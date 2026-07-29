@@ -67,6 +67,40 @@ const DEFAULT_USUARIOS = [
   { id: 'analista_at_trackflow_com', email: 'analista@trackflow.com', nombre: 'Analista de Precios', rol: 'analista', activo: true }
 ];
 
+async function fetchAllSupabaseRows(tableName, pageSize = 1000) {
+  if (!isSupabaseActive() || !supabase) return [];
+  let allRows = [];
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .range(from, to);
+
+    if (error) {
+      console.warn(`[Supabase fetchAll] Error consultando ${tableName} (página ${page}):`, error.message || error);
+      break;
+    }
+
+    if (data && data.length > 0) {
+      allRows = allRows.concat(data);
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allRows;
+}
+
 export function DataProvider({ children, user }) {
   const [productos, setProductos] = useState([]);
   const [productosCompetencia, setProductosCompetencia] = useState([]);
@@ -104,30 +138,24 @@ export function DataProvider({ children, user }) {
     if (hasSupabase) {
       try {
         const [
-          { data: pData, error: pErr },
-          { data: pcData, error: pcErr },
-          { data: cData, error: cErr },
+          pData,
+          pcData,
+          cData,
+          uData,
           { data: hData, error: hErr },
           { data: rData, error: rErr },
-          { data: bData, error: bErr },
-          { data: uData, error: uErr }
+          { data: bData, error: bErr }
         ] = await Promise.all([
-          supabase.from('productos').select('*'),
-          supabase.from('productos_competencia').select('*'),
-          supabase.from('cadenas').select('*'),
-          supabase.from('historico_precios').select('*').order('scraped_at', { ascending: false }).limit(1500),
+          fetchAllSupabaseRows('productos'),
+          fetchAllSupabaseRows('productos_competencia'),
+          fetchAllSupabaseRows('cadenas'),
+          fetchAllSupabaseRows('usuarios'),
+          supabase.from('historico_precios').select('*').order('scraped_at', { ascending: false }).limit(5000),
           supabase.from('scrape_runs').select('*').order('started_at', { ascending: false }).limit(1),
-          supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true }),
-          supabase.from('usuarios').select('*')
+          supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true })
         ]);
 
-        if (pErr) {
-          console.error('[Supabase Read Error] Error al consultar productos:', pErr.message || pErr);
-        }
-        if (pcErr) console.warn('[Supabase Read Warning] productos_competencia:', pcErr.message || pcErr);
-        if (cErr) console.warn('[Supabase Read Warning] cadenas:', cErr.message || cErr);
-
-        if (!pErr && Array.isArray(pData)) {
+        if (Array.isArray(pData)) {
           const prods = pData.map(p => ({
             ...p,
             id: p.id || p.id_interno || p.ID || '',
@@ -302,8 +330,8 @@ export function DataProvider({ children, user }) {
   const refreshProductos = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
-        const { data, error } = await supabase.from('productos').select('*');
-        if (!error && Array.isArray(data)) {
+        const data = await fetchAllSupabaseRows('productos');
+        if (Array.isArray(data)) {
           const prods = data.map(p => ({
             ...p,
             id: p.id || p.id_interno || p.ID || '',
@@ -328,8 +356,8 @@ export function DataProvider({ children, user }) {
   const refreshCompetencia = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
-        const { data, error } = await supabase.from('productos_competencia').select('*');
-        if (!error && Array.isArray(data)) {
+        const data = await fetchAllSupabaseRows('productos_competencia');
+        if (Array.isArray(data)) {
           setProductosCompetencia(data.map(p => ({
             ...p,
             id: p.id || '',
@@ -351,8 +379,8 @@ export function DataProvider({ children, user }) {
   const refreshCadenas = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
-        const { data, error } = await supabase.from('cadenas').select('*');
-        if (!error && Array.isArray(data)) {
+        const data = await fetchAllSupabaseRows('cadenas');
+        if (Array.isArray(data)) {
           const cDocs = [...data].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cDocs);
           return;
@@ -373,8 +401,8 @@ export function DataProvider({ children, user }) {
   const refreshUsuarios = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
-        const { data, error } = await supabase.from('usuarios').select('*');
-        if (!error && Array.isArray(data)) {
+        const data = await fetchAllSupabaseRows('usuarios');
+        if (Array.isArray(data)) {
           const uDocs = [...data].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setUsuarios(uDocs);
           return;

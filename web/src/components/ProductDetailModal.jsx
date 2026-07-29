@@ -75,7 +75,7 @@ function CustomTooltip({ active, payload, label, propios, labMap, currency, anal
 }
 
 export default function ProductDetailModal({ producto, competencia, currency, bcvRate, onClose, initialPriceMode = 'descuento', initialAnalisisMode = 'empaque' }) {
-  const { productos = [], productosCompetencia = [] } = useData() || {};
+  const { productos = [], productosCompetencia = [], historicoPrecios = [] } = useData() || {};
 
   const [activeProduct, setActiveProduct] = useState(producto);
   const [activeCompetencia, setActiveCompetencia] = useState(competencia);
@@ -187,25 +187,60 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   useEffect(() => {
     (async () => {
       setLoading(true);
-      try {
-        const q = query(
-          collection(db, 'historico_precios'),
-          where('id_producto_propio', '==', activeProduct.id_interno)
-        );
-        const snap = await getDocs(q);
-        const docs = snap.docs.map(d => ({
-          ...d.data(),
-          scraped_at: d.data().scraped_at?.toDate?.() || null,
-        }));
-        docs.sort((a, b) => (a.scraped_at?.getTime() || 0) - (b.scraped_at?.getTime() || 0));
-        setHistorico(docs);
-      } catch (err) {
-        console.error('Error cargando histórico:', err?.message || String(err));
-        setError(err.message);
+      setError(null);
+      let docs = [];
+
+      // Primary: filter from DataContext historicoPrecios
+      if (historicoPrecios && historicoPrecios.length > 0) {
+        docs = historicoPrecios.filter(h => h.id_producto_propio === activeProduct.id_interno);
       }
+
+      // Secondary: Try fetching from Supabase or Firestore if available and docs is empty
+      if (docs.length === 0) {
+        try {
+          if (supabase) {
+            const { data, error: sbErr } = await supabase
+              .from('historico_precios')
+              .select('*')
+              .eq('id_producto_propio', activeProduct.id_interno);
+            if (!sbErr && data && data.length > 0) {
+              docs = data.map(d => ({
+                ...d,
+                scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
+              }));
+            }
+          }
+        } catch (e) {
+          console.warn('Supabase historico fetch warning:', e?.message || String(e));
+        }
+
+        if (docs.length === 0 && db) {
+          try {
+            const q = query(
+              collection(db, 'historico_precios'),
+              where('id_producto_propio', '==', activeProduct.id_interno)
+            );
+            const snap = await getDocs(q);
+            docs = snap.docs.map(d => ({
+              ...d.data(),
+              scraped_at: d.data().scraped_at?.toDate?.() || null,
+            }));
+          } catch (err) {
+            console.warn('Firestore historico fetch warning (insufficient permissions or missing collection):', err?.message || String(err));
+          }
+        }
+      }
+
+      docs.sort((a, b) => {
+        const tA = a.scraped_at ? (a.scraped_at instanceof Date ? a.scraped_at.getTime() : new Date(a.scraped_at).getTime()) : 0;
+        const tB = b.scraped_at ? (b.scraped_at instanceof Date ? b.scraped_at.getTime() : new Date(b.scraped_at).getTime()) : 0;
+        return tA - tB;
+      });
+
+      setHistorico(docs);
       setLoading(false);
     })();
-  }, [activeProduct.id_interno]);
+  }, [activeProduct.id_interno, historicoPrecios]);
 
   // Pivot: convertir historico en serie por marca-cadena o por promedio de cadena, agrupado por dia.
   const chartData = (() => {

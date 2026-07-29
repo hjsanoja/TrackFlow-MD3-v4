@@ -208,6 +208,7 @@ export default function Productos() {
 
         const prodsToUpsert = [];
         const compToUpsert = [];
+        const seenCompDocIds = new Set();
         let skippedCount = 0;
 
         for (let idx = 0; idx < rows.length; idx++) {
@@ -296,10 +297,61 @@ export default function Productos() {
           };
 
           prodsToUpsert.push(cleanProd);
+
+          // Capturar también URL/Enlace si viene en la misma fila del CSV
+          const url = getRowValue(row, 'url', 'URL', 'enlace', 'Enlace', 'link', 'Link', 'url_scraper', 'link_farmatodo', 'link_locatel', 'url_competencia');
+          if (url) {
+            let cadena = getRowValue(row, 'cadena', 'Cadena', 'cadena_farmacia', 'farmacia');
+            if (!cadena) {
+              const urlLower = url.toLowerCase();
+              if (urlLower.includes('farmatodo')) cadena = 'Farmatodo';
+              else if (urlLower.includes('locatel')) cadena = 'Locatel';
+              else if (urlLower.includes('redvital')) cadena = 'Redvital';
+              else if (urlLower.includes('meditotal')) cadena = 'Meditotal';
+              else if (urlLower.includes('saas')) cadena = 'SAAS';
+              else cadena = 'Competencia';
+            }
+            let marcaComp = getRowValue(row, 'marca_competencia', 'marca', 'Marca') || nombre;
+            let tipo = getRowValue(row, 'tipo', 'Tipo', 'tipo_enlace').toLowerCase();
+            const cleanUrl = url.toLowerCase().trim();
+            const rawDocId = (row.doc_id || row.id_competencia) ? String(row.doc_id || row.id_competencia).trim() : null;
+            let docId = rawDocId;
+
+            if (!docId || seenCompDocIds.has(docId)) {
+              const urlSlug = cleanUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/[^a-z0-9]/g, '_');
+              const baseId = `${id}_${cadena.toLowerCase().replace(/[^a-z0-9]/g, '')}_${urlSlug}`.replace(/_+/g, '_').slice(0, 100);
+              docId = baseId;
+              let counter = 1;
+              while (seenCompDocIds.has(docId)) {
+                docId = `${baseId}_${counter}`;
+                counter++;
+              }
+            }
+
+            seenCompDocIds.add(docId);
+
+            compToUpsert.push({
+              id: docId,
+              id_producto_propio: id,
+              cadena,
+              tipo: (tipo === 'propio' || tipo === 'propia') ? 'propio' : 'alternativa',
+              marca: marcaComp,
+              url,
+              activo: true,
+              laboratorio: laboratorio || '',
+              concentracion: concentracion || '',
+              tamano: tamano || '',
+            });
+          }
         }
 
         if (prodsToUpsert.length > 0) {
           await dbUpsertProductosBulk(prodsToUpsert);
+
+          if (compToUpsert.length > 0) {
+            await dbUpsertCompetenciaBulk(compToUpsert);
+            refreshCompetencia();
+          }
 
           setProductos(prev => {
             const map = new Map(prev.map(p => [p.id, p]));
@@ -309,11 +361,13 @@ export default function Productos() {
 
           refreshProductos();
 
-          addToast(`Importación exitosa: ${prodsToUpsert.length} productos registrados.`, 'success');
+          const msgComp = compToUpsert.length > 0 ? ` y ${compToUpsert.length} enlaces de competencia.` : '.';
+          addToast(`Importación exitosa: ${prodsToUpsert.length} productos registrados${msgComp}`, 'success');
 
           setCsvSummary({
             totalRows: rows.length,
             successCount: prodsToUpsert.length,
+            compCount: compToUpsert.length,
             skippedCount
           });
         } else {

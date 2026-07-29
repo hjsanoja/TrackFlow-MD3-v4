@@ -350,17 +350,20 @@ export default function Competencia({ user, userDoc }) {
         if (rows.length === 0) throw new Error('El archivo CSV está vacío o no se pudieron reconocer sus columnas.');
 
         const compToUpsert = [];
+        const prodsToAutoCreate = new Map();
+        const seenDocIds = new Set();
         let skippedCount = 0;
 
-        for (const row of rows) {
+        for (let idx = 0; idx < rows.length; idx++) {
+          const row = rows[idx];
           let id_producto = getRowValue(
             row,
             'id_producto_propio', 'ID_Producto', 'id_producto', 'id_interno',
-            'id', 'id producto', 'producto_id', 'sku', 'codigo', 'código'
+            'id', 'id producto', 'producto_id', 'sku', 'codigo', 'código', 'id_producto'
           );
           let cadena = getRowValue(row, 'cadena', 'Cadena', 'cadena_farmacia', 'farmacia');
-          let marca = getRowValue(row, 'marca', 'Marca', 'nombre', 'producto');
-          let url = getRowValue(row, 'url', 'URL', 'enlace', 'Enlace', 'link');
+          let marca = getRowValue(row, 'marca', 'Marca', 'nombre', 'producto', 'item');
+          let url = getRowValue(row, 'url', 'URL', 'enlace', 'Enlace', 'link', 'Link', 'url_scraper', 'link_farmatodo', 'link_locatel', 'url_competencia');
           let tipo = getRowValue(row, 'tipo', 'Tipo', 'tipo_enlace').toLowerCase();
           let laboratorio = getRowValue(row, 'laboratorio', 'Laboratorio', 'lab', 'fabricante');
           let concentracion = getRowValue(row, 'concentracion', 'Concentración', 'Concentracion', 'dosis');
@@ -377,6 +380,7 @@ export default function Competencia({ user, userDoc }) {
             else if (urlLower.includes('locatel')) cadena = 'Locatel';
             else if (urlLower.includes('redvital')) cadena = 'Redvital';
             else if (urlLower.includes('meditotal')) cadena = 'Meditotal';
+            else if (urlLower.includes('saas')) cadena = 'SAAS';
             else cadena = 'Competencia';
           }
 
@@ -388,25 +392,51 @@ export default function Competencia({ user, userDoc }) {
           }
 
           if (!id_producto) {
-            skippedCount++;
-            continue;
+            id_producto = `P_${String(idx + 1).padStart(4, '0')}`;
           }
 
+          // Registrar auto-creación de producto si no existe en el catálogo
+          if (!productos.some(p => p.id_interno === id_producto || p.id === id_producto)) {
+            prodsToAutoCreate.set(id_producto, {
+              id: id_producto,
+              id_interno: id_producto,
+              nombre: marca || `Producto ${id_producto}`,
+              laboratorio: laboratorio || 'La Sante',
+              concentracion: concentracion || '',
+              tamano: tamano || '',
+              categoria: 'Otros',
+              activo: true,
+              market_type: 'GENERICO',
+              unidad_negocio: 'La Sante'
+            });
+          }
+
+          const cleanUrl = url.toLowerCase().trim();
           const existingComp = items.find(c =>
-            c.id_producto_propio === id_producto &&
-            c.cadena.toLowerCase().trim() === cadena.toLowerCase().trim() &&
-            (marca ? (c.marca || '').toLowerCase().trim() === marca.toLowerCase().trim() : true)
-          ) || items.find(c =>
-            c.id_producto_propio === id_producto &&
-            c.cadena.toLowerCase().trim() === cadena.toLowerCase().trim()
+            (row.doc_id && c.id === String(row.doc_id).trim()) ||
+            (row.id && c.id === String(row.id).trim()) ||
+            (c.url && c.url.toLowerCase().trim() === cleanUrl)
           );
 
-          const labPart = laboratorio ? `_${laboratorio}` : '';
-          const docId = (row.doc_id || row.id)
-            ? (row.doc_id || row.id).trim()
-            : existingComp
-              ? existingComp.id
-              : `${id_producto}_${cadena}_${marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
+          const rawDocId = (row.doc_id || row.id) ? String(row.doc_id || row.id).trim() : null;
+          let docId = rawDocId;
+
+          if (!docId || seenDocIds.has(docId)) {
+            if (existingComp && !seenDocIds.has(existingComp.id)) {
+              docId = existingComp.id;
+            } else {
+              const urlSlug = cleanUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/[^a-z0-9]/g, '_');
+              const baseId = `${id_producto}_${cadena.toLowerCase().replace(/[^a-z0-9]/g, '')}_${urlSlug}`.replace(/_+/g, '_').slice(0, 100);
+              docId = baseId;
+              let counter = 1;
+              while (seenDocIds.has(docId)) {
+                docId = `${baseId}_${counter}`;
+                counter++;
+              }
+            }
+          }
+
+          seenDocIds.add(docId);
 
           const activoVal = getRowValue(row, 'activo', 'Activo');
 
@@ -414,7 +444,7 @@ export default function Competencia({ user, userDoc }) {
             id: docId,
             id_producto_propio: id_producto,
             cadena,
-            tipo: tipo === 'propio' ? 'propio' : 'alternativa',
+            tipo: (tipo === 'propio' || tipo === 'propia') ? 'propio' : 'alternativa',
             marca: marca || existingComp?.marca || 'Competencia',
             url,
             activo: activoVal ? (activoVal.toLowerCase() === 'true' || activoVal === '1') : true,
@@ -422,6 +452,11 @@ export default function Competencia({ user, userDoc }) {
             concentracion: concentracion || existingComp?.concentracion || '',
             tamano: tamano || existingComp?.tamano || '',
           });
+        }
+
+        if (prodsToAutoCreate.size > 0) {
+          await dbUpsertProductosBulk(Array.from(prodsToAutoCreate.values()));
+          refreshProductos();
         }
 
         if (compToUpsert.length > 0) {
@@ -443,7 +478,7 @@ export default function Competencia({ user, userDoc }) {
             skippedCount
           });
         } else {
-          throw new Error('No se encontraron filas válidas con al menos id_producto_propio y url.');
+          throw new Error('No se encontraron filas válidas con al menos una URL.');
         }
       } catch (err) {
         addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
@@ -1117,21 +1152,54 @@ export default function Competencia({ user, userDoc }) {
 
 function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas, onSave, onClose }) {
   const isNew = !item;
+  const productosActivos = productos.filter(p => p.activo);
+  const cadenasActivas = cadenas.filter(c => c.activo);
+
+  const initialProdId = item?.id_producto_propio || productoIdPreseleccionado || '';
+  const initialProd = productos.find(p => p.id_interno === initialProdId);
+
   const [form, setForm] = useState({
-    id_producto_propio: item?.id_producto_propio || productoIdPreseleccionado || '',
+    id_producto_propio: initialProdId,
     cadena: item?.cadena || '',
     tipo: item?.tipo || 'alternativa',
-    marca: item?.marca || '',
+    marca: item?.marca || (initialProd ? initialProd.nombre : ''),
     url: item?.url || '',
     activo: item?.activo ?? true,
-    laboratorio: item?.laboratorio || '',
-    concentracion: item?.concentracion || '',
-    tamano: item?.tamano || '',
+    laboratorio: item?.laboratorio || (initialProd ? initialProd.laboratorio || '' : ''),
+    concentracion: item?.concentracion || (initialProd ? initialProd.concentracion || '' : ''),
+    tamano: item?.tamano || (initialProd ? initialProd.tamano || '' : ''),
   });
   const [saving, setSaving] = useState(false);
 
-  const productosActivos = productos.filter(p => p.activo);
-  const cadenasActivas = cadenas.filter(c => c.activo);
+  const selectedProduct = useMemo(() => {
+    return productos.find(p => p.id_interno === form.id_producto_propio);
+  }, [productos, form.id_producto_propio]);
+
+  const handleProductSelect = (prodId) => {
+    const p = productos.find(x => x.id_interno === prodId);
+    setForm(f => ({
+      ...f,
+      id_producto_propio: prodId,
+      marca: f.tipo === 'propio' || !f.marca ? (p?.nombre || '') : f.marca,
+      laboratorio: f.tipo === 'propio' || !f.laboratorio ? (p?.laboratorio || '') : f.laboratorio,
+      concentracion: f.tipo === 'propio' || !f.concentracion ? (p?.concentracion || '') : f.concentracion,
+      tamano: f.tipo === 'propio' || !f.tamano ? (p?.tamano || '') : f.tamano,
+    }));
+  };
+
+  const handleTipoSelect = (tipoVal) => {
+    setForm(f => {
+      const p = productos.find(x => x.id_interno === f.id_producto_propio);
+      return {
+        ...f,
+        tipo: tipoVal,
+        marca: tipoVal === 'propio' && p ? p.nombre : f.marca,
+        laboratorio: tipoVal === 'propio' && p ? (p.laboratorio || '') : f.laboratorio,
+        concentracion: tipoVal === 'propio' && p ? (p.concentracion || '') : f.concentracion,
+        tamano: tipoVal === 'propio' && p ? (p.tamano || '') : f.tamano,
+      };
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1155,7 +1223,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
           <Field label="Producto en Catálogo Interno *">
             <select required value={form.id_producto_propio}
-              onChange={e => handleChange('id_producto_propio', e.target.value)}
+              onChange={e => handleProductSelect(e.target.value)}
               disabled={!isNew}
               className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm bg-white text-on-surface">
               <option value="">— Seleccionar —</option>
@@ -1177,15 +1245,27 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
             </Field>
             
             <Field label="Tipo de Relación *">
-              <select required value={form.tipo} onChange={e => handleChange('tipo', e.target.value)}
+              <select required value={form.tipo} onChange={e => handleTipoSelect(e.target.value)}
                 className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm bg-white text-on-surface">
                 {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </Field>
           </div>
 
+          {form.tipo === 'propio' && selectedProduct && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-3 text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-emerald-900">
+                <span className="material-symbols-outlined text-base">check_circle</span>
+                <span>Datos autocompletados desde tu catálogo</span>
+              </div>
+              <p className="text-[11px] text-emerald-700 font-sans">
+                Se usará el nombre <strong>"{selectedProduct.nombre}"</strong> y especificaciones registradas. Solo selecciona la cadena e ingresa la URL.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Nombre Comercial / Marca *" hint="Ej. Acetaminofén, Atamel">
+            <Field label="Nombre Comercial / Marca *" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Acetaminofén, Atamel'}>
               <input type="text" required value={form.marca}
                 onChange={e => handleChange('marca', e.target.value)}
                 disabled={!isNew}
@@ -1193,7 +1273,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
                 className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
             </Field>
 
-            <Field label="Laboratorio / Fabricante" hint="Ej. Genven, La Santé">
+            <Field label="Laboratorio / Fabricante" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Genven, La Santé'}>
               <input type="text" value={form.laboratorio}
                 onChange={e => handleChange('laboratorio', e.target.value)}
                 placeholder="Ej. Genven"
@@ -1202,14 +1282,14 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Concentración" hint="Ej. 650mg, 500mg">
+            <Field label="Concentración" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 650mg, 500mg'}>
               <input type="text" value={form.concentracion}
                 onChange={e => handleChange('concentracion', e.target.value)}
                 placeholder="Ej. 650mg"
                 className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
             </Field>
 
-            <Field label="Tamaño / Presentación" hint="Ej. 10tab, 20tab, 120ml">
+            <Field label="Tamaño / Presentación" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 10tab, 20tab, 120ml'}>
               <input type="text" value={form.tamano}
                 onChange={e => handleChange('tamano', e.target.value)}
                 placeholder="Ej. 10tab"
