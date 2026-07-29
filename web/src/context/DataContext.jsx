@@ -122,25 +122,36 @@ export function DataProvider({ children, user }) {
         ]);
 
         if (!pErr && Array.isArray(pData)) {
-          const prods = [...pData].sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
+          let finalProds = pData;
+          if (finalProds.length === 0) {
+            finalProds = DEFAULT_PRODUCTS;
+            supabase.from('productos').upsert(DEFAULT_PRODUCTS).catch(() => {});
+          }
+          const prods = [...finalProds].sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
           setProductos(prods);
 
-          setProductosCompetencia(pcData || []);
-
-          if (cData) {
-            const cSorted = [...cData].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-            setCadenas(cSorted);
-          } else {
-            setCadenas([]);
+          let finalPc = pcData || [];
+          if (finalPc.length === 0 && finalProds === DEFAULT_PRODUCTS) {
+            finalPc = DEFAULT_COMPETENCIA;
+            supabase.from('productos_competencia').upsert(DEFAULT_COMPETENCIA).catch(() => {});
           }
+          setProductosCompetencia(finalPc);
 
-          if (hData) {
+          let finalCadenas = cData;
+          if (!finalCadenas || finalCadenas.length === 0) {
+            finalCadenas = DEFAULT_CADENAS;
+            supabase.from('cadenas').upsert(DEFAULT_CADENAS).catch(() => {});
+          }
+          const cSorted = [...finalCadenas].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          setCadenas(cSorted);
+
+          if (hData && hData.length > 0) {
             setHistoricoPrecios(hData.map(d => ({
               ...d,
               scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
             })));
           } else {
-            setHistoricoPrecios([]);
+            setHistoricoPrecios(DEFAULT_HISTORICO);
           }
 
           if (rData && rData.length > 0) {
@@ -149,7 +160,7 @@ export function DataProvider({ children, user }) {
               started_at: rData[0].started_at ? new Date(rData[0].started_at) : null
             });
           } else {
-            setUltimaCorrida(null);
+            setUltimaCorrida(DEFAULT_RUN);
           }
 
           if (bData && bData.length > 0) {
@@ -176,19 +187,24 @@ export function DataProvider({ children, user }) {
               .slice(-10);
 
             setBcvRates(uniqueDaysRates.map(({ dayKey, fecha, valor }) => ({ dayKey, fecha, valor })));
+          } else {
+            setBcvRates(DEFAULT_RATES);
           }
 
-          if (uData) {
-            const uSorted = [...uData].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-            setUsuarios(uSorted);
-          } else {
-            setUsuarios([]);
+          let finalUsuarios = uData;
+          if (!finalUsuarios || finalUsuarios.length === 0) {
+            finalUsuarios = DEFAULT_USUARIOS;
+            supabase.from('usuarios').upsert(DEFAULT_USUARIOS).catch(() => {});
           }
+          const uSorted = [...finalUsuarios].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          setUsuarios(uSorted);
 
           setIsLoadedOnce(true);
           setLoadingInitial(false);
           setIsRefreshing(false);
           return;
+        } else {
+          console.warn('[Supabase] Error o sin datos en tabla productos:', pErr?.message || pErr);
         }
       } catch (sbErr) {
         console.warn('Supabase no devolvió datos o no está migrado aún, cambiando a Firebase/Mock:', sbErr);
