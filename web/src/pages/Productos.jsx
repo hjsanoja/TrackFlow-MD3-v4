@@ -86,6 +86,7 @@ export default function Productos() {
       if (!term) return true;
       return (
         (p.nombre || '').toLowerCase().includes(term) ||
+        (p.codigo_barra || '').toLowerCase().includes(term) ||
         (p.laboratorio || '').toLowerCase().includes(term) ||
         (p.principio_activo || '').toLowerCase().includes(term) ||
         (p.categoria || '').toLowerCase().includes(term) ||
@@ -123,6 +124,7 @@ export default function Productos() {
         id,
         id_interno: id,
         nombre: data.nombre.trim(),
+        codigo_barra: (data.codigo_barra || '').trim(),
         principio_activo: (data.principio_activo || '').trim(),
         concentracion: (data.concentracion || '').trim(),
         tamano: (data.tamano || '').trim(),
@@ -239,6 +241,13 @@ export default function Productos() {
             }
           }
 
+          const codigo_barra = getRowValue(
+            row,
+            'codigo_barra', 'Código de Barra', 'Codigo de Barra', 'codigo_barras',
+            'Código de Barras', 'Codigo de Barras', 'gtin', 'GTIN', 'ean', 'EAN',
+            'upc', 'UPC', 'barcode', 'Bar Code', 'barcode_id'
+          );
+
           const principio_activo = getRowValue(row, 'principio_activo', 'Principio Activo', 'molecula', 'molécula', 'Molecula', 'sustancia_activa');
           const concentracion = getRowValue(row, 'concentracion', 'Concentración', 'Concentracion', 'dosis', 'concentracion_mg', 'conc');
           const tamano = getRowValue(row, 'tamano', 'Tamaño', 'Tamano', 'tamano_empaque', 'presentacion', 'Presentación', 'Presentacion', 'empaque');
@@ -272,6 +281,7 @@ export default function Productos() {
             id,
             id_interno: id,
             nombre,
+            codigo_barra,
             principio_activo,
             concentracion,
             tamano,
@@ -330,7 +340,7 @@ export default function Productos() {
   };
 
   const downloadCsvPlantilla = () => {
-    const headers = ['id_interno', 'nombre', 'principio_activo', 'concentracion', 'tamano', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio'].join(',') + '\n';
+    const headers = ['id_interno', 'nombre', 'codigo_barra', 'principio_activo', 'concentracion', 'tamano', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio'].join(',') + '\n';
 
     let content = '\ufeff' + headers; // UTF-8 BOM for Excel compatibility
 
@@ -339,6 +349,7 @@ export default function Productos() {
         const row = [
           p.id_interno || '',
           p.nombre || '',
+          p.codigo_barra || '',
           p.principio_activo || '',
           p.concentracion || '',
           p.tamano || '',
@@ -358,8 +369,8 @@ export default function Productos() {
       });
     } else {
       // Fallback example rows if database is empty
-      const row1 = 'P001,Atamel,Acetaminofén,500 mg,10 tabletas,La Santé,Analgésicos,MARCA,La Sante\n';
-      const row2 = 'P002,Calox,Ibuprofeno,400 mg,20 capsulas,Calox,Analgésicos,GENERICO,OTC\n';
+      const row1 = 'P001,Atamel,7592450001234,Acetaminofén,500 mg,10 tabletas,La Santé,Analgésicos,MARCA,La Sante\n';
+      const row2 = 'P002,Calox,,Ibuprofeno,400 mg,20 capsulas,Calox,Analgésicos,GENERICO,OTC\n';
       content += row1 + row2;
     }
 
@@ -379,6 +390,7 @@ export default function Productos() {
     const headers = [
       { label: 'ID Interno', key: 'id_interno' },
       { label: 'Nombre', key: 'nombre' },
+      { label: 'Código de Barra', key: 'codigo_barra' },
       { label: 'Principio Activo', key: 'principio_activo' },
       { label: 'Concentración', key: 'concentracion' },
       { label: 'Presentación/Tamaño', key: 'tamano_empaque' },
@@ -573,7 +585,14 @@ export default function Productos() {
                     <tr key={p.id} className="hover:bg-surface-low transition-colors">
                       <td className="px-6 py-4 font-mono text-xs text-primary font-bold">{p.id_interno}</td>
                       <td className="px-6 py-4">
-                        <div className="font-bold text-on-surface text-base font-display">{p.nombre}</div>
+                        <div className="font-bold text-on-surface text-base font-display flex items-center gap-2 flex-wrap">
+                          <span>{p.nombre}</span>
+                          {p.codigo_barra && (
+                            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-low border border-outline-variant text-on-surface-variant font-medium shrink-0" title="Código de barras / EAN">
+                              EAN: {p.codigo_barra}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-on-surface-variant font-mono mt-0.5">{p.principio_activo || 'Sin molécula'}</div>
                       </td>
                       <td className="px-6 py-4">
@@ -747,6 +766,7 @@ export default function Productos() {
                 </div>
                 <div>id_interno <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
                 <div>nombre <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
+                <div>codigo_barra <span className="text-on-surface-variant font-sans font-medium">(Opcional / EAN / GTIN)</span></div>
                 <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
                 <div>concentracion, tamano, laboratorio, categoria</div>
                 <div>market_type, unidad_negocio</div>
@@ -848,6 +868,7 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
   const [form, setForm] = useState({
     id_interno: producto?.id_interno || sugerirId(),
     nombre: producto?.nombre || '',
+    codigo_barra: producto?.codigo_barra || '',
     laboratorio: producto?.laboratorio || '',
     principio_activo: producto?.principio_activo || '',
     concentracion: producto?.concentracion || '',
@@ -881,7 +902,7 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
         </div>
         
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="ID Interno *" hint="Código único (ej: P001)">
               <input type="text" required value={form.id_interno}
                 onChange={e => handleChange('id_interno', e.target.value)}
@@ -894,6 +915,13 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
                 onChange={e => handleChange('nombre', e.target.value)}
                 placeholder="Nombre comercial"
                 className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm" />
+            </Field>
+
+            <Field label="Código de Barra" hint="EAN / GTIN (ej: 759245000123)">
+              <input type="text" value={form.codigo_barra}
+                onChange={e => handleChange('codigo_barra', e.target.value)}
+                placeholder="EAN / GTIN"
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-mono text-sm" />
             </Field>
           </div>
 

@@ -58,6 +58,7 @@ export async function dbUpsertProducto(data) {
     id: targetId,
     id_interno: targetId,
     nombre: data.nombre || '',
+    codigo_barra: data.codigo_barra || data.codigo_barras || '',
     laboratorio: data.laboratorio || 'La Sante',
     principio_activo: data.principio_activo || '',
     concentracion: data.concentracion || '',
@@ -112,6 +113,7 @@ export async function dbUpsertProductosBulk(prodsList) {
       id: targetId,
       id_interno: targetId,
       nombre: data.nombre || '',
+      codigo_barra: data.codigo_barra || data.codigo_barras || '',
       laboratorio: data.laboratorio || 'La Sante',
       principio_activo: data.principio_activo || '',
       concentracion: data.concentracion || '',
@@ -127,13 +129,18 @@ export async function dbUpsertProductosBulk(prodsList) {
   });
 
   if (isSupabaseActive()) {
+    let supabaseErrors = [];
     for (let i = 0; i < cleanList.length; i += 50) {
       const chunk = cleanList.slice(i, i + 50);
       try {
         await supabaseUpsertSafe('productos', chunk);
       } catch (e) {
         console.warn('[Supabase] Error en dbUpsertProductosBulk chunk:', e?.message || String(e));
+        supabaseErrors.push(e?.message || String(e));
       }
+    }
+    if (supabaseErrors.length > 0 && !db) {
+      throw new Error(`Error al guardar en Supabase: ${supabaseErrors[0]}`);
     }
   }
 
@@ -286,13 +293,18 @@ export async function dbUpsertCompetenciaBulk(compList) {
   }));
 
   if (isSupabaseActive()) {
+    let supabaseErrors = [];
     for (let i = 0; i < cleanList.length; i += 50) {
       const chunk = cleanList.slice(i, i + 50);
       try {
         await supabaseUpsertSafe('productos_competencia', chunk);
       } catch (e) {
         console.warn('[Supabase] Error en dbUpsertCompetenciaBulk chunk:', e?.message || String(e));
+        supabaseErrors.push(e?.message || String(e));
       }
+    }
+    if (supabaseErrors.length > 0 && !db) {
+      throw new Error(`Error al guardar competencia en Supabase: ${supabaseErrors[0]}`);
     }
   }
 
