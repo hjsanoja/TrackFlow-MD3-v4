@@ -4,6 +4,53 @@ import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc } from 
 
 export { isSupabaseActive };
 
+// --- HELPER PARA MANEJAR COLUMNAS FALTANTES EN SUPABASE AUTOMÁTICAMENTE ---
+export async function supabaseUpsertSafe(tableName, payload) {
+  const isArray = Array.isArray(payload);
+  let items = isArray ? payload.map(x => ({ ...x })) : [{ ...payload }];
+
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const { error, data } = await supabase.from(tableName).upsert(isArray ? items : items[0]);
+    if (!error) return { ok: true, data };
+
+    const msg = error.message || '';
+    if (error.code === 'PGRST204' || msg.includes('Could not find the') || msg.includes('column')) {
+      const match = msg.match(/Could not find the ['"]?([a-zA-Z0-9_]+)['"]? column/i);
+      if (match && match[1]) {
+        const missingCol = match[1];
+        items.forEach(item => {
+          delete item[missingCol];
+        });
+        continue;
+      }
+    }
+    throw error;
+  }
+}
+
+export async function supabaseInsertSafe(tableName, payload) {
+  const isArray = Array.isArray(payload);
+  let items = isArray ? payload.map(x => ({ ...x })) : [{ ...payload }];
+
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const { error, data } = await supabase.from(tableName).insert(isArray ? items : items[0]);
+    if (!error) return { ok: true, data };
+
+    const msg = error.message || '';
+    if (error.code === 'PGRST204' || msg.includes('Could not find the') || msg.includes('column')) {
+      const match = msg.match(/Could not find the ['"]?([a-zA-Z0-9_]+)['"]? column/i);
+      if (match && match[1]) {
+        const missingCol = match[1];
+        items.forEach(item => {
+          delete item[missingCol];
+        });
+        continue;
+      }
+    }
+    throw error;
+  }
+}
+
 // --- PRODUCTOS ---
 export async function dbUpsertProducto(data) {
   const cleanData = {
@@ -14,6 +61,7 @@ export async function dbUpsertProducto(data) {
     principio_activo: data.principio_activo || '',
     concentracion: data.concentracion || '',
     tamano: data.tamano || '',
+    presentacion: data.presentacion || `${data.concentracion || ''} ${data.tamano || ''}`.trim(),
     categoria: data.categoria || 'Otros',
     pvp_propio_usd: typeof data.pvp_propio_usd === 'number' ? data.pvp_propio_usd : parseFloat(data.pvp_propio_usd) || 0,
     activo: data.activo ?? true,
@@ -27,8 +75,7 @@ export async function dbUpsertProducto(data) {
 
   if (isSupabaseActive()) {
     try {
-      const { error } = await supabase.from('productos').upsert(cleanData);
-      if (error) throw error;
+      await supabaseUpsertSafe('productos', cleanData);
       ok = true;
     } catch (e) {
       console.warn('[Supabase] Error en upsertProducto:', e?.message || String(e));
@@ -137,8 +184,7 @@ export async function dbUpsertProductoCompetencia(data) {
 
   if (isSupabaseActive()) {
     try {
-      const { error } = await supabase.from('productos_competencia').upsert(cleanData);
-      if (error) throw error;
+      await supabaseUpsertSafe('productos_competencia', cleanData);
       ok = true;
     } catch (e) {
       console.warn('[Supabase] Error en upsertProductoCompetencia:', e?.message || String(e));
@@ -219,7 +265,7 @@ export async function dbAddHistoricoPrecio(data) {
 
   if (isSupabaseActive()) {
     try {
-      await supabase.from('historico_precios').insert({
+      await supabaseInsertSafe('historico_precios', {
         prod_comp_id: data.prod_comp_id,
         id_producto_propio: data.id_producto_propio || '',
         cadena: data.cadena || '',
@@ -262,7 +308,7 @@ export async function dbAddScrapeRun(data) {
 
   if (isSupabaseActive()) {
     try {
-      await supabase.from('scrape_runs').insert({
+      await supabaseInsertSafe('scrape_runs', {
         run_id: data.run_id,
         started_at: isoDate,
         total: data.total || 0,
@@ -297,7 +343,7 @@ export async function dbAddScrapeRun(data) {
 export async function dbUpsertCadena(data) {
   if (isSupabaseActive()) {
     try {
-      await supabase.from('cadenas').upsert(data);
+      await supabaseUpsertSafe('cadenas', data);
     } catch (e) {
       console.warn('[Supabase] Error upsertCadena:', e?.message || String(e));
     }
@@ -334,7 +380,7 @@ export async function dbDeleteCadena(id) {
 export async function dbUpsertUsuario(data) {
   if (isSupabaseActive()) {
     try {
-      await supabase.from('usuarios').upsert(data);
+      await supabaseUpsertSafe('usuarios', data);
     } catch (e) {
       console.warn('[Supabase] Error upsertUsuario:', e?.message || String(e));
     }

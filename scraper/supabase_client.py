@@ -9,6 +9,7 @@ Usa las variables de entorno:
 import json
 import os
 import sys
+import re
 import urllib.request
 import urllib.parse
 from typing import List, Dict, Any, Optional
@@ -41,22 +42,36 @@ def _request(endpoint: str, method: str = "GET", data: Optional[Any] = None, hea
     if headers_extra:
         headers.update(headers_extra)
 
-    body = None
-    if data is not None:
-        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    current_data = data
+    for attempt in range(15):
+        body = None
+        if current_data is not None:
+            body = json.dumps(current_data, ensure_ascii=False).encode("utf-8")
 
-    req = urllib.request.Request(full_url, data=body, headers=headers, method=method)
-    
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            resp_bytes = resp.read()
-            if not resp_bytes:
-                return None
-            return json.loads(resp_bytes.decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="ignore")
-        print(f"[Supabase API Error] {e.code} {e.reason}: {err_body}", file=sys.stderr)
-        raise
+        req = urllib.request.Request(full_url, data=body, headers=headers, method=method)
+        
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp_bytes = resp.read()
+                if not resp_bytes:
+                    return None
+                return json.loads(resp_bytes.decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="ignore")
+            # Auto-eliminar columna si no existe en la tabla de Supabase (PGRST204)
+            if "PGRST204" in err_body or ("Could not find the" in err_body and "column" in err_body):
+                match = re.search(r"Could not find the ['\"]?([a-zA-Z0-9_]+)['\"]? column", err_body, re.IGNORECASE)
+                if match and match.group(1):
+                    missing_col = match.group(1)
+                    if isinstance(current_data, list):
+                        for item in current_data:
+                            if isinstance(item, dict):
+                                item.pop(missing_col, None)
+                    elif isinstance(current_data, dict):
+                        current_data.pop(missing_col, None)
+                    continue
+            print(f"[Supabase API Error] {e.code} {e.reason}: {err_body}", file=sys.stderr)
+            raise
 
 def select(table: str, query_params: str = "select=*") -> List[Dict[str, Any]]:
     endpoint = f"{table}?{query_params}" if query_params else table
