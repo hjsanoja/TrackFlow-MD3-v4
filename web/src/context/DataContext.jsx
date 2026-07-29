@@ -122,8 +122,10 @@ export function DataProvider({ children, user }) {
         ]);
 
         if (pErr) {
-          console.error('[Supabase Read Error] error al consultar productos:', pErr.message || pErr);
+          console.error('[Supabase Read Error] Error al consultar productos:', pErr.message || pErr);
         }
+        if (pcErr) console.warn('[Supabase Read Warning] productos_competencia:', pcErr.message || pcErr);
+        if (cErr) console.warn('[Supabase Read Warning] cadenas:', cErr.message || cErr);
 
         if (!pErr && Array.isArray(pData)) {
           let finalProds = pData.map(p => ({
@@ -134,22 +136,22 @@ export function DataProvider({ children, user }) {
 
           if (finalProds.length === 0) {
             finalProds = DEFAULT_PRODUCTS;
-            supabase.from('productos').upsert(DEFAULT_PRODUCTS).catch(() => {});
+            supabaseUpsertSafe('productos', DEFAULT_PRODUCTS).catch(e => console.warn('Error al auto-sembrar productos:', e));
           }
           const prods = [...finalProds].sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
           setProductos(prods);
 
-          let finalPc = pcData || [];
+          let finalPc = Array.isArray(pcData) ? pcData : [];
           if (finalPc.length === 0 && finalProds === DEFAULT_PRODUCTS) {
             finalPc = DEFAULT_COMPETENCIA;
-            supabase.from('productos_competencia').upsert(DEFAULT_COMPETENCIA).catch(() => {});
+            supabaseUpsertSafe('productos_competencia', DEFAULT_COMPETENCIA).catch(() => {});
           }
           setProductosCompetencia(finalPc);
 
-          let finalCadenas = cData;
-          if (!finalCadenas || finalCadenas.length === 0) {
+          let finalCadenas = Array.isArray(cData) ? cData : [];
+          if (finalCadenas.length === 0) {
             finalCadenas = DEFAULT_CADENAS;
-            supabase.from('cadenas').upsert(DEFAULT_CADENAS).catch(() => {});
+            supabaseUpsertSafe('cadenas', DEFAULT_CADENAS).catch(() => {});
           }
           const cSorted = [...finalCadenas].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cSorted);
@@ -200,10 +202,10 @@ export function DataProvider({ children, user }) {
             setBcvRates(DEFAULT_RATES);
           }
 
-          let finalUsuarios = uData;
-          if (!finalUsuarios || finalUsuarios.length === 0) {
+          let finalUsuarios = Array.isArray(uData) ? uData : [];
+          if (finalUsuarios.length === 0) {
             finalUsuarios = DEFAULT_USUARIOS;
-            supabase.from('usuarios').upsert(DEFAULT_USUARIOS).catch(() => {});
+            supabaseUpsertSafe('usuarios', DEFAULT_USUARIOS).catch(() => {});
           }
           const uSorted = [...finalUsuarios].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setUsuarios(uSorted);
