@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
-import { supabase } from '../supabase';
+import { supabase, isSupabaseActive } from '../supabase';
 
 const DataContext = createContext(null);
 
@@ -99,7 +99,7 @@ export function DataProvider({ children, user }) {
       setIsRefreshing(true);
     }
 
-    const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+    const hasSupabase = isSupabaseActive();
 
     if (hasSupabase) {
       try {
@@ -120,6 +120,10 @@ export function DataProvider({ children, user }) {
           supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true }),
           supabase.from('usuarios').select('*')
         ]);
+
+        if (pErr) {
+          console.error('[Supabase Read Error] error al consultar productos:', pErr.message || pErr);
+        }
 
         if (!pErr && Array.isArray(pData)) {
           let finalProds = pData.map(p => ({
