@@ -47,11 +47,11 @@ const DEFAULT_HISTORICO = [
 ];
 
 const DEFAULT_RATES = [
-  { dayKey: '28/07/2026', fecha: '28 jul', valor: 45.00 },
-  { dayKey: '27/07/2026', fecha: '27 jul', valor: 44.80 },
-  { dayKey: '26/07/2026', fecha: '26 jul', valor: 44.50 },
-  { dayKey: '25/07/2026', fecha: '25 jul', valor: 44.20 },
-  { dayKey: '24/07/2026', fecha: '24 jul', valor: 44.00 }
+  { dayKey: '29/07/2026', fecha: '29 jul', valor: 744.23 },
+  { dayKey: '28/07/2026', fecha: '28 jul', valor: 744.00 },
+  { dayKey: '27/07/2026', fecha: '27 jul', valor: 743.50 },
+  { dayKey: '26/07/2026', fecha: '26 jul', valor: 742.00 },
+  { dayKey: '25/07/2026', fecha: '25 jul', valor: 741.00 }
 ];
 
 const DEFAULT_RUN = {

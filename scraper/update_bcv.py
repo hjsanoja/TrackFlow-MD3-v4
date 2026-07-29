@@ -12,8 +12,6 @@ import urllib.request
 import urllib.error
 import json
 
-from firebase_client import get_db
-
 
 def fetch_bcv_pydolarve():
     """Intenta pydolarve.org"""
@@ -48,9 +46,9 @@ def fetch_bcv_dolarapi():
 def update_bcv_rate():
     """Obtiene la tasa, la guarda en Supabase y Firestore, devuelve el valor o None."""
     print("Obteniendo tasa BCV...")
-    rate = fetch_bcv_pydolarve()
+    rate = fetch_bcv_dolarapi()
     if rate is None:
-        rate = fetch_bcv_dolarapi()
+        rate = fetch_bcv_pydolarve()
 
     if rate is None:
         print("  No se pudo obtener tasa de ninguna fuente")
@@ -73,13 +71,15 @@ def update_bcv_rate():
 
     # 2. Guardar en Firestore
     try:
+        from firebase_client import get_db
         db = get_db()
-        db.collection("bcv_rates").add({
-            "value": rate,
-            "source": "auto",
-            "updated_at": datetime.now(timezone.utc),
-        })
-        print("  ✅ Tasa BCV guardada en Firestore")
+        if db:
+            db.collection("bcv_rates").add({
+                "value": rate,
+                "source": "auto",
+                "updated_at": datetime.now(timezone.utc),
+            })
+            print("  ✅ Tasa BCV guardada en Firestore")
     except Exception as e:
         print(f"  Aviso Firestore BCV: {e}")
 
