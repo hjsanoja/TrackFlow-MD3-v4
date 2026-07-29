@@ -122,12 +122,17 @@ export function DataProvider({ children, user }) {
         ]);
 
         if (!pErr && Array.isArray(pData)) {
-          let finalProds = pData;
+          let finalProds = pData.map(p => ({
+            ...p,
+            id: p.id || p.id_interno || p.ID || '',
+            id_interno: p.id_interno || p.id || p.ID || ''
+          }));
+
           if (finalProds.length === 0) {
             finalProds = DEFAULT_PRODUCTS;
             supabase.from('productos').upsert(DEFAULT_PRODUCTS).catch(() => {});
           }
-          const prods = [...finalProds].sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
+          const prods = [...finalProds].sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
           setProductos(prods);
 
           let finalPc = pcData || [];

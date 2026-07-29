@@ -53,9 +53,10 @@ export async function supabaseInsertSafe(tableName, payload) {
 
 // --- PRODUCTOS ---
 export async function dbUpsertProducto(data) {
+  const targetId = (data.id_interno || data.id || '').trim();
   const cleanData = {
-    id: data.id,
-    id_interno: data.id_interno || data.id,
+    id: targetId,
+    id_interno: targetId,
     nombre: data.nombre || '',
     laboratorio: data.laboratorio || 'La Sante',
     principio_activo: data.principio_activo || '',
