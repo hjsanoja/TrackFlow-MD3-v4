@@ -103,6 +103,56 @@ export async function dbUpsertProducto(data) {
   }
 }
 
+export async function dbUpsertProductosBulk(prodsList) {
+  if (!prodsList || prodsList.length === 0) return;
+
+  const cleanList = prodsList.map(data => {
+    const targetId = (data.id_interno || data.id || '').trim();
+    return {
+      id: targetId,
+      id_interno: targetId,
+      nombre: data.nombre || '',
+      laboratorio: data.laboratorio || 'La Sante',
+      principio_activo: data.principio_activo || '',
+      concentracion: data.concentracion || '',
+      tamano: data.tamano || '',
+      presentacion: data.presentacion || `${data.concentracion || ''} ${data.tamano || ''}`.trim(),
+      categoria: data.categoria || 'Otros',
+      pvp_propio_usd: typeof data.pvp_propio_usd === 'number' ? data.pvp_propio_usd : parseFloat(data.pvp_propio_usd) || 0,
+      activo: data.activo ?? true,
+      market_type: data.market_type || 'GENERICO',
+      unidad_negocio: data.unidad_negocio || 'La Sante',
+      unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null
+    };
+  });
+
+  if (isSupabaseActive()) {
+    for (let i = 0; i < cleanList.length; i += 50) {
+      const chunk = cleanList.slice(i, i + 50);
+      try {
+        await supabaseUpsertSafe('productos', chunk);
+      } catch (e) {
+        console.warn('[Supabase] Error en dbUpsertProductosBulk chunk:', e?.message || String(e));
+      }
+    }
+  }
+
+  if (db) {
+    for (let i = 0; i < cleanList.length; i += 500) {
+      const chunk = cleanList.slice(i, i + 500);
+      try {
+        const batch = writeBatch(db);
+        chunk.forEach(p => {
+          batch.set(doc(db, 'productos', p.id), p, { merge: true });
+        });
+        await batch.commit();
+      } catch (e) {
+        console.warn('[Firestore] Error en dbUpsertProductosBulk chunk:', e?.message || String(e));
+      }
+    }
+  }
+}
+
 export async function dbDeleteProducto(id, linksCompetencia = []) {
   if (isSupabaseActive()) {
     try {
@@ -209,6 +259,56 @@ export async function dbUpsertProductoCompetencia(data) {
 
   if (!ok && lastErr && isSupabaseActive()) {
     throw lastErr;
+  }
+}
+
+export async function dbUpsertCompetenciaBulk(compList) {
+  if (!compList || compList.length === 0) return;
+
+  const cleanList = compList.map(data => ({
+    id: data.id,
+    id_producto_propio: data.id_producto_propio,
+    cadena: data.cadena,
+    tipo: data.tipo || 'alternativa',
+    marca: (data.marca || '').trim(),
+    url: (data.url || '').trim(),
+    activo: data.activo ?? true,
+    laboratorio: data.laboratorio?.trim() || '',
+    concentracion: data.concentracion?.trim() || '',
+    tamano: data.tamano?.trim() || '',
+    unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null,
+    ultimo_precio_full_bs: data.ultimo_precio_full_bs ?? null,
+    ultimo_precio_desc_bs: data.ultimo_precio_desc_bs ?? null,
+    ultimo_nombre: data.ultimo_nombre ?? null,
+    ultimo_scrape: data.ultimo_scrape ? (data.ultimo_scrape instanceof Date ? data.ultimo_scrape.toISOString() : data.ultimo_scrape) : null,
+    estado: data.estado || 'ok',
+    ultimo_error: data.ultimo_error || null
+  }));
+
+  if (isSupabaseActive()) {
+    for (let i = 0; i < cleanList.length; i += 50) {
+      const chunk = cleanList.slice(i, i + 50);
+      try {
+        await supabaseUpsertSafe('productos_competencia', chunk);
+      } catch (e) {
+        console.warn('[Supabase] Error en dbUpsertCompetenciaBulk chunk:', e?.message || String(e));
+      }
+    }
+  }
+
+  if (db) {
+    for (let i = 0; i < cleanList.length; i += 500) {
+      const chunk = cleanList.slice(i, i + 500);
+      try {
+        const batch = writeBatch(db);
+        chunk.forEach(c => {
+          batch.set(doc(db, 'productos_competencia', c.id), c, { merge: true });
+        });
+        await batch.commit();
+      } catch (e) {
+        console.warn('[Firestore] Error en dbUpsertCompetenciaBulk chunk:', e?.message || String(e));
+      }
+    }
   }
 }
 

@@ -4,11 +4,14 @@ import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
+import { parseCSV, getRowValue } from '../utils/csvParser';
 import {
   dbUpsertProducto,
   dbDeleteProducto,
   dbDeleteAllProductos,
-  dbUpsertProductoCompetencia
+  dbUpsertProductoCompetencia,
+  dbUpsertProductosBulk,
+  dbUpsertCompetenciaBulk
 } from '../utils/dbClient';
 
 const CATEGORIAS = [
@@ -29,7 +32,11 @@ export default function Productos() {
     productosCompetencia: competencia,
     cadenas,
     loadingInitial: loading,
-    refreshData: cargar
+    refreshData: cargar,
+    refreshProductos,
+    refreshCompetencia,
+    setProductos,
+    setProductosCompetencia
   } = useData();
 
   const [editing, setEditing] = useState(null);
@@ -39,6 +46,8 @@ export default function Productos() {
   const [filtroTipo, setFiltroTipo] = useState('todos'); // todos | generico | marca
   const [filtroUn, setFiltroUn] = useState('todos'); // todos | lasante | pharmetique | otc
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [isUploadingCsv, setIsUploadingCsv] = useState(false);
+  const [csvSummary, setCsvSummary] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -180,65 +189,71 @@ export default function Productos() {
     }
   };
 
-  const getRowVal = (row, ...keys) => {
-    if (!row) return '';
-    for (const k of keys) {
-      if (row[k] !== undefined && String(row[k]).trim() !== '') {
-        return String(row[k]).trim();
-      }
-    }
-    const norm = str => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-    const rowKeys = Object.keys(row);
-    for (const key of keys) {
-      const targetNorm = norm(key);
-      const foundRowKey = rowKeys.find(rk => norm(rk) === targetNorm);
-      if (foundRowKey && row[foundRowKey] !== undefined && String(row[foundRowKey]).trim() !== '') {
-        return String(row[foundRowKey]).trim();
-      }
-    }
-    return '';
-  };
-
   const handleCsvUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setIsUploadingCsv(true);
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
         const text = evt.target.result;
         const rows = parseCSV(text);
-        if (rows.length === 0) throw new Error('El archivo CSV está vacío o no tiene encabezados válidos.');
+        if (rows.length === 0) {
+          throw new Error('El archivo CSV está vacío o no se pudieron reconocer sus columnas.');
+        }
 
-        let count = 0;
+        const prodsToUpsert = [];
+        const compToUpsert = [];
+        let skippedCount = 0;
 
         for (let idx = 0; idx < rows.length; idx++) {
           const row = rows[idx];
 
-          let id = getRowVal(row, 'id_interno', 'id', 'ID Interno', 'ID_INTERNO', 'ID', 'codigo', 'código', 'cod');
-          const nombre = getRowVal(row, 'nombre', 'Nombre', 'nombre_producto', 'Nombre Producto', 'producto', 'descripcion');
+          let id = getRowValue(
+            row,
+            'id_interno', 'id', 'ID Interno', 'ID_INTERNO', 'ID', 'codigo', 'código',
+            'cod', 'item', 'ref', 'sku', 'plu', 'clave', 'identificador', 'ID_PRODUCTO', 'PRODUCTO_ID'
+          );
+
+          let nombre = getRowValue(
+            row,
+            'nombre', 'Nombre', 'nombre_producto', 'Nombre Producto', 'producto',
+            'descripcion', 'descripción', 'descripcion_producto', 'desc', 'item_name',
+            'articulo', 'artículo', 'denominacion', 'denominación', 'PRODUCTO'
+          );
 
           if (!id && nombre) {
             id = `P${String(idx + 1).padStart(3, '0')}`;
+          } else if (id && !nombre) {
+            nombre = `Producto ${id}`;
+          } else if (!id && !nombre) {
+            const values = Object.values(row).filter(v => v !== undefined && String(v).trim() !== '');
+            if (values.length > 0) {
+              id = `P${String(idx + 1).padStart(3, '0')}`;
+              nombre = values[0];
+            } else {
+              skippedCount++;
+              continue;
+            }
           }
 
-          if (!id || !nombre) continue;
-
-          const principio_activo = getRowVal(row, 'principio_activo', 'Principio Activo', 'molecula', 'molécula', 'Molecula');
-          const concentracion = getRowVal(row, 'concentracion', 'Concentración', 'Concentracion');
-          const tamano = getRowVal(row, 'tamano', 'Tamaño', 'presentacion', 'Presentación', 'Presentacion');
-          const laboratorio = getRowVal(row, 'laboratorio', 'Laboratorio', 'lab', 'Lab');
-          const catRaw = getRowVal(row, 'categoria', 'Categoría', 'Categoria');
+          const principio_activo = getRowValue(row, 'principio_activo', 'Principio Activo', 'molecula', 'molécula', 'Molecula', 'sustancia_activa');
+          const concentracion = getRowValue(row, 'concentracion', 'Concentración', 'Concentracion', 'dosis', 'concentracion_mg', 'conc');
+          const tamano = getRowValue(row, 'tamano', 'Tamaño', 'Tamano', 'tamano_empaque', 'presentacion', 'Presentación', 'Presentacion', 'empaque');
+          const laboratorio = getRowValue(row, 'laboratorio', 'Laboratorio', 'lab', 'Lab', 'fabricante');
+          const catRaw = getRowValue(row, 'categoria', 'Categoría', 'Categoria', 'linea', 'grupo');
           const categoria = CATEGORIAS.includes(catRaw) ? catRaw : 'Otros';
 
-          let market_type = getRowVal(row, 'market_type', 'Market Type', 'tipo_mercado', 'tipo', 'Tipo').toUpperCase();
+          let market_type = getRowValue(row, 'market_type', 'Market Type', 'tipo_mercado', 'tipo', 'Tipo').toUpperCase();
           if (market_type.includes('MARCA')) {
             market_type = 'MARCA';
           } else {
             market_type = 'GENERICO';
           }
 
-          let unRaw = getRowVal(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN').toUpperCase();
+          let unRaw = getRowValue(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN', 'linea_negocio').toUpperCase();
           let unidad_negocio = 'La Sante';
           if (unRaw.includes('PHARMETIQUE') || unRaw === 'PH') {
             unidad_negocio = 'Pharmetique';
@@ -248,9 +263,10 @@ export default function Productos() {
             unidad_negocio = 'La Sante';
           }
 
-          const pvpRaw = getRowVal(row, 'pvp_propio_usd', 'PVP Propio USD', 'pvp', 'precio', 'pvp usd', 'precio usd', 'mi precio lista (usd)');
+          const pvpRaw = getRowValue(row, 'pvp_propio_usd', 'PVP Propio USD', 'pvp', 'precio', 'pvp usd', 'precio usd', 'mi precio lista (usd)', 'costo');
           const pvp_propio_usd = parseFloat(pvpRaw.replace(',', '.')) || 0;
-          const unidosis = parseUnidosisCount(tamano);
+          const presentacion = `${concentracion || ''} ${tamano || ''}`.trim();
+          const unidosis = parseUnidosisCount(tamano || presentacion, nombre);
 
           const cleanProd = {
             id,
@@ -259,6 +275,7 @@ export default function Productos() {
             principio_activo,
             concentracion,
             tamano,
+            presentacion,
             laboratorio: laboratorio || 'La Sante',
             categoria,
             pvp_propio_usd,
@@ -268,112 +285,39 @@ export default function Productos() {
             activo: true,
           };
 
-          await dbUpsertProducto(cleanProd);
-          count++;
-
-          for (const key of Object.keys(row)) {
-            if (key.toLowerCase().trim().startsWith('url_')) {
-              const chainNameClean = key.toLowerCase().trim().slice(4).trim();
-              const urlVal = String(row[key] || '').trim();
-              if (urlVal) {
-                const cadenaFormatted = chainNameClean.charAt(0).toUpperCase() + chainNameClean.slice(1);
-                const existingComp = competencia.find(c =>
-                  c.id_producto_propio === id &&
-                  c.cadena.toLowerCase().trim() === cadenaFormatted.toLowerCase().trim()
-                );
-                const docId = existingComp
-                  ? existingComp.id
-                  : `${id}_${chainNameClean}_Competencia`.replace(/\s+/g, '_');
-
-                await dbUpsertProductoCompetencia({
-                  id: docId,
-                  id_producto_propio: id,
-                  cadena: cadenaFormatted,
-                  tipo: 'alternativa',
-                  marca: nombre,
-                  url: urlVal,
-                  activo: true,
-                });
-              }
-            }
-          }
+          prodsToUpsert.push(cleanProd);
         }
 
-        if (count > 0) {
-          addToast(`Carga masiva exitosa: ${count} productos registrados en el catálogo.`, 'success');
-          await cargar(true);
+        if (prodsToUpsert.length > 0) {
+          await dbUpsertProductosBulk(prodsToUpsert);
+
+          setProductos(prev => {
+            const map = new Map(prev.map(p => [p.id, p]));
+            prodsToUpsert.forEach(p => map.set(p.id, p));
+            return Array.from(map.values()).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
+          });
+
+          refreshProductos();
+
+          addToast(`Importación exitosa: ${prodsToUpsert.length} productos registrados.`, 'success');
+
+          setCsvSummary({
+            totalRows: rows.length,
+            successCount: prodsToUpsert.length,
+            skippedCount
+          });
         } else {
-          throw new Error('No se encontraron filas con datos válidos. Revisa que el CSV contenga al menos la columna "id_interno" o "nombre".');
+          throw new Error('No se encontraron filas con datos de productos procesables en el archivo CSV.');
         }
       } catch (err) {
         addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
+        setIsUploadingCsv(false);
         setShowCsvModal(false);
       }
     };
     reader.readAsText(file, 'UTF-8');
-  };
-
-  const parseCSV = (text) => {
-    if (!text) return [];
-    const cleanText = text.replace(/^\uFEFF/, '').trim();
-    if (!cleanText) return [];
-
-    const lines = cleanText.split(/\r?\n/);
-    if (lines.length === 0) return [];
-    
-    // Detect delimiter
-    const firstLine = lines[0];
-    let delimiter = ',';
-    if (firstLine.includes('\t')) {
-      delimiter = '\t';
-    } else if (firstLine.includes(';') && !firstLine.includes(',')) {
-      delimiter = ';';
-    } else if (firstLine.includes(';')) {
-      const commaCount = (firstLine.match(/,/g) || []).length;
-      const semiCount = (firstLine.match(/;/g) || []).length;
-      if (semiCount > commaCount) {
-        delimiter = ';';
-      }
-    }
-
-    const splitLine = (line) => {
-      const result = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === delimiter && !inQuotes) {
-          result.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      result.push(current.trim());
-      return result.map(v => v.replace(/^"|"$/g, '').trim());
-    };
-
-    const rawHeaders = splitLine(lines[0]);
-    const headers = rawHeaders.map(h => h.replace(/^\uFEFF/, '').trim());
-    const result = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.trim()) continue;
-      const values = splitLine(line);
-      const row = {};
-      headers.forEach((header, index) => {
-        if (header) {
-          row[header] = values[index] !== undefined ? values[index] : '';
-        }
-      });
-      result.push(row);
-    }
-    return result;
   };
 
   const sugerirId = () => {
@@ -386,26 +330,12 @@ export default function Productos() {
   };
 
   const downloadCsvPlantilla = () => {
-    // Determine chains columns from active cadenas or defaults
-    const chainList = cadenas.length > 0 
-      ? cadenas.map(c => c.nombre.trim())
-      : ['Farmatodo', 'Locatel', 'Redvital', 'Meditotal'];
-
-    const chainHeaderCols = chainList.map(c => `url_${c.toLowerCase().replace(/\s+/g, '_')}`);
-    const headers = ['id_interno', 'nombre', 'principio_activo', 'concentracion', 'tamano', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio', ...chainHeaderCols].join(',') + '\n';
+    const headers = ['id_interno', 'nombre', 'principio_activo', 'concentracion', 'tamano', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio'].join(',') + '\n';
 
     let content = '\ufeff' + headers; // UTF-8 BOM for Excel compatibility
 
     if (productos.length > 0) {
-      // Export current database products with existing data and chain URLs
       productos.forEach(p => {
-        const pLinks = competencia.filter(c => c.id_producto_propio === p.id_interno && c.activo);
-        
-        const chainUrls = chainList.map(cName => {
-          const found = pLinks.find(c => (c.cadena || '').toLowerCase().trim() === cName.toLowerCase().trim());
-          return found ? found.url : '';
-        });
-
         const row = [
           p.id_interno || '',
           p.nombre || '',
@@ -415,8 +345,7 @@ export default function Productos() {
           p.laboratorio || '',
           p.categoria || '',
           p.market_type || 'GENERICO',
-          p.unidad_negocio || 'La Sante',
-          ...chainUrls
+          p.unidad_negocio || 'La Sante'
         ].map(val => {
           const str = String(val || '');
           if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -429,8 +358,8 @@ export default function Productos() {
       });
     } else {
       // Fallback example rows if database is empty
-      const row1 = 'P001,Atamel,Acetaminofén,500 mg,10 tabletas,La Santé,Analgésicos,MARCA,La Sante,https://www.farmatodo.com.ve/producto/atamel-500mg,https://www.locatel.com.ve/atamel\n';
-      const row2 = 'P002,Calox,Ibuprofeno,400 mg,20 capsulas,Calox,Analgésicos,GENERICO,OTC,,\n';
+      const row1 = 'P001,Atamel,Acetaminofén,500 mg,10 tabletas,La Santé,Analgésicos,MARCA,La Sante\n';
+      const row2 = 'P002,Calox,Ibuprofeno,400 mg,20 capsulas,Calox,Analgésicos,GENERICO,OTC\n';
       content += row1 + row2;
     }
 
@@ -809,18 +738,18 @@ export default function Productos() {
             </div>
             <div className="space-y-4 text-sm text-on-background">
               <p>
-                Sube tu catálogo y enlaces de competidores de forma masiva. El archivo debe estar delimitado por comas.
+                Sube tu catálogo de productos de forma masiva. El archivo puede estar en cualquier formato CSV (comas, punto y coma o tabulaciones).
               </p>
               <div className="bg-surface-low p-4 rounded-2xl border border-outline-variant space-y-1.5 font-mono text-xs">
                 <div className="font-bold text-primary border-b pb-1 mb-1 border-outline-variant flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-sm">lists</span>
-                  Columnas Admitidas:
+                  Columnas del CSV:
                 </div>
                 <div>id_interno <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
                 <div>nombre <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
                 <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
                 <div>concentracion, tamano, laboratorio, categoria</div>
-                <div>url_farmatodo, url_locatel <span className="text-on-surface-variant font-sans font-medium">(Enlaces opcionales)</span></div>
+                <div>market_type, unidad_negocio</div>
               </div>
               <div className="flex justify-between items-center pt-2">
                 <button type="button" onClick={downloadCsvPlantilla}
@@ -831,18 +760,80 @@ export default function Productos() {
               </div>
 
               {/* Drag and Drop Zone */}
-              <div className="border-2 border-dashed border-outline hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-low"
-                onClick={() => fileInputRef.current.click()}>
-                <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
-                <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
-                <p className="text-xs text-on-surface-variant mt-1">Soporta formato .csv delimitado por comas</p>
-                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+              <div
+                className={`border-2 border-dashed border-outline hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-low ${isUploadingCsv ? 'opacity-50 pointer-events-none' : ''}`}
+                onClick={() => !isUploadingCsv && fileInputRef.current.click()}
+              >
+                {isUploadingCsv ? (
+                  <div className="flex flex-col items-center justify-center py-2">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p className="mt-3 text-sm font-bold text-primary">Procesando e importando catálogo...</p>
+                    <p className="text-xs text-on-surface-variant mt-1">Por favor espera un momento</p>
+                  </div>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
+                    <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
+                    <p className="text-xs text-on-surface-variant mt-1">Soporta cualquier formato CSV (comas, punto y coma, tabulaciones)</p>
+                  </>
+                )}
+                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" disabled={isUploadingCsv} />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-3 border-t border-outline-variant">
-              <button onClick={() => setShowCsvModal(false)}
-                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant">
+              <button
+                onClick={() => setShowCsvModal(false)}
+                disabled={isUploadingCsv}
+                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant disabled:opacity-50"
+              >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Result Summary Modal */}
+      {csvSummary && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 space-y-4 border border-outline-variant">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <span className="material-symbols-outlined text-2xl">check_circle</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-on-background">¡Carga Masiva Finalizada!</h3>
+                <p className="text-xs text-on-surface-variant">El catálogo se ha actualizado inmediatamente en pantalla.</p>
+              </div>
+            </div>
+
+            <div className="bg-surface-low rounded-2xl p-4 border border-outline-variant space-y-2 text-sm text-on-background">
+              <div className="flex justify-between py-1 border-b border-outline-variant/50">
+                <span className="text-on-surface-variant">Total de Filas Procesadas:</span>
+                <span className="font-bold">{csvSummary.totalRows}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-outline-variant/50">
+                <span className="text-on-surface-variant">Productos Importados / Actualizados:</span>
+                <span className="font-bold text-emerald-700">{csvSummary.successCount}</span>
+              </div>
+              {csvSummary.compCount > 0 && (
+                <div className="flex justify-between py-1 border-b border-outline-variant/50">
+                  <span className="text-on-surface-variant">Enlaces de Competencia Creados:</span>
+                  <span className="font-bold text-blue-700">{csvSummary.compCount}</span>
+                </div>
+              )}
+              <div className="flex justify-between py-1">
+                <span className="text-on-surface-variant">Filas Omitidas (Sin Datos):</span>
+                <span className="font-bold text-slate-600">{csvSummary.skippedCount}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setCsvSummary(null)}
+                className="w-full py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow hover:bg-primary/90 transition-colors"
+              >
+                Aceptar
               </button>
             </div>
           </div>

@@ -407,7 +407,9 @@ export function DataProvider({ children, user }) {
     refreshProductos,
     refreshCompetencia,
     refreshCadenas,
-    refreshUsuarios
+    refreshUsuarios,
+    setProductos,
+    setProductosCompetencia
   }), [
     productos,
     productosCompetencia,

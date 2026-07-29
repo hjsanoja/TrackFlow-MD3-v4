@@ -8,11 +8,13 @@ import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
 import { executeLiveBatchScrape, scrapeSingleUrl } from '../utils/liveScraper';
+import { parseCSV, getRowValue } from '../utils/csvParser';
 import {
   dbUpsertProductoCompetencia,
   dbDeleteProductoCompetencia,
   dbDeleteAllProductosCompetencia,
-  dbAddHistoricoPrecio
+  dbAddHistoricoPrecio,
+  dbUpsertCompetenciaBulk
 } from '../utils/dbClient';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
@@ -28,7 +30,9 @@ export default function Competencia({ user, userDoc }) {
     productos,
     cadenas,
     loadingInitial: loading,
-    refreshData: cargar
+    refreshData: cargar,
+    refreshCompetencia,
+    setProductosCompetencia
   } = useData();
 
   const [editing, setEditing] = useState(null);
@@ -38,6 +42,8 @@ export default function Competencia({ user, userDoc }) {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [searchParams, setSearchParams] = useSearchParams();
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [isUploadingCsv, setIsUploadingCsv] = useState(false);
+  const [csvSummary, setCsvSummary] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -329,71 +335,82 @@ export default function Competencia({ user, userDoc }) {
     return 'Bs ' + priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const getRowVal = (row, ...keys) => {
-    if (!row) return '';
-    for (const k of keys) {
-      if (row[k] !== undefined && String(row[k]).trim() !== '') {
-        return String(row[k]).trim();
-      }
-    }
-    const norm = str => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-    const rowKeys = Object.keys(row);
-    for (const key of keys) {
-      const targetNorm = norm(key);
-      const foundRowKey = rowKeys.find(rk => norm(rk) === targetNorm);
-      if (foundRowKey && row[foundRowKey] !== undefined && String(row[foundRowKey]).trim() !== '') {
-        return String(row[foundRowKey]).trim();
-      }
-    }
-    return '';
-  };
-
   // CSV Parsing for Bulk Competitor upload
   const handleCsvUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setIsUploadingCsv(true);
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
         const text = evt.target.result;
         const rows = parseCSV(text);
-        if (rows.length === 0) throw new Error('El archivo CSV está vacío.');
+        if (rows.length === 0) throw new Error('El archivo CSV está vacío o no se pudieron reconocer sus columnas.');
 
-        let count = 0;
+        const compToUpsert = [];
+        let skippedCount = 0;
 
         for (const row of rows) {
-          const id_producto = getRowVal(row, 'id_producto_propio', 'ID_Producto', 'id_producto', 'id_interno', 'id', 'id producto', 'producto_id');
-          const cadena = getRowVal(row, 'cadena', 'Cadena');
-          const marca = getRowVal(row, 'marca', 'Marca');
-          const url = getRowVal(row, 'url', 'URL', 'enlace', 'Enlace');
-          const tipo = getRowVal(row, 'tipo', 'Tipo', 'tipo_enlace').toLowerCase();
-          const laboratorio = getRowVal(row, 'laboratorio', 'Laboratorio', 'lab');
-          const concentracion = getRowVal(row, 'concentracion', 'Concentración', 'Concentracion');
-          const tamano = getRowVal(row, 'tamano', 'Tamaño', 'Tamano', 'presentacion');
+          let id_producto = getRowValue(
+            row,
+            'id_producto_propio', 'ID_Producto', 'id_producto', 'id_interno',
+            'id', 'id producto', 'producto_id', 'sku', 'codigo', 'código'
+          );
+          let cadena = getRowValue(row, 'cadena', 'Cadena', 'cadena_farmacia', 'farmacia');
+          let marca = getRowValue(row, 'marca', 'Marca', 'nombre', 'producto');
+          let url = getRowValue(row, 'url', 'URL', 'enlace', 'Enlace', 'link');
+          let tipo = getRowValue(row, 'tipo', 'Tipo', 'tipo_enlace').toLowerCase();
+          let laboratorio = getRowValue(row, 'laboratorio', 'Laboratorio', 'lab', 'fabricante');
+          let concentracion = getRowValue(row, 'concentracion', 'Concentración', 'Concentracion', 'dosis');
+          let tamano = getRowValue(row, 'tamano', 'Tamaño', 'Tamano', 'presentacion', 'Presentación');
 
-          if (!id_producto || !cadena || !url) continue;
+          if (!url) {
+            skippedCount++;
+            continue;
+          }
 
-          // Look for existing competitor document for this product ID and chain
-          const existingComp = items.find(c => 
-            c.id_producto_propio === id_producto && 
+          if (!cadena) {
+            const urlLower = url.toLowerCase();
+            if (urlLower.includes('farmatodo')) cadena = 'Farmatodo';
+            else if (urlLower.includes('locatel')) cadena = 'Locatel';
+            else if (urlLower.includes('redvital')) cadena = 'Redvital';
+            else if (urlLower.includes('meditotal')) cadena = 'Meditotal';
+            else cadena = 'Competencia';
+          }
+
+          if (!id_producto && marca) {
+            const matchedProd = productos.find(p => p.nombre.toLowerCase().trim() === marca.toLowerCase().trim());
+            if (matchedProd) {
+              id_producto = matchedProd.id_interno || matchedProd.id;
+            }
+          }
+
+          if (!id_producto) {
+            skippedCount++;
+            continue;
+          }
+
+          const existingComp = items.find(c =>
+            c.id_producto_propio === id_producto &&
             c.cadena.toLowerCase().trim() === cadena.toLowerCase().trim() &&
             (marca ? (c.marca || '').toLowerCase().trim() === marca.toLowerCase().trim() : true)
-          ) || items.find(c => 
-            c.id_producto_propio === id_producto && 
+          ) || items.find(c =>
+            c.id_producto_propio === id_producto &&
             c.cadena.toLowerCase().trim() === cadena.toLowerCase().trim()
           );
 
           const labPart = laboratorio ? `_${laboratorio}` : '';
           const docId = (row.doc_id || row.id)
             ? (row.doc_id || row.id).trim()
-            : existingComp 
-              ? existingComp.id 
+            : existingComp
+              ? existingComp.id
               : `${id_producto}_${cadena}_${marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
 
-          const activoVal = getRowVal(row, 'activo', 'Activo');
+          const activoVal = getRowValue(row, 'activo', 'Activo');
 
-          await dbUpsertProductoCompetencia({
+          compToUpsert.push({
             id: docId,
             id_producto_propio: id_producto,
             cadena,
@@ -405,85 +422,38 @@ export default function Competencia({ user, userDoc }) {
             concentracion: concentracion || existingComp?.concentracion || '',
             tamano: tamano || existingComp?.tamano || '',
           });
-
-          count++;
         }
 
-        if (count > 0) {
-          addToast(`Carga masiva exitosa: ${count} URLs de competencia importadas.`, 'success');
-          await cargar(true);
+        if (compToUpsert.length > 0) {
+          await dbUpsertCompetenciaBulk(compToUpsert);
+
+          setProductosCompetencia(prev => {
+            const map = new Map(prev.map(c => [c.id, c]));
+            compToUpsert.forEach(c => map.set(c.id, c));
+            return Array.from(map.values());
+          });
+
+          refreshCompetencia();
+
+          addToast(`Importación exitosa: ${compToUpsert.length} enlaces cargados.`, 'success');
+
+          setCsvSummary({
+            totalRows: rows.length,
+            successCount: compToUpsert.length,
+            skippedCount
+          });
         } else {
-          throw new Error('No se encontraron filas con campos obligatorios (id_producto_propio, cadena, url).');
+          throw new Error('No se encontraron filas válidas con al menos id_producto_propio y url.');
         }
       } catch (err) {
         addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
+        setIsUploadingCsv(false);
         setShowCsvModal(false);
       }
     };
     reader.readAsText(file, 'UTF-8');
-  };
-
-  const parseCSV = (text) => {
-    if (!text) return [];
-    const cleanText = text.replace(/^\uFEFF/, '').trim();
-    if (!cleanText) return [];
-
-    const lines = cleanText.split(/\r?\n/);
-    if (lines.length === 0) return [];
-    
-    // Detect delimiter
-    const firstLine = lines[0];
-    let delimiter = ',';
-    if (firstLine.includes('\t')) {
-      delimiter = '\t';
-    } else if (firstLine.includes(';') && !firstLine.includes(',')) {
-      delimiter = ';';
-    } else if (firstLine.includes(';')) {
-      const commaCount = (firstLine.match(/,/g) || []).length;
-      const semiCount = (firstLine.match(/;/g) || []).length;
-      if (semiCount > commaCount) {
-        delimiter = ';';
-      }
-    }
-    
-    const splitLine = (line) => {
-      const result = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === delimiter && !inQuotes) {
-          result.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      result.push(current.trim());
-      return result.map(v => v.replace(/^"|"$/g, '').trim());
-    };
-
-    const rawHeaders = splitLine(lines[0]);
-    const headers = rawHeaders.map(h => h.replace(/^\uFEFF/, '').trim());
-    const result = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.trim()) continue;
-      const values = splitLine(line);
-      const row = {};
-      headers.forEach((header, index) => {
-        if (header) {
-          row[header] = values[index] !== undefined ? values[index] : '';
-        }
-      });
-      result.push(row);
-    }
-    return result;
   };
 
   const downloadExampleCsv = () => {
@@ -981,18 +951,74 @@ export default function Competencia({ user, userDoc }) {
               </div>
 
               {/* File drop area */}
-              <div className="border-2 border-dashed border-outline hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-low"
-                onClick={() => fileInputRef.current.click()}>
-                <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
-                <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
-                <p className="text-xs text-on-surface-variant mt-1">Soporta formato .csv plano</p>
-                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+              <div
+                className={`border-2 border-dashed border-outline hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-low ${isUploadingCsv ? 'opacity-50 pointer-events-none' : ''}`}
+                onClick={() => !isUploadingCsv && fileInputRef.current.click()}
+              >
+                {isUploadingCsv ? (
+                  <div className="flex flex-col items-center justify-center py-2">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p className="mt-3 text-sm font-bold text-primary">Procesando e importando enlaces...</p>
+                    <p className="text-xs text-on-surface-variant mt-1">Por favor espera un momento</p>
+                  </div>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
+                    <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
+                    <p className="text-xs text-on-surface-variant mt-1">Soporta cualquier formato CSV (comas, punto y coma, tabulaciones)</p>
+                  </>
+                )}
+                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" disabled={isUploadingCsv} />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-3 border-t border-outline-variant">
-              <button onClick={() => setShowCsvModal(false)}
-                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant">
+              <button
+                onClick={() => setShowCsvModal(false)}
+                disabled={isUploadingCsv}
+                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant disabled:opacity-50"
+              >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Result Summary Modal */}
+      {csvSummary && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 space-y-4 border border-outline-variant">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <span className="material-symbols-outlined text-2xl">check_circle</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-on-background">¡Carga Masiva Finalizada!</h3>
+                <p className="text-xs text-on-surface-variant">Los enlaces de competencia se han actualizado inmediatamente en pantalla.</p>
+              </div>
+            </div>
+
+            <div className="bg-surface-low rounded-2xl p-4 border border-outline-variant space-y-2 text-sm text-on-background">
+              <div className="flex justify-between py-1 border-b border-outline-variant/50">
+                <span className="text-on-surface-variant">Total de Filas Procesadas:</span>
+                <span className="font-bold">{csvSummary.totalRows}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-outline-variant/50">
+                <span className="text-on-surface-variant">Enlaces Importados / Actualizados:</span>
+                <span className="font-bold text-emerald-700">{csvSummary.successCount}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-on-surface-variant">Filas Omitidas (Sin Enlace o ID):</span>
+                <span className="font-bold text-slate-600">{csvSummary.skippedCount}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setCsvSummary(null)}
+                className="w-full py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow hover:bg-primary/90 transition-colors"
+              >
+                Aceptar
               </button>
             </div>
           </div>
