@@ -53,7 +53,7 @@ jobs:
           ONLY_DOC_ID: ${{ github.event.client_payload.doc_id }}
         run: python scraper/farmatodo.py
 
-      - name: Push results to Firestore
+      - name: Push results to database
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

@@ -30,25 +30,12 @@ def get_db():
 
     raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if not raw:
-        print(
-            "============================================================"
-            "\nERROR: Faltan las credenciales de Firebase (FIREBASE_SERVICE_ACCOUNT).\n"
-            "\nPara resolver esto en GitHub Actions:\n"
-            "1. Ve a tu proyecto en Firebase Console -> Configuración de proyecto -> Cuentas de servicio.\n"
-            "2. Haz clic en 'Generar nueva clave privada' (descargará un archivo .json).\n"
-            "3. En tu repositorio de GitHub, ve a: Settings -> Secrets and variables -> Actions -> New repository secret.\n"
-            "4. Nombre del Secret: FIREBASE_SERVICE_ACCOUNT\n"
-            "5. Valor: Pega todo el contenido del archivo .json descargado.\n"
-            "============================================================",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        raise ValueError("FIREBASE_SERVICE_ACCOUNT no está configurada en las variables de entorno.")
 
     try:
         service_account_info = json.loads(raw)
     except json.JSONDecodeError as e:
-        print(f"ERROR: FIREBASE_SERVICE_ACCOUNT no es JSON válido: {e}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"FIREBASE_SERVICE_ACCOUNT no es un JSON válido: {e}")
 
     cred = credentials.Certificate(service_account_info)
     if not firebase_admin._apps:
