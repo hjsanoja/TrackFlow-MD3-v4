@@ -65,7 +65,6 @@ def update_bcv_rate():
         if is_supabase_configured():
             insert("bcv_rates", [{
                 "value": rate,
-                "source": "auto",
                 "updated_at": now_iso
             }])
             print("  ✅ Tasa BCV guardada en Supabase")

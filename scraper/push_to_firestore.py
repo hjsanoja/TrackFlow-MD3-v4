@@ -136,19 +136,50 @@ def main():
         if is_supabase_configured():
             print("\n[SUPABASE] Sincronizando datos con Supabase...")
             
-            # Upsert en productos_competencia
-            records_to_upsert = [item[0] for item in cambios]
+            # Upsert en productos_competencia con columnas exactas de Supabase
+            records_to_upsert = []
+            for item, es_err, r in cambios:
+                records_to_upsert.append({
+                    "id": item["id"],
+                    "id_producto_propio": item.get("id_producto_propio"),
+                    "cadena": item.get("cadena"),
+                    "marca": item.get("marca"),
+                    "tipo": item.get("tipo"),
+                    "url": item.get("url"),
+                    "ultimo_scrape": item.get("ultimo_scrape"),
+                    "estado": item.get("estado"),
+                    "ultimo_error": item.get("ultimo_error"),
+                    "ultimo_precio_full_bs": item.get("ultimo_precio_full_bs"),
+                    "ultimo_precio_desc_bs": item.get("ultimo_precio_desc_bs"),
+                    "ultimo_nombre": item.get("ultimo_nombre")
+                })
+
             if records_to_upsert:
                 # Insertar en lotes de 100
                 for i in range(0, len(records_to_upsert), 100):
                     upsert("productos_competencia", records_to_upsert[i:i+100])
                 print(f"[SUPABASE] ✅ Actualizados {len(records_to_upsert)} productos en productos_competencia.")
 
-            # Insertar en historico_precios
-            if historico_items:
-                for i in range(0, len(historico_items), 100):
-                    insert("historico_precios", historico_items[i:i+100])
-                print(f"[SUPABASE] ✅ Insertados {len(historico_items)} registros en historico_precios.")
+            # Insertar en historico_precios con columnas exactas de Supabase
+            supabase_historico = []
+            for h in historico_items:
+                supabase_historico.append({
+                    "prod_comp_id": h.get("prod_comp_id"),
+                    "id_producto_propio": h.get("id_producto_propio"),
+                    "cadena": h.get("cadena"),
+                    "marca": h.get("marca"),
+                    "nombre": h.get("nombre"),
+                    "precio_full_bs": h.get("precio_full_bs"),
+                    "precio_desc_bs": h.get("precio_desc_bs"),
+                    "tiene_descuento": Boolean(h.get("tiene_descuento", False)) if "Boolean" in globals() else bool(h.get("tiene_descuento", False)),
+                    "scraped_at": h.get("scraped_at"),
+                    "run_id": h.get("run_id")
+                })
+
+            if supabase_historico:
+                for i in range(0, len(supabase_historico), 100):
+                    insert("historico_precios", supabase_historico[i:i+100])
+                print(f"[SUPABASE] ✅ Insertados {len(supabase_historico)} registros en historico_precios.")
 
             # Registrar scrape_run
             run_data = [{
@@ -157,6 +188,7 @@ def main():
                 "total": len(resultados),
                 "ok": ok,
                 "errores": errores,
+                "status": "exitosa" if errores == 0 else "con_errores",
                 "trigger": trigger
             }]
             insert("scrape_runs", run_data)
