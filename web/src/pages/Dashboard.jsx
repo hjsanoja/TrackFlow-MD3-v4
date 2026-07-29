@@ -37,6 +37,7 @@ export default function Dashboard({ user, userDoc }) {
   const [unSeleccionada, setUnSeleccionada] = useState('Todas');
   const [paginaActual, setPaginaActual] = useState(1);
   const [mostrarCambiosHoy, setMostrarCambiosHoy] = useState(false);
+  const [ocultarSinPrecios, setOcultarSinPrecios] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [dashboardPriceMode, setDashboardPriceMode] = useState('lista');
   const [refreshing, setRefreshing] = useState(false);
@@ -90,7 +91,7 @@ export default function Dashboard({ user, userDoc }) {
   // Reset pagination when filters change
   useEffect(() => {
     setPaginaActual(1);
-  }, [search, categoriaSeleccionada, mostrarCambiosHoy, tipoMercadoSeleccionado, unSeleccionada]);
+  }, [search, categoriaSeleccionada, mostrarCambiosHoy, tipoMercadoSeleccionado, unSeleccionada, ocultarSinPrecios]);
 
   const handleActualizar = async () => {
     if (!isAdmin) return;
@@ -306,10 +307,15 @@ export default function Dashboard({ user, userDoc }) {
       });
   }, [productos, productosCompetencia, bcv.rate, dashboardPriceMode, historicoPrecios, analisisMode]);
 
+  // Count products with no price in any chain
+  const sinPreciosCount = useMemo(() => {
+    return analizados.filter(item => (!item.chainPrices || item.chainPrices.length === 0) && !item.propioPriceUsd).length;
+  }, [analizados]);
+
   // Filtered rows
   const filas = useMemo(() => {
     const term = search.toLowerCase().trim();
-    return analizados.filter(item => {
+    const filtered = analizados.filter(item => {
       const matchSearch = !term || 
         item.producto.nombre.toLowerCase().includes(term) ||
         (item.producto.principio_activo || '').toLowerCase().includes(term) ||
@@ -324,9 +330,27 @@ export default function Dashboard({ user, userDoc }) {
       const pUn = (item.producto.unidad_negocio || 'La Sante').toUpperCase();
       const matchUn = unSeleccionada === 'Todas' || pUn === unSeleccionada.toUpperCase();
 
-      return matchSearch && matchCat && matchChanges && matchTipo && matchUn;
+      const hasAnyPrice = (item.chainPrices && item.chainPrices.length > 0) || Boolean(item.propioPriceUsd);
+      const matchSinPrecios = !ocultarSinPrecios || hasAnyPrice;
+
+      return matchSearch && matchCat && matchChanges && matchTipo && matchUn && matchSinPrecios;
     });
-  }, [analizados, search, categoriaSeleccionada, mostrarCambiosHoy, tipoMercadoSeleccionado, unSeleccionada]);
+
+    // Multi-criteria sorting:
+    // 1. Producto (Alphabetical)
+    // 2. Unidad de Negocio (Alphabetical)
+    return filtered.sort((a, b) => {
+      const nameA = a.producto.nombre || '';
+      const nameB = b.producto.nombre || '';
+      const nameComp = nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+      if (nameComp !== 0) {
+        return nameComp;
+      }
+      const unA = a.producto.unidad_negocio || '';
+      const unB = b.producto.unidad_negocio || '';
+      return unA.localeCompare(unB, 'es', { sensitivity: 'base' });
+    });
+  }, [analizados, search, categoriaSeleccionada, mostrarCambiosHoy, tipoMercadoSeleccionado, unSeleccionada, ocultarSinPrecios]);
 
   const itemsPorPagina = 10;
   const totalPaginas = Math.ceil(filas.length / itemsPorPagina);
@@ -861,130 +885,15 @@ export default function Dashboard({ user, userDoc }) {
       </div>
 
       {/* KPI Cards Area */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <KpiCard label="Catálogo Monitoreado" value={kpiStats.monitoredCount} sub="Productos activos en análisis" icon="package" color="text-primary" />
-        <KpiCard label="Índice de Precio Relativo" value={kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'} sub={`vs Promedio Competidores (Dispersión: ${kpiStats.avgDispersion.toFixed(1)}%)`} icon="analytics" color="text-primary" />
         <KpiCard label="Líder de Precios" value={kpiStats.bestChain} sub="Cadena con precios más bajos" icon="emoji_events" color="text-secondary" />
-        <KpiCard label="Máxima Brecha de Precios" value={`${kpiStats.maxDispersionVal.toFixed(1)}%`} sub={`En: ${kpiStats.maxDispersionProd}`} icon="warning" color="text-error" />
       </div>
 
-      {/* Premium Market Intelligence Bento Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Arbitrage High-Impact Banner Card */}
-        <div className="lg:col-span-2 bg-gradient-to-tr from-[#fcf7ff] to-[#f3ebfa] rounded-[28px] border border-[#e1d5e7] p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:scale-110 transition-transform duration-500"></div>
-          <div className="space-y-2 relative z-10">
-            <div className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-purple-700 text-lg">bolt</span>
-              <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-purple-800">Oportunidad de Arbitraje Activa</span>
-            </div>
-            {kpiStats.arbitrajeInfo ? (
-              <>
-                <h3 className="text-lg font-display font-extrabold text-[#040d53] leading-tight">
-                  Ahorra hasta un <span className="text-purple-700 underline decoration-wavy decoration-purple-400">{kpiStats.arbitrajeInfo.ahorroPct}%</span> comprando <span className="font-sans font-semibold text-purple-900">"{kpiStats.arbitrajeInfo.producto}"</span>
-                </h3>
-                <p className="text-xs text-on-surface-variant max-w-xl font-sans">
-                  Se detectó un costo mínimo en <strong className="text-purple-900">{kpiStats.arbitrajeInfo.chMin}</strong> vs un costo máximo en <strong className="text-purple-900">{kpiStats.arbitrajeInfo.chMax}</strong> para este mismo SKU.
-                </p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-lg font-display font-extrabold text-[#040d53] leading-tight">
-                  Mercado de Medicamentos Estable
-                </h3>
-                <p className="text-xs text-on-surface-variant max-w-xl font-sans">
-                  No hay brechas críticas superiores al 15% entre cadenas. La dispersión general de precios se mantiene controlada.
-                </p>
-              </>
-            )}
-          </div>
-          <div className="pt-4 border-t border-purple-200/40 flex items-center justify-between text-xs relative z-10">
-            <span className="font-mono font-bold text-purple-700 bg-purple-100/50 px-2.5 py-1 rounded-full flex items-center gap-1">
-              <span className="material-symbols-outlined text-xs leading-none">insights</span>
-              Recomendación de Compra
-            </span>
-            <span className="text-[11px] text-[#464650] font-sans">Filtra la tabla de abajo para comparar variantes.</span>
-          </div>
-        </div>
 
-        {/* 3 Mini intelligence KPIs Card */}
-        <div className="bg-white rounded-[28px] border border-outline-variant p-5 shadow-sm space-y-4">
-          <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block border-b pb-1.5 border-outline-variant">
-            Insights de Posicionamiento
-          </span>
-          
-          {/* Own Brand Leadership */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-xs font-bold text-[#1c1b1f] block leading-none">Liderazgo en Precios</span>
-              <span className="text-[10px] text-on-surface-variant font-sans">Porcentaje de productos donde somos líderes</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-extrabold font-mono text-secondary">{kpiStats.porcentajeLiderazgoPropio}%</span>
-              <span className="material-symbols-outlined text-sm text-secondary">trending_up</span>
-            </div>
-          </div>
-
-          {/* Average Price Gap vs Leader */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-xs font-bold text-[#1c1b1f] block leading-none">Brecha vs Opción Más Barata</span>
-              <span className="text-[10px] text-on-surface-variant font-sans">Nuestros precios comparados con el líder</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className={`text-base font-extrabold font-mono ${kpiStats.brechaPromedioVsMin <= 0 ? 'text-green-700' : 'text-amber-700'}`}>
-                {kpiStats.brechaPromedioVsMin > 0 ? '+' : ''}{kpiStats.brechaPromedioVsMin.toFixed(1)}%
-              </span>
-              <span className={`material-symbols-outlined text-sm ${kpiStats.brechaPromedioVsMin <= 0 ? 'text-green-600' : 'text-amber-600'}`}>
-                {kpiStats.brechaPromedioVsMin <= 0 ? 'check_circle' : 'trending_up'}
-              </span>
-            </div>
-          </div>
-
-          {/* High Price Variation SKUs */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-xs font-bold text-[#1c1b1f] block leading-none">Medicamentos con Alta Variación</span>
-              <span className="text-[10px] text-on-surface-variant font-sans">Diferencias mayores al 20% entre farmacias</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-extrabold font-mono text-error">{altaVolatilidad.length} SKUs</span>
-              <span className="material-symbols-outlined text-sm text-error">warning</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Volatility Warning Alert */}
-      {altaVolatilidad.length > 0 && (
-        <div className="bg-[#ffdad6]/40 border border-[#ffdad6] rounded-3xl p-5 space-y-3 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-xl text-[#93000a]">warning</span>
-            <h3 className="font-extrabold text-[#93000a] text-sm">Productos con Alta Dispersión de Precios (Volatilidad &gt;20%)</h3>
-          </div>
-          <p className="text-xs text-[#93000a]/90">
-            Los siguientes medicamentos presentan variaciones de precios muy altas entre las cadenas. Esto significa que hay oportunidades críticas de ahorro comprando en el proveedor líder.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-            {altaVolatilidad.slice(0, 4).map(item => (
-              <div key={item.producto.id_interno} onClick={() => setSelectedProduct({ producto: item.producto, competencia: item.competencia })}
-                className="bg-white p-3 rounded-2xl border border-error/10 hover:bg-error-container/20 cursor-pointer flex justify-between items-center transition-all">
-                <div>
-                  <div className="text-xs font-bold text-primary font-display">{item.producto.nombre}</div>
-                  <div className="text-[10px] text-on-surface-variant font-mono mt-0.5">{item.producto.id_interno} · {item.producto.laboratorio}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs font-mono font-bold text-error">{fmt(item.minCompUsd)} - {fmt(item.maxCompUsd)}</div>
-                  <div className="text-[10px] text-error font-mono font-bold">Brecha: {item.dispersionPercent.toFixed(0)}%</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Visual Analytics Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Leadership Bar Chart */}
         <div className="bg-white rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between">
           <div>
@@ -1010,52 +919,6 @@ export default function Dashboard({ user, userDoc }) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Pricing Positioning (Price Gap vs Competitors) */}
-        <div className="bg-white rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between">
-          <div>
-            <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider mb-1 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-base">bar_chart</span>
-              Brecha de Precios vs. Competencia
-            </h2>
-            <p className="text-[11px] text-on-surface-variant font-sans mb-4 leading-relaxed">
-              Diferencia porcentual de nuestros precios frente al promedio de la competencia. El eje central (0%) indica paridad de precio.
-            </p>
-          </div>
-          <div className="h-60 mt-2">
-            {priceGapData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs text-[#464650] italic">No hay suficientes datos comparativos.</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={priceGapData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 9, fill: '#464650' }} 
-                    interval={0}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 10, fill: '#464650' }} 
-                    tickFormatter={(v) => `${v}%`}
-                  />
-                  <Tooltip content={<PriceGapTooltip />} />
-                  <ReferenceLine y={0} stroke="#464650" strokeWidth={1} />
-                  <Bar dataKey="gap">
-                    {priceGapData.map((entry, index) => {
-                      const isCheaper = entry.gap < 0;
-                      return (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={isCheaper ? '#10b981' : '#f43f5e'} 
-                        />
-                      );
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
           </div>
         </div>
 
@@ -1226,6 +1089,29 @@ export default function Dashboard({ user, userDoc }) {
             >
               <span className="material-symbols-outlined text-[16px]">notifications_active</span>
               ¿Qué cambió hoy? {kpiStats.totalChangesToday > 0 ? `(${kpiStats.totalChangesToday})` : ''}
+            </button>
+
+            {/* Filter: Ocultar productos sin precio */}
+            <button
+              onClick={() => setOcultarSinPrecios(!ocultarSinPrecios)}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                ocultarSinPrecios 
+                  ? 'bg-primary border-primary text-on-primary font-extrabold shadow-sm' 
+                  : 'bg-white border-outline-variant text-on-surface-variant hover:bg-surface-low'
+              }`}
+              title="Quitar de la matriz los productos que no tienen ningún precio en ninguna cadena"
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                {ocultarSinPrecios ? 'visibility_off' : 'filter_alt'}
+              </span>
+              <span>Ocultar sin precio</span>
+              {sinPreciosCount > 0 && (
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  ocultarSinPrecios ? 'bg-white/20 text-white' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
+                }`}>
+                  {sinPreciosCount}
+                </span>
+              )}
             </button>
 
             {/* Market Type Selector */}

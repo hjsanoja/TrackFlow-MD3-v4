@@ -688,7 +688,7 @@ export default function Hallazgos({ user, userDoc }) {
                   {/* Relative indicators */}
                   {item.propioPriceUsd && item.avgCompUsd && (
                     <div className="flex items-center justify-between text-xs font-medium pt-1">
-                      <span className="text-on-surface-variant">Índice IPR vs Competencia:</span>
+                      <span className="text-on-surface-variant">Desviación vs Competencia:</span>
                       <span className={`font-mono font-extrabold ${
                         item.ipr > 115 
                           ? 'text-error' 

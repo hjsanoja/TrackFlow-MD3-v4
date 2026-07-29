@@ -1079,7 +1079,7 @@ export default function Simulador({ user, userDoc }) {
                   {/* Pricing Diagnostics */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-on-surface-variant font-medium">Índice IPR vs Competencia:</span>
+                      <span className="text-on-surface-variant font-medium">Desviación vs Competencia:</span>
                       <span className={`font-mono font-extrabold ${
                         item.avgDiffAvg > 10 
                           ? 'text-error' 
@@ -1394,7 +1394,7 @@ export default function Simulador({ user, userDoc }) {
             {/* Simulated IPR Card */}
             <div className="bg-white rounded-2xl border border-outline-variant p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
               <div>
-                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">IPR Global Simulado</span>
+                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">Paridad Global Simulada</span>
                 <div className="mt-2 flex items-baseline gap-2">
                   <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-primary' : 'text-on-surface-variant'}`}>
                     {simulatedStats.simGlobalIpr ? `${simulatedStats.simGlobalIpr.toFixed(1)}%` : '—'}
@@ -1410,7 +1410,7 @@ export default function Simulador({ user, userDoc }) {
                 </div>
               </div>
               <div className="pt-3 border-t border-outline-variant/30 text-[10px] leading-relaxed mt-2 text-on-surface-variant">
-                IPR Base: <strong className="font-mono">{kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}</strong>. Posición de paridad de tu marca vs promedio.
+                Paridad Base: <strong className="font-mono">{kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}</strong>. Posición de paridad de tu marca vs promedio.
               </div>
             </div>
 

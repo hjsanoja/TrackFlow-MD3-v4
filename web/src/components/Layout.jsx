@@ -20,6 +20,7 @@ export default function Layout({ user, userDoc, children }) {
   // Para reactivarlos en el futuro, descomentar las siguientes líneas:
   const navItems = [
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
+    { to: '/mapa-calor', label: 'Mapa de Calor', icon: 'thermostat', adminOnly: false },
     // { to: '/simulador', label: 'Análisis', icon: 'insights', adminOnly: false }, // REAC_ANÁLISIS_V1.2
     // { to: '/hallazgos', label: 'Hallazgos', icon: 'troubleshoot', adminOnly: false }, // REAC_HALLAZGOS_V1.2
     { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: true },

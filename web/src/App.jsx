@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Simulador from './pages/Simulador';
 import Hallazgos from './pages/Hallazgos';
+import MapaCalor from './pages/MapaCalor';
 import Productos from './pages/Productos';
 import Competencia from './pages/Competencia';
 import Cadenas from './pages/Cadenas';
@@ -192,6 +193,7 @@ function AppContent() {
       <Layout user={user} userDoc={userDoc}>
         <Routes>
           <Route path="/" element={<Dashboard user={user} userDoc={userDoc} />} />
+          <Route path="/mapa-calor" element={<MapaCalor user={user} userDoc={userDoc} />} />
           {/* Versión 1.2: Ocultos del menú en Layout.jsx. Rutas preservadas intactas para cuando se soliciten reactivar */}
           <Route path="/simulador" element={<Simulador user={user} userDoc={userDoc} />} />
           <Route path="/hallazgos" element={<Hallazgos user={user} userDoc={userDoc} />} />

@@ -1,17 +1,16 @@
-# Scraper de Competencia (Farmatodo, Locatel, Farmacias SAAS, etc.) - Version 6 Async Multi-Dominio
+# Scraper de Competencia (Farmatodo, Locatel, Farmacias SAAS, etc.) - Version 6.1 Async Multi-Dominio
 #
 # Arquitectura y Mejoras Integradas:
-# 1. Concurrencia Adaptativa por Dominio:
+# 1. Concurrencia Adaptativa por Dominio & Control Anti-429 para Farmatodo:
 #    - Límite global (MAX_GLOBAL_CONCURRENCY=12) y límite por dominio (MAX_PER_DOMAIN_CONCURRENCY=3).
-#    - Previene bloqueos HTTP 429 (Too Many Requests) / 500 al distribuir las conexiones.
+#    - Concurrencia específica baja para Farmatodo (FARMATODO_CONCURRENCY=1) con pausas previas aleatorias para prevenir HTTP 429.
 # 2. Entrelazado Round-Robin por Cadena:
 #    - Rotación de tiendas (Farmatodo -> Locatel -> SAAS -> Farmatodo) para espaciar
-#      las peticiones de forma natural a 10.000+ productos.
+#      las peticiones de forma natural a miles de productos.
 # 3. Motor de Extracción Universal O(1):
-#    - Compatible con Next.js (__NEXT_DATA__), VTEX (__STATE__ / cm), Schema.org JSON-LD y DOM.
-# 4. Bloqueo Inteligente de Red:
-#    - Cancela recursos pesados (imágenes, fuentes, video, analítica) sin romper estilos/scripts
-#      necesarios para la hidratación React/VTEX.
+#    - Compatible con Next.js (__NEXT_DATA__ / bsPrice), VTEX (__STATE__ / cm), Schema.org JSON-LD y DOM.
+# 4. Bloqueo Inteligente de Red y Headers Anti-Bot:
+#    - Cancela recursos pesados (imágenes, fuentes, video, analítica) e inyecta headers de navegador real (Chrome 124, sec-ch-ua).
 # 5. Obtención única de Tasa BCV al inicio para cero redundancia.
 
 import asyncio
@@ -35,6 +34,7 @@ RESULTS_PATH = PROJECT_ROOT / "resultados.json"
 # Configuración de concurrencia adaptativa por dominio para escalar a miles de links
 MAX_GLOBAL_CONCURRENCY = int(os.environ.get("MAX_GLOBAL_CONCURRENCY", "12"))
 MAX_PER_DOMAIN_CONCURRENCY = int(os.environ.get("MAX_PER_DOMAIN_CONCURRENCY", "3"))
+FARMATODO_CONCURRENCY = int(os.environ.get("FARMATODO_CONCURRENCY", "1"))  # Farmatodo requiere baja concurrencia para evitar HTTP 429
 
 
 def read_text_robust(path: Path) -> str:
@@ -146,8 +146,8 @@ def fetch_bcv_rate_once() -> float:
     except Exception as e:
         print(f"[BCV] Aviso DolarAPI: {e}", flush=True)
 
-    fallback = 44.5
-    print(f"[BCV] Usando tasa hardcoded de seguridad: Bs {fallback:,.2f}", flush=True)
+    fallback = 744.23
+    print(f"[BCV] Usando tasa de seguridad por defecto: Bs {fallback:,.2f}", flush=True)
     return fallback
 
 
@@ -198,8 +198,7 @@ def cargar_filas_de_csv():
 def interleave_filas_por_cadena(filas: list) -> list:
     """
     Agrupa las filas por dominio/cadena y las entrelaza (Round-Robin).
-    Ejemplo: Farmatodo 1 -> SAAS 1 -> Locatel 1 -> Farmatodo 2 -> SAAS 2...
-    Esto evita golpear repetidamente el mismo servidor y previene HTTP 429 / 500.
+    Evita golpear repetidamente el mismo servidor y previene HTTP 429 / 500.
     """
     por_cadena = {}
     for f in filas:
@@ -251,17 +250,18 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
     """
     Motor universal de extracción de e-commerce.
     Soporta Next.js (__NEXT_DATA__), VTEX (__STATE__ / commertialOffer)
-    y Schema.org JSON-LD con extracción complementaria del DOM (incluyendo tachados y ofertas).
+    y Schema.org JSON-LD con extracción complementaria del DOM.
     """
-    return await page.evaluate("""
+    return await page.evaluate(r"""
         () => {
             const bodyText = document.body ? document.body.innerText || '' : '';
             const title = document.title || '';
 
             // 1. Detectar bloqueos de seguridad anti-bot
             if (title.includes('Cloudflare') || title.includes('Just a moment') || 
-                bodyText.includes('Checking your browser') || bodyText.includes('Access Denied')) {
-                return { error: "Bloqueo temporal de seguridad (Cloudflare)." };
+                bodyText.includes('Checking your browser') || bodyText.includes('Access Denied') ||
+                bodyText.includes('Too Many Requests') || title.includes('429')) {
+                return { error: "HTTP 429" };
             }
 
             // 2. Detectar páginas no encontradas o agotadas
@@ -278,16 +278,19 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             const nextDataEl = document.querySelector('script#__NEXT_DATA__');
             if (nextDataEl) {
                 try {
-                    const json = JSON.parse(nextDataEl.textContent);
+                    const json = JSON.parse(nextDataEl.textContent || '{}');
                     const pageProps = json?.props?.pageProps;
                     
                     const findProduct = (obj, depth = 0) => {
-                        if (!obj || depth > 5) return null;
-                        if (obj.product && (obj.product.price || obj.product.name || obj.product.priceOffer || obj.product.description)) return obj.product;
-                        if (obj.productDetail) return obj.productDetail;
-                        if (obj.productData) return obj.productData;
+                        if (!obj || depth > 6) return null;
+                        if (obj.product && typeof obj.product === 'object' && (obj.product.price || obj.product.name || obj.product.bsPrice)) return obj.product;
+                        if (obj.productDetail && typeof obj.productDetail === 'object') return obj.productDetail;
+                        if (obj.productData && typeof obj.productData === 'object') return obj.productData;
+                        
                         for (const k in obj) {
-                            if (k === 'product' || k === 'productDetail' || k === 'productData') return obj[k];
+                            if (k === 'product' || k === 'productDetail' || k === 'productData') {
+                                if (obj[k] && typeof obj[k] === 'object') return obj[k];
+                            }
                             if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
                                 const res = findProduct(obj[k], depth + 1);
                                 if (res) return res;
@@ -298,13 +301,18 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
 
                     const product = findProduct(pageProps) || pageProps?.initialState?.product?.productDetail;
                     if (product) {
-                        nombre = product.name || product.description || product.title;
+                        nombre = product.name || product.description || product.title || product.productName;
                         
+                        // Extraer precios específicos de Farmatodo
+                        const pBs = parseFloat(product.bsPrice || product.precioBs || product.priceBs);
                         const p1 = parseFloat(product.price);
-                        const p2 = parseFloat(product.originalPrice || product.regularPrice || product.listPrice || product.fullPrice || product.normalPrice || product.basePrice || product.priceWithoutDiscount);
+                        const p2 = parseFloat(product.originalPrice || product.regularPrice || product.listPrice || product.fullPrice || product.normalPrice || product.basePrice);
                         const p3 = parseFloat(product.priceOffer || product.offerPrice || product.priceWithOffer || product.discountPrice || product.salePrice);
 
-                        if (p3 && p3 > 0) {
+                        // Si Farmatodo expone el precio en Bs directo
+                        if (pBs && pBs > 0) {
+                            active_price = pBs;
+                        } else if (p3 && p3 > 0) {
                             active_price = p3;
                             if (p1 && p1 > p3) original_price = p1;
                             if (p2 && p2 > p3) original_price = p2;
@@ -369,7 +377,7 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 }
             }
 
-            // 6. ESTRATEGIA D: DOM EXTRACTION (SIEMPRE COMPLEMENTA DOM SI FALTA INFORMACIÓN)
+            // 6. ESTRATEGIA D: DOM EXTRACTION
             const h1El = document.querySelector('h1');
             if (!nombre) {
                 nombre = h1El ? (h1El.innerText || h1El.textContent || '').trim() : document.title.split('|')[0].trim();
@@ -378,7 +386,7 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             let dom_active_text = '';
             let dom_original_text = '';
 
-            // A. Buscar precios tachados en DOM (del, s, strike, line-through, listPrice, etc.)
+            // A. Buscar precios tachados en DOM
             const origEls = document.querySelectorAll(
                 'del, s, strike, .line-through, [class*="line-through"], ' +
                 '[class*="price--original"], [class*="original-price"], [class*="originalPrice"], ' +
@@ -387,8 +395,8 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             );
             for (const el of origEls) {
                 const txt = (el.innerText || el.textContent || '').trim();
-                // Filtrar textos de costo por unidad o dosis ("tabletas a", "unidad a", "c/u")
-                if (txt && !/tableta|unidad\s+a|c\/u|dosis/i.test(txt)) {
+                // Filtrar costos por unidad, dosis o porcentajes de descuento
+                if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF|ahorra/i.test(txt)) {
                     dom_original_text = txt;
                     break;
                 }
@@ -403,7 +411,7 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             for (const el of activeEls) {
                 if (!el.matches('del, s, strike, .line-through, [class*="original"], [class*="old"], [class*="listPrice"]')) {
                     const txt = (el.innerText || el.textContent || '').trim();
-                    if (txt && !/tableta|unidad\s+a|c\/u|dosis/i.test(txt)) {
+                    if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF/i.test(txt)) {
                         dom_active_text = txt;
                         break;
                     }
@@ -423,7 +431,9 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
 
 async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id: str = "1") -> dict:
     """Ejecuta el ciclo de scraping de una URL con reintentos y retroceso exponencial."""
-    intentos = 2
+    intentos = 3
+    is_farmatodo = "farmatodo" in url.lower()
+    
     result = {
         "url": url,
         "marca": marca,
@@ -441,8 +451,12 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         result["precio_desc_bs"] = None
         result["tiene_descuento"] = False
 
+        # Aplicar pausa previa dinámica para Farmatodo
+        if is_farmatodo:
+            await asyncio.sleep(random.uniform(1.2, 3.0))
+
         try:
-            timeout = 18000 + (int_num - 1) * 6000
+            timeout = 22000 + (int_num - 1) * 8000
             response = await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
 
             if response and response.status >= 400:
@@ -451,30 +465,35 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
                     result["error"] = "Producto no disponible o enlace roto (404 / Agotado)."
                     return result
                 if response.status in (429, 403, 500, 502, 503):
-                    backoff = 3 * int_num + random.uniform(1.5, 4.0)
-                    print(f"   [{task_id}] ⚠️ HTTP {response.status} en {url[:35]}... Esperando {backoff:.1f}s", flush=True)
+                    backoff = (6 * int_num) + random.uniform(2.5, 6.0)
+                    print(f"   [{task_id}] ⚠️ HTTP {response.status} en {url[:40]}... Esperando {backoff:.1f}s (Intento {int_num}/{intentos})", flush=True)
                     await asyncio.sleep(backoff)
                     continue
-                await asyncio.sleep(1)
+                await asyncio.sleep(1.5)
                 continue
 
         except PlaywrightTimeout:
             result["error"] = "Timeout cargando la página"
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             continue
         except Exception as e:
             result["error"] = f"Error de red/carga: {type(e).__name__}"
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             continue
 
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.5)
         data = await extract_product_data_from_page(page, url, bcv_rate)
 
         if data.get("error"):
             result["error"] = data["error"]
+            if "HTTP 429" in data["error"]:
+                backoff = (7 * int_num) + random.uniform(3.0, 5.0)
+                print(f"   [{task_id}] ⚠️ Detectado bloqueo HTTP 429 en DOM. Esperando {backoff:.1f}s", flush=True)
+                await asyncio.sleep(backoff)
+                continue
             if "404" in data["error"] or "disponible" in data["error"]:
                 return result
-            await asyncio.sleep(1)
+            await asyncio.sleep(1.5)
             continue
 
         result["nombre"] = data.get("nombre")
@@ -488,17 +507,17 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         p_orig_dom = parse_price(data.get("dom_original_text"))
 
         # Detección y conversión de precios expresados en USD/Divisas
-        if is_usd_text(data.get("dom_active_text")) or (p_act_dom and "farmaciasaas" in url.lower() and p_act_dom < 20.0):
+        if is_usd_text(data.get("dom_active_text")) or (p_act_dom and "farmaciasaas" in url.lower() and p_act_dom < 30.0):
             if p_act_dom:
                 p_act_dom = round(p_act_dom * bcv_rate, 2)
 
-        if is_usd_text(data.get("dom_original_text")) or (p_orig_dom and "farmaciasaas" in url.lower() and p_orig_dom < 20.0):
+        if is_usd_text(data.get("dom_original_text")) or (p_orig_dom and "farmaciasaas" in url.lower() and p_orig_dom < 30.0):
             if p_orig_dom:
                 p_orig_dom = round(p_orig_dom * bcv_rate, 2)
 
         # Filtrar valores dentro del rango lógico en Bolívares
-        actives = [p for p in (p_act_direct, p_act_dom) if p and 0.1 < p < 200000.0]
-        originals = [p for p in (p_orig_direct, p_orig_dom) if p and 0.1 < p < 200000.0]
+        actives = [p for p in (p_act_direct, p_act_dom) if p and 5.0 < p < 300000.0]
+        originals = [p for p in (p_orig_direct, p_orig_dom) if p and 5.0 < p < 300000.0]
 
         all_detected = set(actives + originals)
 
@@ -522,7 +541,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         elif len(all_detected) >= 2:
             p_max = max(all_detected)
             p_min = min(all_detected)
-            if p_max > p_min and (p_max - p_min) > 0.05:
+            if p_max > p_min and (p_max - p_min) > 0.5:
                 precio_full = p_max
                 precio_desc = p_min
                 tiene_descuento = True
@@ -534,8 +553,8 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             precio_full = originals[0]
 
         if precio_full:
-            result["precio_full_bs"] = precio_full
-            result["precio_desc_bs"] = precio_desc
+            result["precio_full_bs"] = round(precio_full, 2)
+            result["precio_desc_bs"] = round(precio_desc, 2) if precio_desc else None
             result["tiene_descuento"] = tiene_descuento
             break
         else:
@@ -585,9 +604,10 @@ async def main_async():
     filas_procesar = interleave_filas_por_cadena(filas_activas)
 
     # 5. Crear semáforos de concurrencia globales y por dominio
+    # Farmatodo usa concurrencia reducida (FARMATODO_CONCURRENCY=1) para prevenir HTTP 429
     global_semaphore = asyncio.Semaphore(MAX_GLOBAL_CONCURRENCY)
     domain_semaphores = {
-        "farmatodo": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY),
+        "farmatodo": asyncio.Semaphore(FARMATODO_CONCURRENCY),
         "locatel": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY),
         "farmaciasaas": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY),
         "saas": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY),
@@ -601,15 +621,28 @@ async def main_async():
                 return domain_semaphores[k]
         return domain_semaphores["default"]
 
-    print(f"\nIniciando scraping de {len(filas_procesar)} URLs (Concurrencia Máx: {MAX_GLOBAL_CONCURRENCY})...\n", flush=True)
+    print(f"\nIniciando scraping de {len(filas_procesar)} URLs (Concurrencia Máx: {MAX_GLOBAL_CONCURRENCY}, Farmatodo Concurrencia: {FARMATODO_CONCURRENCY})...\n", flush=True)
 
-    # 6. Lanzar un único navegador Chromium
+    # 6. Lanzar un único navegador Chromium con opciones anti-detección
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-setuid-sandbox"
+            ]
+        )
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 720},
-            locale="es-VE"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width": 1366, "height": 768},
+            locale="es-VE",
+            extra_http_headers={
+                "Accept-Language": "es-VE,es;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Sec-Ch-Ua": '"Not-A.Brand";v="99", "Chromium";v="124", "Google Chrome";v="124"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+            }
         )
         await context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
 
@@ -634,7 +667,7 @@ async def main_async():
                             "error": "URL vacia"
                         }
                     else:
-                        await asyncio.sleep(random.uniform(0.1, 0.3))
+                        await asyncio.sleep(random.uniform(0.1, 0.4))
                         res = await scrape_url_async(page, url, marca, bcv_rate, task_id=f"{idx}")
 
                     res["id_producto_propio"] = id_prod

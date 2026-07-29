@@ -5,7 +5,7 @@ import ConfirmModal from './ConfirmModal';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { useData } from '../context/DataContext';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine
 } from 'recharts';
 
 const COLORS = ['#040d53', '#70C145', '#ba1a1a', '#004ecb', '#002f6c', '#0891b2', '#db2777'];
@@ -74,6 +74,37 @@ function CustomTooltip({ active, payload, label, propios, labMap, currency, anal
   return null;
 }
 
+function BarChartTooltip({ active, payload, label, currency, analisisMode }) {
+  if (active && payload && payload.length) {
+    const symbol = currency === 'usd' ? '$' : 'Bs ';
+    const locale = currency === 'usd' ? 'en-US' : 'es-VE';
+    return (
+      <div className="bg-white border border-[#e1e2ec] p-3 rounded-2xl shadow-xl space-y-1.5 max-w-xs text-xs font-sans">
+        <p className="font-bold text-[#040d53] font-mono border-b border-[#e1e2ec] pb-1 flex justify-between items-center gap-2">
+          <span>{label}</span>
+          {analisisMode === 'unidosis' && (
+            <span className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
+          )}
+        </p>
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {payload.map((entry) => (
+            <div key={entry.name} className="flex items-center justify-between gap-3 text-[11px]">
+              <span className="flex items-center gap-1.5 font-medium" style={{ color: entry.color }}>
+                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color }}></span>
+                {entry.name}:
+              </span>
+              <span className="font-mono font-bold text-[#1c1b1f]">
+                {symbol}{Number(entry.value).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{analisisMode === 'unidosis' ? '/u' : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function ProductDetailModal({ producto, competencia, currency, bcvRate, onClose, initialPriceMode = 'descuento', initialAnalisisMode = 'empaque' }) {
   const { productos = [], productosCompetencia = [], historicoPrecios = [] } = useData() || {};
 
@@ -97,6 +128,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const [analisisMode, setAnalisisMode] = useState(initialAnalisisMode);
   const [modalCurrency, setModalCurrency] = useState(currency || 'usd');
   const [chartViewType, setChartViewType] = useState('individual'); // 'individual' or 'chainAverage'
+  const [barGroupMode, setBarGroupMode] = useState('laboratorio'); // 'laboratorio' | 'cadena'
+  const [activeGraphTab, setActiveGraphTab] = useState('barras'); // 'barras' | 'tendencia' | 'ambos'
 
   // Dropdown selector states
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -353,28 +386,165 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
   // Filtered competition list for table
   const competenciaFiltrada = useMemo(() => {
-    return competenciaWithUnidosis.filter(pc => {
+    const filtered = competenciaWithUnidosis.filter(pc => {
       const matchRelacion = filterRelacion === 'todos' || 
         (filterRelacion === 'propio' && pc.tipo === 'propio') || 
         (filterRelacion === 'competencia' && pc.tipo !== 'propio');
       const matchCadena = filterCadena === 'todas' || pc.cadena === filterCadena;
       return matchRelacion && matchCadena;
     });
-  }, [competenciaWithUnidosis, filterRelacion, filterCadena]);
 
-  // Minimum full price and minimum discount price for highlights in table
-  const validFullPrices = competenciaWithUnidosis
+    // Multi-criteria sort:
+    // 1. Cadena (Alphabetical)
+    // 2. Relación (propio / Mi Marca first, so it is in a predictable consistent position)
+    // 3. Price (lowest to highest based on current active priceMode)
+    return filtered.sort((a, b) => {
+      const cadenaA = (a.cadena || '').toLowerCase();
+      const cadenaB = (b.cadena || '').toLowerCase();
+      if (cadenaA !== cadenaB) {
+        return cadenaA.localeCompare(cadenaB, 'es');
+      }
+
+      if (a.tipo !== b.tipo) {
+        return a.tipo === 'propio' ? -1 : 1;
+      }
+
+      const priceA = priceMode === 'descuento'
+        ? (a.adjustedDescBs || a.adjustedFullBs || 0)
+        : (a.adjustedFullBs || 0);
+      const priceB = priceMode === 'descuento'
+        ? (b.adjustedDescBs || b.adjustedFullBs || 0)
+        : (b.adjustedFullBs || 0);
+
+      return priceA - priceB;
+    });
+  }, [competenciaWithUnidosis, filterRelacion, filterCadena, priceMode]);
+
+  // Data for Column/Bar chart: Price of each laboratory in each chain (omitting relation/chain filters as requested)
+  const barChartData = useMemo(() => {
+    const listToUse = competenciaWithUnidosis;
+    if (barGroupMode === 'cadena') {
+      const dataMap = new Map();
+      const seriesSet = new Set();
+
+      for (const pc of listToUse) {
+        const cadena = pc.cadena || 'Sin Cadena';
+        const labName = pc.laboratorio ? pc.laboratorio : (pc.marca || 'Sin Lab');
+        const seriesKey = pc.tipo === 'propio' ? `${labName} ⭐` : labName;
+
+        const rawBs = priceMode === 'descuento'
+          ? (pc.adjustedDescBs || pc.adjustedFullBs)
+          : pc.adjustedFullBs;
+
+        if (!rawBs || rawBs <= 0) continue;
+
+        const val = modalCurrency === 'usd' && bcvRate ? rawBs / bcvRate : rawBs;
+        const priceNum = parseFloat(val.toFixed(2));
+
+        seriesSet.add(seriesKey);
+
+        if (!dataMap.has(cadena)) {
+          dataMap.set(cadena, { name: cadena });
+        }
+        const item = dataMap.get(cadena);
+
+        if (item[seriesKey] !== undefined) {
+          const prevSum = item[`_sum_${seriesKey}`] || item[seriesKey];
+          const prevCount = item[`_count_${seriesKey}`] || 1;
+          const newSum = prevSum + priceNum;
+          const newCount = prevCount + 1;
+          item[`_sum_${seriesKey}`] = newSum;
+          item[`_count_${seriesKey}`] = newCount;
+          item[seriesKey] = parseFloat((newSum / newCount).toFixed(2));
+        } else {
+          item[seriesKey] = priceNum;
+        }
+      }
+
+      return {
+        data: Array.from(dataMap.values()),
+        series: Array.from(seriesSet).sort(),
+      };
+    } else {
+      const dataMap = new Map();
+      const seriesSet = new Set();
+
+      for (const pc of listToUse) {
+        const cadena = pc.cadena || 'Sin Cadena';
+        const labName = pc.laboratorio ? pc.laboratorio : (pc.marca || 'Sin Lab');
+        const xKey = pc.tipo === 'propio' ? `${labName} ⭐` : labName;
+        const seriesKey = cadena;
+
+        const rawBs = priceMode === 'descuento'
+          ? (pc.adjustedDescBs || pc.adjustedFullBs)
+          : pc.adjustedFullBs;
+
+        if (!rawBs || rawBs <= 0) continue;
+
+        const val = modalCurrency === 'usd' && bcvRate ? rawBs / bcvRate : rawBs;
+        const priceNum = parseFloat(val.toFixed(2));
+
+        seriesSet.add(seriesKey);
+
+        if (!dataMap.has(xKey)) {
+          dataMap.set(xKey, { name: xKey });
+        }
+        const item = dataMap.get(xKey);
+
+        if (item[seriesKey] !== undefined) {
+          const prevSum = item[`_sum_${seriesKey}`] || item[seriesKey];
+          const prevCount = item[`_count_${seriesKey}`] || 1;
+          const newSum = prevSum + priceNum;
+          const newCount = prevCount + 1;
+          item[`_sum_${seriesKey}`] = newSum;
+          item[`_count_${seriesKey}`] = newCount;
+          item[seriesKey] = parseFloat((newSum / newCount).toFixed(2));
+        } else {
+          item[seriesKey] = priceNum;
+        }
+      }
+
+      return {
+        data: Array.from(dataMap.values()),
+        series: Array.from(seriesSet).sort(),
+      };
+    }
+  }, [competenciaWithUnidosis, barGroupMode, priceMode, modalCurrency, bcvRate]);
+
+  // Calculate overall average price across all items for the column chart reference line
+  const overallBarAverage = useMemo(() => {
+    let sum = 0;
+    let count = 0;
+    for (const pc of competenciaWithUnidosis) {
+      const rawBs = priceMode === 'descuento'
+        ? (pc.adjustedDescBs || pc.adjustedFullBs)
+        : pc.adjustedFullBs;
+      if (rawBs && rawBs > 0) {
+        const val = modalCurrency === 'usd' && bcvRate ? rawBs / bcvRate : rawBs;
+        sum += val;
+        count++;
+      }
+    }
+    return count > 0 ? parseFloat((sum / count).toFixed(2)) : null;
+  }, [competenciaWithUnidosis, priceMode, modalCurrency, bcvRate]);
+
+  // Minimum and maximum prices for highlights in table (calculated on filtered set)
+  const validFullPrices = competenciaFiltrada
     .map(c => c.adjustedFullBs)
     .filter(p => p && p > 0);
   const minFullPriceBs = validFullPrices.length > 0 ? Math.min(...validFullPrices) : null;
+  const maxFullPriceBs = validFullPrices.length > 0 ? Math.max(...validFullPrices) : null;
+  const avgFullPriceBs = validFullPrices.length > 0 ? validFullPrices.reduce((a, b) => a + b, 0) / validFullPrices.length : null;
 
-  const validDescPrices = competenciaWithUnidosis
+  const validDescPrices = competenciaFiltrada
     .map(c => c.adjustedDescBs)
     .filter(p => p && p > 0);
   const minDescPriceBs = validDescPrices.length > 0 ? Math.min(...validDescPrices) : null;
+  const maxDescPriceBs = validDescPrices.length > 0 ? Math.max(...validDescPrices) : null;
+  const avgDescPriceBs = validDescPrices.length > 0 ? validDescPrices.reduce((a, b) => a + b, 0) / validDescPrices.length : null;
 
-  // Calculations for smart indicators (always calculated on full active set for robust comparisons)
-  const validPrices = competenciaWithUnidosis
+  // Calculations for smart indicators (calculated on filtered set)
+  const validPrices = competenciaFiltrada
     .map(c => {
       const pBs = priceMode === 'descuento'
         ? (c.adjustedDescBs || c.adjustedFullBs)
@@ -391,7 +561,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     ? validPrices.reduce((sum, item) => sum + item.priceBs, 0) / validPrices.length
     : null;
 
-  const propioItem = competenciaWithUnidosis.find(c => c.tipo === 'propio');
+  const propioItem = competenciaFiltrada.find(c => c.tipo === 'propio') || competenciaWithUnidosis.find(c => c.tipo === 'propio');
   const propioPriceBs = propioItem 
     ? (priceMode === 'descuento' 
         ? (propioItem.adjustedDescBs || propioItem.adjustedFullBs)
@@ -404,12 +574,44 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const diffAvgBs = (propioPriceBs !== null && avgPriceBs !== null) ? propioPriceBs - avgPriceBs : null;
   const pctAvg = (diffAvgBs !== null && avgPriceBs > 0) ? (diffAvgBs / avgPriceBs) * 100 : null;
 
+  const getChainSpecificColor = (name) => {
+    if (!name) return null;
+    const lower = name.toLowerCase();
+    if (lower.includes('farmatodo')) return '#004ecb'; // Farmatodo en azul
+    if (lower.includes('locatel')) return '#2e7d32'; // Locatel en verde
+    if (lower.includes('saas')) return '#0d9488'; // SAAS en azul-verde / teal
+    return null;
+  };
+
   const getLineColor = (marcaName, index, isPropioChain = false) => {
+    const chainColor = getChainSpecificColor(marcaName);
+    if (chainColor) return chainColor;
+
     if (isPropioChain || (chartData?.individual?.propios && chartData.individual.propios.has(marcaName))) {
-      return '#2e7d32'; // Green for Propio
+      return '#2e7d32'; // Always green for Propio
     }
     const competitorColors = ['#040d53', '#ba1a1a', '#004ecb', '#0891b2', '#db2777', '#8b5cf6', '#ea580c', '#3b82f6'];
     return competitorColors[index % competitorColors.length];
+  };
+
+  const getBarColor = (seriesKey) => {
+    const chainColor = getChainSpecificColor(seriesKey);
+    if (chainColor) return chainColor;
+
+    const isPropio = seriesKey.includes('⭐') || 
+      (propioItem && seriesKey === propioItem.cadena) ||
+      (propioItem && propioItem.marca && seriesKey.toLowerCase().includes(propioItem.marca.toLowerCase()));
+
+    if (isPropio) {
+      return '#2e7d32'; // Always green for user's product/brand/chain
+    }
+    const competitorColors = ['#040d53', '#004ecb', '#ba1a1a', '#0891b2', '#db2777', '#8b5cf6', '#ea580c', '#3b82f6'];
+    let hash = 0;
+    for (let i = 0; i < seriesKey.length; i++) {
+      hash = seriesKey.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % competitorColors.length;
+    return competitorColors[colorIndex];
   };
   const formatHeaderPrice = (priceBs) => {
     if (priceBs == null) return '—';
@@ -745,7 +947,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="bg-white border border-[#e1e2ec] p-4 rounded-2xl shadow-sm space-y-1 relative">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#464650]">
-                    Más Barato {analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)'}
+                    Más Barato {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
                   </span>
                   <InfoTooltip text="El precio mínimo detectado entre todos tus competidores en el mercado para el modo seleccionado (con descuento o de lista)." align="left" />
                 </div>
@@ -781,11 +983,11 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 </div>
                 {propioPriceBs && minPriceItem ? (
                   <>
-                    <div className={`text-lg font-display font-extrabold ${pctMin && pctMin > 0.1 ? 'text-[#ba1a1a]' : 'text-[#70C145]'}`}>
-                      {pctMin && pctMin > 0.1 ? `+${pctMin.toFixed(1)}%` : '¡Precio Mínimo!'}
+                    <div className={`text-lg font-display font-extrabold ${pctMin && pctMin > 0.005 ? 'text-[#ba1a1a]' : 'text-[#70C145]'}`}>
+                      {pctMin && pctMin > 0.005 ? `+${pctMin.toFixed(2)}%` : '¡Precio Mínimo!'}
                     </div>
                     <p className="text-[10px] text-[#464650] font-semibold">
-                      {pctMin && pctMin > 0.1 ? `+${formatHeaderPrice(diffMinBs)} vs el más barato` : 'Líder en este producto'}
+                      {pctMin && pctMin > 0.005 ? `+${formatHeaderPrice(diffMinBs)} vs el más barato` : 'Líder en este producto'}
                     </p>
                   </>
                 ) : (
@@ -797,7 +999,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="bg-white border border-[#e1e2ec] p-4 rounded-2xl shadow-sm space-y-1 relative">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#464650]">
-                    Promedio {analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)'}
+                    Promedio {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
                   </span>
                   <InfoTooltip text="El precio promedio aritmético calculado entre todos los competidores vigentes en el mercado." align="right" />
                 </div>
@@ -855,6 +1057,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     competenciaFiltrada.map(pc => {
                       const isCheapestFull = pc.adjustedFullBs && pc.adjustedFullBs === minFullPriceBs;
                       const isCheapestDesc = pc.adjustedDescBs && pc.adjustedDescBs === minDescPriceBs;
+                      const isMostExpensiveFull = pc.adjustedFullBs && pc.adjustedFullBs === maxFullPriceBs && maxFullPriceBs > minFullPriceBs;
+                      const isMostExpensiveDesc = pc.adjustedDescBs && pc.adjustedDescBs === maxDescPriceBs && maxDescPriceBs > minDescPriceBs;
                       
                       return (
                         <tr key={pc.id} className="hover:bg-[#f8f9fa] transition-colors">
@@ -901,7 +1105,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                           </td>
                           <td className="px-5 py-3 text-right font-mono font-bold text-[#464650]">
                             <div className="flex flex-col items-end justify-center">
-                              <span className={isCheapestFull ? 'text-[#2e7d32] font-extrabold' : ''}>
+                              <span className={
+                                isCheapestFull ? 'text-[#2e7d32] font-extrabold' : 
+                                isMostExpensiveFull ? 'text-[#ba1a1a] font-extrabold' : ''
+                              }>
                                 {formatHeaderPrice(pc.adjustedFullBs)}
                               </span>
                               {isCheapestFull && (
@@ -909,16 +1116,29 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                   Más bajo
                                 </span>
                               )}
+                              {isMostExpensiveFull && (
+                                <span className="text-[9px] bg-red-50 text-[#ba1a1a] border border-red-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                  Más alto
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-5 py-3 text-right font-mono font-extrabold text-[#040d53]">
                             <div className="flex flex-col items-end justify-center">
-                              <span className={isCheapestDesc ? 'text-[#2e7d32] font-extrabold' : ''}>
+                              <span className={
+                                isCheapestDesc ? 'text-[#2e7d32] font-extrabold' : 
+                                isMostExpensiveDesc ? 'text-[#ba1a1a] font-extrabold' : ''
+                              }>
                                 {formatHeaderPrice(pc.adjustedDescBs)}
                               </span>
                               {isCheapestDesc && (
                                 <span className="text-[9px] bg-[#e8f5e9] text-[#2e7d32] border border-[#a5d6a7] font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
                                   Más bajo
+                                </span>
+                              )}
+                              {isMostExpensiveDesc && (
+                                <span className="text-[9px] bg-red-50 text-[#ba1a1a] border border-red-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                  Más alto
                                 </span>
                               )}
                             </div>
@@ -928,157 +1148,383 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     })
                   )}
                 </tbody>
+                {competenciaFiltrada.length > 0 && (
+                  <tfoot className="bg-slate-50 border-t-2 border-[#e1e2ec] font-mono text-[11px] font-bold">
+                    <tr className="border-b border-[#e1e2ec]/60">
+                      <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-slate-500 uppercase tracking-wider text-[10px]">
+                        Mínimo de la Lista
+                      </td>
+                      <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
+                        {minFullPriceBs ? formatHeaderPrice(minFullPriceBs) : '—'}
+                      </td>
+                      <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
+                        {minDescPriceBs ? formatHeaderPrice(minDescPriceBs) : '—'}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-[#e1e2ec]/60">
+                      <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-slate-500 uppercase tracking-wider text-[10px]">
+                        Máximo de la Lista
+                      </td>
+                      <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
+                        {maxFullPriceBs ? formatHeaderPrice(maxFullPriceBs) : '—'}
+                      </td>
+                      <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
+                        {maxDescPriceBs ? formatHeaderPrice(maxDescPriceBs) : '—'}
+                      </td>
+                    </tr>
+                    <tr className="bg-slate-100/70">
+                      <td colSpan="3" className="px-5 py-3 text-right font-sans text-primary uppercase tracking-wider text-[10px] font-extrabold">
+                        Promedio General ({competenciaFiltrada.length} items)
+                      </td>
+                      <td className="px-5 py-3 text-right text-[#040d53] font-black text-xs">
+                        {avgFullPriceBs ? formatHeaderPrice(avgFullPriceBs) : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-right text-[#040d53] font-black text-xs">
+                        {avgDescPriceBs ? formatHeaderPrice(avgDescPriceBs) : '—'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
 
-          {/* Historical Trend Chart */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm">show_chart</span>
-                Historial de Tendencia de Precios ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
-              </h3>
-              {historico.length > 0 && (
+          {/* Chart Section Header with Tab Switch */}
+          <div className="space-y-4 pt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#e1e2ec] shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-lg text-[#040d53]">analytics</span>
+                <span className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider">Análisis Gráfico</span>
+              </div>
+              <div className="bg-[#f3f4f9] p-1 rounded-xl flex gap-1 border border-[#e1e2ec]">
                 <button
-                  onClick={() => setShowClearConfirm(true)}
-                  className="text-[10px] font-bold text-[#ba1a1a] hover:bg-red-50 px-3 py-1 rounded-full border border-red-200 transition-all flex items-center gap-1"
+                  onClick={() => setActiveGraphTab('tendencia')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeGraphTab === 'tendencia'
+                      ? 'bg-[#040d53] text-white shadow-sm'
+                      : 'text-[#464650] hover:bg-white/60'
+                  }`}
                 >
-                  <span className="material-symbols-outlined text-[12px]">delete</span>
-                  Borrar histórico
+                  <span className="material-symbols-outlined text-[15px]">show_chart</span>
+                  Historial de Tendencia
                 </button>
-              )}
+                <button
+                  onClick={() => setActiveGraphTab('barras')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeGraphTab === 'barras'
+                      ? 'bg-[#040d53] text-white shadow-sm'
+                      : 'text-[#464650] hover:bg-white/60'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[15px]">bar_chart</span>
+                  Precios por Laboratorio
+                </button>
+                <button
+                  onClick={() => setActiveGraphTab('ambos')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeGraphTab === 'ambos'
+                      ? 'bg-[#040d53] text-white shadow-sm'
+                      : 'text-[#464650] hover:bg-white/60'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[15px]">grid_view</span>
+                  Ver Ambos
+                </button>
+              </div>
             </div>
-            <div className="bg-white rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
-              {/* Selector de tipo de gráfico */}
-              {historico.length > 0 && !loading && !error && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#e1e2ec] animate-fade-in">
-                  <div className="flex items-center gap-1.5 text-[#464650]">
-                    <span className="material-symbols-outlined text-[16px]">insights</span>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Modo del Gráfico:</span>
-                  </div>
-                  <div className="bg-[#f3f4f9] p-0.5 rounded-xl flex gap-1 self-start sm:self-auto border border-[#e1e2ec]">
-                    <button
-                      onClick={() => setChartViewType('individual')}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
-                        chartViewType === 'individual'
-                          ? 'bg-white text-[#040d53] shadow-sm'
-                          : 'text-[#464650] hover:bg-white/50'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[14px]">medication</span>
-                      Detalle por Variante
-                    </button>
-                    <button
-                      onClick={() => setChartViewType('chainAverage')}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
-                        chartViewType === 'chainAverage'
-                          ? 'bg-white text-[#040d53] shadow-sm'
-                          : 'text-[#464650] hover:bg-white/50'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
-                      Promedio por Cadena
-                    </button>
-                  </div>
-                </div>
-              )}
 
-              {loading ? (
-                <div className="h-64 flex flex-col items-center justify-center text-xs text-[#464650] font-semibold gap-1.5 animate-pulse">
-                  <span className="material-symbols-outlined animate-spin text-2xl text-[#040d53]">autorenew</span>
-                  Cargando tendencia histórica...
+            {/* Historical Trend Chart */}
+            {(activeGraphTab === 'tendencia' || activeGraphTab === 'ambos') && (
+              <div className="space-y-2 animate-fade-in">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm">show_chart</span>
+                    Historial de Tendencia de Precios ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
+                  </h3>
+                  {historico.length > 0 && (
+                    <button
+                      onClick={() => setShowClearConfirm(true)}
+                      className="text-[10px] font-bold text-[#ba1a1a] hover:bg-red-50 px-3 py-1 rounded-full border border-red-200 transition-all flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">delete</span>
+                      Borrar histórico
+                    </button>
+                  )}
                 </div>
-              ) : error ? (
-                <div className="h-64 flex items-center justify-center text-[#ba1a1a] text-xs font-mono font-bold">{error}</div>
-              ) : chartData[chartViewType].data.length === 0 ? (
-                <div className="h-64 flex items-center justify-center text-[#464650] text-xs italic text-center px-4">
-                  No hay suficiente historial que coincida con los filtros seleccionados (relación / cadena) para este gráfico.
-                </div>
-              ) : (
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData[chartViewType].data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                      <XAxis 
-                        dataKey="date" 
-                        tickFormatter={(tick) => {
-                          try {
-                            const parts = tick.split('-');
-                            if (parts.length === 3) {
-                              return `${parts[2]}/${parts[1]}`;
-                            }
-                          } catch (e) {}
-                          return tick;
-                        }}
-                        tick={{ fontSize: 11, fill: '#464650' }} 
-                      />
-                      <YAxis tick={{ fontSize: 11, fill: '#464650' }} />
-                      <Tooltip content={
-                        <CustomTooltip 
-                          propios={chartViewType === 'individual' 
-                            ? Array.from(chartData.individual.propios) 
-                            : (propioItem ? [propioItem.cadena] : [])
-                          } 
-                          labMap={chartViewType === 'individual' ? Object.fromEntries(labMap) : {}} 
-                          currency={modalCurrency} 
-                          analisisMode={analisisMode}
-                        />
-                      } />
-                      <Legend wrapperStyle={{ fontSize: 11, marginTop: 10 }} />
-                      
-                      {chartViewType === 'individual' ? (
-                        chartData.individual.marcas.map((m, i) => {
-                          const isPropio = chartData.individual.propios.has(m);
-                          return (
+                <div className="bg-white rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
+                  {/* Selector de tipo de gráfico */}
+                  {historico.length > 0 && !loading && !error && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#e1e2ec] animate-fade-in">
+                      <div className="flex items-center gap-1.5 text-[#464650]">
+                        <span className="material-symbols-outlined text-[16px]">insights</span>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Modo del Gráfico:</span>
+                      </div>
+                      <div className="bg-[#f3f4f9] p-0.5 rounded-xl flex gap-1 self-start sm:self-auto border border-[#e1e2ec]">
+                        <button
+                          onClick={() => setChartViewType('individual')}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                            chartViewType === 'individual'
+                              ? 'bg-white text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-white/50'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[14px]">medication</span>
+                          Detalle por Variante
+                        </button>
+                        <button
+                          onClick={() => setChartViewType('chainAverage')}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                            chartViewType === 'chainAverage'
+                              ? 'bg-white text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-white/50'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
+                          Promedio por Cadena
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {loading ? (
+                    <div className="h-64 flex flex-col items-center justify-center text-xs text-[#464650] font-semibold gap-1.5 animate-pulse">
+                      <span className="material-symbols-outlined animate-spin text-2xl text-[#040d53]">autorenew</span>
+                      Cargando tendencia histórica...
+                    </div>
+                  ) : error ? (
+                    <div className="h-64 flex items-center justify-center text-[#ba1a1a] text-xs font-mono font-bold">{error}</div>
+                  ) : chartData[chartViewType].data.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-[#464650] text-xs italic text-center px-4">
+                      No hay suficiente historial que coincida con los filtros seleccionados (relación / cadena) para este gráfico.
+                    </div>
+                  ) : (
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData[chartViewType].data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
+                          <XAxis 
+                            dataKey="date" 
+                            tickFormatter={(tick) => {
+                              try {
+                                const parts = tick.split('-');
+                                if (parts.length === 3) {
+                                  return `${parts[2]}/${parts[1]}`;
+                                }
+                              } catch (e) {}
+                              return tick;
+                            }}
+                            tick={{ fontSize: 11, fill: '#464650' }} 
+                          />
+                          <YAxis tick={{ fontSize: 11, fill: '#464650' }} />
+                          <Tooltip content={
+                            <CustomTooltip 
+                              propios={chartViewType === 'individual' 
+                                ? Array.from(chartData.individual.propios) 
+                                : (propioItem ? [propioItem.cadena] : [])
+                              } 
+                              labMap={chartViewType === 'individual' ? Object.fromEntries(labMap) : {}} 
+                              currency={modalCurrency} 
+                              analisisMode={analisisMode}
+                            />
+                          } />
+                          <Legend wrapperStyle={{ fontSize: 11, marginTop: 10 }} />
+                          
+                          {chartViewType === 'individual' ? (
+                            chartData.individual.marcas.map((m, i) => {
+                              const isPropio = chartData.individual.propios.has(m);
+                              return (
+                                <Line
+                                  key={m}
+                                  type="monotone"
+                                  dataKey={m}
+                                  name={isPropio ? `${m} ⭐ (Mi Marca)` : m}
+                                  stroke={getLineColor(m, i)}
+                                  strokeWidth={isPropio ? 4.5 : 2}
+                                  dot={{ r: isPropio ? 5 : 3 }}
+                                  connectNulls
+                                />
+                              );
+                            })
+                          ) : (
+                            chartData.chainAverage.cadenas.map((c, i) => {
+                              const isPropioChain = propioItem && propioItem.cadena === c;
+                              return (
+                                <Line
+                                  key={c}
+                                  type="monotone"
+                                  dataKey={c}
+                                  name={isPropioChain ? `${c} ⭐ (Mi Cadena)` : c}
+                                  stroke={getLineColor(c, i, isPropioChain)}
+                                  strokeWidth={isPropioChain ? 4.5 : 2}
+                                  dot={{ r: isPropioChain ? 5 : 3 }}
+                                  connectNulls
+                                />
+                              );
+                            })
+                          )}
+
+                          {/* Línea especial para el Promedio del mercado */}
+                          {chartData[chartViewType].data.length > 0 && (
                             <Line
-                              key={m}
                               type="monotone"
-                              dataKey={m}
-                              name={isPropio ? `${m} ⭐ (Mi Marca)` : m}
-                              stroke={getLineColor(m, i)}
-                              strokeWidth={isPropio ? 4.5 : 2}
-                              dot={{ r: isPropio ? 5 : 3 }}
+                              dataKey="Promedio"
+                              name="Promedio Mercado"
+                              stroke="#ea580c"
+                              strokeWidth={3}
+                              strokeDasharray="6 4"
+                              dot={{ r: 4 }}
                               connectNulls
                             />
-                          );
-                        })
-                      ) : (
-                        chartData.chainAverage.cadenas.map((c, i) => {
-                          const isPropioChain = propioItem && propioItem.cadena === c;
-                          return (
-                            <Line
-                              key={c}
-                              type="monotone"
-                              dataKey={c}
-                              name={isPropioChain ? `${c} ⭐ (Mi Cadena)` : c}
-                              stroke={getLineColor(c, i, isPropioChain)}
-                              strokeWidth={isPropioChain ? 4.5 : 2}
-                              dot={{ r: isPropioChain ? 5 : 3 }}
-                              connectNulls
-                            />
-                          );
-                        })
-                      )}
-
-                      {/* Línea especial para el Promedio del mercado */}
-                      {chartData[chartViewType].data.length > 0 && (
-                        <Line
-                          type="monotone"
-                          dataKey="Promedio"
-                          name="Promedio Mercado"
-                          stroke="#ea580c"
-                          strokeWidth={3}
-                          strokeDasharray="6 4"
-                          dot={{ r: 4 }}
-                          connectNulls
-                        />
-                      )}
-                    </LineChart>
-                  </ResponsiveContainer>
+                          )}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Column Chart: Price of each laboratory in each chain */}
+            {(activeGraphTab === 'barras' || activeGraphTab === 'ambos') && (
+              <div className="space-y-2 animate-fade-in">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm">bar_chart</span>
+                    Precios por Laboratorio por Cadena ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
+                  </h3>
+                </div>
+                <div className="bg-white rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#e1e2ec]">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-[#464650]">
+                        <span className="material-symbols-outlined text-[16px]">tune</span>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Agrupar Eje X Por:</span>
+                      </div>
+                      <div className="bg-[#f3f4f9] p-0.5 rounded-xl flex gap-1 border border-[#e1e2ec]">
+                        <button
+                          onClick={() => setBarGroupMode('laboratorio')}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                            barGroupMode === 'laboratorio'
+                              ? 'bg-white text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-white/50'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[14px]">science</span>
+                          Por Laboratorio
+                        </button>
+                        <button
+                          onClick={() => setBarGroupMode('cadena')}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                            barGroupMode === 'cadena'
+                              ? 'bg-white text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-white/50'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[14px]">storefront</span>
+                          Por Cadena
+                        </button>
+                      </div>
+                    </div>
+
+                    {overallBarAverage !== null && (
+                      <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-[#ea580c] px-3 py-1 rounded-xl text-[11px] font-bold font-mono self-start sm:self-auto shadow-xs">
+                        <span className="material-symbols-outlined text-[15px]">show_chart</span>
+                        <span>Promedio General: {modalCurrency === 'usd' ? '$' : 'Bs '}{overallBarAverage.toLocaleString(modalCurrency === 'usd' ? 'en-US' : 'es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {barChartData.data.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-[#464650] text-xs italic text-center px-4">
+                      No hay productos registrados para mostrar en este gráfico.
+                    </div>
+                  ) : (
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={barChartData.data} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#464650' }} />
+                          <YAxis tick={{ fontSize: 11, fill: '#464650' }} />
+                          <Tooltip content={<BarChartTooltip currency={modalCurrency} analisisMode={analisisMode} />} />
+                          <Legend wrapperStyle={{ fontSize: 11, marginTop: 10 }} />
+                          {overallBarAverage !== null && (
+                            <ReferenceLine
+                              y={overallBarAverage}
+                              stroke="#ea580c"
+                              strokeDasharray="4 4"
+                              strokeWidth={1.5}
+                              strokeOpacity={0.7}
+                              isFront={false}
+                            />
+                          )}
+                          {barChartData.series.map((seriesKey) => {
+                            const barColor = getBarColor(seriesKey);
+                            const symbol = modalCurrency === 'usd' ? '$' : 'Bs ';
+                            return (
+                              <Bar
+                                key={seriesKey}
+                                dataKey={seriesKey}
+                                name={seriesKey}
+                                fill={barColor}
+                                radius={[4, 4, 0, 0]}
+                              >
+                                {barGroupMode === 'cadena' && barChartData.data.map((entry, idx) => {
+                                  const cellColor = getChainSpecificColor(entry.name);
+                                  return cellColor ? <Cell key={`cell-${idx}`} fill={cellColor} /> : null;
+                                })}
+                                <LabelList
+                                  dataKey={seriesKey}
+                                  content={(props) => {
+                                    const { x, y, width, value } = props;
+                                    if (value == null || value <= 0) return null;
+                                    const numStr = Number(value).toLocaleString(modalCurrency === 'usd' ? 'en-US' : 'es-VE', {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2
+                                    });
+                                    const labelText = `${symbol}${numStr}`;
+                                    const cx = x + width / 2;
+                                    const cy = y - 9;
+                                    const pillWidth = Math.max(42, labelText.length * 5.2 + 8);
+                                    const pillHeight = 14;
+                                    return (
+                                      <g>
+                                        <rect
+                                          x={cx - pillWidth / 2}
+                                          y={cy - pillHeight / 2}
+                                          width={pillWidth}
+                                          height={pillHeight}
+                                          rx={3}
+                                          fill="#ffffff"
+                                          stroke="#e1e2ec"
+                                          strokeWidth={1}
+                                          opacity={0.95}
+                                        />
+                                        <text
+                                          x={cx}
+                                          y={cy + 0.5}
+                                          fill="#040d53"
+                                          textAnchor="middle"
+                                          dominantBaseline="middle"
+                                          fontSize="8.5px"
+                                          fontWeight="800"
+                                          fontFamily="monospace"
+                                        >
+                                          {labelText}
+                                        </text>
+                                      </g>
+                                    );
+                                  }}
+                                />
+                              </Bar>
+                            );
+                          })}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
