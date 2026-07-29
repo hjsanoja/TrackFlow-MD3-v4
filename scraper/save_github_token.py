@@ -32,17 +32,35 @@ def main():
         print("ERROR: usuario y repo son obligatorios")
         sys.exit(1)
 
-    db = get_db()
-    db.collection("secrets").document("github_dispatch").set({
+    secret_data = {
+        "id": "github_dispatch",
         "token": token,
         "repo_owner": repo_owner,
         "repo_name": repo_name,
         "workflow_event_type": "run-scraper",
-        "updated_at": datetime.now(timezone.utc),
-    })
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Intentar guardar en Supabase si está disponible
+    try:
+        from supabase_client import get_supabase_client
+        sp = get_supabase_client()
+        if sp:
+            sp.table("secrets").upsert(secret_data).execute()
+            print("OK: token guardado en Supabase (tabla 'secrets').")
+    except Exception as e:
+        print(f"Aviso Supabase: {e}")
+
+    # Intentar guardar en Firestore
+    try:
+        db = get_db()
+        if db:
+            db.collection("secrets").document("github_dispatch").set(secret_data)
+            print("OK: token guardado en Firestore (secrets/github_dispatch).")
+    except Exception as e:
+        print(f"Aviso Firestore: {e}")
 
     print("")
-    print("OK: token guardado en Firestore.")
     print("  Repo: " + repo_owner + "/" + repo_name)
     print("  Event type: run-scraper")
 

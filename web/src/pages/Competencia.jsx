@@ -3,6 +3,7 @@ import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../firebase';
 import ConfirmModal from '../components/ConfirmModal';
+import GitHubConfigModal from '../components/GitHubConfigModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
@@ -13,6 +14,7 @@ import {
   dbDeleteAllProductosCompetencia,
   dbAddHistoricoPrecio
 } from '../utils/dbClient';
+import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
 const TIPOS = [
   { value: 'propio', label: 'Mi marca' },
@@ -41,6 +43,7 @@ export default function Competencia() {
   const [scrapingItems, setScrapingItems] = useState({});
   const [manualPriceItem, setManualPriceItem] = useState(null);
   const [isGlobalScraping, setIsGlobalScraping] = useState(false);
+  const [showGithubModal, setShowGithubModal] = useState(false);
 
   const { addToast } = useToast();
 
@@ -178,79 +181,38 @@ export default function Competencia() {
     setConfirmDeleteAll(false);
   };
 
-  const getGitHubConfig = async () => {
-    let config = null;
-    if (db) {
-      try {
-        const secretSnap = await getDoc(doc(db, 'secrets', 'github_dispatch'));
-        if (secretSnap.exists()) {
-          config = secretSnap.data();
-        }
-      } catch (fErr) {
-        console.warn('Aviso de permisos al leer secrets/github_dispatch en Firestore:', fErr?.message || String(fErr));
-      }
-    }
-    if (!config) {
-      const localConfig = localStorage.getItem('trackflow_github_config');
-      if (localConfig) {
-        try { config = JSON.parse(localConfig); } catch (_) {}
-      }
-    }
-    return config;
-  };
-
   const handleDispararScraperGlobal = async () => {
     setIsGlobalScraping(true);
     try {
       const config = await getGitHubConfig();
-      if (config && config.token && config.repo_owner && config.repo_name) {
-        const res = await fetch(
-          `https://api.github.com/repos/${config.repo_owner}/${config.repo_name}/dispatches`,
-          {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/vnd.github+json',
-              'Authorization': `Bearer ${config.token}`,
-              'X-GitHub-Api-Version': '2022-11-28',
-            },
-            body: JSON.stringify({ event_type: config.workflow_event_type || 'run-scraper' }),
-          }
-        );
-        if (res.status === 204) {
-          addToast('El robot scraper global ha sido ejecutado vía GitHub Actions.', 'success');
-          setIsGlobalScraping(false);
-          return;
-        } else {
-          const txt = await res.text();
-          throw new Error(`GitHub respondió ${res.status}: ${txt}`);
-        }
+
+      if (!config || !config.token || !config.repo_owner || !config.repo_name) {
+        addToast('No se encontraron credenciales de GitHub Actions. Ingresa tus datos de conexión.', 'info');
+        setShowGithubModal(true);
+        setIsGlobalScraping(false);
+        return;
       }
 
-      // Extracción real en vivo enlace por enlace
-      addToast('Iniciando extracción en tiempo real enlace por enlace...', 'info');
-      const itemsToScrape = (items || []).filter(it => it.activo !== false);
-      const res = await executeLiveBatchScrape(itemsToScrape, ({ index, total, item }) => {
-        if (index === 1 || index % 5 === 0 || index === total) {
-          addToast(`Extrayendo enlace ${index}/${total}: [${item.cadena || 'Competencia'}] ${item.marca || ''}...`, 'info');
-        }
-      });
-
-      addToast(`¡Extracción completada con éxito! Se procesaron ${res.total} enlaces (${res.ok} exitosos, ${res.errores} errores).`, 'success');
-      await cargar(true);
-      setIsGlobalScraping(false);
-      return;
+      await triggerGitHubScraper({ config });
+      addToast('¡Robot scraper global disparado con éxito vía GitHub Actions!', 'success');
     } catch (err) {
-      addToast('Error al disparar scraper: ' + err.message, 'error');
+      if (err.message === 'CONFIG_MISSING') {
+        setShowGithubModal(true);
+      } else {
+        addToast('Error al disparar GitHub Actions: ' + err.message, 'error');
+      }
+    } finally {
+      setIsGlobalScraping(false);
     }
-    setIsGlobalScraping(false);
   };
 
   const handleToggleActivo = async (item) => {
     try {
-      await setDoc(doc(db, 'productos_competencia', item.id), {
+      await dbUpsertProductoCompetencia({
+        ...item,
         activo: !item.activo,
-      }, { merge: true });
-      await cargar();
+      });
+      await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -260,91 +222,32 @@ export default function Competencia() {
     setScrapingItems(prev => ({ ...prev, [item.id]: 'disparando' }));
     try {
       const config = await getGitHubConfig();
-      if (config && config.token && config.repo_owner && config.repo_name) {
-        const { token, repo_owner, repo_name, workflow_event_type } = config;
-        const res = await fetch(
-          `https://api.github.com/repos/${repo_owner}/${repo_name}/dispatches`,
-          {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/vnd.github+json',
-              'Authorization': `Bearer ${token}`,
-              'X-GitHub-Api-Version': '2022-11-28',
-            },
-            body: JSON.stringify({
-              event_type: workflow_event_type || 'run-scraper',
-              client_payload: {
-                product_id: item.id_producto_propio,
-                doc_id: item.id
-              }
-            }),
-          }
-        );
-        if (res.status === 204) {
-          setScrapingItems(prev => ({ ...prev, [item.id]: 'esperando' }));
-          addToast(`El robot se ha lanzado para extraer "${item.marca}" vía GitHub Actions.`, 'success');
-          return;
-        }
+
+      if (!config || !config.token || !config.repo_owner || !config.repo_name) {
+        addToast('Ingresa tus credenciales de GitHub Actions para continuar.', 'info');
+        setShowGithubModal(true);
+        setScrapingItems(prev => ({ ...prev, [item.id]: null }));
+        return;
       }
 
-      // Extracción directa link por link en vivo
-      addToast(`Extrayendo datos en tiempo real de "${item.marca || item.cadena}"...`, 'info');
-      const resData = await scrapeSingleUrl(item.url);
-
-      if (resData.error || !resData.precio_full_bs) {
-        addToast(`Error al extraer ${item.marca || 'enlace'}: ${resData.error || 'Precio no encontrado en la página'}`, 'error');
-      } else {
-        const now = new Date();
-        if (item.id) {
-          try {
-            await dbUpsertProductoCompetencia({
-              ...item,
-              ultimo_precio_full_bs: resData.precio_full_bs,
-              ultimo_precio_desc_bs: resData.precio_desc_bs || null,
-              ultimo_nombre: resData.nombre || null,
-              ultimo_scrape: now,
-              estado: 'ok',
-              ultimo_error: null
-            });
-
-            await dbAddHistoricoPrecio({
-              prod_comp_id: item.id,
-              id_producto_propio: item.id_producto_propio || '',
-              cadena: item.cadena || '',
-              marca: item.marca || '',
-              nombre: resData.nombre || item.marca || '',
-              precio_full_bs: resData.precio_full_bs,
-              precio_desc_bs: resData.precio_desc_bs || null,
-              tiene_descuento: Boolean(resData.tiene_descuento),
-              scraped_at: now,
-              run_id: `single_${Date.now()}`
-            });
-          } catch (e) {
-            console.warn('Aviso guardando resultado individual:', e?.message || String(e));
-          }
+      await triggerGitHubScraper({
+        config,
+        payload: {
+          product_id: item.id_producto_propio,
+          doc_id: item.id
         }
-
-        let pMsg = `Bs ${resData.precio_full_bs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
-        if (resData.precio_desc_bs) {
-          pMsg += ` (Oferta: Bs ${resData.precio_desc_bs.toLocaleString('es-VE', { minimumFractionDigits: 2 })})`;
-        }
-        addToast(`¡Extracción completada para "${item.marca || item.cadena}"! Precio extraído: ${pMsg}`, 'success');
-      }
-
-      setScrapingItems(prev => {
-        const copy = { ...prev };
-        delete copy[item.id];
-        return copy;
       });
-      await cargar(true);
 
+      setScrapingItems(prev => ({ ...prev, [item.id]: 'esperando' }));
+      addToast(`Robot lanzado para extraer "${item.marca}" vía GitHub Actions.`, 'success');
+      return;
     } catch (err) {
-      setScrapingItems(prev => {
-        const copy = { ...prev };
-        delete copy[item.id];
-        return copy;
-      });
-      addToast('Error al extraer enlace: ' + err.message, 'error');
+      setScrapingItems(prev => ({ ...prev, [item.id]: null }));
+      if (err.message === 'CONFIG_MISSING') {
+        setShowGithubModal(true);
+      } else {
+        addToast('Error al disparar scraper: ' + err.message, 'error');
+      }
     }
   };
 
@@ -622,6 +525,12 @@ export default function Competencia() {
             className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm">
             <span className="material-symbols-outlined text-base">upload_file</span>
             <span>Importar CSV</span>
+          </button>
+          <button onClick={() => setShowGithubModal(true)}
+            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm"
+            title="Configurar credenciales de GitHub Actions (Token / Repo)">
+            <span className="material-symbols-outlined text-base">settings</span>
+            <span>Config GitHub</span>
           </button>
           <button onClick={handleDispararScraperGlobal}
             disabled={isGlobalScraping}
@@ -1147,6 +1056,11 @@ export default function Competencia() {
           </div>
         </div>
       )}
+
+      <GitHubConfigModal
+        isOpen={showGithubModal}
+        onClose={() => setShowGithubModal(false)}
+      />
     </div>
   );
 }

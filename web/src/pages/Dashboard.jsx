@@ -4,10 +4,12 @@ import { db } from '../firebase';
 import { useBcvRate } from '../hooks/useBcvRate';
 import ProductDetailModal from '../components/ProductDetailModal';
 import ConfirmModal from '../components/ConfirmModal';
+import GitHubConfigModal from '../components/GitHubConfigModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { executeLiveBatchScrape } from '../utils/liveScraper';
+import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Cell, Legend, ReferenceLine
@@ -42,6 +44,7 @@ export default function Dashboard({ user, userDoc }) {
   const [clearingHistory, setClearingHistory] = useState(false);
   const [waitingForScraper, setWaitingForScraper] = useState(false);
   const [scraperTriggerTime, setScraperTriggerTime] = useState(null);
+  const [showGithubModal, setShowGithubModal] = useState(false);
 
   const bcv = useBcvRate();
   const { addToast } = useToast();
@@ -93,71 +96,28 @@ export default function Dashboard({ user, userDoc }) {
     if (!isAdmin) return;
     setRefreshing(true);
     try {
-      let config = null;
-      if (db) {
-        try {
-          const secretSnap = await getDoc(doc(db, 'secrets', 'github_dispatch'));
-          if (secretSnap.exists()) {
-            config = secretSnap.data();
-          }
-        } catch (fErr) {
-          console.warn('Aviso de permisos al leer secrets/github_dispatch en Firestore:', fErr?.message || String(fErr));
-        }
+      const config = await getGitHubConfig();
+
+      if (!config || !config.token || !config.repo_owner || !config.repo_name) {
+        addToast('No hay configuración de GitHub Actions. Ingresa tus credenciales para conectar.', 'info');
+        setShowGithubModal(true);
+        setRefreshing(false);
+        return;
       }
 
-      if (!config) {
-        const localConfig = localStorage.getItem('trackflow_github_config');
-        if (localConfig) {
-          try { config = JSON.parse(localConfig); } catch (_) {}
-        }
-      }
-
-      if (config && config.token && config.repo_owner && config.repo_name) {
-        const res = await fetch(
-          `https://api.github.com/repos/${config.repo_owner}/${config.repo_name}/dispatches`,
-          {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/vnd.github+json',
-              'Authorization': `Bearer ${config.token}`,
-              'X-GitHub-Api-Version': '2022-11-28',
-            },
-            body: JSON.stringify({ event_type: config.workflow_event_type || 'run-scraper' }),
-          }
-        );
-        if (res.status === 204) {
-          setWaitingForScraper(true);
-          setScraperTriggerTime(new Date());
-          addToast('El robot scraper ha sido iniciado vía GitHub Actions. Se te notificará cuando finalice.', 'success');
-          setRefreshing(false);
-          return;
-        } else {
-          const txt = await res.text();
-          throw new Error(`GitHub respondió ${res.status}: ${txt}`);
-        }
-      }
-
-      // Ejecución directa enlace por enlace en tiempo real
+      await triggerGitHubScraper({ config });
       setWaitingForScraper(true);
       setScraperTriggerTime(new Date());
-      addToast('Iniciando extracción en tiempo real enlace por enlace...', 'info');
-
-      const itemsToScrape = (productosCompetencia || []).filter(item => item.activo !== false);
-      const res = await executeLiveBatchScrape(itemsToScrape, ({ index, total, item }) => {
-        if (index === 1 || index % 5 === 0 || index === total) {
-          addToast(`Extrayendo enlace ${index}/${total}: [${item.cadena || 'Competencia'}] ${item.marca || ''}...`, 'info');
-        }
-      });
-
-      setWaitingForScraper(false);
-      setScraperTriggerTime(null);
-      addToast(`¡Extracción completada con éxito! Se procesaron ${res.total} enlaces (${res.ok} exitosos, ${res.errores} errores).`, 'success');
-      await cargarDatos(true);
-
+      addToast('¡Robot scraper iniciado con éxito vía GitHub Actions! Los precios se actualizarán automáticamente.', 'success');
     } catch (err) {
-      addToast('Error al disparar scraper: ' + err.message, 'error');
+      if (err.message === 'CONFIG_MISSING') {
+        setShowGithubModal(true);
+      } else {
+        addToast('Error en GitHub Actions: ' + err.message, 'error');
+      }
+    } finally {
+      setRefreshing(false);
     }
-    setRefreshing(false);
   };
 
   const handleClearAllHistory = async () => {
@@ -889,6 +849,13 @@ export default function Dashboard({ user, userDoc }) {
             )}
           </div>
 
+          <button onClick={() => setShowGithubModal(true)}
+            className="px-3.5 py-2.5 bg-surface-low text-on-surface hover:bg-surface-medium font-mono font-semibold text-xs rounded-full transition-all border border-outline-variant flex items-center gap-1.5 shadow-sm"
+            title="Configurar credenciales de GitHub Actions (Token / Repo)">
+            <span className="material-symbols-outlined text-base">settings</span>
+            <span className="hidden sm:inline">Config GitHub</span>
+          </button>
+
           <button onClick={handleActualizar} disabled={refreshing || waitingForScraper}
             className="px-4 py-2.5 bg-secondary text-on-secondary hover:bg-secondary/90 disabled:opacity-50 font-extrabold font-mono tracking-wide text-xs rounded-full transition-all flex items-center gap-2 shadow-sm"
             title="Iniciar robot extractor para actualizar precios de competidores">
@@ -1526,6 +1493,11 @@ export default function Dashboard({ user, userDoc }) {
         isDanger={true}
         onConfirm={handleClearAllHistory}
         onCancel={() => setShowClearHistoryConfirm(false)}
+      />
+
+      <GitHubConfigModal
+        isOpen={showGithubModal}
+        onClose={() => setShowGithubModal(false)}
       />
     </div>
   );
