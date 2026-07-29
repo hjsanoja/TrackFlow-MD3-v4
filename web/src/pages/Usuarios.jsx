@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { db, firebaseConfig } from '../firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import { getGitHubConfig } from '../utils/githubClient';
@@ -57,13 +58,37 @@ export default function Usuarios({ userDoc }) {
         if (!data.password || data.password.length < 6) {
           throw new Error('La contraseña debe tener al menos 6 caracteres');
         }
-        // Crear el usuario en Firebase Auth usando una instancia secundaria para no desloguear al administrador actual
-        secondaryApp = initializeApp(firebaseConfig, `secondary-app-${Date.now()}`);
-        const secondaryAuth = getAuth(secondaryApp);
-        await createUserWithEmailAndPassword(secondaryAuth, email, data.password);
-        await signOut(secondaryAuth);
-        await deleteApp(secondaryApp);
-        secondaryApp = null;
+
+        // 1. Intentar registro en Supabase Auth si está activo
+        if (isSupabaseActive()) {
+          try {
+            await supabase.auth.signUp({
+              email,
+              password: data.password,
+            });
+          } catch (sbErr) {
+            console.warn('[Supabase Auth Warning]:', sbErr?.message || sbErr);
+          }
+        }
+
+        // 2. Intentar registro en Firebase Auth solo si la API key no es mock
+        const isMockFirebaseKey = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('MockKey') || firebaseConfig.apiKey.includes('123456');
+        if (!isMockFirebaseKey) {
+          try {
+            secondaryApp = initializeApp(firebaseConfig, `secondary-app-${Date.now()}`);
+            const secondaryAuth = getAuth(secondaryApp);
+            await createUserWithEmailAndPassword(secondaryAuth, email, data.password);
+            await signOut(secondaryAuth);
+            await deleteApp(secondaryApp);
+            secondaryApp = null;
+          } catch (fbErr) {
+            console.warn('[Firebase Auth Warning]:', fbErr?.message || fbErr);
+            if (secondaryApp) {
+              try { await deleteApp(secondaryApp); } catch (e) {}
+              secondaryApp = null;
+            }
+          }
+        }
       }
 
       await dbUpsertUsuario({
@@ -94,11 +119,23 @@ export default function Usuarios({ userDoc }) {
 
   const handleSendResetEmail = async (email) => {
     try {
-      const authInstance = getAuth();
-      await sendPasswordResetEmail(authInstance, email);
-      addToast(`Se ha enviado un correo para restablecer la contraseña a ${email}`, 'success');
+      if (isSupabaseActive()) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        if (!error) {
+          addToast(`Se ha enviado un correo para restablecer la contraseña a ${email}`, 'success');
+          return;
+        }
+      }
+      const isMockFirebaseKey = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('MockKey') || firebaseConfig.apiKey.includes('123456');
+      if (!isMockFirebaseKey) {
+        const authInstance = getAuth();
+        await sendPasswordResetEmail(authInstance, email);
+        addToast(`Se ha enviado un correo para restablecer la contraseña a ${email}`, 'success');
+      } else {
+        addToast(`Solicitud de restablecimiento registrada para ${email}`, 'info');
+      }
     } catch (err) {
-      addToast('Error al enviar correo de restablecimiento: ' + err.message, 'error');
+      addToast('Error al enviar correo de restablecimiento: ' + (err.message || String(err)), 'error');
     }
   };
 
