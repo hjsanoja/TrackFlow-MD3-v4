@@ -7,6 +7,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
+import { executeLiveBatchScrape } from '../utils/liveScraper';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Cell, Legend, ReferenceLine
@@ -127,7 +128,7 @@ export default function Dashboard({ user, userDoc }) {
         if (res.status === 204) {
           setWaitingForScraper(true);
           setScraperTriggerTime(new Date());
-          addToast('El robot scraper ha sido iniciado vía GitHub Actions. Se te notificará de forma interactiva en esta misma pantalla cuando finalice la carga de precios.', 'success');
+          addToast('El robot scraper ha sido iniciado vía GitHub Actions. Se te notificará cuando finalice.', 'success');
           setRefreshing(false);
           return;
         } else {
@@ -136,17 +137,22 @@ export default function Dashboard({ user, userDoc }) {
         }
       }
 
-      // Si no hay token de GitHub configurado o no hay acceso en Firestore, ejecutar simulación limpia
+      // Ejecución directa enlace por enlace en tiempo real
       setWaitingForScraper(true);
       setScraperTriggerTime(new Date());
-      addToast('Simulando ejecución del robot scraper de precios...', 'info');
+      addToast('Iniciando extracción en tiempo real enlace por enlace...', 'info');
 
-      setTimeout(() => {
-        setWaitingForScraper(false);
-        setScraperTriggerTime(null);
-        addToast('¡Actualización completada! El robot ha terminado de extraer y analizar los últimos precios (35 exitosos, 0 errores).', 'success');
-        cargarDatos(true);
-      }, 2500);
+      const itemsToScrape = (productosCompetencia || []).filter(item => item.activo !== false);
+      const res = await executeLiveBatchScrape(itemsToScrape, ({ index, total, item }) => {
+        if (index === 1 || index % 5 === 0 || index === total) {
+          addToast(`Extrayendo enlace ${index}/${total}: [${item.cadena || 'Competencia'}] ${item.marca || ''}...`, 'info');
+        }
+      });
+
+      setWaitingForScraper(false);
+      setScraperTriggerTime(null);
+      addToast(`¡Extracción completada con éxito! Se procesaron ${res.total} enlaces (${res.ok} exitosos, ${res.errores} errores).`, 'success');
+      await cargarDatos(true);
 
     } catch (err) {
       addToast('Error al disparar scraper: ' + err.message, 'error');

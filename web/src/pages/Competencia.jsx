@@ -6,6 +6,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
+import { executeLiveBatchScrape, scrapeSingleUrl } from '../utils/liveScraper';
 
 const TIPOS = [
   { value: 'propio', label: 'Mi marca' },
@@ -238,7 +239,7 @@ export default function Competencia() {
           }
         );
         if (res.status === 204) {
-          addToast('El robot scraper global ha sido ejecutado vía GitHub Actions. Los datos se actualizarán automáticamente al terminar.', 'success');
+          addToast('El robot scraper global ha sido ejecutado vía GitHub Actions.', 'success');
           setIsGlobalScraping(false);
           return;
         } else {
@@ -247,13 +248,18 @@ export default function Competencia() {
         }
       }
 
-      // Modo simulación
-      addToast('Simulando ejecución del robot scraper global...', 'info');
-      setTimeout(() => {
-        addToast('¡Extracción completada con éxito! Precios y disponibilidad actualizados.', 'success');
-        cargar();
-        setIsGlobalScraping(false);
-      }, 2000);
+      // Extracción real en vivo enlace por enlace
+      addToast('Iniciando extracción en tiempo real enlace por enlace...', 'info');
+      const itemsToScrape = (items || []).filter(it => it.activo !== false);
+      const res = await executeLiveBatchScrape(itemsToScrape, ({ index, total, item }) => {
+        if (index === 1 || index % 5 === 0 || index === total) {
+          addToast(`Extrayendo enlace ${index}/${total}: [${item.cadena || 'Competencia'}] ${item.marca || ''}...`, 'info');
+        }
+      });
+
+      addToast(`¡Extracción completada con éxito! Se procesaron ${res.total} enlaces (${res.ok} exitosos, ${res.errores} errores).`, 'success');
+      await cargar(true);
+      setIsGlobalScraping(false);
       return;
     } catch (err) {
       addToast('Error al disparar scraper: ' + err.message, 'error');
@@ -276,86 +282,90 @@ export default function Competencia() {
     setScrapingItems(prev => ({ ...prev, [item.id]: 'disparando' }));
     try {
       const config = await getGitHubConfig();
-      if (!config || !config.token || !config.repo_owner || !config.repo_name) {
-        // Fallback simulación
-        addToast(`Simulando extracción en tiempo real para "${item.marca}"...`, 'info');
-        setTimeout(() => {
-          setScrapingItems(prev => {
-            const copy = { ...prev };
-            delete copy[item.id];
-            return copy;
-          });
-          addToast(`¡Extracción completada para "${item.marca}"!`, 'success');
-          cargar();
-        }, 2000);
-        return;
+      if (config && config.token && config.repo_owner && config.repo_name) {
+        const { token, repo_owner, repo_name, workflow_event_type } = config;
+        const res = await fetch(
+          `https://api.github.com/repos/${repo_owner}/${repo_name}/dispatches`,
+          {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': `Bearer ${token}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+            body: JSON.stringify({
+              event_type: workflow_event_type || 'run-scraper',
+              client_payload: {
+                product_id: item.id_producto_propio,
+                doc_id: item.id
+              }
+            }),
+          }
+        );
+        if (res.status === 204) {
+          setScrapingItems(prev => ({ ...prev, [item.id]: 'esperando' }));
+          addToast(`El robot se ha lanzado para extraer "${item.marca}" vía GitHub Actions.`, 'success');
+          return;
+        }
       }
-      const { token, repo_owner, repo_name, workflow_event_type } = config;
-      const res = await fetch(
-        `https://api.github.com/repos/${repo_owner}/${repo_name}/dispatches`,
-        {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/vnd.github+json',
-            'Authorization': `Bearer ${token}`,
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
-          body: JSON.stringify({
-            event_type: workflow_event_type || 'run-scraper',
-            client_payload: {
-              product_id: item.id_producto_propio,
-              doc_id: item.id
-            }
-          }),
-        }
-      );
-      if (res.status === 204) {
-        setScrapingItems(prev => ({ ...prev, [item.id]: 'esperando' }));
-        addToast(`El robot se ha lanzado para extraer "${item.marca}" de forma individual en tiempo real. La tabla se actualizará automáticamente en unos instantes.`, 'success');
 
-        // Suscribirse en tiempo real al documento para detectar cuando cambie
-        if (db) {
-          const unsubscribe = onSnapshot(doc(db, 'productos_competencia', item.id), (snap) => {
-            if (snap.exists()) {
-              const data = snap.data();
-              // Si tiene fecha de scrape nueva o el estado ya no es "esperando", refrescamos
-              setScrapingItems(prev => {
-                if (prev[item.id] === 'esperando') {
-                  const copy = { ...prev };
-                  delete copy[item.id];
-                  // Recargar de nuevo los items
-                  cargar();
-                  return copy;
-                }
-                return prev;
-              });
-              unsubscribe();
-            }
-          }, (err) => {
-            console.warn('Aviso en onSnapshot de productos_competencia:', err?.message || String(err));
-          });
-        }
+      // Extracción directa link por link en vivo
+      addToast(`Extrayendo datos en tiempo real de "${item.marca || item.cadena}"...`, 'info');
+      const resData = await scrapeSingleUrl(item.url);
 
-        // Timeout de seguridad de 3 minutos
-        setTimeout(() => {
-          setScrapingItems(prev => {
-            const copy = { ...prev };
-            delete copy[item.id];
-            return copy;
-          });
-        }, 180000);
-
+      if (resData.error || !resData.precio_full_bs) {
+        addToast(`Error al extraer ${item.marca || 'enlace'}: ${resData.error || 'Precio no encontrado en la página'}`, 'error');
       } else {
-        const txt = await res.text();
-        throw new Error(`GitHub respondió ${res.status}: ${txt}`);
+        const now = new Date();
+        if (db && item.id) {
+          try {
+            await setDoc(doc(db, 'productos_competencia', item.id), {
+              ultimo_precio_full_bs: resData.precio_full_bs,
+              ultimo_precio_desc_bs: resData.precio_desc_bs || null,
+              ultimo_nombre: resData.nombre || null,
+              ultimo_scrape: now,
+              estado: 'ok',
+              ultimo_error: null
+            }, { merge: true });
+
+            await addDoc(collection(db, 'historico_precios'), {
+              prod_comp_id: item.id,
+              id_producto_propio: item.id_producto_propio || '',
+              cadena: item.cadena || '',
+              marca: item.marca || '',
+              nombre: resData.nombre || item.marca || '',
+              precio_full_bs: resData.precio_full_bs,
+              precio_desc_bs: resData.precio_desc_bs || null,
+              tiene_descuento: Boolean(resData.tiene_descuento),
+              scraped_at: now,
+              run_id: `single_${Date.now()}`
+            });
+          } catch (e) {
+            console.warn('Aviso guardando en Firestore:', e?.message || String(e));
+          }
+        }
+
+        let pMsg = `Bs ${resData.precio_full_bs.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+        if (resData.precio_desc_bs) {
+          pMsg += ` (Oferta: Bs ${resData.precio_desc_bs.toLocaleString('es-VE', { minimumFractionDigits: 2 })})`;
+        }
+        addToast(`¡Extracción completada para "${item.marca || item.cadena}"! Precio extraído: ${pMsg}`, 'success');
       }
+
+      setScrapingItems(prev => {
+        const copy = { ...prev };
+        delete copy[item.id];
+        return copy;
+      });
+      await cargar(true);
+
     } catch (err) {
       setScrapingItems(prev => {
         const copy = { ...prev };
         delete copy[item.id];
         return copy;
       });
-      addToast('Error al lanzar robot: ' + err.message, 'error');
+      addToast('Error al extraer enlace: ' + err.message, 'error');
     }
   };
 

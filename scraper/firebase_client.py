@@ -31,9 +31,15 @@ def get_db():
     raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if not raw:
         print(
-            "ERROR: la variable de entorno FIREBASE_SERVICE_ACCOUNT no existe.\n"
-            "  - En Codespaces: revisa Settings -> Secrets -> Codespaces.\n"
-            "  - Si acabas de crear el secret, reinicia el codespace.",
+            "============================================================"
+            "\nERROR: Faltan las credenciales de Firebase (FIREBASE_SERVICE_ACCOUNT).\n"
+            "\nPara resolver esto en GitHub Actions:\n"
+            "1. Ve a tu proyecto en Firebase Console -> Configuración de proyecto -> Cuentas de servicio.\n"
+            "2. Haz clic en 'Generar nueva clave privada' (descargará un archivo .json).\n"
+            "3. En tu repositorio de GitHub, ve a: Settings -> Secrets and variables -> Actions -> New repository secret.\n"
+            "4. Nombre del Secret: FIREBASE_SERVICE_ACCOUNT\n"
+            "5. Valor: Pega todo el contenido del archivo .json descargado.\n"
+            "============================================================",
             file=sys.stderr,
         )
         sys.exit(1)
