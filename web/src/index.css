@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* --- TEMA CLARO (Warm-Tech Expressive) --- */
+  --md-sys-color-background: #FAF8F5;          /* Fondo base cálido */
+  --md-sys-color-on-background: #1C1B1F;       /* Texto de alto contraste */
+  
+  --md-sys-color-primary: #6750A4;             /* Violeta tecnológico principal */
+  --md-sys-color-on-primary: #FFFFFF;          /* Texto sobre violeta */
+  --md-sys-color-primary-container: #EADDFF;   /* Contenedor secundario suave */
+  --md-sys-color-on-primary-container: #21005D;
+  
+  --md-sys-color-secondary: #006874;           /* Teal expresivo moderno */
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #97F0FF;
+  --md-sys-color-on-secondary-container: #001F24;
+  
+  --md-sys-color-tertiary: #E040FB;            /* Acento eléctrico para CTAs e impacto */
+  --md-sys-color-on-tertiary: #FFFFFF;
+  
+  --md-sys-color-surface: #F3EDF7;             /* Fondo de tarjetas y componentes */
+  --md-sys-color-surface-variant: #E7E0EC;     /* Bordes y separadores sutiles */
+  --md-sys-color-on-surface: #1D1B20;
+  --md-sys-color-outline: #79747E;             /* Líneas de enfoque y textos secundarios */
+  --md-sys-color-error: #B3261E;
+
+  --md-transition-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
+  --md-transition-duration-medium: 350ms;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #fbf9f6;
+  color: #1C1B1F;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in-slide {
+  animation: fadeInSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulseBorder {
+  0%, 100% { border-color: rgba(0, 104, 116, 0.2); }
+  50% { border-color: rgba(0, 104, 116, 0.6); }
+}
+
+.animate-pulse-border {
+  animation: pulseBorder 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+

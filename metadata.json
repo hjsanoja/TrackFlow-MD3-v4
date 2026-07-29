@@ -1,0 +1,6 @@
+{
+  "name": "TrackFlow - Monitor de Precios",
+  "description": "Monitor de precios y análisis de competencia para cadenas de farmacias",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,1003 @@
+import { useEffect, useState, useMemo, useRef } from 'react';
+import {
+  collection, doc, setDoc, deleteDoc, writeBatch, getDocs
+} from 'firebase/firestore';
+import { db } from '../firebase';
+import ConfirmModal from '../components/ConfirmModal';
+import { useToast } from '../context/ToastContext';
+import { useData } from '../context/DataContext';
+import { exportToCSV } from '../utils/exportUtils';
+import { parseUnidosisCount } from '../utils/unidosisUtils';
+
+const CATEGORIAS = [
+  'Analgésicos',
+  'Antialérgicos',
+  'Antibióticos',
+  'Antigripales',
+  'Cardiovasculares',
+  'Dermatológicos',
+  'Gastrointestinales',
+  'Vitaminas',
+  'Otros',
+];
+
+export default function Productos() {
+  const {
+    productos,
+    productosCompetencia: competencia,
+    cadenas,
+    loadingInitial: loading,
+    refreshData: cargar
+  } = useData();
+
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filtroActivo, setFiltroActivo] = useState('todos');
+  const [filtroUrls, setFiltroUrls] = useState('todos'); // todos | con_urls | sin_urls
+  const [filtroTipo, setFiltroTipo] = useState('todos'); // todos | generico | marca
+  const [filtroUn, setFiltroUn] = useState('todos'); // todos | lasante | pharmetique | otc
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+
+  const { addToast } = useToast();
+
+  const fileInputRef = useRef(null);
+
+  // Cuenta URLs activas por producto
+  const urlsPorProducto = useMemo(() => {
+    const map = new Map();
+    for (const c of competencia) {
+      if (c.activo) {
+        map.set(c.id_producto_propio, (map.get(c.id_producto_propio) || []).concat(c));
+      }
+    }
+    return map;
+  }, [competencia]);
+
+  const filtrados = useMemo(() => {
+    const term = search.toLowerCase().trim();
+    return productos.filter(p => {
+      if (filtroActivo === 'activos' && !p.activo) return false;
+      if (filtroActivo === 'inactivos' && p.activo) return false;
+
+      const pTipo = (p.market_type || 'GENERICO').toUpperCase();
+      if (filtroTipo === 'generico' && pTipo !== 'GENERICO') return false;
+      if (filtroTipo === 'marca' && pTipo !== 'MARCA') return false;
+
+      const pUn = (p.unidad_negocio || 'La Sante').toLowerCase().replace(/\s/g, '');
+      if (filtroUn !== 'todos' && pUn !== filtroUn) return false;
+
+      const links = urlsPorProducto.get(p.id_interno) || [];
+      if (filtroUrls === 'con_urls' && links.length === 0) return false;
+      if (filtroUrls === 'sin_urls' && links.length > 0) return false;
+      if (!term) return true;
+      return (
+        (p.nombre || '').toLowerCase().includes(term) ||
+        (p.laboratorio || '').toLowerCase().includes(term) ||
+        (p.principio_activo || '').toLowerCase().includes(term) ||
+        (p.categoria || '').toLowerCase().includes(term) ||
+        (p.id_interno || '').toLowerCase().includes(term)
+      );
+    });
+  }, [productos, search, filtroActivo, filtroUrls, filtroTipo, filtroUn, urlsPorProducto]);
+
+  const huerfanos = useMemo(() => {
+    return productos.filter(p => p.activo && (urlsPorProducto.get(p.id_interno) || []).length === 0).length;
+  }, [productos, urlsPorProducto]);
+
+  const [paginaActual, setPaginaActual] = useState(1);
+  const itemsPorPagina = 20;
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [search, filtroActivo, filtroUrls, filtroTipo, filtroUn]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / itemsPorPagina));
+  const productosPaginados = useMemo(() => {
+    const inicio = (paginaActual - 1) * itemsPorPagina;
+    return filtrados.slice(inicio, inicio + itemsPorPagina);
+  }, [filtrados, paginaActual]);
+
+  const handleSave = async (data, isNew) => {
+    try {
+      const id = data.id_interno.trim();
+      if (!id) throw new Error('El ID interno es obligatorio');
+      if (isNew && productos.some(p => p.id_interno === id)) {
+        throw new Error('Ya existe un producto con ese ID interno');
+      }
+
+      const cleanProductData = {
+        id_interno: id,
+        nombre: data.nombre.trim(),
+        principio_activo: (data.principio_activo || '').trim(),
+        concentracion: (data.concentracion || '').trim(),
+        tamano: (data.tamano || '').trim(),
+        presentacion: `${data.concentracion || ''} ${data.tamano || ''}`.trim() || (data.presentacion || ''),
+        laboratorio: (data.laboratorio || '').trim(),
+        categoria: data.categoria || 'Otros',
+        market_type: data.market_type || 'GENERICO',
+        unidad_negocio: data.unidad_negocio || 'La Sante',
+        activo: data.activo ?? true,
+      };
+
+      await setDoc(doc(db, 'productos', id), cleanProductData);
+
+      addToast(isNew ? 'Producto creado con éxito' : 'Producto actualizado con éxito', 'success');
+      setEditing(null);
+      await cargar();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  const handleDelete = (producto) => {
+    setConfirmDelete(producto);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+    const producto = confirmDelete;
+    const links = urlsPorProducto.get(producto.id_interno) || [];
+    const count = links.length;
+    setConfirmDelete(null);
+
+    try {
+      await deleteDoc(doc(db, 'productos', producto.id));
+      if (count > 0) {
+        const batch = writeBatch(db);
+        links.forEach(l => {
+          batch.delete(doc(db, 'productos_competencia', l.id));
+        });
+        await batch.commit();
+      }
+      addToast('Producto y sus enlaces de competencia eliminados con éxito.', 'success');
+      await cargar();
+    } catch (err) {
+      addToast('Error al eliminar: ' + err.message, 'error');
+    }
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    setDeletingAll(true);
+    try {
+      // 1. Delete all productos
+      const prodSnap = await getDocs(collection(db, 'productos'));
+      const prodDocs = prodSnap.docs;
+      for (let i = 0; i < prodDocs.length; i += 500) {
+        const chunk = prodDocs.slice(i, i + 500);
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      // 2. Delete all productos_competencia
+      const compSnap = await getDocs(collection(db, 'productos_competencia'));
+      const compDocs = compSnap.docs;
+      for (let i = 0; i < compDocs.length; i += 500) {
+        const chunk = compDocs.slice(i, i + 500);
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      // 3. Delete all historico_precios
+      const histSnap = await getDocs(collection(db, 'historico_precios'));
+      const histDocs = histSnap.docs;
+      for (let i = 0; i < histDocs.length; i += 500) {
+        const chunk = histDocs.slice(i, i + 500);
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      // 4. Delete all scrape_runs
+      const runsSnap = await getDocs(collection(db, 'scrape_runs'));
+      const runsDocs = runsSnap.docs;
+      for (let i = 0; i < runsDocs.length; i += 500) {
+        const chunk = runsDocs.slice(i, i + 500);
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      addToast('Se han eliminado todos los productos, enlaces de competencia e historial de precios con éxito.', 'success');
+      await cargar();
+    } catch (err) {
+      addToast('Error al vaciar catálogo: ' + err.message, 'error');
+    }
+    setDeletingAll(false);
+    setConfirmDeleteAll(false);
+  };
+
+  const handleToggleActivo = async (producto) => {
+    try {
+      await setDoc(doc(db, 'productos', producto.id), {
+        activo: !producto.activo,
+      }, { merge: true });
+      await cargar();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  const handleCsvUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target.result;
+        const rows = parseCSV(text);
+        if (rows.length === 0) throw new Error('El archivo CSV está vacío o no es válido.');
+
+        const batch = writeBatch(db);
+        let count = 0;
+
+        for (const row of rows) {
+          const id = (row.id_interno || row.id || row.ID || '').trim();
+          const nombre = (row.nombre || row.nombre_producto || row.Nombre || '').trim();
+          
+          if (!id || !nombre) continue;
+
+          const principio_activo = (row.principio_activo || row.molecula || row.Molecula || '').trim();
+          const concentracion = (row.concentracion || row.Concentracion || '').trim();
+          const tamano = (row.tamano || row.presentacion || row.Tamano || '').trim();
+          const laboratorio = (row.laboratorio || row.Laboratorio || '').trim();
+          const categoria = (row.categoria || row.Categoria || 'Otros').trim();
+          let market_type = (row.market_type || row.tipo_mercado || row.tipo || row.Market_Type || 'GENERICO').trim().toUpperCase();
+          if (market_type.includes('MARCA')) {
+            market_type = 'MARCA';
+          } else {
+            market_type = 'GENERICO';
+          }
+
+          let unRaw = (row.unidad_negocio || row.unidad || row.un || row.Unidad_Negocio || row.UN || 'La Sante').trim().toUpperCase();
+          let unidad_negocio = 'La Sante';
+          if (unRaw.includes('PHARMETIQUE') || unRaw === 'PH') {
+            unidad_negocio = 'Pharmetique';
+          } else if (unRaw.includes('OTC')) {
+            unidad_negocio = 'OTC';
+          } else if (unRaw.includes('SANTE') || unRaw.includes('SANTÉ')) {
+            unidad_negocio = 'La Sante';
+          }
+
+          const cleanProd = {
+            id_interno: id,
+            nombre: nombre,
+            principio_activo,
+            concentracion,
+            tamano,
+            presentacion: `${concentracion} ${tamano}`.trim() || tamano,
+            laboratorio,
+            categoria: CATEGORIAS.includes(categoria) ? categoria : 'Otros',
+            market_type,
+            unidad_negocio,
+            activo: true,
+          };
+
+          const prodRef = doc(db, 'productos', id);
+          batch.set(prodRef, cleanProd, { merge: true });
+          count++;
+
+          for (const key of Object.keys(row)) {
+            if (key.toLowerCase().startsWith('url_')) {
+              const chainNameClean = key.slice(4).trim();
+              const urlVal = row[key].trim();
+              if (urlVal) {
+                const cadenaFormatted = chainNameClean.charAt(0).toUpperCase() + chainNameClean.slice(1);
+                // Search if an existing competitor link already exists for this product + chain
+                const existingComp = competencia.find(c =>
+                  c.id_producto_propio === id &&
+                  c.cadena.toLowerCase().trim() === cadenaFormatted.toLowerCase().trim()
+                );
+                const docId = existingComp
+                  ? existingComp.id
+                  : `${id}_${chainNameClean}_Competencia`.replace(/\s+/g, '_');
+
+                const compRef = doc(db, 'productos_competencia', docId);
+                batch.set(compRef, {
+                  id_producto_propio: id,
+                  cadena: cadenaFormatted,
+                  tipo: 'alternativa',
+                  marca: nombre,
+                  url: urlVal,
+                  activo: true,
+                }, { merge: true });
+              }
+            }
+          }
+        }
+
+        if (count > 0) {
+          await batch.commit();
+          addToast(`Carga masiva exitosa: ${count} productos registrados en el catálogo.`, 'success');
+          await cargar();
+        } else {
+          throw new Error('No se encontraron filas válidas con ID y Nombre.');
+        }
+      } catch (err) {
+        addToast('Error procesando CSV: ' + err.message, 'error');
+      }
+      setShowCsvModal(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const parseCSV = (text) => {
+    const lines = text.split(/\r?\n/);
+    if (lines.length === 0) return [];
+    
+    // Detect delimiter
+    const firstLine = lines[0];
+    let delimiter = ',';
+    if (firstLine.includes('\t')) {
+      delimiter = '\t';
+    } else if (firstLine.includes(';') && !firstLine.includes(',')) {
+      delimiter = ';';
+    } else if (firstLine.includes(';')) {
+      const commaCount = (firstLine.match(/,/g) || []).length;
+      const semiCount = (firstLine.match(/;/g) || []).length;
+      if (semiCount > commaCount) {
+        delimiter = ';';
+      }
+    }
+
+    const splitLine = (line) => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === delimiter && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result.map(v => v.replace(/^"|"$/g, ''));
+    };
+
+    const headers = splitLine(lines[0]);
+    const result = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      const values = splitLine(line);
+      const row = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      result.push(row);
+    }
+    return result;
+  };
+
+  const sugerirId = () => {
+    const numeros = productos
+      .map(p => p.id_interno)
+      .filter(id => /^P\d+$/.test(id))
+      .map(id => parseInt(id.slice(1), 10));
+    const max = numeros.length > 0 ? Math.max(...numeros) : 0;
+    return 'P' + String(max + 1).padStart(3, '0');
+  };
+
+  const downloadCsvPlantilla = () => {
+    // Determine chains columns from active cadenas or defaults
+    const chainList = cadenas.length > 0 
+      ? cadenas.map(c => c.nombre.trim())
+      : ['Farmatodo', 'Locatel', 'Redvital', 'Meditotal'];
+
+    const chainHeaderCols = chainList.map(c => `url_${c.toLowerCase().replace(/\s+/g, '_')}`);
+    const headers = ['id_interno', 'nombre', 'principio_activo', 'concentracion', 'tamano', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio', ...chainHeaderCols].join(',') + '\n';
+
+    let content = '\ufeff' + headers; // UTF-8 BOM for Excel compatibility
+
+    if (productos.length > 0) {
+      // Export current database products with existing data and chain URLs
+      productos.forEach(p => {
+        const pLinks = competencia.filter(c => c.id_producto_propio === p.id_interno && c.activo);
+        
+        const chainUrls = chainList.map(cName => {
+          const found = pLinks.find(c => (c.cadena || '').toLowerCase().trim() === cName.toLowerCase().trim());
+          return found ? found.url : '';
+        });
+
+        const row = [
+          p.id_interno || '',
+          p.nombre || '',
+          p.principio_activo || '',
+          p.concentracion || '',
+          p.tamano || '',
+          p.laboratorio || '',
+          p.categoria || '',
+          p.market_type || 'GENERICO',
+          p.unidad_negocio || 'La Sante',
+          ...chainUrls
+        ].map(val => {
+          const str = String(val || '');
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        }).join(',');
+
+        content += row + '\n';
+      });
+    } else {
+      // Fallback example rows if database is empty
+      const row1 = 'P001,Atamel,Acetaminofén,500 mg,10 tabletas,La Santé,Analgésicos,MARCA,La Sante,https://www.farmatodo.com.ve/producto/atamel-500mg,https://www.locatel.com.ve/atamel\n';
+      const row2 = 'P002,Calox,Ibuprofeno,400 mg,20 capsulas,Calox,Analgésicos,GENERICO,OTC,,\n';
+      content += row1 + row2;
+    }
+
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Plantilla_Catalogo_Productos_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast(productos.length > 0 ? `Plantilla con tus ${productos.length} productos cargados descargada con éxito.` : 'Plantilla de ejemplo descargada.', 'success');
+  };
+
+  const handleExportarCatalogo = () => {
+    const headers = [
+      { label: 'ID Interno', key: 'id_interno' },
+      { label: 'Nombre', key: 'nombre' },
+      { label: 'Principio Activo', key: 'principio_activo' },
+      { label: 'Concentración', key: 'concentracion' },
+      { label: 'Presentación/Tamaño', key: 'tamano_empaque' },
+      { label: 'Tipo', key: 'market_type' },
+      { label: 'Unidad de Negocio', key: 'unidad_negocio' },
+      { label: 'Laboratorio', key: 'laboratorio' },
+      { label: 'Categoría', key: 'categoria' },
+      { label: 'Estado', key: 'estado_str' }
+    ];
+
+    const dataRows = filtrados.map(p => ({
+      ...p,
+      market_type: p.market_type || 'GENERICO',
+      unidad_negocio: p.unidad_negocio || 'Sin UN',
+      laboratorio: p.laboratorio || '—',
+      categoria: p.categoria || 'Sin Categ',
+      estado_str: p.activo ? 'ACTIVO' : 'INACTIVO'
+    }));
+
+    exportToCSV('Catalogo_Productos_Farmaceuticos', headers, dataRows);
+    addToast(`Exportados ${dataRows.length} productos a CSV.`, 'success');
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Editorial Title Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-4 gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-extrabold text-primary tracking-tight">Catálogo de Productos</h1>
+          <p className="text-sm text-on-surface-variant font-sans mt-1">
+            Gestiona el catálogo de medicamentos registrados y asocia sus enlaces de competencia.
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setConfirmDeleteAll(true)}
+            disabled={deletingAll || productos.length === 0}
+            className="text-xs px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 font-bold text-red-700 rounded-full transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Eliminar todos los productos, enlaces de competencia e historial">
+            <span className="material-symbols-outlined text-base">delete_sweep</span>
+            <span>{deletingAll ? 'Vaciando...' : 'Vaciar Catálogo'}</span>
+          </button>
+          <button onClick={handleExportarCatalogo}
+            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm"
+            title="Exportar vista actual a archivo CSV">
+            <span className="material-symbols-outlined text-base">download</span>
+            <span>Exportar CSV</span>
+          </button>
+          <button onClick={() => setShowCsvModal(true)}
+            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm">
+            <span className="material-symbols-outlined text-base">upload_file</span>
+            <span>Carga Masiva (CSV)</span>
+          </button>
+          <button onClick={() => setEditing('new')}
+            className="text-xs px-5 py-2.5 bg-secondary hover:bg-secondary/90 text-on-secondary font-extrabold shadow-sm rounded-full transition-all flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-base">add</span>
+            <span>Nuevo Producto</span>
+          </button>
+        </div>
+      </div>
+
+      {huerfanos > 0 && (
+        <div className="bg-primary-container text-on-primary-container px-5 py-4 rounded-2xl flex items-center justify-between border border-outline-variant/40 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-xl leading-none select-none text-primary">warning</span>
+            <span className="text-sm font-sans">
+              Hay <strong>{huerfanos} producto{huerfanos > 1 ? 's activos' : ' activo'} sin enlaces</strong> de competencia registrados para el scraper.
+            </span>
+          </div>
+          <button onClick={() => setFiltroUrls('sin_urls')}
+            className="text-xs px-4 py-2 bg-white text-primary hover:bg-surface-low rounded-full font-bold shadow-sm transition-all">
+            Ver Cuáles
+          </button>
+        </div>
+      )}
+
+      {/* Structured Grid & Filters Area */}
+      <div className="bg-white rounded-3xl border border-outline-variant p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+        <div className="flex-1 min-w-[280px] relative">
+          <span className="material-symbols-outlined text-on-surface-variant absolute left-3 top-2.5 select-none">search</span>
+          <input type="text" placeholder="Buscar por nombre, molécula, ID o laboratorio..."
+            value={search} onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border border-outline-variant rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans" />
+        </div>
+        
+        <div className="flex gap-4 flex-wrap">
+          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
+            <button onClick={() => setFiltroActivo('todos')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroActivo === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODOS</button>
+            <button onClick={() => setFiltroActivo('activos')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroActivo === 'activos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>ACTIVOS</button>
+            <button onClick={() => setFiltroActivo('inactivos')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroActivo === 'inactivos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>INACTIVOS</button>
+          </div>
+
+          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
+            <button onClick={() => setFiltroUrls('todos')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroUrls === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODOS</button>
+            <button onClick={() => setFiltroUrls('con_urls')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroUrls === 'con_urls' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>CON ENLACES</button>
+            <button onClick={() => setFiltroUrls('sin_urls')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroUrls === 'sin_urls' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>SIN ENLACES</button>
+          </div>
+
+          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
+            <button onClick={() => setFiltroTipo('todos')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroTipo === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODOS TIPO</button>
+            <button onClick={() => setFiltroTipo('generico')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroTipo === 'generico' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>GENÉRICOS</button>
+            <button onClick={() => setFiltroTipo('marca')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroTipo === 'marca' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>MARCA</button>
+          </div>
+
+          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
+            <button onClick={() => setFiltroUn('todos')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODAS UN</button>
+            <button onClick={() => setFiltroUn('lasante')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'lasante' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>LA SANTÉ</button>
+            <button onClick={() => setFiltroUn('pharmetique')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'pharmetique' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>PHARMETIQUE</button>
+            <button onClick={() => setFiltroUn('otc')}
+              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'otc' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>OTC</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Table View */}
+      <div className="bg-white rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="overflow-x-auto animate-pulse">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+                <tr>
+                  <th className="text-left px-6 py-4 font-bold">ID</th>
+                  <th className="text-left px-6 py-4 font-bold">Nombre / Molécula</th>
+                  <th className="text-left px-6 py-4 font-bold">Concentración / Tamaño</th>
+                  <th className="text-left px-6 py-4 font-bold">Tipo</th>
+                  <th className="text-left px-6 py-4 font-bold">Laboratorio</th>
+                  <th className="text-left px-6 py-4 font-bold">Categoría</th>
+                  <th className="text-center px-6 py-4 font-bold">Enlaces Activos</th>
+                  <th className="text-center px-6 py-4 font-bold">Estado</th>
+                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/30">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <tr key={n}>
+                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-16"></div></td>
+                    <td className="px-6 py-4">
+                      <div className="h-4 bg-gray-200 rounded w-48 mb-1.5"></div>
+                      <div className="h-3 bg-gray-100 rounded w-32"></div>
+                    </td>
+                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-12"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-28"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                    <td className="px-6 py-4 text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
+                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
+                    <td className="px-6 py-4 text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : filtrados.length === 0 ? (
+          <div className="p-12 text-center text-on-surface-variant italic">
+            {search || filtroActivo !== 'todos' || filtroUrls !== 'todos'
+              ? 'No se encontraron productos con los filtros seleccionados.'
+              : 'Aún no hay productos registrados. Sube un CSV o haz click en "+ Nuevo Producto".'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+                <tr>
+                  <th className="text-left px-6 py-4 font-bold">ID</th>
+                  <th className="text-left px-6 py-4 font-bold">Nombre / Molécula</th>
+                  <th className="text-left px-6 py-4 font-bold">Concentración / Tamaño</th>
+                  <th className="text-left px-6 py-4 font-bold">Tipo</th>
+                  <th className="text-left px-6 py-4 font-bold">UN</th>
+                  <th className="text-left px-6 py-4 font-bold">Laboratorio</th>
+                  <th className="text-left px-6 py-4 font-bold">Categoría</th>
+                  <th className="text-center px-6 py-4 font-bold">Enlaces Activos</th>
+                  <th className="text-center px-6 py-4 font-bold">Estado</th>
+                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/30">
+                {productosPaginados.map(p => {
+                  const links = urlsPorProducto.get(p.id_interno) || [];
+                  const count = links.length;
+                  return (
+                    <tr key={p.id} className="hover:bg-surface-low transition-colors">
+                      <td className="px-6 py-4 font-mono text-xs text-primary font-bold">{p.id_interno}</td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-on-surface text-base font-display">{p.nombre}</div>
+                        <div className="text-xs text-on-surface-variant font-mono mt-0.5">{p.principio_activo || 'Sin molécula'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-on-surface font-semibold">{p.concentracion || '—'}</div>
+                        <div className="text-xs text-on-surface-variant font-mono mt-0.5 flex items-center gap-1.5">
+                          <span>{p.tamano || '—'}</span>
+                          {parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis) > 1 && (
+                            <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold" title="Unidades/Tabletas por empaque para cálculo unidosis">
+                              {parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis)}u
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-0.5 text-[10px] rounded font-mono font-bold tracking-wider ${
+                          (p.market_type || 'GENERICO').toUpperCase() === 'MARCA'
+                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                            : 'bg-green-100 text-green-800 border border-green-200'
+                        }`}>
+                          {p.market_type || 'GENERICO'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded text-xs font-mono font-bold border ${
+                          (p.unidad_negocio || 'La Sante') === 'OTC'
+                            ? 'bg-amber-100 text-amber-800 border-amber-200'
+                            : (p.unidad_negocio || 'La Sante') === 'Pharmetique'
+                            ? 'bg-blue-100 text-blue-800 border-blue-200'
+                            : 'bg-teal-100 text-teal-800 border-teal-200'
+                        }`}>
+                          {p.unidad_negocio || 'La Sante'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-on-surface">{p.laboratorio || '—'}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1 text-xs rounded-full bg-surface-low text-on-surface font-medium border border-outline-variant">
+                          {p.categoria || 'Otros'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-mono text-xs font-bold ${
+                          count === 0
+                            ? 'bg-error-container text-error border border-error/20'
+                            : 'bg-primary-container text-on-primary-container border border-outline-variant/30'
+                        }`}>
+                          <span className="material-symbols-outlined text-sm leading-none">{count === 0 ? 'link_off' : 'link'}</span>
+                          {count === 0 ? 'Sin Enlaces' : `${count} Enlace${count > 1 ? 's' : ''}`}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button onClick={() => handleToggleActivo(p)}
+                          className={`text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider transition-all ${
+                            p.activo ? 'bg-secondary/15 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
+                          }`}>
+                          {p.activo ? 'Activo' : 'Inactivo'}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <button onClick={() => setEditing(p.id)}
+                          className="text-xs text-primary hover:text-primary/85 font-bold mr-4 inline-flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                          Editar
+                        </button>
+                        <button onClick={() => handleDelete(p)}
+                          className="text-xs text-error hover:text-error/85 font-bold inline-flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                          Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination Footer */}
+        {filtrados.length > 0 && (
+          <div className="px-6 py-4 bg-surface-low border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-xs text-on-surface-variant font-mono">
+              Mostrando <span className="font-bold text-primary">{Math.min(filtrados.length, (paginaActual - 1) * itemsPorPagina + 1)}</span> - <span className="font-bold text-primary">{Math.min(filtrados.length, paginaActual * itemsPorPagina)}</span> de <span className="font-bold text-primary">{filtrados.length}</span> productos
+            </div>
+            {totalPaginas > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+                  disabled={paginaActual === 1}
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-sm">chevron_left</span>
+                  Anterior
+                </button>
+                <span className="text-xs font-mono font-bold px-3 py-1 bg-white border border-outline-variant rounded-lg text-primary">
+                  {paginaActual} / {totalPaginas}
+                </span>
+                <button
+                  onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
+                  disabled={paginaActual === totalPaginas}
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+                >
+                  Siguiente
+                  <span className="material-symbols-outlined text-sm">chevron_right</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Create/Edit Product Modal */}
+      {editing && (
+        <ProductoModal
+          producto={editing === 'new' ? null : productos.find(p => p.id === editing)}
+          sugerirId={sugerirId}
+          onSave={handleSave}
+          cadenas={cadenas}
+          competenciaActual={competencia}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {/* Custom Confirmation Dialog */}
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        title="¿Eliminar Producto?"
+        message={
+          confirmDelete 
+            ? `¿Estás seguro de que deseas eliminar "${confirmDelete.nombre}"?${
+                (urlsPorProducto.get(confirmDelete.id_interno) || []).length > 0 
+                  ? `\n\nATENCIÓN: este producto tiene ${(urlsPorProducto.get(confirmDelete.id_interno) || []).length} URL(s) de competencia activa(s) que también se eliminarán.`
+                  : ''
+              }\n\nEsta acción no se puede deshacer.`
+            : ''
+        }
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        isDanger={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
+      {/* Confirm Modal to Delete All Products and History */}
+      <ConfirmModal
+        isOpen={confirmDeleteAll}
+        title="¿Vaciar Catálogo de Productos Completo?"
+        message="¿Estás seguro de que deseas eliminar TODOS los productos de tu catálogo, junto con todos sus enlaces de competencia y todo el historial de precios acumulado?\n\nEsta acción eliminará de forma permanente toda la base de datos de productos y competidores, y NO se puede deshacer."
+        confirmText={deletingAll ? "Eliminando..." : "Sí, Vaciar Todo"}
+        cancelText="Cancelar"
+        isDanger={true}
+        onConfirm={handleConfirmDeleteAll}
+        onCancel={() => setConfirmDeleteAll(false)}
+      />
+
+      {/* CSV Import Modal */}
+      {showCsvModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-outline-variant">
+            <div className="flex items-center justify-between border-b pb-3 border-outline-variant">
+              <h2 className="text-xl font-display font-extrabold text-primary">Importación Masiva (CSV)</h2>
+              <button onClick={() => setShowCsvModal(false)} className="text-on-surface-variant hover:text-on-surface text-2xl leading-none">×</button>
+            </div>
+            <div className="space-y-4 text-sm text-on-background">
+              <p>
+                Sube tu catálogo y enlaces de competidores de forma masiva. El archivo debe estar delimitado por comas.
+              </p>
+              <div className="bg-surface-low p-4 rounded-2xl border border-outline-variant space-y-1.5 font-mono text-xs">
+                <div className="font-bold text-primary border-b pb-1 mb-1 border-outline-variant flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">lists</span>
+                  Columnas Admitidas:
+                </div>
+                <div>id_interno <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
+                <div>nombre <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
+                <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
+                <div>concentracion, tamano, laboratorio, categoria</div>
+                <div>url_farmatodo, url_locatel <span className="text-on-surface-variant font-sans font-medium">(Enlaces opcionales)</span></div>
+              </div>
+              <div className="flex justify-between items-center pt-2">
+                <button type="button" onClick={downloadCsvPlantilla}
+                  className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">download</span>
+                  Descargar Plantilla / Catálogo Actual (CSV)
+                </button>
+              </div>
+
+              {/* Drag and Drop Zone */}
+              <div className="border-2 border-dashed border-outline hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-low"
+                onClick={() => fileInputRef.current.click()}>
+                <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
+                <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
+                <p className="text-xs text-on-surface-variant mt-1">Soporta formato .csv delimitado por comas</p>
+                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-outline-variant">
+              <button onClick={() => setShowCsvModal(false)}
+                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProductoModal({ producto, sugerirId, onSave, onClose }) {
+  const isNew = !producto;
+  const [form, setForm] = useState({
+    id_interno: producto?.id_interno || sugerirId(),
+    nombre: producto?.nombre || '',
+    laboratorio: producto?.laboratorio || '',
+    principio_activo: producto?.principio_activo || '',
+    concentracion: producto?.concentracion || '',
+    tamano: producto?.tamano || '',
+    unidosis: producto?.unidosis || '',
+    presentacion: producto?.presentacion || '',
+    categoria: producto?.categoria || '',
+    market_type: producto?.market_type || 'GENERICO',
+    unidad_negocio: producto?.unidad_negocio || 'La Sante',
+    activo: producto?.activo ?? true,
+  });
+
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave(form, isNew);
+    setSaving(false);
+  };
+
+  const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-xl max-w-2xl w-full max-h-[92vh] flex flex-col border border-outline-variant"
+        onClick={e => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+          <h2 className="text-xl font-display font-extrabold text-primary">{isNew ? 'Registrar Nuevo Producto' : 'Editar Propiedades'}</h2>
+          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl leading-none">×</button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="ID Interno *" hint="Código único (ej: P001)">
+              <input type="text" required value={form.id_interno}
+                onChange={e => handleChange('id_interno', e.target.value)}
+                disabled={!isNew}
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-mono text-sm" />
+            </Field>
+            
+            <Field label="Nombre Comercial *" hint="Ej. Atamel">
+              <input type="text" required value={form.nombre}
+                onChange={e => handleChange('nombre', e.target.value)}
+                placeholder="Nombre comercial"
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm" />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Field label="Molécula / Principio">
+              <input type="text" value={form.principio_activo}
+                onChange={e => handleChange('principio_activo', e.target.value)}
+                placeholder="Acetaminofén"
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
+            </Field>
+
+            <Field label="Concentración" hint="Ej: 500 mg, 10%">
+              <input type="text" value={form.concentracion}
+                onChange={e => handleChange('concentracion', e.target.value)}
+                placeholder="500 mg"
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
+            </Field>
+
+            <Field label="Tamaño / Unidades" hint="Ej: 10 tabletas">
+              <input type="text" value={form.tamano}
+                onChange={e => handleChange('tamano', e.target.value)}
+                placeholder="10 tabletas"
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Laboratorio">
+              <input type="text" value={form.laboratorio}
+                onChange={e => handleChange('laboratorio', e.target.value)}
+                placeholder="La Santé"
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
+            </Field>
+
+            <Field label="Categoría">
+              <select value={form.categoria} onChange={e => handleChange('categoria', e.target.value)}
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white text-sm">
+                <option value="">— Selecciona —</option>
+                {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+
+            <Field label="Market Type (Tipo)">
+              <select value={form.market_type} onChange={e => handleChange('market_type', e.target.value)}
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white text-sm font-bold text-primary">
+                <option value="GENERICO">GENÉRICO</option>
+                <option value="MARCA">MARCA</option>
+              </select>
+            </Field>
+
+            <Field label="Unidad de Negocio (UN)">
+              <select value={form.unidad_negocio} onChange={e => handleChange('unidad_negocio', e.target.value)}
+                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white text-sm font-bold text-secondary">
+                <option value="La Sante">La Santé</option>
+                <option value="Pharmetique">Pharmetique</option>
+                <option value="OTC">OTC</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="flex justify-between items-center pt-4 border-t border-outline-variant">
+            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-primary select-none">
+              <input type="checkbox" checked={form.activo}
+                onChange={e => handleChange('activo', e.target.checked)}
+                className="rounded text-primary focus:ring-primary h-4 w-4" />
+              <span>PRODUCTO ACTIVO</span>
+            </label>
+            
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose}
+                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant">
+                Cancelar
+              </button>
+              <button type="submit" disabled={saving}
+                className="px-6 py-2 bg-secondary hover:bg-secondary/90 text-on-secondary rounded-full text-xs font-extrabold shadow-sm transition-all">
+                {saving ? 'Guardando...' : isNew ? 'Registrar' : 'Guardar Cambios'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, children }) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
+      {children}
+      {hint && <p className="text-[10px] text-on-surface-variant font-mono">{hint}</p>}
+    </div>
+  );
+}

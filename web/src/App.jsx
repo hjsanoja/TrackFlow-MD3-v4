@@ -1,0 +1,215 @@
+import { useEffect, useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+import { supabase } from './supabase';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Simulador from './pages/Simulador';
+import Hallazgos from './pages/Hallazgos';
+import Productos from './pages/Productos';
+import Competencia from './pages/Competencia';
+import Cadenas from './pages/Cadenas';
+import Usuarios from './pages/Usuarios';
+import Layout from './components/Layout';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider, useToast } from './context/ToastContext';
+import { DataProvider } from './context/DataContext';
+
+function emailToDocId(email) {
+  return email.toLowerCase().replace('@', '_at_').replaceAll('.', '_');
+}
+
+function AppContent() {
+  const [user, setUser] = useState(null);
+  const [userDoc, setUserDoc] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // 0. Check local demo session or default demo mode
+    const storedDemo = localStorage.getItem('trackflow_demo_user');
+    if (storedDemo) {
+      try {
+        const parsed = JSON.parse(storedDemo);
+        if (parsed && parsed.email) {
+          setUser({ email: parsed.email, uid: 'demo-user-id' });
+          setUserDoc(parsed);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        localStorage.removeItem('trackflow_demo_user');
+      }
+    }
+
+    const hasSbEnv = Boolean(import.meta.env.VITE_SUPABASE_URL);
+    const hasFbEnv = Boolean(import.meta.env.VITE_FIREBASE_API_KEY);
+
+    if (!hasSbEnv && !hasFbEnv) {
+      const demoDoc = { email: 'admin@trackflow.com', nombre: 'Administrador TrackFlow', rol: 'administrador', activo: true };
+      localStorage.setItem('trackflow_demo_user', JSON.stringify(demoDoc));
+      setUser({ email: demoDoc.email, uid: 'demo-admin-id' });
+      setUserDoc(demoDoc);
+      setLoading(false);
+      return;
+    }
+
+    // 1. Verificar sesión activa con Supabase
+    const checkSupabaseAuth = async () => {
+
+      if (!import.meta.env.VITE_SUPABASE_URL) return false;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const email = session.user.email.toLowerCase();
+          const { data: uData, error } = await supabase
+            .from('usuarios')
+            .select('*')
+            .or(`email.eq.${email},id.eq.${emailToDocId(email)}`)
+            .maybeSingle();
+
+          if (uData) {
+            const isActive = uData.activo === true || uData.activo === 'si' || uData.activo === 'sí';
+            if (isActive) {
+              if (isMounted) {
+                setUser({ email: session.user.email, uid: session.user.id });
+                setUserDoc(uData);
+                setLoading(false);
+              }
+              return true;
+            } else {
+              await supabase.auth.signOut();
+              addToast('Tu usuario está inactivo. Contacta a un administrador.', 'error');
+            }
+          } else {
+            // Usuario en Supabase Auth pero sin perfil en la tabla usuarios todavía
+            if (isMounted) {
+              setUser({ email: session.user.email, uid: session.user.id });
+              setUserDoc({ email: session.user.email, nombre: session.user.email.split('@')[0], rol: 'administrador', activo: true });
+              setLoading(false);
+            }
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('Error verificando Supabase session:', err);
+      }
+      return false;
+    };
+
+    const initAuth = async () => {
+      const hasSbUser = await checkSupabaseAuth();
+      if (hasSbUser) return;
+
+      // 2. Escuchar cambios en Firebase Auth como fallback
+      const unsubFirebase = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!isMounted) return;
+        if (firebaseUser) {
+          try {
+            const docId = emailToDocId(firebaseUser.email);
+            const snap = await getDoc(doc(db, 'usuarios', docId));
+            if (snap.exists()) {
+              const data = snap.data();
+              const isActive = data.activo === true || data.activo === 'si' || data.activo === 'sí';
+              if (isActive) {
+                setUser(firebaseUser);
+                setUserDoc(data);
+              } else {
+                await signOut(auth);
+                addToast('Tu usuario está inactivo. Contacta a un administrador.', 'error');
+              }
+            } else {
+              // Permitir ingreso con perfil por defecto si no existe doc en Firestore
+              setUser(firebaseUser);
+              setUserDoc({ email: firebaseUser.email, nombre: firebaseUser.email.split('@')[0], rol: 'administrador', activo: true });
+            }
+          } catch (err) {
+            console.error('Error:', err?.message || String(err));
+            setUser(firebaseUser);
+            setUserDoc({ email: firebaseUser.email, nombre: firebaseUser.email.split('@')[0], rol: 'administrador', activo: true });
+          }
+        } else {
+          setUser(null);
+          setUserDoc(null);
+        }
+        setLoading(false);
+      });
+
+      return unsubFirebase;
+    };
+
+    let unsubFirebaseFn = null;
+    initAuth().then(unsub => { unsubFirebaseFn = unsub; });
+
+    // Escuchar eventos de cambio de sesión en Supabase Auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await checkSupabaseAuth();
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setUserDoc(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubFirebaseFn) unsubFirebaseFn();
+      subscription?.unsubscribe();
+    };
+  }, [addToast]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm font-mono font-bold text-primary mt-4 animate-pulse">Cargando TrackFlow...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    );
+  }
+
+  const isAdmin = userDoc?.rol === 'administrador';
+
+  return (
+    <DataProvider user={user}>
+      <Layout user={user} userDoc={userDoc}>
+        <Routes>
+          <Route path="/" element={<Dashboard user={user} userDoc={userDoc} />} />
+          {/* Versión 1.2: Ocultos del menú en Layout.jsx. Rutas preservadas intactas para cuando se soliciten reactivar */}
+          <Route path="/simulador" element={<Simulador user={user} userDoc={userDoc} />} />
+          <Route path="/hallazgos" element={<Hallazgos user={user} userDoc={userDoc} />} />
+          <Route path="/productos" element={isAdmin ? <Productos /> : <Navigate to="/" />} />
+          <Route path="/competencia" element={isAdmin ? <Competencia /> : <Navigate to="/" />} />
+          <Route path="/cadenas" element={isAdmin ? <Cadenas /> : <Navigate to="/" />} />
+          <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to="/" />} />
+          <Route path="/login" element={<Navigate to="/" />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Layout>
+    </DataProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </ErrorBoundary>
+  );
+}
+
