@@ -128,32 +128,21 @@ export function DataProvider({ children, user }) {
         if (cErr) console.warn('[Supabase Read Warning] cadenas:', cErr.message || cErr);
 
         if (!pErr && Array.isArray(pData)) {
-          let finalProds = pData.map(p => ({
+          const prods = pData.map(p => ({
             ...p,
             id: p.id || p.id_interno || p.ID || '',
             id_interno: p.id_interno || p.id || p.ID || ''
-          }));
-
-          if (finalProds.length === 0) {
-            finalProds = DEFAULT_PRODUCTS;
-            supabaseUpsertSafe('productos', DEFAULT_PRODUCTS).catch(e => console.warn('Error al auto-sembrar productos:', e));
-          }
-          const prods = [...finalProds].sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
+          })).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
           setProductos(prods);
 
-          let finalPc = Array.isArray(pcData) ? pcData : [];
-          if (finalPc.length === 0 && finalProds === DEFAULT_PRODUCTS) {
-            finalPc = DEFAULT_COMPETENCIA;
-            supabaseUpsertSafe('productos_competencia', DEFAULT_COMPETENCIA).catch(() => {});
-          }
-          setProductosCompetencia(finalPc);
+          const pc = (Array.isArray(pcData) ? pcData : []).map(p => ({
+            ...p,
+            id: p.id || '',
+            id_producto_propio: p.id_producto_propio || ''
+          }));
+          setProductosCompetencia(pc);
 
-          let finalCadenas = Array.isArray(cData) ? cData : [];
-          if (finalCadenas.length === 0) {
-            finalCadenas = DEFAULT_CADENAS;
-            supabaseUpsertSafe('cadenas', DEFAULT_CADENAS).catch(() => {});
-          }
-          const cSorted = [...finalCadenas].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          const cSorted = [...(Array.isArray(cData) ? cData : [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cSorted);
 
           if (hData && hData.length > 0) {
@@ -162,7 +151,7 @@ export function DataProvider({ children, user }) {
               scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
             })));
           } else {
-            setHistoricoPrecios(DEFAULT_HISTORICO);
+            setHistoricoPrecios([]);
           }
 
           if (rData && rData.length > 0) {
@@ -171,7 +160,7 @@ export function DataProvider({ children, user }) {
               started_at: rData[0].started_at ? new Date(rData[0].started_at) : null
             });
           } else {
-            setUltimaCorrida(DEFAULT_RUN);
+            setUltimaCorrida(null);
           }
 
           if (bData && bData.length > 0) {
@@ -202,12 +191,7 @@ export function DataProvider({ children, user }) {
             setBcvRates(DEFAULT_RATES);
           }
 
-          let finalUsuarios = Array.isArray(uData) ? uData : [];
-          if (finalUsuarios.length === 0) {
-            finalUsuarios = DEFAULT_USUARIOS;
-            supabaseUpsertSafe('usuarios', DEFAULT_USUARIOS).catch(() => {});
-          }
-          const uSorted = [...finalUsuarios].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          const uSorted = [...(Array.isArray(uData) ? uData : [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setUsuarios(uSorted);
 
           setIsLoadedOnce(true);
@@ -215,10 +199,15 @@ export function DataProvider({ children, user }) {
           setIsRefreshing(false);
           return;
         } else {
-          console.warn('[Supabase] Error o sin datos en tabla productos:', pErr?.message || pErr);
+          console.warn('[Supabase] Error al leer tabla productos:', pErr?.message || pErr);
+          setProductos([]);
+          setIsLoadedOnce(true);
+          setLoadingInitial(false);
+          setIsRefreshing(false);
+          return;
         }
       } catch (sbErr) {
-        console.warn('Supabase no devolvió datos o no está migrado aún, cambiando a Firebase/Mock:', sbErr);
+        console.warn('Supabase no devolvió datos:', sbErr);
       }
     }
 
@@ -307,15 +296,23 @@ export function DataProvider({ children, user }) {
   }, [isLoadedOnce, applyDefaultSeed]);
 
   useEffect(() => {
-    if (user) {
-      cargarTodo(false);
-    } else {
-      applyDefaultSeed();
-    }
-  }, [user, cargarTodo, applyDefaultSeed]);
+    cargarTodo(false);
+  }, [cargarTodo]);
 
   const refreshProductos = useCallback(async () => {
     try {
+      if (isSupabaseActive()) {
+        const { data, error } = await supabase.from('productos').select('*');
+        if (!error && Array.isArray(data)) {
+          const prods = data.map(p => ({
+            ...p,
+            id: p.id || p.id_interno || p.ID || '',
+            id_interno: p.id_interno || p.id || p.ID || ''
+          })).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
+          setProductos(prods);
+          return;
+        }
+      }
       if (!db) return;
       const snap = await getDocs(collection(db, 'productos'));
       if (!snap.empty) {
@@ -330,6 +327,17 @@ export function DataProvider({ children, user }) {
 
   const refreshCompetencia = useCallback(async () => {
     try {
+      if (isSupabaseActive()) {
+        const { data, error } = await supabase.from('productos_competencia').select('*');
+        if (!error && Array.isArray(data)) {
+          setProductosCompetencia(data.map(p => ({
+            ...p,
+            id: p.id || '',
+            id_producto_propio: p.id_producto_propio || ''
+          })));
+          return;
+        }
+      }
       if (!db) return;
       const snap = await getDocs(collection(db, 'productos_competencia'));
       if (!snap.empty) {
@@ -342,6 +350,14 @@ export function DataProvider({ children, user }) {
 
   const refreshCadenas = useCallback(async () => {
     try {
+      if (isSupabaseActive()) {
+        const { data, error } = await supabase.from('cadenas').select('*');
+        if (!error && Array.isArray(data)) {
+          const cDocs = [...data].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          setCadenas(cDocs);
+          return;
+        }
+      }
       if (!db) return;
       const snap = await getDocs(collection(db, 'cadenas'));
       if (!snap.empty) {
@@ -356,6 +372,14 @@ export function DataProvider({ children, user }) {
 
   const refreshUsuarios = useCallback(async () => {
     try {
+      if (isSupabaseActive()) {
+        const { data, error } = await supabase.from('usuarios').select('*');
+        if (!error && Array.isArray(data)) {
+          const uDocs = [...data].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          setUsuarios(uDocs);
+          return;
+        }
+      }
       if (!db) return;
       const snap = await getDocs(collection(db, 'usuarios'));
       if (!snap.empty) {
