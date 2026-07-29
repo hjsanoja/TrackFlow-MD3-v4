@@ -329,9 +329,28 @@ export default function Competencia({ user, userDoc }) {
     return 'Bs ' + priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  const getRowVal = (row, ...keys) => {
+    if (!row) return '';
+    for (const k of keys) {
+      if (row[k] !== undefined && String(row[k]).trim() !== '') {
+        return String(row[k]).trim();
+      }
+    }
+    const norm = str => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const rowKeys = Object.keys(row);
+    for (const key of keys) {
+      const targetNorm = norm(key);
+      const foundRowKey = rowKeys.find(rk => norm(rk) === targetNorm);
+      if (foundRowKey && row[foundRowKey] !== undefined && String(row[foundRowKey]).trim() !== '') {
+        return String(row[foundRowKey]).trim();
+      }
+    }
+    return '';
+  };
+
   // CSV Parsing for Bulk Competitor upload
   const handleCsvUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
@@ -341,18 +360,17 @@ export default function Competencia({ user, userDoc }) {
         const rows = parseCSV(text);
         if (rows.length === 0) throw new Error('El archivo CSV está vacío.');
 
-        const batch = writeBatch(db);
         let count = 0;
 
         for (const row of rows) {
-          const id_producto = (row.id_producto_propio || row.ID_Producto || row.id_producto || row.id_interno || row.id || '').trim();
-          const cadena = (row.cadena || row.Cadena || '').trim();
-          const marca = (row.marca || row.Marca || '').trim();
-          const url = (row.url || row.URL || '').trim();
-          const tipo = (row.tipo || row.Tipo || 'alternativa').trim().toLowerCase();
-          const laboratorio = (row.laboratorio || row.Laboratorio || '').trim();
-          const concentracion = (row.concentracion || row.Concentracion || '').trim();
-          const tamano = (row.tamano || row.Tamano || '').trim();
+          const id_producto = getRowVal(row, 'id_producto_propio', 'ID_Producto', 'id_producto', 'id_interno', 'id', 'id producto', 'producto_id');
+          const cadena = getRowVal(row, 'cadena', 'Cadena');
+          const marca = getRowVal(row, 'marca', 'Marca');
+          const url = getRowVal(row, 'url', 'URL', 'enlace', 'Enlace');
+          const tipo = getRowVal(row, 'tipo', 'Tipo', 'tipo_enlace').toLowerCase();
+          const laboratorio = getRowVal(row, 'laboratorio', 'Laboratorio', 'lab');
+          const concentracion = getRowVal(row, 'concentracion', 'Concentración', 'Concentracion');
+          const tamano = getRowVal(row, 'tamano', 'Tamaño', 'Tamano', 'presentacion');
 
           if (!id_producto || !cadena || !url) continue;
 
@@ -373,6 +391,8 @@ export default function Competencia({ user, userDoc }) {
               ? existingComp.id 
               : `${id_producto}_${cadena}_${marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
 
+          const activoVal = getRowVal(row, 'activo', 'Activo');
+
           await dbUpsertProductoCompetencia({
             id: docId,
             id_producto_propio: id_producto,
@@ -380,7 +400,7 @@ export default function Competencia({ user, userDoc }) {
             tipo: tipo === 'propio' ? 'propio' : 'alternativa',
             marca: marca || existingComp?.marca || 'Competencia',
             url,
-            activo: row.activo ? (String(row.activo).toLowerCase() === 'true' || String(row.activo) === '1') : true,
+            activo: activoVal ? (activoVal.toLowerCase() === 'true' || activoVal === '1') : true,
             laboratorio: laboratorio || existingComp?.laboratorio || '',
             concentracion: concentracion || existingComp?.concentracion || '',
             tamano: tamano || existingComp?.tamano || '',
@@ -393,18 +413,24 @@ export default function Competencia({ user, userDoc }) {
           addToast(`Carga masiva exitosa: ${count} URLs de competencia importadas.`, 'success');
           await cargar(true);
         } else {
-          throw new Error('No se encontraron filas con campos obligatorios (id_producto_propio, cadena, marca, url).');
+          throw new Error('No se encontraron filas con campos obligatorios (id_producto_propio, cadena, url).');
         }
       } catch (err) {
-        addToast('Error procesando CSV: ' + err.message, 'error');
+        addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setShowCsvModal(false);
       }
-      setShowCsvModal(false);
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'UTF-8');
   };
 
   const parseCSV = (text) => {
-    const lines = text.split(/\r?\n/);
+    if (!text) return [];
+    const cleanText = text.replace(/^\uFEFF/, '').trim();
+    if (!cleanText) return [];
+
+    const lines = cleanText.split(/\r?\n/);
     if (lines.length === 0) return [];
     
     // Detect delimiter
@@ -438,10 +464,11 @@ export default function Competencia({ user, userDoc }) {
         }
       }
       result.push(current.trim());
-      return result.map(v => v.replace(/^"|"$/g, ''));
+      return result.map(v => v.replace(/^"|"$/g, '').trim());
     };
 
-    const headers = splitLine(lines[0]);
+    const rawHeaders = splitLine(lines[0]);
+    const headers = rawHeaders.map(h => h.replace(/^\uFEFF/, '').trim());
     const result = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -450,7 +477,9 @@ export default function Competencia({ user, userDoc }) {
       const values = splitLine(line);
       const row = {};
       headers.forEach((header, index) => {
-        row[header] = values[index] || '';
+        if (header) {
+          row[header] = values[index] !== undefined ? values[index] : '';
+        }
       });
       result.push(row);
     }

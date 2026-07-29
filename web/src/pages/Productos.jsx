@@ -180,8 +180,27 @@ export default function Productos() {
     }
   };
 
+  const getRowVal = (row, ...keys) => {
+    if (!row) return '';
+    for (const k of keys) {
+      if (row[k] !== undefined && String(row[k]).trim() !== '') {
+        return String(row[k]).trim();
+      }
+    }
+    const norm = str => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const rowKeys = Object.keys(row);
+    for (const key of keys) {
+      const targetNorm = norm(key);
+      const foundRowKey = rowKeys.find(rk => norm(rk) === targetNorm);
+      if (foundRowKey && row[foundRowKey] !== undefined && String(row[foundRowKey]).trim() !== '') {
+        return String(row[foundRowKey]).trim();
+      }
+    }
+    return '';
+  };
+
   const handleCsvUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
@@ -189,29 +208,37 @@ export default function Productos() {
       try {
         const text = evt.target.result;
         const rows = parseCSV(text);
-        if (rows.length === 0) throw new Error('El archivo CSV está vacío o no es válido.');
+        if (rows.length === 0) throw new Error('El archivo CSV está vacío o no tiene encabezados válidos.');
 
         let count = 0;
 
-        for (const row of rows) {
-          const id = (row.id_interno || row.id || row.ID || '').trim();
-          const nombre = (row.nombre || row.nombre_producto || row.Nombre || '').trim();
-          
+        for (let idx = 0; idx < rows.length; idx++) {
+          const row = rows[idx];
+
+          let id = getRowVal(row, 'id_interno', 'id', 'ID Interno', 'ID_INTERNO', 'ID', 'codigo', 'código', 'cod');
+          const nombre = getRowVal(row, 'nombre', 'Nombre', 'nombre_producto', 'Nombre Producto', 'producto', 'descripcion');
+
+          if (!id && nombre) {
+            id = `P${String(idx + 1).padStart(3, '0')}`;
+          }
+
           if (!id || !nombre) continue;
 
-          const principio_activo = (row.principio_activo || row.molecula || row.Molecula || '').trim();
-          const concentracion = (row.concentracion || row.Concentracion || '').trim();
-          const tamano = (row.tamano || row.presentacion || row.Tamano || '').trim();
-          const laboratorio = (row.laboratorio || row.Laboratorio || '').trim();
-          const categoria = (row.categoria || row.Categoria || 'Otros').trim();
-          let market_type = (row.market_type || row.tipo_mercado || row.tipo || row.Market_Type || 'GENERICO').trim().toUpperCase();
+          const principio_activo = getRowVal(row, 'principio_activo', 'Principio Activo', 'molecula', 'molécula', 'Molecula');
+          const concentracion = getRowVal(row, 'concentracion', 'Concentración', 'Concentracion');
+          const tamano = getRowVal(row, 'tamano', 'Tamaño', 'presentacion', 'Presentación', 'Presentacion');
+          const laboratorio = getRowVal(row, 'laboratorio', 'Laboratorio', 'lab', 'Lab');
+          const catRaw = getRowVal(row, 'categoria', 'Categoría', 'Categoria');
+          const categoria = CATEGORIAS.includes(catRaw) ? catRaw : 'Otros';
+
+          let market_type = getRowVal(row, 'market_type', 'Market Type', 'tipo_mercado', 'tipo', 'Tipo').toUpperCase();
           if (market_type.includes('MARCA')) {
             market_type = 'MARCA';
           } else {
             market_type = 'GENERICO';
           }
 
-          let unRaw = (row.unidad_negocio || row.unidad || row.un || row.Unidad_Negocio || row.UN || 'La Sante').trim().toUpperCase();
+          let unRaw = getRowVal(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN').toUpperCase();
           let unidad_negocio = 'La Sante';
           if (unRaw.includes('PHARMETIQUE') || unRaw === 'PH') {
             unidad_negocio = 'Pharmetique';
@@ -221,7 +248,8 @@ export default function Productos() {
             unidad_negocio = 'La Sante';
           }
 
-          const pvp_propio_usd = parseFloat(row.pvp_propio_usd || row.pvp || row.precio) || 0;
+          const pvpRaw = getRowVal(row, 'pvp_propio_usd', 'PVP Propio USD', 'pvp', 'precio', 'pvp usd', 'precio usd', 'mi precio lista (usd)');
+          const pvp_propio_usd = parseFloat(pvpRaw.replace(',', '.')) || 0;
           const unidosis = parseUnidosisCount(tamano);
 
           const cleanProd = {
@@ -232,7 +260,7 @@ export default function Productos() {
             concentracion,
             tamano,
             laboratorio: laboratorio || 'La Sante',
-            categoria: CATEGORIAS.includes(categoria) ? categoria : 'Otros',
+            categoria,
             pvp_propio_usd,
             unidosis,
             market_type,
@@ -244,9 +272,9 @@ export default function Productos() {
           count++;
 
           for (const key of Object.keys(row)) {
-            if (key.toLowerCase().startsWith('url_')) {
-              const chainNameClean = key.slice(4).trim();
-              const urlVal = row[key].trim();
+            if (key.toLowerCase().trim().startsWith('url_')) {
+              const chainNameClean = key.toLowerCase().trim().slice(4).trim();
+              const urlVal = String(row[key] || '').trim();
               if (urlVal) {
                 const cadenaFormatted = chainNameClean.charAt(0).toUpperCase() + chainNameClean.slice(1);
                 const existingComp = competencia.find(c =>
@@ -275,18 +303,24 @@ export default function Productos() {
           addToast(`Carga masiva exitosa: ${count} productos registrados en el catálogo.`, 'success');
           await cargar(true);
         } else {
-          throw new Error('No se encontraron filas válidas con ID y Nombre.');
+          throw new Error('No se encontraron filas con datos válidos. Revisa que el CSV contenga al menos la columna "id_interno" o "nombre".');
         }
       } catch (err) {
-        addToast('Error procesando CSV: ' + err.message, 'error');
+        addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setShowCsvModal(false);
       }
-      setShowCsvModal(false);
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'UTF-8');
   };
 
   const parseCSV = (text) => {
-    const lines = text.split(/\r?\n/);
+    if (!text) return [];
+    const cleanText = text.replace(/^\uFEFF/, '').trim();
+    if (!cleanText) return [];
+
+    const lines = cleanText.split(/\r?\n/);
     if (lines.length === 0) return [];
     
     // Detect delimiter
@@ -320,10 +354,11 @@ export default function Productos() {
         }
       }
       result.push(current.trim());
-      return result.map(v => v.replace(/^"|"$/g, ''));
+      return result.map(v => v.replace(/^"|"$/g, '').trim());
     };
 
-    const headers = splitLine(lines[0]);
+    const rawHeaders = splitLine(lines[0]);
+    const headers = rawHeaders.map(h => h.replace(/^\uFEFF/, '').trim());
     const result = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -332,7 +367,9 @@ export default function Productos() {
       const values = splitLine(line);
       const row = {};
       headers.forEach((header, index) => {
-        row[header] = values[index] || '';
+        if (header) {
+          row[header] = values[index] !== undefined ? values[index] : '';
+        }
       });
       result.push(row);
     }
