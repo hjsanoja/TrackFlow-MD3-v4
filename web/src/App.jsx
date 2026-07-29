@@ -36,6 +36,10 @@ function AppContent() {
       try {
         const parsed = JSON.parse(storedDemo);
         if (parsed && parsed.email) {
+          if (!parsed.nombre || parsed.nombre === 'Administrador TrackFlow' || parsed.nombre === 'admin') {
+            parsed.nombre = 'Hernando Sanoja';
+            localStorage.setItem('trackflow_demo_user', JSON.stringify(parsed));
+          }
           setUser({ email: parsed.email, uid: 'demo-user-id' });
           setUserDoc(parsed);
           setLoading(false);
@@ -50,7 +54,7 @@ function AppContent() {
     const hasFbEnv = Boolean(import.meta.env.VITE_FIREBASE_API_KEY);
 
     if (!hasSbEnv && !hasFbEnv) {
-      const demoDoc = { email: 'admin@trackflow.com', nombre: 'Administrador TrackFlow', rol: 'administrador', activo: true };
+      const demoDoc = { email: 'admin@trackflow.com', nombre: 'Hernando Sanoja', rol: 'administrador', activo: true };
       localStorage.setItem('trackflow_demo_user', JSON.stringify(demoDoc));
       setUser({ email: demoDoc.email, uid: 'demo-admin-id' });
       setUserDoc(demoDoc);

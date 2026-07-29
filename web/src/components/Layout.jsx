@@ -81,16 +81,25 @@ export default function Layout({ user, userDoc, children }) {
         <div className="space-y-4">
           <div className="bg-surface-low rounded-2xl p-4 border border-outline-variant/30">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-sm font-display">
-                {userDoc?.nombre ? userDoc.nombre.charAt(0).toUpperCase() : 'U'}
-              </div>
-              <div className="truncate flex-1">
-                <div className="text-sm font-bold text-on-surface truncate font-display">{userDoc?.nombre || 'Usuario'}</div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="h-2 w-2 rounded-full bg-secondary animate-pulse"></span>
-                  <span className="text-[10px] text-on-surface-variant uppercase font-mono font-semibold tracking-wider">{userDoc?.rol || 'Rol'}</span>
-                </div>
-              </div>
+              {(() => {
+                const displayName = (!userDoc?.nombre || userDoc.nombre === 'Administrador TrackFlow' || userDoc.nombre === 'admin')
+                  ? 'Hernando Sanoja'
+                  : userDoc.nombre;
+                return (
+                  <>
+                    <div className="w-10 h-10 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-sm font-display">
+                      {displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="truncate flex-1">
+                      <div className="text-sm font-bold text-on-surface truncate font-display">{displayName}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="h-2 w-2 rounded-full bg-secondary animate-pulse"></span>
+                        <span className="text-[10px] text-on-surface-variant uppercase font-mono font-semibold tracking-wider">{userDoc?.rol || 'administrador'}</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -122,12 +131,14 @@ export default function Layout({ user, userDoc, children }) {
       {/* Main content */}
       <main className="flex-1 overflow-x-auto min-h-screen flex flex-col">
         {/* Top Header Bar */}
-        <header className="px-8 py-3 bg-white/80 backdrop-blur border-b border-outline-variant/50 flex items-center justify-between sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-            <span className="text-xs font-mono font-semibold text-on-surface-variant">
-              Conexión Supabase DB Activa
-            </span>
+        <header className="px-6 py-2.5 bg-white/90 backdrop-blur border-b border-outline-variant/50 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-10 shadow-xs">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-xs font-mono font-semibold text-on-surface-variant hidden md:inline">
+                Supabase DB Activa
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

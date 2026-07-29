@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, memoryLocalCache, setLogLevel } from 'firebase/firestore';
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyMockKeyForTrackFlowStudio',
@@ -18,13 +18,15 @@ let auth;
 let db;
 
 try {
-  app = initializeApp(firebaseConfig);
+  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   auth = getAuth(app);
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
-  });
+  try {
+    db = getFirestore(app);
+  } catch {
+    db = initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    });
+  }
 } catch (err) {
   console.warn('Firebase initialization warning:', err?.message || String(err));
 }

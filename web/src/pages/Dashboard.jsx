@@ -1511,6 +1511,21 @@ function KpiCard({ label, value, sub, icon, color }) {
   );
 }
 
+function formatDateTime(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const strHours = String(hours).padStart(2, '0');
+  return `${day}/${month}/${year} ${strHours}:${minutes} ${ampm}`;
+}
+
 function BcvController({ bcv }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
@@ -1523,8 +1538,10 @@ function BcvController({ bcv }) {
     }
   };
 
+  const formattedDate = bcv.updatedAt ? formatDateTime(bcv.updatedAt) : '';
+
   return (
-    <div className="flex items-center gap-4 text-xs font-mono">
+    <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
       <div className="flex items-center gap-1.5">
         <span className="h-2 w-2 rounded-full bg-secondary animate-ping"></span>
         <span className="text-on-surface-variant uppercase font-bold flex items-center gap-1">
@@ -1541,13 +1558,19 @@ function BcvController({ bcv }) {
           {bcv.error && <span className="text-[10px] text-error font-bold">{bcv.error}</span>}
         </div>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-extrabold text-primary text-base">
             {bcv.loading ? 'Recuperando...' : bcv.rate ? `Bs ${bcv.rate.toFixed(4)} / USD` : 'Sin tasa'}
           </span>
           <span className="text-[9px] uppercase bg-primary-container px-2.5 py-1 rounded-full text-on-primary-container font-bold">
             {bcv.source || 'Auto'}
           </span>
+          {formattedDate && (
+            <span className="text-[11px] text-on-surface-variant font-sans flex items-center gap-1 bg-surface-low px-2.5 py-1 rounded-full border border-outline-variant/50" title="Fecha y hora de la última actualización de la tasa">
+              <span className="material-symbols-outlined text-xs text-primary leading-none">schedule</span>
+              <span className="font-semibold">{formattedDate}</span>
+            </span>
+          )}
           <button onClick={() => { setEditing(true); setVal(bcv.rate || ''); }}
             className="text-[11px] font-bold text-primary hover:underline uppercase inline-flex items-center gap-0.5">
             <span className="material-symbols-outlined text-xs">edit</span>

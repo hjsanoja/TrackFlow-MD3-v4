@@ -10,9 +10,11 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const handleDemoLogin = () => {
+    const rawName = email.split('@')[0] || '';
+    const nameToUse = (!rawName || rawName === 'admin' || rawName.toLowerCase().includes('administrador')) ? 'Hernando Sanoja' : rawName;
     const demoDoc = {
       email: email.trim() || 'admin@trackflow.com',
-      nombre: (email.split('@')[0] || 'Administrador TrackFlow'),
+      nombre: nameToUse,
       rol: 'administrador',
       activo: true
     };

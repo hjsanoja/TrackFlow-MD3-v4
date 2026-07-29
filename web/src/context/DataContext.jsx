@@ -63,7 +63,7 @@ const DEFAULT_RUN = {
 };
 
 const DEFAULT_USUARIOS = [
-  { id: 'admin_at_trackflow_com', email: 'admin@trackflow.com', nombre: 'Administrador TrackFlow', rol: 'administrador', activo: true },
+  { id: 'admin_at_trackflow_com', email: 'admin@trackflow.com', nombre: 'Hernando Sanoja', rol: 'administrador', activo: true },
   { id: 'analista_at_trackflow_com', email: 'analista@trackflow.com', nombre: 'Analista de Precios', rol: 'analista', activo: true }
 ];
 
