@@ -3,6 +3,8 @@ import { db, firebaseConfig } from '../firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import ConfirmModal from '../components/ConfirmModal';
+import GitHubConfigModal from '../components/GitHubConfigModal';
+import { getGitHubConfig } from '../utils/githubClient';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { dbUpsertUsuario, dbDeleteUsuario } from '../utils/dbClient';
@@ -21,8 +23,23 @@ export default function Usuarios({ userDoc }) {
 
   const [editing, setEditing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [showGithubModal, setShowGithubModal] = useState(false);
+  const [githubInfo, setGithubInfo] = useState(null);
 
   const { addToast } = useToast();
+
+  const cargarGithubConfig = async () => {
+    const cfg = await getGitHubConfig();
+    if (cfg && cfg.token) {
+      setGithubInfo(cfg);
+    } else {
+      setGithubInfo(null);
+    }
+  };
+
+  useEffect(() => {
+    cargarGithubConfig();
+  }, []);
 
   const handleSave = async (data, isNew) => {
     let secondaryApp = null;
@@ -271,6 +288,32 @@ export default function Usuarios({ userDoc }) {
         )}
       </div>
 
+      {/* GitHub Integration Card (Solo Administradores) */}
+      <div className="bg-white rounded-3xl border border-[#e1e2ec] shadow-sm p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-2xl">
+              <span className="material-symbols-outlined text-2xl">smart_toy</span>
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-[#040d53] font-display">Integración Robot Extractor (GitHub Actions)</h3>
+              <p className="text-xs text-[#464650] font-sans">
+                {githubInfo
+                  ? `Conectado al repositorio ${githubInfo.repo_owner}/${githubInfo.repo_name}`
+                  : 'Aún no se han configurado credenciales de conexión a GitHub.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowGithubModal(true)}
+            className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full border border-indigo-200/60 transition-all flex items-center gap-2 self-start sm:self-auto"
+          >
+            <span className="material-symbols-outlined text-base">key</span>
+            <span>{githubInfo ? 'Modificar Token / Configuración' : 'Configurar Token PAT'}</span>
+          </button>
+        </div>
+      </div>
+
       {editing && (
         <UsuarioModal
           usuario={editing === 'new' ? null : usuarios.find(u => u.id === editing)}
@@ -293,6 +336,14 @@ export default function Usuarios({ userDoc }) {
         isDanger={true}
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDelete(null)}
+      />
+
+      <GitHubConfigModal
+        isOpen={showGithubModal}
+        onClose={() => setShowGithubModal(false)}
+        onSaveSuccess={(newConfig) => {
+          setGithubInfo(newConfig);
+        }}
       />
     </div>
   );

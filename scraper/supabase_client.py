@@ -17,7 +17,9 @@ def get_supabase_config():
     url = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL") or ""
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY") or os.environ.get("VITE_SUPABASE_ANON_KEY") or ""
     
-    url = url.rstrip('/')
+    url = url.strip().rstrip('/')
+    if url.endswith('/rest/v1'):
+        url = url[:-8].rstrip('/')
     return url, key
 
 def is_supabase_configured() -> bool:

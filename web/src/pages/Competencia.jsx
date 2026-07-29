@@ -21,7 +21,8 @@ const TIPOS = [
   { value: 'alternativa', label: 'Alternativa (competencia)' },
 ];
 
-export default function Competencia() {
+export default function Competencia({ user, userDoc }) {
+  const isAdmin = userDoc ? userDoc.rol === 'administrador' : true;
   const {
     productosCompetencia: items,
     productos,
@@ -525,12 +526,6 @@ export default function Competencia() {
             className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm">
             <span className="material-symbols-outlined text-base">upload_file</span>
             <span>Importar CSV</span>
-          </button>
-          <button onClick={() => setShowGithubModal(true)}
-            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm"
-            title="Configurar credenciales de GitHub Actions (Token / Repo)">
-            <span className="material-symbols-outlined text-base">settings</span>
-            <span>Config GitHub</span>
           </button>
           <button onClick={handleDispararScraperGlobal}
             disabled={isGlobalScraping}

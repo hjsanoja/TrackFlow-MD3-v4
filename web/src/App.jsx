@@ -192,7 +192,7 @@ function AppContent() {
           <Route path="/simulador" element={<Simulador user={user} userDoc={userDoc} />} />
           <Route path="/hallazgos" element={<Hallazgos user={user} userDoc={userDoc} />} />
           <Route path="/productos" element={isAdmin ? <Productos /> : <Navigate to="/" />} />
-          <Route path="/competencia" element={isAdmin ? <Competencia /> : <Navigate to="/" />} />
+          <Route path="/competencia" element={isAdmin ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to="/" />} />
           <Route path="/cadenas" element={isAdmin ? <Cadenas /> : <Navigate to="/" />} />
           <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to="/" />} />
           <Route path="/login" element={<Navigate to="/" />} />

@@ -849,13 +849,6 @@ export default function Dashboard({ user, userDoc }) {
             )}
           </div>
 
-          <button onClick={() => setShowGithubModal(true)}
-            className="px-3.5 py-2.5 bg-surface-low text-on-surface hover:bg-surface-medium font-mono font-semibold text-xs rounded-full transition-all border border-outline-variant flex items-center gap-1.5 shadow-sm"
-            title="Configurar credenciales de GitHub Actions (Token / Repo)">
-            <span className="material-symbols-outlined text-base">settings</span>
-            <span className="hidden sm:inline">Config GitHub</span>
-          </button>
-
           <button onClick={handleActualizar} disabled={refreshing || waitingForScraper}
             className="px-4 py-2.5 bg-secondary text-on-secondary hover:bg-secondary/90 disabled:opacity-50 font-extrabold font-mono tracking-wide text-xs rounded-full transition-all flex items-center gap-2 shadow-sm"
             title="Iniciar robot extractor para actualizar precios de competidores">
