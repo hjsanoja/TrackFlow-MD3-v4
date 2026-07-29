@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { doc, setDoc, deleteDoc, getDoc, getDocs, collection, writeBatch, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../firebase';
 import ConfirmModal from '../components/ConfirmModal';
@@ -7,6 +7,12 @@ import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
 import { executeLiveBatchScrape, scrapeSingleUrl } from '../utils/liveScraper';
+import {
+  dbUpsertProductoCompetencia,
+  dbDeleteProductoCompetencia,
+  dbDeleteAllProductosCompetencia,
+  dbAddHistoricoPrecio
+} from '../utils/dbClient';
 
 const TIPOS = [
   { value: 'propio', label: 'Mi marca' },
@@ -122,7 +128,8 @@ export default function Competencia() {
           throw new Error('La URL no es válida');
         }
       }
-      await setDoc(doc(db, 'productos_competencia', docId), {
+      await dbUpsertProductoCompetencia({
+        id: docId,
         id_producto_propio: data.id_producto_propio,
         cadena: data.cadena,
         tipo: data.tipo,
@@ -132,10 +139,10 @@ export default function Competencia() {
         laboratorio: data.laboratorio?.trim() || '',
         concentracion: data.concentracion?.trim() || '',
         tamano: data.tamano?.trim() || '',
-      }, { merge: true });
+      });
       addToast(isNew ? (existing ? 'URL de competencia actualizada con éxito' : 'URL de competencia creada con éxito') : 'Cambios guardados con éxito', 'success');
       setEditing(null);
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -150,9 +157,9 @@ export default function Competencia() {
     const item = confirmDelete;
     setConfirmDelete(null);
     try {
-      await deleteDoc(doc(db, 'productos_competencia', item.id));
+      await dbDeleteProductoCompetencia(item.id);
       addToast('Enlace eliminado del scraper', 'success');
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast('Error al eliminar: ' + err.message, 'error');
     }
@@ -161,38 +168,9 @@ export default function Competencia() {
   const handleConfirmDeleteAll = async () => {
     setDeletingAll(true);
     try {
-      // 1. Delete all productos_competencia
-      const compSnap = await getDocs(collection(db, 'productos_competencia'));
-      const compDocs = compSnap.docs;
-      for (let i = 0; i < compDocs.length; i += 500) {
-        const chunk = compDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
-      // 2. Delete all historico_precios
-      const histSnap = await getDocs(collection(db, 'historico_precios'));
-      const histDocs = histSnap.docs;
-      for (let i = 0; i < histDocs.length; i += 500) {
-        const chunk = histDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
-      // 3. Delete all scrape_runs
-      const runsSnap = await getDocs(collection(db, 'scrape_runs'));
-      const runsDocs = runsSnap.docs;
-      for (let i = 0; i < runsDocs.length; i += 500) {
-        const chunk = runsDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
+      await dbDeleteAllProductosCompetencia();
       addToast('Se han eliminado todos los enlaces de competencia e historial de precios.', 'success');
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast('Error al vaciar enlaces: ' + err.message, 'error');
     }
@@ -317,18 +295,19 @@ export default function Competencia() {
         addToast(`Error al extraer ${item.marca || 'enlace'}: ${resData.error || 'Precio no encontrado en la página'}`, 'error');
       } else {
         const now = new Date();
-        if (db && item.id) {
+        if (item.id) {
           try {
-            await setDoc(doc(db, 'productos_competencia', item.id), {
+            await dbUpsertProductoCompetencia({
+              ...item,
               ultimo_precio_full_bs: resData.precio_full_bs,
               ultimo_precio_desc_bs: resData.precio_desc_bs || null,
               ultimo_nombre: resData.nombre || null,
               ultimo_scrape: now,
               estado: 'ok',
               ultimo_error: null
-            }, { merge: true });
+            });
 
-            await addDoc(collection(db, 'historico_precios'), {
+            await dbAddHistoricoPrecio({
               prod_comp_id: item.id,
               id_producto_propio: item.id_producto_propio || '',
               cadena: item.cadena || '',
@@ -341,7 +320,7 @@ export default function Competencia() {
               run_id: `single_${Date.now()}`
             });
           } catch (e) {
-            console.warn('Aviso guardando en Firestore:', e?.message || String(e));
+            console.warn('Aviso guardando resultado individual:', e?.message || String(e));
           }
         }
 
@@ -490,9 +469,8 @@ export default function Competencia() {
               ? existingComp.id 
               : `${id_producto}_${cadena}_${marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
 
-          const compRef = doc(db, 'productos_competencia', docId);
-
-          batch.set(compRef, {
+          await dbUpsertProductoCompetencia({
+            id: docId,
             id_producto_propio: id_producto,
             cadena,
             tipo: tipo === 'propio' ? 'propio' : 'alternativa',
@@ -502,15 +480,14 @@ export default function Competencia() {
             laboratorio: laboratorio || existingComp?.laboratorio || '',
             concentracion: concentracion || existingComp?.concentracion || '',
             tamano: tamano || existingComp?.tamano || '',
-          }, { merge: true });
+          });
 
           count++;
         }
 
         if (count > 0) {
-          await batch.commit();
           addToast(`Carga masiva exitosa: ${count} URLs de competencia importadas.`, 'success');
-          await cargar();
+          await cargar(true);
         } else {
           throw new Error('No se encontraron filas con campos obligatorios (id_producto_propio, cadena, marca, url).');
         }
@@ -1131,25 +1108,22 @@ export default function Competencia() {
                   try {
                     const docId = manualPriceItem.id;
                     const ahora = new Date();
+                    const runId = 'MANUAL_' + ahora.toISOString().slice(0, 10).replace(/-/g, '') + '_' + ahora.toTimeString().slice(0, 8).replace(/:/g, '');
                     
-                    // 1. Guardar precio en el documento de competencia
-                    await setDoc(doc(db, 'productos_competencia', docId), {
+                    await dbUpsertProductoCompetencia({
+                      ...manualPriceItem,
                       ultimo_precio_full_bs: price,
                       ultimo_precio_desc_bs: price,
                       ultimo_scrape: ahora,
                       estado: 'ok',
-                      actualizado_manualmente: true,
                       ultimo_error: null,
-                    }, { merge: true });
+                    });
 
-                    // 2. Insertar en historico_precios
-                    const runId = 'MANUAL_' + ahora.toISOString().slice(0, 10).replace(/-/g, '') + '_' + ahora.toTimeString().slice(0, 8).replace(/:/g, '');
-                    await setDoc(doc(collection(db, 'historico_precios')), {
+                    await dbAddHistoricoPrecio({
                       prod_comp_id: docId,
                       id_producto_propio: manualPriceItem.id_producto_propio,
                       cadena: manualPriceItem.cadena,
                       marca: manualPriceItem.marca,
-                      tipo: manualPriceItem.tipo,
                       nombre: manualPriceItem.marca + ' (Manual)',
                       precio_full_bs: price,
                       precio_desc_bs: price,
@@ -1160,7 +1134,7 @@ export default function Competencia() {
 
                     addToast(`Precio de ${manualPriceItem.marca} actualizado manualmente a Bs ${price.toFixed(2)}.`, 'success');
                     setManualPriceItem(null);
-                    await cargar();
+                    await cargar(true);
                   } catch (err) {
                     addToast('Error: ' + err.message, 'error');
                   }

@@ -1,10 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { supabase } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
+import { dbUpsertCadena, dbDeleteCadena } from '../utils/dbClient';
 
 // Scrapers disponibles en el código actual
 const SCRAPERS_DISPONIBLES = [
@@ -51,31 +49,17 @@ export default function Cadenas() {
         throw new Error('Ya existe una cadena con ese nombre');
       }
 
-      if (import.meta.env.VITE_SUPABASE_URL) {
-        await supabase.from('cadenas').upsert({
-          id: docId,
-          _doc_id: docId,
-          nombre: data.nombre.trim(),
-          website: data.website.trim(),
-          scraper_modulo: data.scraper_modulo,
-          activo: data.activo,
-        });
-      }
-
-      try {
-        await setDoc(doc(db, 'cadenas', docId), {
-          nombre: data.nombre.trim(),
-          website: data.website.trim(),
-          scraper_modulo: data.scraper_modulo,
-          activo: data.activo,
-        });
-      } catch (fbErr) {
-        console.warn('Fallback Firebase warning:', fbErr?.message);
-      }
+      await dbUpsertCadena({
+        id: docId,
+        nombre: data.nombre.trim(),
+        website: data.website.trim(),
+        scraper_modulo: data.scraper_modulo,
+        activo: data.activo,
+      });
 
       addToast(isNew ? 'Cadena creada con éxito' : 'Cambios guardados con éxito', 'success');
       setEditing(null);
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -90,17 +74,9 @@ export default function Cadenas() {
     const cadena = confirmDelete;
     setConfirmDelete(null);
     try {
-      if (import.meta.env.VITE_SUPABASE_URL) {
-        await supabase.from('cadenas').delete().eq('id', cadena.id);
-      }
-      try {
-        await deleteDoc(doc(db, 'cadenas', cadena.id));
-      } catch (fbErr) {
-        console.warn('Fallback Firebase warning:', fbErr?.message);
-      }
-
+      await dbDeleteCadena(cadena.id);
       addToast('Cadena eliminada con éxito', 'success');
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast('Error al eliminar: ' + err.message, 'error');
     }
@@ -108,18 +84,11 @@ export default function Cadenas() {
 
   const handleToggleActivo = async (cadena) => {
     try {
-      if (import.meta.env.VITE_SUPABASE_URL) {
-        await supabase.from('cadenas').update({ activo: !cadena.activo }).eq('id', cadena.id);
-      }
-      try {
-        await setDoc(doc(db, 'cadenas', cadena.id), {
-          activo: !cadena.activo,
-        }, { merge: true });
-      } catch (fbErr) {
-        console.warn('Fallback Firebase warning:', fbErr?.message);
-      }
-
-      await cargar();
+      await dbUpsertCadena({
+        ...cadena,
+        activo: !cadena.activo,
+      });
+      await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
     }

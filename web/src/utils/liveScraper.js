@@ -1,5 +1,4 @@
-import { collection, doc, setDoc, addDoc, writeBatch } from 'firebase/firestore';
-import { db } from '../firebase';
+import { dbUpsertProductoCompetencia, dbAddHistoricoPrecio, dbAddScrapeRun } from './dbClient';
 
 export async function scrapeSingleUrl(url) {
   try {
@@ -61,21 +60,21 @@ export async function executeLiveBatchScrape(items, onProgress) {
 
     results.push(resultItem);
 
-    // Persistir resultado individual en Firestore si db está configurado
-    if (db && item.id) {
+    // Persistir resultado individual en Supabase & Firestore vía dbClient
+    if (item.id) {
       try {
-        const itemRef = doc(db, 'productos_competencia', item.id);
-        await setDoc(itemRef, {
+        await dbUpsertProductoCompetencia({
+          ...item,
           ultimo_precio_full_bs: scrapedData.precio_full_bs || item.ultimo_precio_full_bs || null,
           ultimo_precio_desc_bs: scrapedData.precio_desc_bs || item.ultimo_precio_desc_bs || null,
           ultimo_nombre: scrapedData.nombre || item.ultimo_nombre || null,
           ultimo_scrape: now,
           estado: hasError ? 'error' : 'ok',
           ultimo_error: scrapedData.error || null
-        }, { merge: true });
+        });
 
         if (!hasError && scrapedData.precio_full_bs) {
-          await addDoc(collection(db, 'historico_precios'), {
+          await dbAddHistoricoPrecio({
             prod_comp_id: item.id,
             id_producto_propio: item.id_producto_propio || '',
             cadena: item.cadena || '',
@@ -89,25 +88,24 @@ export async function executeLiveBatchScrape(items, onProgress) {
           });
         }
       } catch (fErr) {
-        console.warn(`No se pudo actualizar Firestore para ${item.id}:`, fErr?.message || String(fErr));
+        console.warn(`No se pudo actualizar BD para ${item.id}:`, fErr?.message || String(fErr));
       }
     }
   }
 
   // Guardar registro de la corrida completa
-  if (db) {
-    try {
-      await setDoc(doc(db, 'scrape_runs', runId), {
-        run_id: runId,
-        started_at: now,
-        total: items.length,
-        ok: okCount,
-        errores: errorCount,
-        status: 'exitosa'
-      });
-    } catch (rErr) {
-      console.warn('Aviso guardando scrape_runs:', rErr?.message || String(rErr));
-    }
+  try {
+    await dbAddScrapeRun({
+      run_id: runId,
+      started_at: now,
+      total: items.length,
+      ok: okCount,
+      errores: errorCount,
+      status: 'exitosa',
+      trigger: 'manual_app'
+    });
+  } catch (rErr) {
+    console.warn('Aviso guardando scrape_runs:', rErr?.message || String(rErr));
   }
 
   return {
@@ -118,3 +116,4 @@ export async function executeLiveBatchScrape(items, onProgress) {
     results
   };
 }
+

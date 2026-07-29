@@ -121,15 +121,17 @@ export function DataProvider({ children, user }) {
           supabase.from('usuarios').select('*')
         ]);
 
-        if (!pErr && pData && pData.length > 0) {
+        if (!pErr && Array.isArray(pData)) {
           const prods = [...pData].sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
           setProductos(prods);
 
-          if (pcData) setProductosCompetencia(pcData);
+          setProductosCompetencia(pcData || []);
 
           if (cData) {
             const cSorted = [...cData].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
             setCadenas(cSorted);
+          } else {
+            setCadenas([]);
           }
 
           if (hData) {
@@ -137,6 +139,8 @@ export function DataProvider({ children, user }) {
               ...d,
               scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
             })));
+          } else {
+            setHistoricoPrecios([]);
           }
 
           if (rData && rData.length > 0) {
@@ -144,6 +148,8 @@ export function DataProvider({ children, user }) {
               ...rData[0],
               started_at: rData[0].started_at ? new Date(rData[0].started_at) : null
             });
+          } else {
+            setUltimaCorrida(null);
           }
 
           if (bData && bData.length > 0) {
@@ -175,6 +181,8 @@ export function DataProvider({ children, user }) {
           if (uData) {
             const uSorted = [...uData].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
             setUsuarios(uSorted);
+          } else {
+            setUsuarios([]);
           }
 
           setIsLoadedOnce(true);

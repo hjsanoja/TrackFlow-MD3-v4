@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, firebaseConfig } from '../firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
+import { dbUpsertUsuario, dbDeleteUsuario } from '../utils/dbClient';
 
 const ROLES = [
   { value: 'administrador', label: 'Administrador', desc: 'Acceso completo, puede editar todo' },
@@ -49,7 +49,8 @@ export default function Usuarios({ userDoc }) {
         secondaryApp = null;
       }
 
-      await setDoc(doc(db, 'usuarios', docId), {
+      await dbUpsertUsuario({
+        id: docId,
         email,
         nombre: data.nombre.trim(),
         rol: data.rol,
@@ -60,12 +61,12 @@ export default function Usuarios({ userDoc }) {
 
       addToast(
         isNew
-          ? `Usuario creado y registrado correctamente. Ya puede iniciar sesión con su correo y contraseña.`
+          ? `Usuario creado y registrado correctamente.`
           : 'Cambios guardados con éxito',
         'success'
       );
       setEditing(null);
-      await cargar();
+      await cargar(true);
     } catch (err) {
       if (secondaryApp) {
         try { await deleteApp(secondaryApp); } catch (e) {}
@@ -97,9 +98,9 @@ export default function Usuarios({ userDoc }) {
     const usuario = confirmDelete;
     setConfirmDelete(null);
     try {
-      await deleteDoc(doc(db, 'usuarios', usuario.id));
-      addToast('Usuario eliminado con éxito de Firestore.', 'success');
-      await cargar();
+      await dbDeleteUsuario(usuario.id);
+      addToast('Usuario eliminado con éxito.', 'success');
+      await cargar(true);
     } catch (err) {
       addToast('Error al eliminar: ' + err.message, 'error');
     }
@@ -111,10 +112,11 @@ export default function Usuarios({ userDoc }) {
       return;
     }
     try {
-      await setDoc(doc(db, 'usuarios', usuario.id), {
+      await dbUpsertUsuario({
+        ...usuario,
         activo: !usuario.activo,
-      }, { merge: true });
-      await cargar();
+      });
+      await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
     }

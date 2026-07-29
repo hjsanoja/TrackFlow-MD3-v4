@@ -1,13 +1,15 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import {
-  collection, doc, setDoc, deleteDoc, writeBatch, getDocs
-} from 'firebase/firestore';
-import { db } from '../firebase';
 import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
+import {
+  dbUpsertProducto,
+  dbDeleteProducto,
+  dbDeleteAllProductos,
+  dbUpsertProductoCompetencia
+} from '../utils/dbClient';
 
 const CATEGORIAS = [
   'Analgésicos',
@@ -109,24 +111,26 @@ export default function Productos() {
       }
 
       const cleanProductData = {
+        id,
         id_interno: id,
         nombre: data.nombre.trim(),
         principio_activo: (data.principio_activo || '').trim(),
         concentracion: (data.concentracion || '').trim(),
         tamano: (data.tamano || '').trim(),
-        presentacion: `${data.concentracion || ''} ${data.tamano || ''}`.trim() || (data.presentacion || ''),
-        laboratorio: (data.laboratorio || '').trim(),
+        laboratorio: (data.laboratorio || '').trim() || 'La Sante',
         categoria: data.categoria || 'Otros',
+        pvp_propio_usd: parseFloat(data.pvp_propio_usd) || 0,
+        unidosis: data.unidosis ? parseInt(data.unidosis, 10) : parseUnidosisCount(data.tamano || ''),
         market_type: data.market_type || 'GENERICO',
         unidad_negocio: data.unidad_negocio || 'La Sante',
         activo: data.activo ?? true,
       };
 
-      await setDoc(doc(db, 'productos', id), cleanProductData);
+      await dbUpsertProducto(cleanProductData);
 
       addToast(isNew ? 'Producto creado con éxito' : 'Producto actualizado con éxito', 'success');
       setEditing(null);
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -140,20 +144,12 @@ export default function Productos() {
     if (!confirmDelete) return;
     const producto = confirmDelete;
     const links = urlsPorProducto.get(producto.id_interno) || [];
-    const count = links.length;
     setConfirmDelete(null);
 
     try {
-      await deleteDoc(doc(db, 'productos', producto.id));
-      if (count > 0) {
-        const batch = writeBatch(db);
-        links.forEach(l => {
-          batch.delete(doc(db, 'productos_competencia', l.id));
-        });
-        await batch.commit();
-      }
+      await dbDeleteProducto(producto.id, links);
       addToast('Producto y sus enlaces de competencia eliminados con éxito.', 'success');
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast('Error al eliminar: ' + err.message, 'error');
     }
@@ -162,48 +158,9 @@ export default function Productos() {
   const handleConfirmDeleteAll = async () => {
     setDeletingAll(true);
     try {
-      // 1. Delete all productos
-      const prodSnap = await getDocs(collection(db, 'productos'));
-      const prodDocs = prodSnap.docs;
-      for (let i = 0; i < prodDocs.length; i += 500) {
-        const chunk = prodDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
-      // 2. Delete all productos_competencia
-      const compSnap = await getDocs(collection(db, 'productos_competencia'));
-      const compDocs = compSnap.docs;
-      for (let i = 0; i < compDocs.length; i += 500) {
-        const chunk = compDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
-      // 3. Delete all historico_precios
-      const histSnap = await getDocs(collection(db, 'historico_precios'));
-      const histDocs = histSnap.docs;
-      for (let i = 0; i < histDocs.length; i += 500) {
-        const chunk = histDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
-      // 4. Delete all scrape_runs
-      const runsSnap = await getDocs(collection(db, 'scrape_runs'));
-      const runsDocs = runsSnap.docs;
-      for (let i = 0; i < runsDocs.length; i += 500) {
-        const chunk = runsDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
+      await dbDeleteAllProductos();
       addToast('Se han eliminado todos los productos, enlaces de competencia e historial de precios con éxito.', 'success');
-      await cargar();
+      await cargar(true);
     } catch (err) {
       addToast('Error al vaciar catálogo: ' + err.message, 'error');
     }
@@ -213,10 +170,11 @@ export default function Productos() {
 
   const handleToggleActivo = async (producto) => {
     try {
-      await setDoc(doc(db, 'productos', producto.id), {
+      await dbUpsertProducto({
+        ...producto,
         activo: !producto.activo,
-      }, { merge: true });
-      await cargar();
+      });
+      await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -233,7 +191,6 @@ export default function Productos() {
         const rows = parseCSV(text);
         if (rows.length === 0) throw new Error('El archivo CSV está vacío o no es válido.');
 
-        const batch = writeBatch(db);
         let count = 0;
 
         for (const row of rows) {
@@ -264,22 +221,26 @@ export default function Productos() {
             unidad_negocio = 'La Sante';
           }
 
+          const pvp_propio_usd = parseFloat(row.pvp_propio_usd || row.pvp || row.precio) || 0;
+          const unidosis = parseUnidosisCount(tamano);
+
           const cleanProd = {
+            id,
             id_interno: id,
-            nombre: nombre,
+            nombre,
             principio_activo,
             concentracion,
             tamano,
-            presentacion: `${concentracion} ${tamano}`.trim() || tamano,
-            laboratorio,
+            laboratorio: laboratorio || 'La Sante',
             categoria: CATEGORIAS.includes(categoria) ? categoria : 'Otros',
+            pvp_propio_usd,
+            unidosis,
             market_type,
             unidad_negocio,
             activo: true,
           };
 
-          const prodRef = doc(db, 'productos', id);
-          batch.set(prodRef, cleanProd, { merge: true });
+          await dbUpsertProducto(cleanProd);
           count++;
 
           for (const key of Object.keys(row)) {
@@ -288,7 +249,6 @@ export default function Productos() {
               const urlVal = row[key].trim();
               if (urlVal) {
                 const cadenaFormatted = chainNameClean.charAt(0).toUpperCase() + chainNameClean.slice(1);
-                // Search if an existing competitor link already exists for this product + chain
                 const existingComp = competencia.find(c =>
                   c.id_producto_propio === id &&
                   c.cadena.toLowerCase().trim() === cadenaFormatted.toLowerCase().trim()
@@ -297,24 +257,23 @@ export default function Productos() {
                   ? existingComp.id
                   : `${id}_${chainNameClean}_Competencia`.replace(/\s+/g, '_');
 
-                const compRef = doc(db, 'productos_competencia', docId);
-                batch.set(compRef, {
+                await dbUpsertProductoCompetencia({
+                  id: docId,
                   id_producto_propio: id,
                   cadena: cadenaFormatted,
                   tipo: 'alternativa',
                   marca: nombre,
                   url: urlVal,
                   activo: true,
-                }, { merge: true });
+                });
               }
             }
           }
         }
 
         if (count > 0) {
-          await batch.commit();
           addToast(`Carga masiva exitosa: ${count} productos registrados en el catálogo.`, 'success');
-          await cargar();
+          await cargar(true);
         } else {
           throw new Error('No se encontraron filas válidas con ID y Nombre.');
         }
