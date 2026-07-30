@@ -3,9 +3,9 @@ name: Scraper diario
 # Triggers: cron diario + manual desde GitHub UI + manual desde el panel via API
 on:
   schedule:
-    # 6:00 AM hora Venezuela = 10:00 UTC
+    # 4:00 AM hora Venezuela = 08:00 UTC
     # GitHub usa cron UTC. Precision ~5 min.
-    - cron: '0 10 * * *'
+    - cron: '0 8 * * *'
   workflow_dispatch:        # boton "Run workflow" en la UI de GitHub
   repository_dispatch:      # disparo via API (lo usaremos desde el panel)
     types: [run-scraper]
