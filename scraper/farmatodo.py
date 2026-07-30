@@ -195,28 +195,61 @@ def cargar_filas_de_csv():
     return filas
 
 
-def interleave_filas_por_cadena(filas: list) -> list:
+# Rate limiting per domain to prevent HTTP 403/429
+LAST_REQUEST_TIME = {}
+DOMAIN_MIN_DELAY = {
+    "farmatodo": 7.0,  # 7 seconds minimum between Farmatodo requests
+    "locatel": 2.0,
+    "saas": 2.0,
+    "farmaciasaas": 2.0,
+    "default": 1.5
+}
+
+async def wait_for_domain_rate_limit(url: str):
+    domain = "default"
+    url_lower = url.lower()
+    for d in DOMAIN_MIN_DELAY:
+        if d in url_lower:
+            domain = d
+            break
+            
+    min_delay = DOMAIN_MIN_DELAY.get(domain, 1.5)
+    
+    now = time.time()
+    last_time = LAST_REQUEST_TIME.get(domain, 0.0)
+    elapsed = now - last_time
+    if elapsed < min_delay:
+        sleep_time = min_delay - elapsed
+        sleep_time += random.uniform(0.1, 0.5)
+        await asyncio.sleep(sleep_time)
+        
+    LAST_REQUEST_TIME[domain] = time.time()
+
+
+def interleave_filas_por_producto(filas: list) -> list:
     """
-    Agrupa las filas por dominio/cadena y las entrelaza (Round-Robin).
-    Evita golpear repetidamente el mismo servidor y previene HTTP 429 / 500.
+    Agrupa las filas por id_producto_propio y las ordena por producto para que el scraper
+    procese los enlaces de un mismo producto en secuencia rotando de cadena en cadena.
+    Ejemplo: Producto A (Farmatodo) -> Producto A (Locatel) -> Producto A (SAAS) -> Producto B (Farmatodo)...
+    Esto rota de forma natural los dominios y espacia las peticiones por dominio.
     """
-    por_cadena = {}
+    por_producto = {}
     for f in filas:
-        cad = str(f.get("cadena", "otra")).strip().lower()
-        if cad not in por_cadena:
-            por_cadena[cad] = []
-        por_cadena[cad].append(f)
+        pid = str(f.get("id_producto_propio", "sin_id")).strip()
+        if pid not in por_producto:
+            por_producto[pid] = []
+        por_producto[pid].append(f)
+
+    pids_ordenados = sorted(por_producto.keys())
 
     interleaved = []
-    max_len = max((len(lst) for lst in por_cadena.values()), default=0)
-    cadenas_keys = sorted(por_cadena.keys())
+    for pid in pids_ordenados:
+        filas_prod = por_producto[pid]
+        # Ordenamos las filas de este producto por cadena (farmatodo, locatel, saas) de forma consistente
+        filas_prod_ordenadas = sorted(filas_prod, key=lambda x: str(x.get("cadena", "")).lower())
+        interleaved.extend(filas_prod_ordenadas)
 
-    for i in range(max_len):
-        for cad in cadenas_keys:
-            if i < len(por_cadena[cad]):
-                interleaved.append(por_cadena[cad][i])
-
-    print(f"[Optimizador] Entrelazadas {len(interleaved)} URLs entre {len(cadenas_keys)} cadenas ({', '.join(cadenas_keys)})", flush=True)
+    print(f"[Optimizador] Entrelazadas {len(interleaved)} URLs agrupadas por producto ({len(pids_ordenados)} productos únicos)", flush=True)
     return interleaved
 
 
@@ -383,10 +416,14 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 nombre = h1El ? (h1El.innerText || h1El.textContent || '').trim() : document.title.split('|')[0].trim();
             }
 
+            let dom_bs_active_text = '';
+            let dom_bs_original_text = '';
+            let dom_usd_active_text = '';
+            let dom_usd_original_text = '';
             let dom_active_text = '';
             let dom_original_text = '';
 
-            // A. Buscar precios tachados en DOM
+            // A. Buscar precios tachados en DOM (originales)
             const origEls = document.querySelectorAll(
                 'del, s, strike, .line-through, [class*="line-through"], ' +
                 '[class*="price--original"], [class*="original-price"], [class*="originalPrice"], ' +
@@ -395,10 +432,18 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             );
             for (const el of origEls) {
                 const txt = (el.innerText || el.textContent || '').trim();
-                // Filtrar costos por unidad, dosis o porcentajes de descuento
-                if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF|ahorra/i.test(txt)) {
-                    dom_original_text = txt;
-                    break;
+                if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF|ahorra/i.test(txt) && /\d/.test(txt)) {
+                    const lower = txt.toLowerCase();
+                    const isUsd = lower.includes('ref') || lower.includes('usd') || lower.includes('$');
+                    const hasBs = lower.includes('bs') || lower.includes('ves');
+                    
+                    if (hasBs && !isUsd) {
+                        if (!dom_bs_original_text) dom_bs_original_text = txt;
+                    } else if (isUsd) {
+                        if (!dom_usd_original_text) dom_usd_original_text = txt;
+                    } else {
+                        if (!dom_original_text) dom_original_text = txt;
+                    }
                 }
             }
 
@@ -411,9 +456,18 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             for (const el of activeEls) {
                 if (!el.matches('del, s, strike, .line-through, [class*="original"], [class*="old"], [class*="listPrice"]')) {
                     const txt = (el.innerText || el.textContent || '').trim();
-                    if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF/i.test(txt)) {
-                        dom_active_text = txt;
-                        break;
+                    if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF/i.test(txt) && /\d/.test(txt)) {
+                        const lower = txt.toLowerCase();
+                        const isUsd = lower.includes('ref') || lower.includes('usd') || lower.includes('$');
+                        const hasBs = lower.includes('bs') || lower.includes('ves');
+                        
+                        if (hasBs && !isUsd) {
+                            if (!dom_bs_active_text) dom_bs_active_text = txt;
+                        } else if (isUsd) {
+                            if (!dom_usd_active_text) dom_usd_active_text = txt;
+                        } else {
+                            if (!dom_active_text) dom_active_text = txt;
+                        }
                     }
                 }
             }
@@ -422,6 +476,10 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 nombre: nombre,
                 active_price_direct: active_price,
                 original_price_direct: original_price,
+                dom_bs_active_text: dom_bs_active_text,
+                dom_bs_original_text: dom_bs_original_text,
+                dom_usd_active_text: dom_usd_active_text,
+                dom_usd_original_text: dom_usd_original_text,
                 dom_active_text: dom_active_text,
                 dom_original_text: dom_original_text
             };
@@ -451,9 +509,8 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         result["precio_desc_bs"] = None
         result["tiene_descuento"] = False
 
-        # Aplicar pausa previa dinámica para Farmatodo
-        if is_farmatodo:
-            await asyncio.sleep(random.uniform(1.2, 3.0))
+        # Wait for domain rate limit to be respected (e.g. 7s minimum for Farmatodo)
+        await wait_for_domain_rate_limit(url)
 
         try:
             timeout = 22000 + (int_num - 1) * 8000
@@ -502,55 +559,74 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         p_act_direct = data.get("active_price_direct")
         p_orig_direct = data.get("original_price_direct")
 
-        # 2. Candidatos del DOM
-        p_act_dom = parse_price(data.get("dom_active_text"))
-        p_orig_dom = parse_price(data.get("dom_original_text"))
+        # 2. Candidatos del DOM (Bolívares directos)
+        p_bs_active_dom = parse_price(data.get("dom_bs_active_text"))
+        p_bs_orig_dom = parse_price(data.get("dom_bs_original_text"))
 
-        # Detección y conversión de precios expresados en USD/Divisas
-        if is_usd_text(data.get("dom_active_text")) or (p_act_dom and "farmaciasaas" in url.lower() and p_act_dom < 30.0):
-            if p_act_dom:
-                p_act_dom = round(p_act_dom * bcv_rate, 2)
+        # 3. Candidatos del DOM (USD directos)
+        p_usd_active_dom = parse_price_usd(data.get("dom_usd_active_text"))
+        p_usd_orig_dom = parse_price_usd(data.get("dom_usd_original_text"))
 
-        if is_usd_text(data.get("dom_original_text")) or (p_orig_dom and "farmaciasaas" in url.lower() and p_orig_dom < 30.0):
-            if p_orig_dom:
-                p_orig_dom = round(p_orig_dom * bcv_rate, 2)
+        # 4. Candidatos del DOM (Fallback sin moneda explícita)
+        p_fallback_active_dom = parse_price(data.get("dom_active_text"))
+        p_fallback_orig_dom = parse_price(data.get("dom_original_text"))
 
-        # Filtrar valores dentro del rango lógico en Bolívares
-        actives = [p for p in (p_act_direct, p_act_dom) if p and 5.0 < p < 300000.0]
-        originals = [p for p in (p_orig_direct, p_orig_dom) if p and 5.0 < p < 300000.0]
+        # Convertir cualquier precio detectado en USD a Bolívares
+        p_usd_active_in_bs = round(p_usd_active_dom * bcv_rate, 2) if p_usd_active_dom else None
+        p_usd_orig_in_bs = round(p_usd_orig_dom * bcv_rate, 2) if p_usd_orig_dom else None
 
-        all_detected = set(actives + originals)
+        # Si los precios directos de VTEX/NextJS parecen estar en USD (ej: < 120.0 en SAAS o Locatel)
+        # convertirlos a Bolívares usando la tasa BCV
+        is_saas_or_locatel = any(x in url.lower() for x in ("saas", "locatel", "farmaciasaas"))
+        
+        if p_act_direct and is_saas_or_locatel and p_act_direct < 120.0:
+            p_act_direct = round(p_act_direct * bcv_rate, 2)
+            
+        if p_orig_direct and is_saas_or_locatel and p_orig_direct < 120.0:
+            p_orig_direct = round(p_orig_direct * bcv_rate, 2)
+
+        # Selección inteligente del precio ACTIVO (Bolívares)
+        final_active_bs = None
+        if p_bs_active_dom:
+            final_active_bs = p_bs_active_dom
+        elif p_usd_active_in_bs:
+            final_active_bs = p_usd_active_in_bs
+        elif p_act_direct:
+            final_active_bs = p_act_direct
+        elif p_fallback_active_dom:
+            final_active_bs = p_fallback_active_dom
+
+        # Selección inteligente del precio ORIGINAL (Bolívares)
+        final_original_bs = None
+        if p_bs_orig_dom:
+            final_original_bs = p_bs_orig_dom
+        elif p_usd_orig_in_bs:
+            final_original_bs = p_usd_orig_in_bs
+        elif p_orig_direct:
+            final_original_bs = p_orig_direct
+        elif p_fallback_orig_dom:
+            final_original_bs = p_fallback_orig_dom
 
         precio_full = None
         precio_desc = None
         tiene_descuento = False
 
-        if originals and actives:
-            p_orig = max(originals)
-            p_act = min(actives)
-            if p_orig > p_act:
-                precio_full = p_orig
-                precio_desc = p_act
+        if final_original_bs and final_active_bs:
+            if final_original_bs > final_active_bs and (final_original_bs - final_active_bs) > 0.1:
+                precio_full = final_original_bs
+                precio_desc = final_active_bs
                 tiene_descuento = True
-            elif p_act > p_orig:
-                precio_full = p_act
-                precio_desc = p_orig
-                tiene_descuento = True
-            else:
-                precio_full = p_act
-        elif len(all_detected) >= 2:
-            p_max = max(all_detected)
-            p_min = min(all_detected)
-            if p_max > p_min and (p_max - p_min) > 0.5:
-                precio_full = p_max
-                precio_desc = p_min
+            elif final_active_bs > final_original_bs and (final_active_bs - final_original_bs) > 0.1:
+                # Si vinieron invertidos, los corregimos
+                precio_full = final_active_bs
+                precio_desc = final_original_bs
                 tiene_descuento = True
             else:
-                precio_full = p_max
-        elif actives:
-            precio_full = actives[0]
-        elif originals:
-            precio_full = originals[0]
+                precio_full = final_active_bs
+        elif final_active_bs:
+            precio_full = final_active_bs
+        elif final_original_bs:
+            precio_full = final_original_bs
 
         if precio_full:
             result["precio_full_bs"] = round(precio_full, 2)
@@ -600,8 +676,8 @@ async def main_async():
         print("No hay enlaces de productos activos para procesar.")
         sys.exit(0)
 
-    # 4. Entrelazar filas por cadena para rotar peticiones
-    filas_procesar = interleave_filas_por_cadena(filas_activas)
+    # 4. Entrelazar filas por producto para procesar enlace por enlace de cada competidor rotando cadenas de forma natural
+    filas_procesar = interleave_filas_por_producto(filas_activas)
 
     # 5. Crear semáforos de concurrencia globales y por dominio
     # Farmatodo usa concurrencia reducida (FARMATODO_CONCURRENCY=1) para prevenir HTTP 429

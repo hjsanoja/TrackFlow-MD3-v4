@@ -74,9 +74,28 @@ def _request(endpoint: str, method: str = "GET", data: Optional[Any] = None, hea
             raise
 
 def select(table: str, query_params: str = "select=*") -> List[Dict[str, Any]]:
-    endpoint = f"{table}?{query_params}" if query_params else table
-    res = _request(endpoint, method="GET")
-    return res if isinstance(res, list) else []
+    # If explicit limit is requested, perform a single request without pagination
+    if "limit=" in query_params:
+        endpoint = f"{table}?{query_params}" if query_params else table
+        res = _request(endpoint, method="GET")
+        return res if isinstance(res, list) else []
+
+    # Otherwise, paginate automatically in chunks of 1000 to get ALL records
+    all_res = []
+    offset = 0
+    chunk_size = 1000
+    while True:
+        sep = "&" if query_params else ""
+        current_params = f"{query_params}{sep}limit={chunk_size}&offset={offset}"
+        endpoint = f"{table}?{current_params}"
+        res = _request(endpoint, method="GET")
+        if not res or not isinstance(res, list):
+            break
+        all_res.extend(res)
+        if len(res) < chunk_size:
+            break
+        offset += chunk_size
+    return all_res
 
 def upsert(table: str, records: List[Dict[str, Any]], on_conflict: str = "") -> Any:
     if not records:
