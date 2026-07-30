@@ -9,11 +9,15 @@ export default function Layout({ user, userDoc, children }) {
   const isAdmin = userDoc?.rol === 'administrador';
   const handleLogout = async () => {
     try {
+      localStorage.removeItem('trackflow_demo_user');
+    } catch (e) {}
+    try {
       await supabase.auth.signOut();
     } catch (e) {}
     try {
       await signOut(auth);
     } catch (e) {}
+    window.location.reload();
   };
 
   // Versión 1.2: Menús 'Análisis' y 'Hallazgos' ocultados temporalmente por solicitud del usuario.

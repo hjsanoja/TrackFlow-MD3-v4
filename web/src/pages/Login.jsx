@@ -123,6 +123,21 @@ export default function Login() {
             )}
           </button>
         </form>
+
+        {/* Developer attribution & Version */}
+        <div className="pt-5 border-t border-outline-variant text-center flex flex-col items-center gap-1.5">
+          <span className="text-[11px] text-on-surface-variant font-mono tracking-wide">
+            Desarrollador: <span className="font-bold text-primary">Hernando Sanoja</span>
+          </span>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[9px] text-primary/90 font-mono font-bold uppercase tracking-widest bg-primary-container px-2.5 py-0.5 rounded-full border border-primary/10">
+              Fase 3 Activa
+            </span>
+            <span className="text-[10px] text-on-surface-variant/70 font-mono">
+              V7.3.0 · Inteligencia Predictiva & Simulador
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
