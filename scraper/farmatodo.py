@@ -345,6 +345,11 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                         // Si Farmatodo expone el precio en Bs directo
                         if (pBs && pBs > 0) {
                             active_price = pBs;
+                            const active_usd = (p3 && p3 > 0) ? p3 : (p1 && p1 > 0 ? p1 : null);
+                            const original_usd = (p2 && p2 > 0) ? p2 : null;
+                            if (active_usd && original_usd && original_usd > active_usd) {
+                                original_price = pBs * (original_usd / active_usd);
+                            }
                         } else if (p3 && p3 > 0) {
                             active_price = p3;
                             if (p1 && p1 > p3) original_price = p1;
@@ -410,66 +415,159 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 }
             }
 
-            // 6. ESTRATEGIA D: DOM EXTRACTION
+            // 6. ESTRATEGIA D: DOM EXTRACTION CON ALGORITMO DE SCORING ROBUSTO
             const h1El = document.querySelector('h1');
             if (!nombre) {
                 nombre = h1El ? (h1El.innerText || h1El.textContent || '').trim() : document.title.split('|')[0].trim();
             }
 
-            let dom_bs_active_text = '';
-            let dom_bs_original_text = '';
-            let dom_usd_active_text = '';
-            let dom_usd_original_text = '';
-            let dom_active_text = '';
-            let dom_original_text = '';
-
-            // A. Buscar precios tachados en DOM (originales)
-            const origEls = document.querySelectorAll(
-                'del, s, strike, .line-through, [class*="line-through"], ' +
-                '[class*="price--original"], [class*="original-price"], [class*="originalPrice"], ' +
-                '[class*="listPrice"], [class*="list-price"], [class*="oldPrice"], [class*="old-price"], ' +
-                '[class*="was-price"], [class*="before-price"], [class*="precio-anterior"], [class*="strikethrough"]'
-            );
-            for (const el of origEls) {
-                const txt = (el.innerText || el.textContent || '').trim();
-                if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF|ahorra/i.test(txt) && /\d/.test(txt)) {
-                    const lower = txt.toLowerCase();
-                    const isUsd = lower.includes('ref') || lower.includes('usd') || lower.includes('$');
-                    const hasBs = lower.includes('bs') || lower.includes('ves');
-                    
-                    if (hasBs && !isUsd) {
-                        if (!dom_bs_original_text) dom_bs_original_text = txt;
-                    } else if (isUsd) {
-                        if (!dom_usd_original_text) dom_usd_original_text = txt;
-                    } else {
-                        if (!dom_original_text) dom_original_text = txt;
+            const parsePriceText = (str) => {
+                if (!str) return null;
+                let cleaned = str.replace(/[^\d.,]/g, '').trim();
+                if (cleaned.includes(',')) {
+                    cleaned = cleaned.replace(/\./g, '').replace(/,/g, '.');
+                } else {
+                    const dots = (cleaned.match(/\./g) || []).length;
+                    if (dots === 1) {
+                        const parts = cleaned.split('.');
+                        if (parts[1].length === 3) {
+                            cleaned = cleaned.replace(/\./g, '');
+                        }
+                    } else if (dots > 1) {
+                        cleaned = cleaned.replace(/\./g, '');
                     }
+                }
+                const val = parseFloat(cleaned);
+                return isNaN(val) ? null : val;
+            };
+
+            const isParentOfPriceElement = (el) => {
+                return Array.from(el.children).some(child => {
+                    const childTxt = (child.innerText || child.textContent || '').trim();
+                    return /\d/.test(childTxt) && (
+                        childTxt.toLowerCase().includes('bs') || 
+                        childTxt.toLowerCase().includes('ves') || 
+                        childTxt.includes('$') || 
+                        childTxt.toLowerCase().includes('usd') || 
+                        childTxt.toLowerCase().includes('ref')
+                    );
+                });
+            };
+
+            const allElements = Array.from(document.querySelectorAll('span, p, div, s, del, strike, b, strong, font, h1, h2, h3, h4, h5, h6, a, td, li'));
+            
+            let bs_candidates = [];
+            let usd_candidates = [];
+            let fallback_candidates = [];
+
+            for (const el of allElements) {
+                if (el.children.length > 5) continue;
+                if (isParentOfPriceElement(el)) continue;
+                
+                const txt = (el.innerText || el.textContent || '').trim();
+                if (!txt || txt.length > 80) continue;
+                if (!/\d/.test(txt)) continue;
+                
+                if (/unidad\s+a|c\/u|dosis|%\s*off|ahorras?|tabletas?\s+as?|cajas?\s+as?|ahorra/i.test(txt)) {
+                    continue;
+                }
+
+                let isStrikethrough = false;
+                try {
+                    const style = window.getComputedStyle(el);
+                    const td = style.textDecoration || style.textDecorationLine || '';
+                    if (td.includes('line-through') || el.matches('del, s, strike') || el.closest('del, s, strike')) {
+                        isStrikethrough = true;
+                    }
+                } catch(e) {}
+
+                const lower = txt.toLowerCase();
+                const isUsd = lower.includes('ref') || lower.includes('usd') || lower.includes('$');
+                const hasBs = lower.includes('bs') || lower.includes('ves');
+
+                const priceMatch = txt.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/);
+                if (!priceMatch) continue;
+
+                const priceVal = parsePriceText(priceMatch[1]);
+                if (!priceVal || priceVal <= 0.1) continue;
+
+                let fontSize = 14;
+                try {
+                    const style = window.getComputedStyle(el);
+                    const fs = style.fontSize || '';
+                    if (fs) fontSize = parseFloat(fs);
+                } catch(e) {}
+
+                let score = fontSize;
+                const className = (el.className || '').toLowerCase();
+                const idName = (el.id || '').toLowerCase();
+                
+                if (className.includes('price') || className.includes('valor') || className.includes('monto')) score += 15;
+                if (className.includes('active') || className.includes('venta') || className.includes('selling') || className.includes('best') || className.includes('current')) score += 15;
+                if (idName.includes('price') || idName.includes('best')) score += 15;
+                
+                if (className.includes('unit') || className.includes('secondary') || txt.includes('/') || txt.includes('x')) score -= 25;
+
+                const candidate = {
+                    text: txt,
+                    price: priceVal,
+                    isStrikethrough: isStrikethrough,
+                    fontSize: fontSize,
+                    score: score
+                };
+
+                if (hasBs && !isUsd) {
+                    bs_candidates.push(candidate);
+                } else if (isUsd) {
+                    usd_candidates.push(candidate);
+                } else {
+                    fallback_candidates.push(candidate);
                 }
             }
 
-            // B. Buscar precio activo principal en DOM
-            const activeEls = document.querySelectorAll(
-                '.product-purchase__price--active, [class*="price--active"], .product-purchase__price, ' +
-                '[class*="sellingPrice"], [class*="bestPrice"], [class*="best-price"], [class*="offer-price"], ' +
-                '[class*="product-price"], [class*="vtex-product-price"], [class*="current-price"]'
-            );
-            for (const el of activeEls) {
-                if (!el.matches('del, s, strike, .line-through, [class*="original"], [class*="old"], [class*="listPrice"]')) {
-                    const txt = (el.innerText || el.textContent || '').trim();
-                    if (txt && !/tableta|unidad\s+a|c\/u|dosis|%\s*OFF/i.test(txt) && /\d/.test(txt)) {
-                        const lower = txt.toLowerCase();
-                        const isUsd = lower.includes('ref') || lower.includes('usd') || lower.includes('$');
-                        const hasBs = lower.includes('bs') || lower.includes('ves');
-                        
-                        if (hasBs && !isUsd) {
-                            if (!dom_bs_active_text) dom_bs_active_text = txt;
-                        } else if (isUsd) {
-                            if (!dom_usd_active_text) dom_usd_active_text = txt;
-                        } else {
-                            if (!dom_active_text) dom_active_text = txt;
-                        }
-                    }
-                }
+            let dom_bs_active_text = '';
+            let dom_bs_original_text = '';
+
+            const bs_orig_cands = bs_candidates.filter(c => c.isStrikethrough);
+            if (bs_orig_cands.length > 0) {
+                bs_orig_cands.sort((a, b) => b.fontSize - a.fontSize);
+                dom_bs_original_text = bs_orig_cands[0].text;
+            }
+
+            const bs_act_cands = bs_candidates.filter(c => !c.isStrikethrough);
+            if (bs_act_cands.length > 0) {
+                bs_act_cands.sort((a, b) => b.score - a.score);
+                dom_bs_active_text = bs_act_cands[0].text;
+            }
+
+            let dom_usd_active_text = '';
+            let dom_usd_original_text = '';
+
+            const usd_orig_cands = usd_candidates.filter(c => c.isStrikethrough);
+            if (usd_orig_cands.length > 0) {
+                usd_orig_cands.sort((a, b) => b.fontSize - a.fontSize);
+                dom_usd_original_text = usd_orig_cands[0].text;
+            }
+
+            const usd_act_cands = usd_candidates.filter(c => !c.isStrikethrough);
+            if (usd_act_cands.length > 0) {
+                usd_act_cands.sort((a, b) => b.score - a.score);
+                dom_usd_active_text = usd_act_cands[0].text;
+            }
+
+            let dom_active_text = '';
+            let dom_original_text = '';
+
+            const fall_orig_cands = fallback_candidates.filter(c => c.isStrikethrough);
+            if (fall_orig_cands.length > 0) {
+                fall_orig_cands.sort((a, b) => b.fontSize - a.fontSize);
+                dom_original_text = fall_orig_cands[0].text;
+            }
+
+            const fall_act_cands = fallback_candidates.filter(c => !c.isStrikethrough);
+            if (fall_act_cands.length > 0) {
+                fall_act_cands.sort((a, b) => b.score - a.score);
+                dom_active_text = fall_act_cands[0].text;
             }
 
             return {
@@ -576,14 +674,31 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         p_usd_orig_in_bs = round(p_usd_orig_dom * bcv_rate, 2) if p_usd_orig_dom else None
 
         # Si los precios directos de VTEX/NextJS parecen estar en USD (ej: < 120.0 en SAAS o Locatel)
-        # convertirlos a Bolívares usando la tasa BCV
+        # convertirlos a Bolívares usando la tasa BCV. Calibramos usando el DOM para evitar falsas conversiones.
         is_saas_or_locatel = any(x in url.lower() for x in ("saas", "locatel", "farmaciasaas"))
         
-        if p_act_direct and is_saas_or_locatel and p_act_direct < 120.0:
-            p_act_direct = round(p_act_direct * bcv_rate, 2)
-            
-        if p_orig_direct and is_saas_or_locatel and p_orig_direct < 120.0:
-            p_orig_direct = round(p_orig_direct * bcv_rate, 2)
+        if is_saas_or_locatel:
+            if p_act_direct and p_act_direct < 120.0:
+                if p_bs_active_dom:
+                    diff_as_bs = abs(p_bs_active_dom - p_act_direct)
+                    diff_as_usd = abs(p_bs_active_dom - p_act_direct * bcv_rate)
+                    if diff_as_usd < diff_as_bs:
+                        p_act_direct = round(p_act_direct * bcv_rate, 2)
+                else:
+                    p_act_direct = round(p_act_direct * bcv_rate, 2)
+                    
+            if p_orig_direct and p_orig_direct < 120.0:
+                if p_bs_active_dom:
+                    is_base_in_bs = (abs(p_bs_active_dom - (p_act_direct / bcv_rate if bcv_rate else 1)) > abs(p_bs_active_dom - p_act_direct))
+                    if not is_base_in_bs:
+                        p_orig_direct = round(p_orig_direct * bcv_rate, 2)
+                elif p_bs_orig_dom:
+                    diff_as_bs = abs(p_bs_orig_dom - p_orig_direct)
+                    diff_as_usd = abs(p_bs_orig_dom - p_orig_direct * bcv_rate)
+                    if diff_as_usd < diff_as_bs:
+                        p_orig_direct = round(p_orig_direct * bcv_rate, 2)
+                else:
+                    p_orig_direct = round(p_orig_direct * bcv_rate, 2)
 
         # Selección inteligente del precio ACTIVO (Bolívares)
         final_active_bs = None
