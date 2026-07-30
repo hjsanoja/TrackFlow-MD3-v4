@@ -66,7 +66,7 @@ export default function Simulador({ user, userDoc }) {
           const k = getHistoryKey(p.id_interno, c.cadena, c.marca);
           const hList = historyGrouped[k] || [];
           const currentHist = hList[0];
-          const previousHist = hList.find(x => x.run_id !== currentHist?.run_id && x.scraped_at?.toDateString() !== currentHist?.scraped_at?.toDateString());
+          const previousHist = hList.find(x => x.run_id !== currentHist?.run_id);
           
           const currentVal = currentHist ? (dashboardPriceMode === 'descuento' ? (currentHist.precio_desc_bs || currentHist.precio_full_bs) : currentHist.precio_full_bs) : null;
           const prevVal = previousHist ? (dashboardPriceMode === 'descuento' ? (previousHist.precio_desc_bs || previousHist.precio_full_bs) : previousHist.precio_full_bs) : null;
@@ -94,16 +94,14 @@ export default function Simulador({ user, userDoc }) {
 
         const hasChangesToday = chainPrices.some(cp => Math.abs(cp.changePercent) > 0.05);
 
-        const competitorPricesUsd = chainPrices
-          .filter(x => x.tipo !== 'propio')
-          .map(x => x.priceUsd);
+        const allPricesUsd = chainPrices.map(x => x.priceUsd);
 
-        const avgCompUsd = competitorPricesUsd.length > 0 
-          ? competitorPricesUsd.reduce((a, b) => a + b, 0) / competitorPricesUsd.length 
+        const avgCompUsd = allPricesUsd.length > 0 
+          ? allPricesUsd.reduce((a, b) => a + b, 0) / allPricesUsd.length 
           : null;
 
-        const minCompUsd = competitorPricesUsd.length > 0 ? Math.min(...competitorPricesUsd) : null;
-        const maxCompUsd = competitorPricesUsd.length > 0 ? Math.max(...competitorPricesUsd) : null;
+        const minCompUsd = allPricesUsd.length > 0 ? Math.min(...allPricesUsd) : null;
+        const maxCompUsd = allPricesUsd.length > 0 ? Math.max(...allPricesUsd) : null;
 
         const dispersionPercent = (minCompUsd && maxCompUsd && minCompUsd > 0)
           ? ((maxCompUsd - minCompUsd) / minCompUsd) * 100
@@ -117,14 +115,11 @@ export default function Simulador({ user, userDoc }) {
           .filter(x => Math.abs(x.priceUsd - maxCompUsd) < 0.001)
           .map(x => x.cadena);
 
-        const propioItem = compItems.find(c => c.tipo === 'propio');
-        const rawPropioPriceBs = propioItem ? (
-          dashboardPriceMode === 'descuento'
-            ? (propioItem.ultimo_precio_desc_bs || propioItem.ultimo_precio_full_bs)
-            : propioItem.ultimo_precio_full_bs
-        ) : null;
-        const propioPriceBs = rawPropioPriceBs ? rawPropioPriceBs / pUnitFactor : null;
-        const propioPriceUsd = (propioPriceBs && bcv.rate) ? (propioPriceBs / bcv.rate) : null;
+        // Find own price (most economical one among all own listings)
+        const propioOptions = chainPrices.filter(x => x.tipo === 'propio');
+        const propioPriceUsd = propioOptions.length > 0 
+          ? Math.min(...propioOptions.map(x => x.priceUsd)) 
+          : null;
 
         const diffMinUsd = (propioPriceUsd !== null && minCompUsd !== null) ? propioPriceUsd - minCompUsd : null;
         const diffMinPercent = (diffMinUsd !== null && minCompUsd > 0) ? (diffMinUsd / minCompUsd) * 100 : null;
