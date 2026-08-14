@@ -1300,7 +1300,11 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   ) : (
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData[chartViewType].data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                        <LineChart 
+                          key={`trend-line-${chartViewType}-${productGroup.length}-${chartData[chartViewType].data.length}`}
+                          data={chartData[chartViewType].data} 
+                          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                        >
                           <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
                           <XAxis 
                             dataKey="date" 
@@ -1342,6 +1346,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                   strokeWidth={isPropio ? 4.5 : 2}
                                   dot={{ r: isPropio ? 5 : 3 }}
                                   connectNulls
+                                  isAnimationActive={true}
+                                  animationDuration={750}
+                                  animationBegin={0}
+                                  animationEasing="ease-out"
                                 />
                               );
                             })
@@ -1358,6 +1366,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                   strokeWidth={isPropioChain ? 4.5 : 2}
                                   dot={{ r: isPropioChain ? 5 : 3 }}
                                   connectNulls
+                                  isAnimationActive={true}
+                                  animationDuration={750}
+                                  animationBegin={0}
+                                  animationEasing="ease-out"
                                 />
                               );
                             })
@@ -1374,6 +1386,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                               strokeDasharray="6 4"
                               dot={{ r: 4 }}
                               connectNulls
+                              isAnimationActive={true}
+                              animationDuration={750}
+                              animationBegin={0}
+                              animationEasing="ease-out"
                             />
                           )}
                         </LineChart>
@@ -1441,7 +1457,11 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   ) : (
                     <div className="h-72">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={barChartData.data} margin={{ top: 22, right: 10, left: -10, bottom: 0 }}>
+                        <BarChart 
+                          key={`modal-bars-${barGroupMode}-${modalCurrency}-${barChartData.data.length}`}
+                          data={barChartData.data} 
+                          margin={{ top: 22, right: 10, left: -10, bottom: 0 }}
+                        >
                           <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
                           <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#464650' }} />
                           <YAxis tick={{ fontSize: 11, fill: '#464650' }} />
@@ -1467,6 +1487,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                 name={seriesKey}
                                 fill={barColor}
                                 radius={[4, 4, 0, 0]}
+                                isAnimationActive={true}
+                                animationDuration={750}
+                                animationBegin={0}
+                                animationEasing="ease-out"
                               >
                                 {barGroupMode === 'cadena' && barChartData.data.map((entry, idx) => {
                                   const cellColor = getChainSpecificColor(entry.name);

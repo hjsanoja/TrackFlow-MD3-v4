@@ -95,23 +95,30 @@ export default function Cadenas() {
   };
 
   return (
-    <div className="space-y-6 text-on-surface">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* Title Header Block */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-4 gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
-          <h1 className="text-3xl font-display font-extrabold text-primary tracking-tight">Cadenas de Monitoreo</h1>
-          <p className="text-sm text-on-surface-variant font-sans mt-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-primary text-3xl">store</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
+              Cadenas de Monitoreo
+            </h1>
+          </div>
+          <p className="text-xs text-on-surface-variant font-sans">
             Administra las cadenas de farmacias registradas en el robot de extracción.
           </p>
         </div>
-        <button onClick={() => setEditing('new')}
-          className="text-xs px-5 py-2.5 bg-secondary hover:bg-secondary/90 text-on-secondary font-extrabold shadow-sm rounded-full transition-all flex items-center gap-1.5 self-start">
+        <button
+          onClick={() => setEditing('new')}
+          className="m3-btn-primary"
+        >
           <span className="material-symbols-outlined text-base">add</span>
           <span>Agregar Cadena</span>
         </button>
       </div>
 
-      <div className="bg-primary-container border border-outline-variant/40 rounded-2xl px-5 py-4 text-xs text-on-primary-container space-y-1.5 shadow-sm">
+      <div className="bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-xs text-on-background space-y-1.5 shadow-xs">
         <div className="flex items-center gap-2 font-mono font-bold text-sm text-primary">
           <span className="material-symbols-outlined text-lg leading-none">info</span>
           <span>Información Técnica del Scraper</span>
@@ -122,29 +129,29 @@ export default function Cadenas() {
       </div>
 
       {/* Main Grid View */}
-      <div className="bg-white rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
+      <div className="neural-card overflow-hidden">
         {loading ? (
           <div className="overflow-x-auto animate-pulse">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">Nombre Cadena</th>
-                  <th className="text-left px-6 py-4 font-bold">Portal Website</th>
-                  <th className="text-left px-6 py-4 font-bold">Identificador Técnico Scraper</th>
-                  <th className="text-center px-6 py-4 font-bold">URLs Activas Scrapeadas</th>
-                  <th className="text-center px-6 py-4 font-bold">Estado</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>Nombre Cadena</th>
+                  <th>Portal Website</th>
+                  <th>Identificador Técnico Scraper</th>
+                  <th className="text-center">URLs Activas Scrapeadas</th>
+                  <th className="text-center">Estado</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30">
+              <tbody className="divide-y divide-surface-variant">
                 {[1, 2, 3].map((n) => (
                   <tr key={n}>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-2/3"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-3/4"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-1/2"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-12 mx-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
-                    <td className="px-6 py-4 text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-2/3"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-3/4"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-1/2"></div></td>
+                    <td className="text-center"><div className="h-4 bg-gray-200 rounded w-12 mx-auto"></div></td>
+                    <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
+                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
                   </tr>
                 ))}
               </tbody>
@@ -156,18 +163,18 @@ export default function Cadenas() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">Nombre Cadena</th>
-                  <th className="text-left px-6 py-4 font-bold">Portal Website</th>
-                  <th className="text-left px-6 py-4 font-bold">Identificador Técnico Scraper</th>
-                  <th className="text-center px-6 py-4 font-bold">URLs Activas Scrapeadas</th>
-                  <th className="text-center px-6 py-4 font-bold">Estado</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>Nombre Cadena</th>
+                  <th>Portal Website</th>
+                  <th>Identificador Técnico Scraper</th>
+                  <th className="text-center">URLs Activas Scrapeadas</th>
+                  <th className="text-center">Estado</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30">
+              <tbody className="divide-y divide-surface-variant">
                 {cadenas.map(c => {
                   const implementado = SCRAPERS_IMPLEMENTADOS.has(c.scraper_modulo);
                   const count = urlsPorCadena.get(c.nombre) || 0;

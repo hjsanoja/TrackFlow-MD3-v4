@@ -965,7 +965,7 @@ export default function Simulador({ user, userDoc }) {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12 font-sans">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       
       {/* Header and top view controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1477,7 +1477,11 @@ export default function Simulador({ user, userDoc }) {
             <div className="h-full flex items-center justify-center text-xs text-[#464650] italic">No hay suficientes datos comparativos.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={priceGapData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <BarChart 
+                key={`sim-bar-${selectedProductKey}-${priceGapData.length}`}
+                data={priceGapData} 
+                margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
                 <XAxis 
                   dataKey="name" 
@@ -1490,7 +1494,13 @@ export default function Simulador({ user, userDoc }) {
                 />
                 <Tooltip content={<PriceGapTooltip />} />
                 <ReferenceLine y={0} stroke="#464650" strokeWidth={1} />
-                <Bar dataKey="gap">
+                <Bar 
+                  dataKey="gap"
+                  isAnimationActive={true}
+                  animationDuration={750}
+                  animationBegin={0}
+                  animationEasing="ease-out"
+                >
                   {priceGapData.map((entry, index) => {
                     const isCheaper = entry.gap < 0;
                     return (
@@ -1534,7 +1544,10 @@ export default function Simulador({ user, userDoc }) {
 
           <div className="h-80 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
+              <ScatterChart 
+                key={`sim-scatter-${scatterPlotData.length}`}
+                margin={{ top: 20, right: 30, bottom: 20, left: 10 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
                 <XAxis 
                   type="number" 
@@ -1553,7 +1566,14 @@ export default function Simulador({ user, userDoc }) {
                   label={{ value: 'Mi Precio (USD $)', angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill: '#016874', fontWeight: 'bold' }}
                 />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomScatterTooltip />} />
-                <Scatter name="Productos Monitoreados" data={scatterPlotData} onClick={(entry) => setSelectedProduct({ producto: entry.producto, competencia: entry.competencia })}>
+                <Scatter 
+                  name="Productos Monitoreados" 
+                  data={scatterPlotData} 
+                  onClick={(entry) => setSelectedProduct({ producto: entry.producto, competencia: entry.competencia })}
+                  isAnimationActive={true}
+                  animationDuration={750}
+                  animationBegin={0}
+                >
                   {scatterPlotData.map((entry, index) => {
                     const isCheaper = entry.y < entry.x;
                     const isEqual = Math.abs(entry.y - entry.x) < 0.05;

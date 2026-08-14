@@ -374,7 +374,7 @@ export default function Hallazgos({ user, userDoc }) {
   }
 
   return (
-    <div className="space-y-6 text-on-background">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

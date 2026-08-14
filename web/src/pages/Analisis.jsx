@@ -202,7 +202,7 @@ export default function Analisis() {
   }, [compareProductIds, productos, compByProductMap]);
 
   return (
-    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* HEADER PRINCIPAL */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
@@ -219,7 +219,7 @@ export default function Analisis() {
 
         <button
           onClick={() => window.print()}
-          className="touch-target px-4 py-2 bg-surface-low hover:bg-surface-variant text-primary font-mono font-bold text-xs rounded-full border border-outline-variant/60 transition-all flex items-center gap-2 self-start lg:self-auto"
+          className="m3-btn-outline self-start lg:self-auto"
         >
           <span className="material-symbols-outlined text-base">picture_as_pdf</span>
           <span>Exportar Informe</span>
@@ -236,7 +236,7 @@ export default function Analisis() {
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="Buscar producto, laboratorio o principio activo..."
-              className="w-full pl-9 pr-8 py-2 bg-surface-low border border-outline-variant/60 rounded-xl text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 font-sans"
+              className="m3-input pl-9 pr-8"
             />
             {searchTerm && (
               <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
@@ -248,7 +248,7 @@ export default function Analisis() {
             <select
               value={selectedCategoria}
               onChange={e => setSelectedCategoria(e.target.value)}
-              className="px-3 py-2 bg-surface-low border border-outline-variant/60 rounded-xl text-xs text-on-surface font-sans font-bold focus:outline-none"
+              className="m3-select"
             >
               {categorias.map(cat => (
                 <option key={cat} value={cat}>
@@ -413,7 +413,7 @@ export default function Analisis() {
               <div className="h-full flex items-center justify-center text-xs text-on-surface-variant italic">Sin datos.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart key={`pie-chart-${positioningPieData.map(d => d.value).join('-')}`}>
                   <Pie
                     data={positioningPieData}
                     cx="50%"
@@ -422,6 +422,10 @@ export default function Analisis() {
                     outerRadius={60}
                     paddingAngle={3}
                     dataKey="value"
+                    isAnimationActive={true}
+                    animationDuration={750}
+                    animationBegin={0}
+                    animationEasing="ease-out"
                   >
                     {positioningPieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -483,20 +487,20 @@ export default function Analisis() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead className="bg-surface-low text-on-surface text-[10px] uppercase font-mono tracking-wider border-b border-outline-variant/50">
+          <table className="m3-table">
+            <thead>
               <tr>
-                <th className="p-2.5 font-bold text-center">Comp.</th>
-                <th className="p-2.5 font-bold">Producto Propio</th>
-                <th className="p-2.5 font-bold">Laboratorio</th>
-                <th className="p-2.5 font-bold text-right">PVP Propio ($)</th>
-                <th className="p-2.5 font-bold text-right">Mín. Competidor ($)</th>
-                <th className="p-2.5 font-bold">Cadena Más Económica</th>
-                <th className="p-2.5 font-bold text-right">Diferencia %</th>
-                <th className="p-2.5 font-bold text-center">Estado</th>
+                <th className="text-center">Comp.</th>
+                <th>Producto Propio</th>
+                <th>Laboratorio</th>
+                <th className="text-right">PVP Propio ($)</th>
+                <th className="text-right">Mín. Competidor ($)</th>
+                <th>Cadena Más Económica</th>
+                <th className="text-right">Diferencia %</th>
+                <th className="text-center">Estado</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-outline-variant/30 font-sans">
+            <tbody className="divide-y divide-surface-variant font-sans">
               {visibleBrechas.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-6 text-center text-on-surface-variant italic">

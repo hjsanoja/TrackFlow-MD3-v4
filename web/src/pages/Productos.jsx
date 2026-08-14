@@ -469,36 +469,49 @@ export default function Productos() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* Editorial Title Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-4 gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
-          <h1 className="text-3xl font-display font-extrabold text-primary tracking-tight">Catálogo de Productos</h1>
-          <p className="text-sm text-on-surface-variant font-sans mt-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-primary text-3xl">medication</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
+              Catálogo de Productos
+            </h1>
+          </div>
+          <p className="text-xs text-on-surface-variant font-sans">
             Gestiona el catálogo de medicamentos registrados y asocia sus enlaces de competencia.
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setConfirmDeleteAll(true)}
+        <div className="flex gap-2.5 flex-wrap items-center">
+          <button
+            onClick={() => setConfirmDeleteAll(true)}
             disabled={deletingAll || productos.length === 0}
-            className="text-xs px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 font-bold text-red-700 rounded-full transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Eliminar todos los productos, enlaces de competencia e historial">
+            className="touch-target px-4 py-2 bg-surface-low hover:bg-rose-50 text-rose-700 font-mono font-bold text-xs rounded-full border border-rose-200 transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Eliminar todos los productos, enlaces de competencia e historial"
+          >
             <span className="material-symbols-outlined text-base">delete_sweep</span>
             <span>{deletingAll ? 'Vaciando...' : 'Vaciar Catálogo'}</span>
           </button>
-          <button onClick={handleExportarCatalogo}
-            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm"
-            title="Exportar vista actual a archivo CSV">
+          <button
+            onClick={handleExportarCatalogo}
+            className="m3-btn-outline"
+            title="Exportar vista actual a archivo CSV"
+          >
             <span className="material-symbols-outlined text-base">download</span>
             <span>Exportar CSV</span>
           </button>
-          <button onClick={() => setShowCsvModal(true)}
-            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm">
+          <button
+            onClick={() => setShowCsvModal(true)}
+            className="m3-btn-outline"
+          >
             <span className="material-symbols-outlined text-base">upload_file</span>
             <span>Carga Masiva (CSV)</span>
           </button>
-          <button onClick={() => setEditing('new')}
-            className="text-xs px-5 py-2.5 bg-secondary hover:bg-secondary/90 text-on-secondary font-extrabold shadow-sm rounded-full transition-all flex items-center gap-1.5">
+          <button
+            onClick={() => setEditing('new')}
+            className="m3-btn-primary"
+          >
             <span className="material-symbols-outlined text-base">add</span>
             <span>Nuevo Producto</span>
           </button>
@@ -506,103 +519,114 @@ export default function Productos() {
       </div>
 
       {huerfanos > 0 && (
-        <div className="bg-primary-container text-on-primary-container px-5 py-4 rounded-2xl flex items-center justify-between border border-outline-variant/40 shadow-sm">
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-5 py-3.5 rounded-2xl flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-xl leading-none select-none text-primary">warning</span>
-            <span className="text-sm font-sans">
+            <span className="material-symbols-outlined text-xl text-amber-700">warning</span>
+            <span className="text-xs font-medium">
               Hay <strong>{huerfanos} producto{huerfanos > 1 ? 's activos' : ' activo'} sin enlaces</strong> de competencia registrados para el scraper.
             </span>
           </div>
-          <button onClick={() => setFiltroUrls('sin_urls')}
-            className="text-xs px-4 py-2 bg-white text-primary hover:bg-surface-low rounded-full font-bold shadow-sm transition-all">
+          <button
+            onClick={() => setFiltroUrls('sin_urls')}
+            className="text-xs px-3.5 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
+          >
             Ver Cuáles
           </button>
         </div>
       )}
 
       {/* Structured Grid & Filters Area */}
-      <div className="bg-white rounded-3xl border border-outline-variant p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-        <div className="flex-1 min-w-[280px] relative">
-          <span className="material-symbols-outlined text-on-surface-variant absolute left-3 top-2.5 select-none">search</span>
-          <input type="text" placeholder="Buscar por nombre, molécula, ID o laboratorio..."
-            value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-outline-variant rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans" />
-        </div>
-        
-        <div className="flex gap-4 flex-wrap">
-          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
-            <button onClick={() => setFiltroActivo('todos')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroActivo === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODOS</button>
-            <button onClick={() => setFiltroActivo('activos')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroActivo === 'activos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>ACTIVOS</button>
-            <button onClick={() => setFiltroActivo('inactivos')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroActivo === 'inactivos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>INACTIVOS</button>
+      <div className="neural-card p-4 space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between">
+          <div className="flex-1 w-full relative">
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+            <input
+              type="text"
+              placeholder="Buscar por nombre, molécula, ID o laboratorio..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="m3-input pl-9 pr-8"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
+            )}
           </div>
+          
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="m3-segmented">
+              <button onClick={() => setFiltroActivo('todos')}
+                className={`m3-segmented-item ${filtroActivo === 'todos' ? 'active' : ''}`}>TODOS</button>
+              <button onClick={() => setFiltroActivo('activos')}
+                className={`m3-segmented-item ${filtroActivo === 'activos' ? 'active' : ''}`}>ACTIVOS</button>
+              <button onClick={() => setFiltroActivo('inactivos')}
+                className={`m3-segmented-item ${filtroActivo === 'inactivos' ? 'active' : ''}`}>INACTIVOS</button>
+            </div>
 
-          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
-            <button onClick={() => setFiltroUrls('todos')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroUrls === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODOS</button>
-            <button onClick={() => setFiltroUrls('con_urls')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroUrls === 'con_urls' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>CON ENLACES</button>
-            <button onClick={() => setFiltroUrls('sin_urls')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroUrls === 'sin_urls' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>SIN ENLACES</button>
-          </div>
+            <div className="m3-segmented">
+              <button onClick={() => setFiltroUrls('todos')}
+                className={`m3-segmented-item ${filtroUrls === 'todos' ? 'active' : ''}`}>TODOS</button>
+              <button onClick={() => setFiltroUrls('con_urls')}
+                className={`m3-segmented-item ${filtroUrls === 'con_urls' ? 'active' : ''}`}>CON ENLACES</button>
+              <button onClick={() => setFiltroUrls('sin_urls')}
+                className={`m3-segmented-item ${filtroUrls === 'sin_urls' ? 'active' : ''}`}>SIN ENLACES</button>
+            </div>
 
-          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
-            <button onClick={() => setFiltroTipo('todos')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroTipo === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODOS TIPO</button>
-            <button onClick={() => setFiltroTipo('generico')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroTipo === 'generico' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>GENÉRICOS</button>
-            <button onClick={() => setFiltroTipo('marca')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroTipo === 'marca' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>MARCA</button>
-          </div>
+            <div className="m3-segmented">
+              <button onClick={() => setFiltroTipo('todos')}
+                className={`m3-segmented-item ${filtroTipo === 'todos' ? 'active' : ''}`}>TODOS TIPO</button>
+              <button onClick={() => setFiltroTipo('generico')}
+                className={`m3-segmented-item ${filtroTipo === 'generico' ? 'active' : ''}`}>GENÉRICOS</button>
+              <button onClick={() => setFiltroTipo('marca')}
+                className={`m3-segmented-item ${filtroTipo === 'marca' ? 'active' : ''}`}>MARCA</button>
+            </div>
 
-          <div className="flex bg-surface-low rounded-full p-1 text-xs font-mono font-bold border border-outline-variant">
-            <button onClick={() => setFiltroUn('todos')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'todos' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>TODAS UN</button>
-            <button onClick={() => setFiltroUn('lasante')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'lasante' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>LA SANTÉ</button>
-            <button onClick={() => setFiltroUn('pharmetique')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'pharmetique' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>PHARMETIQUE</button>
-            <button onClick={() => setFiltroUn('otc')}
-              className={`px-4 py-1.5 rounded-full transition-all ${filtroUn === 'otc' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>OTC</button>
+            <div className="m3-segmented">
+              <button onClick={() => setFiltroUn('todos')}
+                className={`m3-segmented-item ${filtroUn === 'todos' ? 'active' : ''}`}>TODAS UN</button>
+              <button onClick={() => setFiltroUn('lasante')}
+                className={`m3-segmented-item ${filtroUn === 'lasante' ? 'active' : ''}`}>LA SANTÉ</button>
+              <button onClick={() => setFiltroUn('pharmetique')}
+                className={`m3-segmented-item ${filtroUn === 'pharmetique' ? 'active' : ''}`}>PHARMETIQUE</button>
+              <button onClick={() => setFiltroUn('otc')}
+                className={`m3-segmented-item ${filtroUn === 'otc' ? 'active' : ''}`}>OTC</button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Table View */}
-      <div className="bg-white rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
+      <div className="neural-card overflow-hidden">
         {loading ? (
           <div className="overflow-x-auto animate-pulse">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">ID</th>
-                  <th className="text-left px-6 py-4 font-bold">Nombre / Molécula</th>
-                  <th className="text-left px-6 py-4 font-bold">Concentración / Tamaño</th>
-                  <th className="text-left px-6 py-4 font-bold">Tipo</th>
-                  <th className="text-left px-6 py-4 font-bold">Laboratorio</th>
-                  <th className="text-left px-6 py-4 font-bold">Categoría</th>
-                  <th className="text-center px-6 py-4 font-bold">Enlaces Activos</th>
-                  <th className="text-center px-6 py-4 font-bold">Estado</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>ID</th>
+                  <th>Nombre / Molécula</th>
+                  <th>Concentración / Tamaño</th>
+                  <th>Tipo</th>
+                  <th>Laboratorio</th>
+                  <th>Categoría</th>
+                  <th className="text-center">Enlaces Activos</th>
+                  <th className="text-center">Estado</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30">
+              <tbody className="divide-y divide-surface-variant">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <tr key={n}>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-16"></div></td>
-                    <td className="px-6 py-4">
+                    <td><div className="h-4 bg-gray-200 rounded w-16"></div></td>
+                    <td>
                       <div className="h-4 bg-gray-200 rounded w-48 mb-1.5"></div>
                       <div className="h-3 bg-gray-100 rounded w-32"></div>
                     </td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-12"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-28"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                    <td className="px-6 py-4 text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
-                    <td className="px-6 py-4 text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-12"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-28"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                    <td className="text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
+                    <td><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
+                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
                   </tr>
                 ))}
               </tbody>
@@ -616,22 +640,22 @@ export default function Productos() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">ID</th>
-                  <th className="text-left px-6 py-4 font-bold">Nombre / Molécula</th>
-                  <th className="text-left px-6 py-4 font-bold">Concentración / Tamaño</th>
-                  <th className="text-left px-6 py-4 font-bold">Tipo</th>
-                  <th className="text-left px-6 py-4 font-bold">UN</th>
-                  <th className="text-left px-6 py-4 font-bold">Laboratorio</th>
-                  <th className="text-left px-6 py-4 font-bold">Categoría</th>
-                  <th className="text-center px-6 py-4 font-bold">Enlaces Activos</th>
-                  <th className="text-center px-6 py-4 font-bold">Estado</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>ID</th>
+                  <th>Nombre / Molécula</th>
+                  <th>Concentración / Tamaño</th>
+                  <th>Tipo</th>
+                  <th>UN</th>
+                  <th>Laboratorio</th>
+                  <th>Categoría</th>
+                  <th className="text-center">Enlaces Activos</th>
+                  <th className="text-center">Estado</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30">
+              <tbody className="divide-y divide-surface-variant">
                 {productosPaginados.map(p => {
                   const links = urlsPorProducto.get(p.id_interno) || [];
                   const count = links.length;

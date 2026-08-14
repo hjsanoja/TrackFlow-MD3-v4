@@ -177,84 +177,91 @@ export default function Usuarios({ userDoc }) {
   };
 
   return (
-    <div className="space-y-6 text-[#1c1b1f]">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* Title Header Block */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-[#e1e2ec] pb-4 gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
-          <h1 className="text-3xl font-display font-extrabold text-[#040d53] tracking-tight">Usuarios Autorizados</h1>
-          <p className="text-sm text-[#464650] font-sans mt-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-primary text-3xl">manage_accounts</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
+              Usuarios Autorizados
+            </h1>
+          </div>
+          <p className="text-xs text-on-surface-variant font-sans">
             Administra los roles de acceso, credenciales y perfiles de alertas del sistema.
           </p>
         </div>
-        <button onClick={() => setEditing('new')}
-          className="text-xs px-5 py-2.5 bg-[#70C145] hover:bg-[#5ca536] text-[#040d53] font-extrabold shadow-sm rounded-full transition-all flex items-center gap-1.5 self-start">
+        <button
+          onClick={() => setEditing('new')}
+          className="m3-btn-primary"
+        >
           <span className="material-symbols-outlined text-base">person_add</span>
           <span>Invitar Usuario</span>
         </button>
       </div>
 
-      <div className="bg-[#e0e1f9] border border-[#c6c5d2]/40 rounded-2xl px-5 py-4 text-xs text-[#00174c] space-y-1.5 shadow-sm">
-        <div className="flex items-center gap-2 font-mono font-bold text-sm text-[#040d53]">
+      <div className="bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-xs text-on-background space-y-1.5 shadow-xs">
+        <div className="flex items-center gap-2 font-mono font-bold text-sm text-primary">
           <span className="material-symbols-outlined text-lg leading-none">info</span>
           <span>Cómo registrar y dar acceso a un colaborador</span>
         </div>
-        <ol className="list-decimal ml-5 mt-1 space-y-1 text-xs text-[#464650] font-sans">
-          <li>Haz clic en el botón <strong>"Invitar Usuario"</strong> para registrar sus datos en Firestore y crear automáticamente su cuenta en Firebase Auth.</li>
+        <ol className="list-decimal ml-5 mt-1 space-y-1 text-xs text-on-surface-variant font-sans">
+          <li>Haz clic en el botón <strong>"Invitar Usuario"</strong> para registrar sus datos y crear automáticamente su cuenta.</li>
           <li>Especifica una contraseña inicial segura (mínimo 6 caracteres) para que el nuevo colaborador pueda iniciar sesión de inmediato.</li>
           <li>Si un colaborador olvida su contraseña, haz clic en el botón <strong>"Clave"</strong> junto a su nombre para enviarle un correo automático para restablecerla.</li>
         </ol>
       </div>
 
       {/* Main Grid View */}
-      <div className="bg-white rounded-3xl border border-[#e1e2ec] shadow-sm overflow-hidden">
+      <div className="neural-card overflow-hidden">
         {loading ? (
           <div className="overflow-x-auto animate-pulse">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-[#f8f9fa] text-[#040d53] text-xs uppercase font-mono tracking-wider border-b border-[#e1e2ec]">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">Nombre</th>
-                  <th className="text-left px-6 py-4 font-bold">Email</th>
-                  <th className="text-left px-6 py-4 font-bold">Rol</th>
-                  <th className="text-center px-6 py-4 font-bold">Alertas Inmediatas</th>
-                  <th className="text-center px-6 py-4 font-bold">Resumen Diario</th>
-                  <th className="text-center px-6 py-4 font-bold">Estado</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>Nombre</th>
+                  <th>Email</th>
+                  <th>Rol</th>
+                  <th className="text-center">Alertas Inmediatas</th>
+                  <th className="text-center">Resumen Diario</th>
+                  <th className="text-center">Estado</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#e1e2ec]">
+              <tbody className="divide-y divide-surface-variant">
                 {[1, 2, 3].map((n) => (
                   <tr key={n}>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-28"></div></td>
-                    <td className="px-6 py-4 text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
-                    <td className="px-6 py-4 text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
-                    <td className="px-6 py-4 text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-48"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-28"></div></td>
+                    <td className="text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
+                    <td className="text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
+                    <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
+                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : usuarios.length === 0 ? (
-          <div className="p-12 text-center text-[#464650] italic">
+          <div className="p-12 text-center text-on-surface-variant italic">
             Aún no hay usuarios registrados. Invita a alguien para empezar.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-[#f8f9fa] text-[#040d53] text-xs uppercase font-mono tracking-wider border-b border-[#e1e2ec]">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">Nombre</th>
-                  <th className="text-left px-6 py-4 font-bold">Email</th>
-                  <th className="text-left px-6 py-4 font-bold">Rol</th>
-                  <th className="text-center px-6 py-4 font-bold">Alertas Inmediatas</th>
-                  <th className="text-center px-6 py-4 font-bold">Resumen Diario</th>
-                  <th className="text-center px-6 py-4 font-bold">Estado</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>Nombre</th>
+                  <th>Email</th>
+                  <th>Rol</th>
+                  <th className="text-center">Alertas Inmediatas</th>
+                  <th className="text-center">Resumen Diario</th>
+                  <th className="text-center">Estado</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#e1e2ec]">
+              <tbody className="divide-y divide-surface-variant">
                 {usuarios.map(u => {
                   const isCurrent = u.email === userDoc?.email;
                   return (

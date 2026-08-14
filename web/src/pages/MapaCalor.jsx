@@ -265,81 +265,74 @@ export default function MapaCalor({ user, userDoc }) {
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12 text-[#1c1b1f] font-sans">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* Page Header */}
-      <div className="bg-white border border-[#e1e2ec] p-6 rounded-3xl flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#040d53] text-2xl select-none font-bold">thermostat</span>
-            <h2 className="text-xl font-display font-extrabold text-[#040d53]">Mapa de Calor y Posición Relativa</h2>
+            <span className="material-symbols-outlined text-primary text-3xl">thermostat</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
+              Mapa de Calor y Posición Relativa
+            </h1>
           </div>
-          <p className="text-xs text-[#464650] max-w-2xl font-sans leading-relaxed">
-            Visualiza de forma prioritaria el espectro de precios del mercado. Los extremos representan los precios
-            mínimo y máximo (en rojo), el centro es el promedio (en verde), y el marcador indica el posicionamiento exacto de tu precio.
+          <p className="text-xs text-on-surface-variant max-w-2xl font-sans leading-relaxed">
+            Visualiza el espectro de precios del mercado. Los extremos representan los precios
+            mínimo y máximo, el centro es el promedio y el marcador indica el posicionamiento exacto de tu precio.
           </p>
         </div>
 
         {/* Unified Mode Toggle & Currency switcher */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-[#f0f2f9] rounded-full border border-[#e1e2ec] p-0.5 flex text-xs font-mono font-bold shadow-sm">
+          <div className="m3-segmented">
             <button
               onClick={() => setAnalisisMode('empaque')}
-              className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1 ${
-                analisisMode === 'empaque' ? 'bg-[#040d53] text-white shadow-sm' : 'text-[#464650] hover:bg-[#040d53]/5'
-              }`}
+              className={`m3-segmented-item ${analisisMode === 'empaque' ? 'active' : ''}`}
             >
               <span className="material-symbols-outlined text-[14px]">inventory_2</span>
-              Empaque
+              <span>Empaque</span>
             </button>
             <button
               onClick={() => setAnalisisMode('unidosis')}
-              className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1 ${
-                analisisMode === 'unidosis' ? 'bg-[#040d53] text-white shadow-sm' : 'text-[#464650] hover:bg-[#040d53]/5'
-              }`}
+              className={`m3-segmented-item ${analisisMode === 'unidosis' ? 'active' : ''}`}
             >
               <span className="material-symbols-outlined text-[14px]">medication</span>
-              Por Unidosis
+              <span>Por Unidosis</span>
             </button>
           </div>
 
-          <div className="bg-[#f0f2f9] rounded-full border border-[#e1e2ec] p-0.5 flex text-xs font-mono font-bold shadow-sm">
+          <div className="m3-segmented">
             <button
               onClick={() => setCurrency('usd')}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                currency === 'usd' ? 'bg-[#040d53] text-white shadow-sm' : 'text-[#464650] hover:bg-[#040d53]/5'
-              }`}
+              className={`m3-segmented-item ${currency === 'usd' ? 'active' : ''}`}
             >
-              USD
+              USD ($)
             </button>
             <button
               onClick={() => setCurrency('bs')}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${
-                currency === 'bs' ? 'bg-[#040d53] text-white shadow-sm' : 'text-[#464650] hover:bg-[#040d53]/5'
-              }`}
+              className={`m3-segmented-item ${currency === 'bs' ? 'active' : ''}`}
             >
-              VES
-              {bcv.rate && <span className="text-[9px] opacity-75">({bcv.rate.toFixed(2)})</span>}
+              VES (Bs)
             </button>
           </div>
         </div>
       </div>
 
-      {/* KPI Stats Grid - Consistency with Dashboard layout (Point 8 requirement) */}
+      {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total con precio */}
-        <div className="bg-white border border-[#e1e2ec] p-4 rounded-3xl shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#040d53]/5 border border-[#040d53]/15 flex items-center justify-center text-[#040d53] shrink-0">
+        <div className="neural-card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
             <span className="material-symbols-outlined text-xl">medication</span>
           </div>
           <div>
-            <span className="text-[10px] font-mono font-bold text-[#464650] uppercase tracking-wider block">Productos Vigentes</span>
-            <div className="text-xl font-display font-extrabold text-[#040d53] mt-0.5">{statsSummary.total}</div>
-            <span className="text-[9px] text-[#464650]/80">Con precio o competencia activa</span>
+            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Vigentes</span>
+            <div className="text-xl font-display font-extrabold text-primary mt-0.5">{statsSummary.total}</div>
+            <span className="text-[9px] text-on-surface-variant font-semibold">Con precio o competencia activa</span>
           </div>
         </div>
 
         {/* Bajo Promedio (Más competitivos) */}
-        <div className="bg-white border border-[#e1e2ec] p-4 rounded-3xl shadow-sm flex items-center gap-3">
+        <div className="neural-card p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0">
             <span className="material-symbols-outlined text-xl">trending_down</span>
           </div>
@@ -351,7 +344,7 @@ export default function MapaCalor({ user, userDoc }) {
         </div>
 
         {/* En Paridad */}
-        <div className="bg-white border border-[#e1e2ec] p-4 rounded-3xl shadow-sm flex items-center gap-3">
+        <div className="neural-card p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
             <span className="material-symbols-outlined text-xl">drag_handle</span>
           </div>
@@ -363,7 +356,7 @@ export default function MapaCalor({ user, userDoc }) {
         </div>
 
         {/* Sobre Promedio */}
-        <div className="bg-white border border-[#e1e2ec] p-4 rounded-3xl shadow-sm flex items-center gap-3">
+        <div className="neural-card p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
             <span className="material-symbols-outlined text-xl">trending_up</span>
           </div>
@@ -376,33 +369,29 @@ export default function MapaCalor({ user, userDoc }) {
       </div>
 
       {/* Filter and Search controls */}
-      <div className="bg-white border border-[#e1e2ec] p-5 rounded-3xl shadow-sm space-y-4">
+      <div className="neural-card p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {/* Search Box */}
           <div className="relative md:col-span-1">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#464650]">
-              <span className="material-symbols-outlined text-lg leading-none select-none">search</span>
-            </span>
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
             <input
               type="text"
               placeholder="Buscar producto o principio..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-[#f5f6fa] border border-[#e1e2ec] rounded-2xl text-xs placeholder-[#464650]/60 focus:outline-none focus:ring-2 focus:ring-[#040d53]/20 focus:border-transparent transition-all font-sans"
+              className="m3-input pl-9 pr-8"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#464650] hover:text-[#040d53]">
-                <span className="material-symbols-outlined text-base">close</span>
-              </button>
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
             )}
           </div>
 
-          {/* Chain Filter - Replacing Category Filter (Point 7 requirement) */}
+          {/* Chain Filter */}
           <div className="space-y-1">
             <select
               value={cadenaSeleccionada}
               onChange={(e) => setCadenaSeleccionada(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-[#f5f6fa] border border-[#e1e2ec] rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-[#040d53]/20 transition-all text-[#1c1b1f] font-sans font-bold"
+              className="m3-select"
             >
               <option value="Todas">Cadena: Todas</option>
               {cadenas.filter(c => c !== 'Todas').map(cad => (
@@ -416,7 +405,7 @@ export default function MapaCalor({ user, userDoc }) {
             <select
               value={unSeleccionada}
               onChange={(e) => setUnSeleccionada(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-[#f5f6fa] border border-[#e1e2ec] rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-[#040d53]/20 transition-all text-[#1c1b1f] font-sans font-bold"
+              className="m3-select"
             >
               <option value="Todas">Unidad de Negocio: Todas</option>
               {unidadesNegocio.filter(u => u !== 'Todas').map(un => (
@@ -430,7 +419,7 @@ export default function MapaCalor({ user, userDoc }) {
             <select
               value={filtroPosicionamiento}
               onChange={(e) => setFiltroPosicionamiento(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-[#f5f6fa] border border-[#e1e2ec] rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-[#040d53]/20 transition-all text-[#1c1b1f] font-sans font-bold"
+              className="m3-select"
             >
               <option value="Todos">Posición: Todos</option>
               <option value="Bajo Promedio">Bajo el Promedio</option>
@@ -442,19 +431,15 @@ export default function MapaCalor({ user, userDoc }) {
         </div>
 
         {/* Quick filters / Sort display */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#e1e2ec]/60 text-xs text-[#464650] font-sans">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-surface-variant text-xs text-on-surface-variant font-sans">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-semibold text-[#1c1b1f]">Tipo de Mercado:</span>
-            <div className="flex gap-1.5">
+            <span className="font-semibold text-on-background">Tipo de Mercado:</span>
+            <div className="m3-segmented">
               {['Todos', 'Marca', 'Genérico'].map(opt => (
                 <button
                   key={opt}
                   onClick={() => setTipoMercadoSeleccionado(opt)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                    tipoMercadoSeleccionado === opt 
-                      ? 'bg-[#040d53] text-white font-bold border border-transparent' 
-                      : 'hover:bg-slate-100 border border-[#e1e2ec]'
-                  }`}
+                  className={`m3-segmented-item ${tipoMercadoSeleccionado === opt ? 'active' : ''}`}
                 >
                   {opt}
                 </button>
@@ -464,18 +449,18 @@ export default function MapaCalor({ user, userDoc }) {
 
           <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold">
             <span className="material-symbols-outlined text-xs text-primary">info</span>
-            Mostrando <span className="font-black text-[#040d53]">{filteredRows.length}</span> de <span className="font-bold">{heatmapData.length}</span> productos
+            <span>Mostrando <span className="font-black text-primary">{filteredRows.length}</span> de <span className="font-bold">{heatmapData.length}</span> productos</span>
           </div>
         </div>
       </div>
 
       {/* Heatmap Table Grid */}
-      <div className="bg-white border border-[#e1e2ec] rounded-[28px] overflow-hidden shadow-sm">
+      <div className="neural-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs font-sans table-fixed min-w-[800px]">
+          <table className="m3-table table-fixed min-w-[800px]">
             <thead>
-              <tr className="bg-[#f8f9fc] border-b border-[#e1e2ec] text-[#040d53] font-mono uppercase tracking-wider text-[11px] font-bold select-none">
-                <th className="px-6 py-5 cursor-pointer hover:bg-slate-100 transition-colors w-[30%]" onClick={() => handleSort('nombre')}>
+              <tr>
+                <th className="cursor-pointer hover:bg-surface-variant/50 transition-colors w-[30%]" onClick={() => handleSort('nombre')}>
                   <div className="flex items-center gap-1">
                     <span>Medicamento / Producto</span>
                     {sortField === 'nombre' && (
@@ -483,15 +468,15 @@ export default function MapaCalor({ user, userDoc }) {
                     )}
                   </div>
                 </th>
-                <th className="px-6 py-5 text-center w-[70%]">
+                <th className="text-center w-[70%]">
                   Espectro de Precios y Posicionamiento de Mi Precio
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#e1e2ec]">
+            <tbody className="divide-y divide-surface-variant">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={2} className="px-6 py-16 text-center text-[#464650] italic bg-white">
+                  <td colSpan={2} className="px-6 py-16 text-center text-on-surface-variant italic bg-surface-low/30">
                     No se encontraron productos activos que coincidan con la selección y tengan precio.
                   </td>
                 </tr>

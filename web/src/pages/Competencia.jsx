@@ -533,193 +533,225 @@ export default function Competencia({ user, userDoc }) {
   };
 
   return (
-    <div className="space-y-6 text-on-surface">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* Title Header Block */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-4 gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
-          <h1 className="text-3xl font-display font-extrabold text-primary tracking-tight">Enlaces de Competencia</h1>
-          <p className="text-sm text-on-surface-variant font-sans mt-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-primary text-3xl">link</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
+              Enlaces de Competencia
+            </h1>
+          </div>
+          <p className="text-xs text-on-surface-variant font-sans">
             Vincula productos locales con URLs externas para el monitoreo automático de precios.
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setConfirmDeleteAll(true)}
+        <div className="flex gap-2.5 flex-wrap items-center">
+          <button
+            onClick={() => setConfirmDeleteAll(true)}
             disabled={deletingAll || items.length === 0}
-            className="text-xs px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 font-bold text-red-700 rounded-full transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Eliminar todos los enlaces de competencia e historial">
+            className="touch-target px-4 py-2 bg-surface-low hover:bg-rose-50 text-rose-700 font-mono font-bold text-xs rounded-full border border-rose-200 transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Eliminar todos los enlaces de competencia e historial"
+          >
             <span className="material-symbols-outlined text-base">delete_sweep</span>
             <span>{deletingAll ? 'Vaciando...' : 'Vaciar Enlaces'}</span>
           </button>
-          <button onClick={handleExportarEnlaces}
-            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm"
-            title="Exportar enlaces filtrados a archivo CSV">
+          <button
+            onClick={handleExportarEnlaces}
+            className="m3-btn-outline"
+            title="Exportar enlaces filtrados a archivo CSV"
+          >
             <span className="material-symbols-outlined text-base">download</span>
             <span>Exportar CSV</span>
           </button>
-          <button onClick={() => setShowCsvModal(true)}
-            className="text-xs px-4 py-2.5 bg-white border border-outline-variant hover:bg-surface-low font-bold text-primary rounded-full transition-all flex items-center gap-1.5 shadow-sm">
+          <button
+            onClick={() => setShowCsvModal(true)}
+            className="m3-btn-outline"
+          >
             <span className="material-symbols-outlined text-base">upload_file</span>
             <span>Importar CSV</span>
           </button>
-          <button onClick={handleDispararScraperGlobal}
+          <button
+            onClick={handleDispararScraperGlobal}
             disabled={isGlobalScraping}
-            className="text-xs px-4 py-2.5 bg-secondary text-on-secondary hover:bg-secondary/90 font-extrabold shadow-sm rounded-full transition-all flex items-center gap-1.5 disabled:opacity-50"
-            title="Lanzar el robot extractor de precios para todos los enlaces activos">
+            className="m3-btn-primary"
+            title="Lanzar el robot extractor de precios para todos los enlaces activos"
+          >
             <span className={`material-symbols-outlined text-base ${isGlobalScraping ? 'animate-spin' : ''}`}>
               {isGlobalScraping ? 'sync' : 'smart_toy'}
             </span>
             <span>{isGlobalScraping ? 'Ejecutando...' : 'Ejecutar Scraper Robot'}</span>
           </button>
-          <button onClick={() => setEditing('new')}
-            className="text-xs px-5 py-2.5 bg-primary hover:bg-primary/90 text-on-primary font-extrabold shadow-sm rounded-full transition-all flex items-center gap-1.5">
+          <button
+            onClick={() => setEditing('new')}
+            className="m3-btn-outline bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+          >
             <span className="material-symbols-outlined text-base">add</span>
             <span>Vincular Enlace</span>
           </button>
         </div>
       </div>
 
-
-
       {productoFiltradoSinUrls && (
-        <div className="bg-primary-container text-on-primary-container px-5 py-4 rounded-2xl flex items-center justify-between border border-outline-variant/40 shadow-sm">
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-5 py-3.5 rounded-2xl flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-xl text-primary">warning</span>
-            <span className="text-sm font-sans">
+            <span className="material-symbols-outlined text-xl text-amber-700">warning</span>
+            <span className="text-xs font-medium">
               El producto <strong>"{productoFiltradoSinUrls.nombre}"</strong> todavía no tiene ningún enlace competidor asignado.
             </span>
           </div>
-          <button onClick={() => setEditing('new')} className="text-xs bg-white text-primary hover:bg-surface-low px-4 py-2 rounded-full font-bold shadow-sm transition-all">
+          <button
+            onClick={() => setEditing('new')}
+            className="text-xs px-3.5 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
+          >
             Vincular Enlace Ahora
           </button>
         </div>
       )}
 
       {/* KPIs de Competencia Bento Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* KPI 1: Tasa de Salud Técnica */}
-        <div className="bg-white rounded-3xl border border-outline-variant p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Salud del Catálogo</span>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Salud del Catálogo</span>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-display font-extrabold text-primary">{kpis.tasaSalud}%</span>
-              <span className="text-xs font-semibold text-on-surface-variant">Enlaces OK</span>
+              <span className="text-2xl font-display font-extrabold text-primary">{kpis.tasaSalud}%</span>
+              <span className="text-[10px] font-semibold text-on-surface-variant">Enlaces OK</span>
             </div>
-            <p className="text-xs text-on-surface-variant/80 font-sans">
+            <p className="text-[11px] text-on-surface-variant font-sans">
               {kpis.exitososCount} de {kpis.activosCount} activos sin fallos de lectura.
             </p>
           </div>
-          <div className={`p-4 rounded-2xl flex items-center justify-center ${kpis.tasaSalud > 90 ? 'bg-[#f0f9eb] text-[#2e7d32]' : 'bg-error-container text-error'}`}>
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${kpis.tasaSalud > 90 ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-700'}`}>
             <span className="material-symbols-outlined text-2xl">{kpis.tasaSalud > 90 ? 'health_and_safety' : 'sync_problem'}</span>
           </div>
         </div>
 
         {/* KPI 2: Frescura de Datos */}
-        <div className="bg-white rounded-3xl border border-outline-variant p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Frescura de Precios</span>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Frescura de Precios</span>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-display font-extrabold text-primary">
+              <span className="text-2xl font-display font-extrabold text-primary">
                 {kpis.desactualizados}
               </span>
-              <span className="text-xs font-semibold text-on-surface-variant">Vencidos</span>
+              <span className="text-[10px] font-semibold text-on-surface-variant">Vencidos</span>
             </div>
-            <p className="text-xs text-on-surface-variant/80 font-sans">
-              Enlaces que requieren actualización de precios (&gt; 24h).
+            <p className="text-[11px] text-on-surface-variant font-sans">
+              Enlaces que requieren actualización (&gt; 24h).
             </p>
           </div>
-          <div className={`p-4 rounded-2xl flex items-center justify-center ${kpis.desactualizados === 0 ? 'bg-[#f0f9eb] text-[#2e7d32]' : 'bg-amber-50 text-amber-600 border border-amber-200/40'}`}>
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${kpis.desactualizados === 0 ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
             <span className="material-symbols-outlined text-2xl">{kpis.desactualizados === 0 ? 'schedule' : 'history_toggle_off'}</span>
           </div>
         </div>
 
         {/* KPI 3: Liderazgo de Mercado */}
-        <div className="bg-white rounded-3xl border border-outline-variant p-5 flex items-center justify-between shadow-sm relative overflow-hidden">
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Liderazgo en Precios</span>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Liderazgo en Precios</span>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-display font-extrabold text-primary">
+              <span className="text-2xl font-display font-extrabold text-primary">
                 {kpis.totalComparables > 0 ? `${Math.round((kpis.propiosMasBaratos / kpis.totalComparables) * 100)}%` : '—'}
               </span>
-              <span className="text-xs font-semibold text-on-surface-variant">Líder</span>
+              <span className="text-[10px] font-semibold text-on-surface-variant">Líder</span>
             </div>
-            <p className="text-xs text-on-surface-variant/80 font-sans">
-              {kpis.propiosMasBaratos} de {kpis.totalComparables} comparables son los más baratos.
+            <p className="text-[11px] text-on-surface-variant font-sans">
+              {kpis.propiosMasBaratos} de {kpis.totalComparables} comparables más económicos.
             </p>
           </div>
-          <div className="p-4 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-2xl">leaderboard</span>
           </div>
         </div>
       </div>
 
       {/* Filter and Query Section */}
-      <div className="bg-white rounded-3xl border border-outline-variant p-5 flex flex-wrap items-center gap-3 shadow-sm">
-        <div className="flex-1 min-w-[280px] relative">
-          <span className="material-symbols-outlined text-on-surface-variant absolute left-3 top-2.5 select-none">search</span>
-          <input type="text" placeholder="Buscar por variante, marca o dirección URL..."
-            value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-outline rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans" />
+      <div className="neural-card p-4 flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[240px] relative">
+          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+          <input
+            type="text"
+            placeholder="Buscar por variante, marca o dirección URL..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="m3-input pl-9 pr-8"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
+          )}
         </div>
         
-        <select value={filtroProducto} onChange={(e) => setFiltroProducto(e.target.value)}
-          className="px-4 py-2.5 border border-outline rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans bg-white text-on-surface">
+        <select
+          value={filtroProducto}
+          onChange={(e) => setFiltroProducto(e.target.value)}
+          className="m3-select max-w-[220px]"
+        >
           <option value="todos">Todos los productos</option>
           {productos.map(p => <option key={p.id} value={p.id_interno}>{p.nombre}</option>)}
         </select>
 
-        <select value={filtroCadena} onChange={(e) => setFiltroCadena(e.target.value)}
-          className="px-4 py-2.5 border border-outline rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans bg-white text-on-surface">
+        <select
+          value={filtroCadena}
+          onChange={(e) => setFiltroCadena(e.target.value)}
+          className="m3-select max-w-[180px]"
+        >
           <option value="todas">Todas las cadenas</option>
           {cadenas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
         </select>
 
-        <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}
-          className="px-4 py-2.5 border border-outline rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans bg-white text-on-surface">
+        <select
+          value={filtroTipo}
+          onChange={(e) => setFiltroTipo(e.target.value)}
+          className="m3-select max-w-[160px]"
+        >
           <option value="todos">Todos los tipos</option>
           {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
 
         {(search || filtroCadena !== 'todas' || filtroProducto !== 'todos' || filtroTipo !== 'todos') && (
-          <button onClick={limpiarFiltros} className="text-xs font-bold text-error hover:underline uppercase font-mono px-2">
+          <button onClick={limpiarFiltros} className="text-xs font-bold text-rose-600 hover:underline uppercase font-mono px-2">
             Limpiar Filtros
           </button>
         )}
       </div>
 
       {/* Main Grid View */}
-      <div className="bg-white rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
+      <div className="neural-card overflow-hidden">
         {loading ? (
           <div className="overflow-x-auto animate-pulse">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">Mi Producto Local</th>
-                  <th className="text-left px-6 py-4 font-bold">Cadena Farmacia</th>
-                  <th className="text-left px-6 py-4 font-bold">Variante Competidor</th>
-                  <th className="text-left px-6 py-4 font-bold">Tipo Asociación</th>
-                  <th className="text-right px-6 py-4 font-bold">Último Precio Detectado</th>
-                  <th className="text-center px-6 py-4 font-bold">Status Scrape</th>
-                  <th className="text-center px-6 py-4 font-bold">Scraper Activo</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>Mi Producto Local</th>
+                  <th>Cadena Farmacia</th>
+                  <th>Variante Competidor</th>
+                  <th>Tipo Asociación</th>
+                  <th className="text-right">Último Precio Detectado</th>
+                  <th className="text-center">Status Scrape</th>
+                  <th className="text-center">Scraper Activo</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30">
+              <tbody className="divide-y divide-surface-variant">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <tr key={n}>
-                    <td className="px-6 py-4">
+                    <td>
                       <div className="h-4 bg-gray-200 rounded w-48 mb-1.5"></div>
                       <div className="h-3 bg-gray-100 rounded w-24"></div>
                     </td>
-                    <td className="px-6 py-4"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                    <td className="px-6 py-4">
+                    <td><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                    <td>
                       <div className="h-4 bg-gray-200 rounded w-40 mb-1"></div>
                       <div className="h-3 bg-gray-100 rounded w-60"></div>
                     </td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-20"></div></td>
-                    <td className="px-6 py-4 text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-24 mx-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
-                    <td className="px-6 py-4 text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                    <td><div className="h-6 bg-gray-200 rounded-full w-20"></div></td>
+                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                    <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-24 mx-auto"></div></td>
+                    <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
+                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
                   </tr>
                 ))}
               </tbody>
@@ -733,20 +765,20 @@ export default function Competencia({ user, userDoc }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-surface-low text-primary text-xs uppercase font-mono tracking-wider border-b border-outline-variant">
+            <table className="m3-table">
+              <thead>
                 <tr>
-                  <th className="text-left px-6 py-4 font-bold">Mi Producto Local</th>
-                  <th className="text-left px-6 py-4 font-bold">Cadena Farmacia</th>
-                  <th className="text-left px-6 py-4 font-bold">Variante Competidor</th>
-                  <th className="text-left px-6 py-4 font-bold">Tipo Asociación</th>
-                  <th className="text-right px-6 py-4 font-bold">Último Precio Detectado</th>
-                  <th className="text-center px-6 py-4 font-bold">Status Scrape</th>
-                  <th className="text-center px-6 py-4 font-bold">Scraper Activo</th>
-                  <th className="text-right px-6 py-4 font-bold">Acciones</th>
+                  <th>Mi Producto Local</th>
+                  <th>Cadena Farmacia</th>
+                  <th>Variante Competidor</th>
+                  <th>Tipo Asociación</th>
+                  <th className="text-right">Último Precio Detectado</th>
+                  <th className="text-center">Status Scrape</th>
+                  <th className="text-center">Scraper Activo</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30">
+              <tbody className="divide-y divide-surface-variant">
                 {itemsPaginados.map(it => (
                   <tr key={it.id} className="hover:bg-surface-low transition-colors">
                     <td className="px-6 py-4">

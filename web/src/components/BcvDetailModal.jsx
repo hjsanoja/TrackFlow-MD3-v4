@@ -327,7 +327,11 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -15, bottom: 0 }}>
+                  <AreaChart 
+                    key={`modal-bcv-${filterDays}-${chartData.length}`}
+                    data={chartData} 
+                    margin={{ top: 10, right: 15, left: -15, bottom: 0 }}
+                  >
                     <defs>
                       <linearGradient id="modalBcvGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#016874" stopOpacity={0.3} />
@@ -369,6 +373,10 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                       strokeWidth={2.5} 
                       fillOpacity={1} 
                       fill="url(#modalBcvGradient)" 
+                      isAnimationActive={true}
+                      animationDuration={750}
+                      animationBegin={0}
+                      animationEasing="ease-out"
                     />
                   </AreaChart>
                 </ResponsiveContainer>

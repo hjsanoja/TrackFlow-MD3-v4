@@ -818,57 +818,78 @@ export default function Dashboard({ user, userDoc }) {
   };
 
   return (
-    <div className="space-y-6 text-on-background">
-      {/* Editorial Title Block */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-outline-variant pb-4 gap-4">
+    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
+      {/* HEADER PRINCIPAL */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
-          <h1 className="text-3xl font-display font-extrabold text-primary tracking-tight">Panel de Inteligencia</h1>
-          <p className="text-sm text-on-surface-variant font-sans mt-1">
-            Análisis de volatilidad, liderazgo de precios por cadena farmacéutica y tasas de cambio.
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-primary text-3xl">dashboard</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
+              Panel de Inteligencia
+            </h1>
+          </div>
+          <p className="text-xs text-on-surface-variant font-sans">
+            Análisis de volatilidad, liderazgo de precios por cadena farmacéutica y tasas de cambio oficial.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {/* Mode Switcher: Empaque vs Unidosis */}
-          <div className="flex bg-surface-low border border-outline-variant rounded-full p-1 text-xs font-mono font-bold shadow-sm">
-            <button onClick={() => setAnalisisMode('empaque')}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${analisisMode === 'empaque' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>
+          <div className="m3-segmented">
+            <button
+              onClick={() => setAnalisisMode('empaque')}
+              className={`m3-segmented-item ${analisisMode === 'empaque' ? 'active' : ''}`}
+            >
               <span className="material-symbols-outlined text-[14px]">inventory_2</span>
-              Empaque
+              <span>Empaque</span>
             </button>
-            <button onClick={() => setAnalisisMode('unidosis')}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${analisisMode === 'unidosis' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}
-              title="Analizar precios normalizados por 1 unidad/tableta/dosis">
+            <button
+              onClick={() => setAnalisisMode('unidosis')}
+              className={`m3-segmented-item ${analisisMode === 'unidosis' ? 'active' : ''}`}
+              title="Analizar precios normalizados por 1 unidad/tableta/dosis"
+            >
               <span className="material-symbols-outlined text-[14px]">medication</span>
-              Por Unidosis
+              <span>Por Unidosis</span>
             </button>
           </div>
 
           {/* Currency Switcher widget */}
-          <div className="flex bg-surface-low border border-outline-variant rounded-full p-1 text-xs font-mono font-bold shadow-sm">
-            <button onClick={() => setCurrency('usd')}
-              className={`px-3.5 py-1.5 rounded-full transition-all ${currency === 'usd' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>USD ($)</button>
-            <button onClick={() => setCurrency('bs')}
-              className={`px-3.5 py-1.5 rounded-full transition-all ${currency === 'bs' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>BS (Bs)</button>
+          <div className="m3-segmented">
+            <button
+              onClick={() => setCurrency('usd')}
+              className={`m3-segmented-item ${currency === 'usd' ? 'active' : ''}`}
+            >
+              USD ($)
+            </button>
+            <button
+              onClick={() => setCurrency('bs')}
+              className={`m3-segmented-item ${currency === 'bs' ? 'active' : ''}`}
+            >
+              VES (Bs)
+            </button>
           </div>
 
-          <button onClick={downloadReport}
-            className="text-xs font-bold bg-white border border-outline-variant hover:bg-surface-low px-4 py-2.5 rounded-full text-primary transition-all flex items-center gap-1.5 shadow-sm">
+          <button
+            onClick={downloadReport}
+            className="m3-btn-outline"
+          >
             <span className="material-symbols-outlined text-base">download</span>
-            Exportar CSV
+            <span>Exportar CSV</span>
           </button>
 
           {isAdmin && (
-            <button onClick={() => setShowClearHistoryConfirm(true)}
-              className="text-xs font-bold bg-white border border-error/30 hover:bg-error-container/10 active:bg-error-container/20 px-4 py-2.5 rounded-full text-error transition-all flex items-center gap-1.5 shadow-sm">
+            <button
+              onClick={() => setShowClearHistoryConfirm(true)}
+              className="touch-target px-4 py-2 bg-surface-low hover:bg-rose-50 text-rose-700 font-mono font-bold text-xs rounded-full border border-rose-200 transition-all flex items-center gap-1.5 shadow-xs"
+            >
               <span className="material-symbols-outlined text-base">delete_sweep</span>
-              Borrar Historial
+              <span>Borrar Historial</span>
             </button>
           )}
         </div>
       </div>
 
       {/* BCV and Status Control Bar */}
-      <div className="bg-white rounded-3xl border border-outline-variant p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      <div className="neural-card p-5 flex flex-wrap items-center justify-between gap-4">
         <BcvController bcv={bcv} />
         
         <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -889,15 +910,18 @@ export default function Dashboard({ user, userDoc }) {
                 </span>
               </>
             ) : (
-              <span className="font-mono bg-surface-low text-on-surface-variant px-3 py-1 rounded-full font-bold border border-outline-variant">
+              <span className="font-mono bg-surface-low text-on-surface-variant px-3 py-1 rounded-full font-bold border border-outline-variant/50">
                 Sin ejecuciones previas
               </span>
             )}
           </div>
 
-          <button onClick={handleActualizar} disabled={refreshing || waitingForScraper}
-            className="px-4 py-2.5 bg-secondary text-on-secondary hover:bg-secondary/90 disabled:opacity-50 font-extrabold font-mono tracking-wide text-xs rounded-full transition-all flex items-center gap-2 shadow-sm"
-            title="Iniciar robot extractor para actualizar precios de competidores">
+          <button
+            onClick={handleActualizar}
+            disabled={refreshing || waitingForScraper}
+            className="m3-btn-primary"
+            title="Iniciar robot extractor para actualizar precios de competidores"
+          >
             <span className={`material-symbols-outlined text-base ${refreshing || waitingForScraper ? 'animate-spin' : ''}`}>
               {refreshing || waitingForScraper ? 'sync' : 'smart_toy'}
             </span>
@@ -929,12 +953,23 @@ export default function Dashboard({ user, userDoc }) {
           </div>
           <div className="h-60 mt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartChainLeadershipData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+              <BarChart 
+                key={`chain-lead-chart-${chartChainLeadershipData.map(d => d.liderazgos).join('-')}`}
+                data={chartChainLeadershipData} 
+                margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#464650' }} />
                 <YAxis tick={{ fontSize: 10, fill: '#464650' }} />
                 <Tooltip formatter={(value) => [`${value} productos`, 'Líder en']} />
-                <Bar dataKey="liderazgos">
+                <Bar 
+                  dataKey="liderazgos"
+                  isAnimationActive={true}
+                  animationDuration={750}
+                  animationBegin={0}
+                  animationEasing="ease-out"
+                  radius={[6, 6, 0, 0]}
+                >
                   {chartChainLeadershipData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
@@ -1014,7 +1049,11 @@ export default function Dashboard({ user, userDoc }) {
               <div className="h-full flex items-center justify-center text-xs text-[#464650] italic">No hay registros históricos de tasa cargados.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={bcvHistorico.slice(-7)} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <AreaChart 
+                  key={`bcv-history-chart-${bcvHistorico.slice(-7).map(d => d.valor).join('-')}`}
+                  data={bcvHistorico.slice(-7)} 
+                  margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
+                >
                   <defs>
                     <linearGradient id="colorBcv" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#016874" stopOpacity={0.2}/>
@@ -1025,7 +1064,18 @@ export default function Dashboard({ user, userDoc }) {
                   <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: '#464650' }} />
                   <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#464650' }} />
                   <Tooltip formatter={(value) => [`Bs ${value.toFixed(2)}`, 'Tasa Oficial']} />
-                  <Area type="monotone" dataKey="valor" stroke="#016874" strokeWidth={2} fillOpacity={1} fill="url(#colorBcv)" />
+                  <Area 
+                    type="monotone" 
+                    dataKey="valor" 
+                    stroke="#016874" 
+                    strokeWidth={2} 
+                    fillOpacity={1} 
+                    fill="url(#colorBcv)" 
+                    isAnimationActive={true}
+                    animationDuration={750}
+                    animationBegin={0}
+                    animationEasing="ease-out"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -1121,59 +1171,51 @@ export default function Dashboard({ user, userDoc }) {
       )} */}
 
       {/* Heatmap Matrix Section */}
-      <div className="bg-white rounded-3xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-outline-variant flex flex-wrap items-center justify-between gap-4">
+      <div className="neural-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-surface-variant flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="font-display font-extrabold text-lg text-primary">Matriz Comparativa & Heatmap de Precios</h2>
+            <h2 className="font-display font-extrabold text-lg text-on-background">Matriz Comparativa & Heatmap de Precios</h2>
             <p className="text-xs text-on-surface-variant font-sans">Identifica el precio de menor costo resaltado en color verde.</p>
           </div>
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
             {/* Price Mode Toggle */}
-            <div className="bg-surface-low p-1 rounded-xl flex gap-1 border border-outline-variant">
+            <div className="m3-segmented">
               <button
                 onClick={() => setDashboardPriceMode('descuento')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  dashboardPriceMode === 'descuento' 
-                    ? 'bg-primary text-on-primary shadow-sm' 
-                    : 'text-on-surface-variant hover:bg-surface/50'
-                }`}
+                className={`m3-segmented-item ${dashboardPriceMode === 'descuento' ? 'active' : ''}`}
               >
                 <span className="material-symbols-outlined text-[14px]">sell</span>
-                Con Descuento
+                <span>Con Descuento</span>
               </button>
               <button
                 onClick={() => setDashboardPriceMode('lista')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  dashboardPriceMode === 'lista' 
-                    ? 'bg-primary text-on-primary shadow-sm' 
-                    : 'text-on-surface-variant hover:bg-surface/50'
-                }`}
+                className={`m3-segmented-item ${dashboardPriceMode === 'lista' ? 'active' : ''}`}
               >
                 <span className="material-symbols-outlined text-[14px]">receipt_long</span>
-                Precio Lista (Full)
+                <span>Precio Lista</span>
               </button>
             </div>
 
             {/* Quick Audit: What changed today? */}
             <button
               onClick={() => setMostrarCambiosHoy(!mostrarCambiosHoy)}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border ${
                 mostrarCambiosHoy 
-                  ? 'bg-amber-500 border-amber-500 text-white font-extrabold shadow-sm' 
-                  : 'bg-white border-outline-variant text-on-surface-variant hover:bg-surface-low'
+                  ? 'bg-amber-500 border-amber-500 text-white font-extrabold shadow-xs' 
+                  : 'bg-surface-low border-outline-variant/60 text-on-surface-variant hover:bg-surface-variant'
               }`}
             >
               <span className="material-symbols-outlined text-[16px]">notifications_active</span>
-              ¿Qué cambió hoy? {kpiStats.totalChangesToday > 0 ? `(${kpiStats.totalChangesToday})` : ''}
+              <span>¿Qué cambió hoy? {kpiStats.totalChangesToday > 0 ? `(${kpiStats.totalChangesToday})` : ''}</span>
             </button>
 
             {/* Filter: Ocultar productos sin precio */}
             <button
               onClick={() => setOcultarSinPrecios(!ocultarSinPrecios)}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border ${
                 ocultarSinPrecios 
-                  ? 'bg-primary border-primary text-on-primary font-extrabold shadow-sm' 
-                  : 'bg-white border-outline-variant text-on-surface-variant hover:bg-surface-low'
+                  ? 'bg-primary border-primary text-on-primary font-extrabold shadow-xs' 
+                  : 'bg-surface-low border-outline-variant/60 text-on-surface-variant hover:bg-surface-variant'
               }`}
               title="Quitar de la matriz los productos que no tienen ningún precio en ninguna cadena"
             >
@@ -1183,7 +1225,7 @@ export default function Dashboard({ user, userDoc }) {
               <span>Ocultar sin precio</span>
               {sinPreciosCount > 0 && (
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                  ocultarSinPrecios ? 'bg-white/20 text-white' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
+                  ocultarSinPrecios ? 'bg-white/20 text-white' : 'bg-surface-variant text-on-surface-variant'
                 }`}>
                   {sinPreciosCount}
                 </span>
@@ -1191,16 +1233,12 @@ export default function Dashboard({ user, userDoc }) {
             </button>
 
             {/* Market Type Selector */}
-            <div className="bg-surface-low p-1 rounded-xl flex gap-1 border border-outline-variant">
+            <div className="m3-segmented">
               {['Todos', 'GENERICO', 'MARCA'].map(t => (
                 <button
                   key={t}
                   onClick={() => setTipoMercadoSeleccionado(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    tipoMercadoSeleccionado === t 
-                      ? 'bg-primary text-on-primary shadow-sm' 
-                      : 'text-on-surface-variant hover:bg-surface/50'
-                  }`}
+                  className={`m3-segmented-item ${tipoMercadoSeleccionado === t ? 'active' : ''}`}
                 >
                   {t === 'Todos' ? 'Todos Tipo' : t === 'GENERICO' ? 'Genéricos' : 'Marca'}
                 </button>
@@ -1208,52 +1246,66 @@ export default function Dashboard({ user, userDoc }) {
             </div>
 
             {/* Business Unit Selector */}
-            <div className="bg-surface-low p-1 rounded-xl flex gap-1 border border-outline-variant">
+            <div className="m3-segmented">
               {['Todas', 'La Sante', 'Pharmetique', 'OTC'].map(un => (
                 <button
                   key={un}
                   onClick={() => setUnSeleccionada(un)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    unSeleccionada === un 
-                      ? 'bg-secondary text-on-secondary shadow-sm' 
-                      : 'text-on-surface-variant hover:bg-surface/50'
-                  }`}
+                  className={`m3-segmented-item ${unSeleccionada === un ? 'active' : ''}`}
                 >
                   {un === 'Todas' ? 'Todas UN' : un === 'La Sante' ? 'La Santé' : un}
-                </button>
-              ))}
-            </div>
-
-            {/* Categorías */}
-            <div className="flex gap-1.5 flex-wrap">
-              {categorias.map(cat => (
-                <button key={cat} onClick={() => setCategoriaSeleccionada(cat)}
-                  className={`px-4 py-1 text-xs rounded-full border transition-all ${
-                    categoriaSeleccionada === cat 
-                      ? 'bg-primary border-primary text-on-primary font-bold shadow-sm' 
-                      : 'bg-white border-outline-variant text-on-background hover:bg-surface-low'
-                  }`}>
-                  {cat}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
+        {/* Search & Categories Bar */}
+        <div className="px-5 py-3 bg-surface-low/50 border-b border-surface-variant flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar producto en la matriz..."
+              className="m3-input pl-9 pr-8"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
+            )}
+          </div>
+
+          {/* Categorías */}
+          <div className="flex gap-1.5 flex-wrap items-center">
+            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase mr-1">Categoría:</span>
+            {categorias.map(cat => (
+              <button key={cat} onClick={() => setCategoriaSeleccionada(cat)}
+                className={`px-3 py-1 text-xs rounded-full border transition-all ${
+                  categoriaSeleccionada === cat 
+                    ? 'bg-primary border-primary text-on-primary font-bold shadow-xs' 
+                    : 'bg-white border-outline-variant/60 text-on-background hover:bg-surface-variant'
+                }`}>
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Heatmap Grid Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead className="bg-surface-low text-primary uppercase font-mono tracking-wider text-left border-b border-surface-variant">
+          <table className="m3-table">
+            <thead>
               <tr>
-                <th className="px-6 py-4 font-bold">Producto</th>
+                <th>Producto</th>
                 {cadenasUnicas.map(c => (
-                  <th key={c} className="px-6 py-4 font-bold text-right">{c}</th>
+                  <th key={c} className="text-right">{c}</th>
                 ))}
-                <th className="px-6 py-4 font-bold text-right border-l border-surface-variant">Promedio</th>
-                <th className="px-6 py-4 font-bold text-right">Mínimo</th>
-                <th className="px-6 py-4 font-bold text-right bg-green-500/10 text-green-700 font-bold border-l border-green-500/10">Mi Precio</th>
-                <th className="px-6 py-4 font-bold text-right text-secondary">Mi Desviación</th>
-                <th className="px-6 py-4 font-bold text-center">Dispersión (%)</th>
+                <th className="text-right border-l border-outline-variant/30">Promedio</th>
+                <th className="text-right">Mínimo</th>
+                <th className="text-right bg-emerald-500/10 text-emerald-800 font-bold border-l border-emerald-500/20">Mi Precio</th>
+                <th className="text-right text-secondary">Mi Desviación</th>
+                <th className="text-center">Dispersión (%)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-variant">
@@ -1468,13 +1520,13 @@ export default function Dashboard({ user, userDoc }) {
 
 function KpiCard({ label, value, sub, icon, color }) {
   return (
-    <div className="bg-white rounded-3xl border border-outline-variant p-5 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
+    <div className="neural-card p-5 flex items-center justify-between">
       <div className="space-y-1">
         <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">{label}</span>
         <div className={`text-2xl font-display font-extrabold ${color}`}>{value}</div>
         <p className="text-[11px] text-on-surface-variant font-semibold">{sub}</p>
       </div>
-      <div className="bg-surface-low p-3 rounded-2xl w-12 h-12 flex items-center justify-center border border-outline-variant">
+      <div className="bg-surface-low p-3 rounded-2xl w-12 h-12 flex items-center justify-center border border-outline-variant/60">
         <span className="material-symbols-outlined text-primary text-2xl select-none">{icon}</span>
       </div>
     </div>
