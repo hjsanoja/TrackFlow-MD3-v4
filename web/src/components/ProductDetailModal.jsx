@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import ConfirmModal from './ConfirmModal';
@@ -35,11 +36,11 @@ function InfoTooltip({ text, align = 'center' }) {
 function CustomTooltip({ active, payload, label, propios, labMap, currency, analisisMode }) {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white border border-[#e1e2ec] p-3 rounded-2xl shadow-xl space-y-2 max-w-sm text-xs font-sans">
-        <p className="font-bold text-[#040d53] font-mono border-b border-[#e1e2ec] pb-1 flex justify-between items-center">
+      <div className="bg-surface-container-lowest border border-outline-variant p-3 rounded-2xl shadow-elevation-3 space-y-2 max-w-sm text-xs font-sans">
+        <p className="font-bold text-primary font-mono border-b border-outline-variant pb-1 flex justify-between items-center">
           <span>Fecha: {label ? label.split('-').reverse().join('/') : ''}</span>
           {analisisMode === 'unidosis' && (
-            <span className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
+            <span className="text-[10px] text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
           )}
         </p>
         <div className="space-y-1.5 max-h-48 overflow-y-auto">
@@ -51,17 +52,17 @@ function CustomTooltip({ active, payload, label, propios, labMap, currency, anal
             return (
               <div key={pld.name} className="flex justify-between gap-4 items-center">
                 <div className="flex flex-col">
-                  <span className={`font-semibold ${isPropio ? 'text-[#2e7d32]' : isPromedio ? 'text-[#ea580c]' : 'text-[#1c1b1f]'}`}>
+                  <span className={`font-semibold ${isPropio ? 'text-secondary' : isPromedio ? 'text-amber-600' : 'text-on-surface'}`}>
                     {pld.name}
                     {isPropio && (pld.name.includes('(') ? ' (Mi Marca)' : ' (Mi Cadena)')}
                   </span>
                   {lab && (
-                    <span className="text-[10px] text-[#464650]/80 font-sans leading-none mt-0.5">
+                    <span className="text-[10px] text-on-surface-variant font-sans leading-none mt-0.5">
                       Lab: {lab}
                     </span>
                   )}
                 </div>
-                <span className={`font-mono font-bold ${isPropio ? 'text-[#2e7d32]' : isPromedio ? 'text-[#ea580c]' : 'text-[#040d53]'}`}>
+                <span className={`font-mono font-bold ${isPropio ? 'text-secondary' : isPromedio ? 'text-amber-600' : 'text-primary'}`}>
                   {currency === 'usd' ? '$' : 'Bs '}{pld.value?.toFixed(2)}{analisisMode === 'unidosis' ? '/u' : ''}
                 </span>
               </div>
@@ -79,11 +80,11 @@ function BarChartTooltip({ active, payload, label, currency, analisisMode }) {
     const symbol = currency === 'usd' ? '$' : 'Bs ';
     const locale = currency === 'usd' ? 'en-US' : 'es-VE';
     return (
-      <div className="bg-white border border-[#e1e2ec] p-3 rounded-2xl shadow-xl space-y-1.5 max-w-xs text-xs font-sans">
-        <p className="font-bold text-[#040d53] font-mono border-b border-[#e1e2ec] pb-1 flex justify-between items-center gap-2">
+      <div className="bg-surface-container-lowest border border-outline-variant p-3 rounded-2xl shadow-elevation-3 space-y-1.5 max-w-xs text-xs font-sans">
+        <p className="font-bold text-primary font-mono border-b border-outline-variant pb-1 flex justify-between items-center gap-2">
           <span>{label}</span>
           {analisisMode === 'unidosis' && (
-            <span className="text-[10px] text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
+            <span className="text-[10px] text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
           )}
         </p>
         <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -93,7 +94,7 @@ function BarChartTooltip({ active, payload, label, currency, analisisMode }) {
                 <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color }}></span>
                 {entry.name}:
               </span>
-              <span className="font-mono font-bold text-[#1c1b1f]">
+              <span className="font-mono font-bold text-on-surface">
                 {symbol}{Number(entry.value).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{analisisMode === 'unidosis' ? '/u' : ''}
               </span>
             </div>
@@ -623,7 +624,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     return 'Bs ' + priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-[#f8f9fa] z-50 flex flex-col overflow-hidden animate-fade-in text-[#1c1b1f]">
       {/* Header Navigation Bar */}
       <div className="bg-white border-b border-[#e1e2ec] px-4 md:px-8 py-3 flex items-center justify-between gap-4 shrink-0 shadow-sm z-30">
@@ -1301,7 +1302,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart 
-                          key={`trend-line-${chartViewType}-${productGroup.length}-${chartData[chartViewType].data.length}`}
+                          key={`trend-line-${chartViewType}-${competenciaWithUnidosis.length}-${chartData[chartViewType].data.length}`}
                           data={chartData[chartViewType].data} 
                           margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
                         >
@@ -1563,6 +1564,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
         onConfirm={handleClearHistory}
         onCancel={() => setShowClearConfirm(false)}
       />
-    </div>
+    </div>,
+    document.body
   );
 }

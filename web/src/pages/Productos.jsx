@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import ConfirmModal from '../components/ConfirmModal';
+import ModalWrapper from '../components/ModalWrapper';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
@@ -633,17 +634,39 @@ export default function Productos() {
             </table>
           </div>
         ) : filtrados.length === 0 ? (
-          <div className="p-12 text-center text-on-surface-variant italic">
-            {search || filtroActivo !== 'todos' || filtroUrls !== 'todos'
-              ? 'No se encontraron productos con los filtros seleccionados.'
-              : 'Aún no hay productos registrados. Sube un CSV o haz click en "+ Nuevo Producto".'}
+          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-2xl">medication</span>
+            </div>
+            <div>
+              <div className="font-bold text-on-surface font-display text-base">No se encontraron productos</div>
+              <div className="text-xs text-on-surface-variant mt-0.5">
+                {search || filtroActivo !== 'todos' || filtroUrls !== 'todos' || filtroTipo !== 'todos' || filtroUn !== 'todos'
+                  ? 'Prueba ajustando los términos de búsqueda o los filtros activos.'
+                  : 'Aún no hay productos registrados. Sube un CSV o haz click en "+ Nuevo Producto".'}
+              </div>
+            </div>
+            {(search || filtroActivo !== 'todos' || filtroUrls !== 'todos' || filtroTipo !== 'todos' || filtroUn !== 'todos') && (
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setFiltroActivo('todos');
+                  setFiltroUrls('todos');
+                  setFiltroTipo('todos');
+                  setFiltroUn('todos');
+                }}
+                className="m3-btn-outline h-8 px-4 text-xs mt-1"
+              >
+                Limpiar todos los filtros
+              </button>
+            )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[750px] relative">
             <table className="m3-table">
-              <thead>
+              <thead className="m3-sticky-header">
                 <tr>
-                  <th>ID</th>
+                  <th className="rounded-tl-2xl">ID</th>
                   <th>Nombre / Molécula</th>
                   <th>Concentración / Tamaño</th>
                   <th>Tipo</th>
@@ -652,7 +675,7 @@ export default function Productos() {
                   <th>Categoría</th>
                   <th className="text-center">Enlaces Activos</th>
                   <th className="text-center">Estado</th>
-                  <th className="text-right">Acciones</th>
+                  <th className="text-right rounded-tr-2xl">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
@@ -827,115 +850,110 @@ export default function Productos() {
 
       {/* CSV Import Modal */}
       {showCsvModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-outline-variant">
-            <div className="flex items-center justify-between border-b pb-3 border-outline-variant">
-              <h2 className="text-xl font-display font-extrabold text-primary">Importación Masiva (CSV)</h2>
-              <button onClick={() => setShowCsvModal(false)} className="text-on-surface-variant hover:text-on-surface text-2xl leading-none">×</button>
+        <ModalWrapper
+          isOpen={showCsvModal}
+          onClose={() => !isUploadingCsv && setShowCsvModal(false)}
+          title="Importación Masiva (CSV)"
+          subtitle="Sube tu catálogo de productos de forma masiva en cualquier formato CSV."
+          icon="upload_file"
+          maxWidth="max-w-lg"
+          footer={
+            <button
+              onClick={() => setShowCsvModal(false)}
+              disabled={isUploadingCsv}
+              className="m3-btn-outline h-9 px-4 text-xs disabled:opacity-50"
+            >
+              Cerrar
+            </button>
+          }
+        >
+          <div className="space-y-4 text-sm text-on-surface">
+            <p className="text-xs text-on-surface-variant font-sans">
+              El archivo puede estar delimitado por comas, punto y coma o tabulaciones.
+            </p>
+            <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 space-y-1.5 font-mono text-xs">
+              <div className="font-bold text-primary border-b border-outline-variant/60 pb-1 mb-1 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">lists</span>
+                Columnas del CSV:
+              </div>
+              <div>id_interno <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
+              <div>nombre <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
+              <div>codigo_barra <span className="text-on-surface-variant font-sans font-medium">(Opcional / EAN / GTIN)</span></div>
+              <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
+              <div>concentracion, tamano, laboratorio, categoria</div>
+              <div>market_type, unidad_negocio</div>
             </div>
-            <div className="space-y-4 text-sm text-on-background">
-              <p>
-                Sube tu catálogo de productos de forma masiva. El archivo puede estar en cualquier formato CSV (comas, punto y coma o tabulaciones).
-              </p>
-              <div className="bg-surface-low p-4 rounded-2xl border border-outline-variant space-y-1.5 font-mono text-xs">
-                <div className="font-bold text-primary border-b pb-1 mb-1 border-outline-variant flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm">lists</span>
-                  Columnas del CSV:
-                </div>
-                <div>id_interno <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
-                <div>nombre <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
-                <div>codigo_barra <span className="text-on-surface-variant font-sans font-medium">(Opcional / EAN / GTIN)</span></div>
-                <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
-                <div>concentracion, tamano, laboratorio, categoria</div>
-                <div>market_type, unidad_negocio</div>
-              </div>
-              <div className="flex justify-between items-center pt-2">
-                <button type="button" onClick={downloadCsvPlantilla}
-                  className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">download</span>
-                  Descargar Plantilla / Catálogo Actual (CSV)
-                </button>
-              </div>
-
-              {/* Drag and Drop Zone */}
-              <div
-                className={`border-2 border-dashed border-outline hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-low ${isUploadingCsv ? 'opacity-50 pointer-events-none' : ''}`}
-                onClick={() => !isUploadingCsv && fileInputRef.current.click()}
-              >
-                {isUploadingCsv ? (
-                  <div className="flex flex-col items-center justify-center py-2">
-                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <p className="mt-3 text-sm font-bold text-primary">Procesando e importando catálogo...</p>
-                    <p className="text-xs text-on-surface-variant mt-1">Por favor espera un momento</p>
-                  </div>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
-                    <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
-                    <p className="text-xs text-on-surface-variant mt-1">Soporta cualquier formato CSV (comas, punto y coma, tabulaciones)</p>
-                  </>
-                )}
-                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" disabled={isUploadingCsv} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-3 border-t border-outline-variant">
-              <button
-                onClick={() => setShowCsvModal(false)}
-                disabled={isUploadingCsv}
-                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant disabled:opacity-50"
-              >
-                Cerrar
+            <div className="flex justify-between items-center pt-1">
+              <button type="button" onClick={downloadCsvPlantilla}
+                className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">download</span>
+                Descargar Plantilla / Catálogo Actual (CSV)
               </button>
             </div>
+
+            {/* Drag and Drop Zone */}
+            <div
+              className={`border-2 border-dashed border-outline-variant hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-container-low ${isUploadingCsv ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={() => !isUploadingCsv && fileInputRef.current.click()}
+            >
+              {isUploadingCsv ? (
+                <div className="flex flex-col items-center justify-center py-2">
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <p className="mt-3 text-sm font-bold text-primary">Procesando e importando catálogo...</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Por favor espera un momento</p>
+                </div>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
+                  <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Soporta cualquier formato CSV (comas, punto y coma, tabulaciones)</p>
+                </>
+              )}
+              <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" disabled={isUploadingCsv} />
+            </div>
           </div>
-        </div>
+        </ModalWrapper>
       )}
 
       {/* CSV Result Summary Modal */}
       {csvSummary && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 space-y-4 border border-outline-variant">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                <span className="material-symbols-outlined text-2xl">check_circle</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-on-background">¡Carga Masiva Finalizada!</h3>
-                <p className="text-xs text-on-surface-variant">El catálogo se ha actualizado inmediatamente en pantalla.</p>
-              </div>
+        <ModalWrapper
+          isOpen={Boolean(csvSummary)}
+          onClose={() => setCsvSummary(null)}
+          title="¡Carga Masiva Finalizada!"
+          subtitle="El catálogo se ha actualizado inmediatamente en pantalla."
+          icon="check_circle"
+          maxWidth="max-w-md"
+          footer={
+            <button
+              onClick={() => setCsvSummary(null)}
+              className="m3-btn-primary h-9 w-full text-xs"
+            >
+              Aceptar
+            </button>
+          }
+        >
+          <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/60 space-y-2 text-sm text-on-surface">
+            <div className="flex justify-between py-1 border-b border-outline-variant/40">
+              <span className="text-on-surface-variant text-xs">Total de Filas Procesadas:</span>
+              <span className="font-bold font-mono text-xs">{csvSummary.totalRows}</span>
             </div>
-
-            <div className="bg-surface-low rounded-2xl p-4 border border-outline-variant space-y-2 text-sm text-on-background">
-              <div className="flex justify-between py-1 border-b border-outline-variant/50">
-                <span className="text-on-surface-variant">Total de Filas Procesadas:</span>
-                <span className="font-bold">{csvSummary.totalRows}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-outline-variant/50">
-                <span className="text-on-surface-variant">Productos Importados / Actualizados:</span>
-                <span className="font-bold text-emerald-700">{csvSummary.successCount}</span>
-              </div>
-              {csvSummary.compCount > 0 && (
-                <div className="flex justify-between py-1 border-b border-outline-variant/50">
-                  <span className="text-on-surface-variant">Enlaces de Competencia Creados:</span>
-                  <span className="font-bold text-blue-700">{csvSummary.compCount}</span>
-                </div>
-              )}
-              <div className="flex justify-between py-1">
-                <span className="text-on-surface-variant">Filas Omitidas (Sin Datos):</span>
-                <span className="font-bold text-slate-600">{csvSummary.skippedCount}</span>
-              </div>
+            <div className="flex justify-between py-1 border-b border-outline-variant/40">
+              <span className="text-on-surface-variant text-xs">Productos Importados / Actualizados:</span>
+              <span className="font-bold font-mono text-xs text-secondary">{csvSummary.successCount}</span>
             </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setCsvSummary(null)}
-                className="w-full py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow hover:bg-primary/90 transition-colors"
-              >
-                Aceptar
-              </button>
+            {csvSummary.compCount > 0 && (
+              <div className="flex justify-between py-1 border-b border-outline-variant/40">
+                <span className="text-on-surface-variant text-xs">Enlaces de Competencia Creados:</span>
+                <span className="font-bold font-mono text-xs text-primary">{csvSummary.compCount}</span>
+              </div>
+            )}
+            <div className="flex justify-between py-1">
+              <span className="text-on-surface-variant text-xs">Filas Omitidas (Sin Datos):</span>
+              <span className="font-bold font-mono text-xs text-outline">{csvSummary.skippedCount}</span>
             </div>
           </div>
-        </div>
+        </ModalWrapper>
       )}
     </div>
   );
@@ -971,117 +989,116 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
   const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-xl max-w-2xl w-full max-h-[92vh] flex flex-col border border-outline-variant"
-        onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
-          <h2 className="text-xl font-display font-extrabold text-primary">{isNew ? 'Registrar Nuevo Producto' : 'Editar Propiedades'}</h2>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl leading-none">×</button>
+    <ModalWrapper
+      isOpen={true}
+      onClose={onClose}
+      title={isNew ? 'Registrar Nuevo Producto' : 'Editar Propiedades'}
+      subtitle={isNew ? 'Ingresa los datos para registrar un nuevo producto en el catálogo' : `Editando ${form.nombre || form.id_interno}`}
+      icon="inventory_2"
+      maxWidth="max-w-2xl"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Field label="ID Interno *" hint="Código único (ej: P001)">
+            <input type="text" required value={form.id_interno}
+              onChange={e => handleChange('id_interno', e.target.value)}
+              disabled={!isNew}
+              className="m3-input font-mono disabled:opacity-60" />
+          </Field>
+          
+          <Field label="Nombre Comercial *" hint="Ej. Atamel">
+            <input type="text" required value={form.nombre}
+              onChange={e => handleChange('nombre', e.target.value)}
+              placeholder="Nombre comercial"
+              className="m3-input font-sans" />
+          </Field>
+
+          <Field label="Código de Barra" hint="EAN / GTIN (ej: 759245000123)">
+            <input type="text" value={form.codigo_barra}
+              onChange={e => handleChange('codigo_barra', e.target.value)}
+              placeholder="EAN / GTIN"
+              className="m3-input font-mono" />
+          </Field>
         </div>
-        
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="ID Interno *" hint="Código único (ej: P001)">
-              <input type="text" required value={form.id_interno}
-                onChange={e => handleChange('id_interno', e.target.value)}
-                disabled={!isNew}
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-mono text-sm" />
-            </Field>
-            
-            <Field label="Nombre Comercial *" hint="Ej. Atamel">
-              <input type="text" required value={form.nombre}
-                onChange={e => handleChange('nombre', e.target.value)}
-                placeholder="Nombre comercial"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm" />
-            </Field>
 
-            <Field label="Código de Barra" hint="EAN / GTIN (ej: 759245000123)">
-              <input type="text" value={form.codigo_barra}
-                onChange={e => handleChange('codigo_barra', e.target.value)}
-                placeholder="EAN / GTIN"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-mono text-sm" />
-            </Field>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Field label="Molécula / Principio">
+            <input type="text" value={form.principio_activo}
+              onChange={e => handleChange('principio_activo', e.target.value)}
+              placeholder="Acetaminofén"
+              className="m3-input" />
+          </Field>
+
+          <Field label="Concentración" hint="Ej: 500 mg, 10%">
+            <input type="text" value={form.concentracion}
+              onChange={e => handleChange('concentracion', e.target.value)}
+              placeholder="500 mg"
+              className="m3-input" />
+          </Field>
+
+          <Field label="Tamaño / Unidades" hint="Ej: 10 tabletas">
+            <input type="text" value={form.tamano}
+              onChange={e => handleChange('tamano', e.target.value)}
+              placeholder="10 tabletas"
+              className="m3-input" />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Field label="Laboratorio">
+            <input type="text" value={form.laboratorio}
+              onChange={e => handleChange('laboratorio', e.target.value)}
+              placeholder="La Santé"
+              className="m3-input" />
+          </Field>
+
+          <Field label="Categoría">
+            <select value={form.categoria} onChange={e => handleChange('categoria', e.target.value)}
+              className="m3-input bg-surface-container-lowest">
+              <option value="">— Selecciona —</option>
+              {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Market Type (Tipo)">
+            <select value={form.market_type} onChange={e => handleChange('market_type', e.target.value)}
+              className="m3-input bg-surface-container-lowest font-bold text-primary">
+              <option value="GENERICO">GENÉRICO</option>
+              <option value="MARCA">MARCA</option>
+            </select>
+          </Field>
+
+          <Field label="Unidad de Negocio (UN)">
+            <select value={form.unidad_negocio} onChange={e => handleChange('unidad_negocio', e.target.value)}
+              className="m3-input bg-surface-container-lowest font-bold text-secondary">
+              <option value="La Sante">La Santé</option>
+              <option value="Pharmetique">Pharmetique</option>
+              <option value="OTC">OTC</option>
+            </select>
+          </Field>
+        </div>
+
+        <div className="flex justify-between items-center pt-4 border-t border-outline-variant/60">
+          <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-primary select-none">
+            <input type="checkbox" checked={form.activo}
+              onChange={e => handleChange('activo', e.target.checked)}
+              className="rounded text-primary focus:ring-primary h-4 w-4" />
+            <span>PRODUCTO ACTIVO</span>
+          </label>
+          
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose}
+              className="m3-btn-outline h-9 px-4 text-xs">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving}
+              className="m3-btn-primary h-9 px-5 text-xs">
+              {saving ? 'Guardando...' : isNew ? 'Registrar' : 'Guardar Cambios'}
+            </button>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Molécula / Principio">
-              <input type="text" value={form.principio_activo}
-                onChange={e => handleChange('principio_activo', e.target.value)}
-                placeholder="Acetaminofén"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
-            </Field>
-
-            <Field label="Concentración" hint="Ej: 500 mg, 10%">
-              <input type="text" value={form.concentracion}
-                onChange={e => handleChange('concentracion', e.target.value)}
-                placeholder="500 mg"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
-            </Field>
-
-            <Field label="Tamaño / Unidades" hint="Ej: 10 tabletas">
-              <input type="text" value={form.tamano}
-                onChange={e => handleChange('tamano', e.target.value)}
-                placeholder="10 tabletas"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Laboratorio">
-              <input type="text" value={form.laboratorio}
-                onChange={e => handleChange('laboratorio', e.target.value)}
-                placeholder="La Santé"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary text-sm" />
-            </Field>
-
-            <Field label="Categoría">
-              <select value={form.categoria} onChange={e => handleChange('categoria', e.target.value)}
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white text-sm">
-                <option value="">— Selecciona —</option>
-                {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
-
-            <Field label="Market Type (Tipo)">
-              <select value={form.market_type} onChange={e => handleChange('market_type', e.target.value)}
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white text-sm font-bold text-primary">
-                <option value="GENERICO">GENÉRICO</option>
-                <option value="MARCA">MARCA</option>
-              </select>
-            </Field>
-
-            <Field label="Unidad de Negocio (UN)">
-              <select value={form.unidad_negocio} onChange={e => handleChange('unidad_negocio', e.target.value)}
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white text-sm font-bold text-secondary">
-                <option value="La Sante">La Santé</option>
-                <option value="Pharmetique">Pharmetique</option>
-                <option value="OTC">OTC</option>
-              </select>
-            </Field>
-          </div>
-
-          <div className="flex justify-between items-center pt-4 border-t border-outline-variant">
-            <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-primary select-none">
-              <input type="checkbox" checked={form.activo}
-                onChange={e => handleChange('activo', e.target.checked)}
-                className="rounded text-primary focus:ring-primary h-4 w-4" />
-              <span>PRODUCTO ACTIVO</span>
-            </label>
-            
-            <div className="flex gap-2">
-              <button type="button" onClick={onClose}
-                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant">
-                Cancelar
-              </button>
-              <button type="submit" disabled={saving}
-                className="px-6 py-2 bg-secondary hover:bg-secondary/90 text-on-secondary rounded-full text-xs font-extrabold shadow-sm transition-all">
-                {saving ? 'Guardando...' : isNew ? 'Registrar' : 'Guardar Cambios'}
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+      </form>
+    </ModalWrapper>
   );
 }
 

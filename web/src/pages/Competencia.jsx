@@ -3,6 +3,7 @@ import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../firebase';
 import ConfirmModal from '../components/ConfirmModal';
+import ModalWrapper from '../components/ModalWrapper';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
@@ -758,24 +759,40 @@ export default function Competencia({ user, userDoc }) {
             </table>
           </div>
         ) : ordenados.length === 0 ? (
-          <div className="p-12 text-center text-on-surface-variant italic">
-            {items.length === 0 
-              ? 'Aún no hay enlaces vinculados en el catálogo de competencia.' 
-              : 'No se encontraron registros con los filtros activos.'}
+          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-2xl">link_off</span>
+            </div>
+            <div>
+              <div className="font-bold text-on-surface font-display text-base">No se encontraron enlaces de competencia</div>
+              <div className="text-xs text-on-surface-variant mt-0.5">
+                {search || filtroCadena !== 'todas' || filtroProducto !== 'todos' || filtroTipo !== 'todos'
+                  ? 'Prueba ajustando los filtros de producto, cadena o búsqueda.'
+                  : 'Aún no hay enlaces vinculados en el catálogo de competencia.'}
+              </div>
+            </div>
+            {(search || filtroCadena !== 'todas' || filtroProducto !== 'todos' || filtroTipo !== 'todos') && (
+              <button
+                onClick={limpiarFiltros}
+                className="m3-btn-outline h-8 px-4 text-xs mt-1"
+              >
+                Limpiar todos los filtros
+              </button>
+            )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[750px] relative">
             <table className="m3-table">
-              <thead>
+              <thead className="m3-sticky-header">
                 <tr>
-                  <th>Mi Producto Local</th>
+                  <th className="rounded-tl-2xl">Mi Producto Local</th>
                   <th>Cadena Farmacia</th>
                   <th>Variante Competidor</th>
                   <th>Tipo Asociación</th>
                   <th className="text-right">Último Precio Detectado</th>
                   <th className="text-center">Status Scrape</th>
                   <th className="text-center">Scraper Activo</th>
-                  <th className="text-right">Acciones</th>
+                  <th className="text-right rounded-tr-2xl">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
@@ -984,143 +1001,118 @@ export default function Competencia({ user, userDoc }) {
 
       {/* CSV Mass Upload Competitors Modal */}
       {showCsvModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-outline-variant">
-            <div className="flex items-center justify-between border-b pb-3 border-outline-variant">
-              <h2 className="text-xl font-display font-extrabold text-primary">Importar Enlaces CSV</h2>
-              <button onClick={() => setShowCsvModal(false)} className="text-on-surface-variant hover:text-on-surface text-2xl leading-none">×</button>
+        <ModalWrapper
+          isOpen={showCsvModal}
+          onClose={() => !isUploadingCsv && setShowCsvModal(false)}
+          title="Importar Enlaces CSV"
+          subtitle="Asocia enlaces de forma masiva a tus productos registrados."
+          icon="upload_file"
+          maxWidth="max-w-lg"
+          footer={
+            <button
+              onClick={() => setShowCsvModal(false)}
+              disabled={isUploadingCsv}
+              className="m3-btn-outline h-9 px-4 text-xs disabled:opacity-50"
+            >
+              Cerrar
+            </button>
+          }
+        >
+          <div className="space-y-4 text-sm text-on-surface">
+            <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 space-y-1.5 font-mono text-xs">
+              <div className="font-bold text-primary border-b border-outline-variant/60 pb-1 mb-1 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">lists</span>
+                Columnas Obligatorias del CSV:
+              </div>
+              <div>id_producto_propio <span className="text-on-surface-variant font-sans font-medium">(ID del Producto, ej. P001)</span></div>
+              <div>cadena <span className="text-on-surface-variant font-sans font-medium">(Nombre de la Cadena, ej. Farmatodo)</span></div>
+              <div>marca <span className="text-on-surface-variant font-sans font-medium">(Variante/Nombre en competidor)</span></div>
+              <div>url <span className="text-on-surface-variant font-sans font-medium">(Enlace completo)</span></div>
+              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(Opcional: propio / alternativa)</span></div>
+              <div>activo <span className="text-on-surface-variant font-sans font-medium">(Opcional: true / false)</span></div>
+              <div>laboratorio <span className="text-on-surface-variant font-sans font-medium">(Opcional: Laboratorio fabricante)</span></div>
+              <div>concentracion <span className="text-on-surface-variant font-sans font-medium">(Opcional: Concentración, ej. 500mg)</span></div>
+              <div>tamano <span className="text-on-surface-variant font-sans font-medium">(Opcional: Presentación, ej. 10tab)</span></div>
             </div>
-            <div className="space-y-4 text-sm text-on-background">
-              <p>
-                Asocia enlaces de forma masiva a tus productos registrados.
-              </p>
-              <div className="bg-surface-low p-4 rounded-2xl border border-outline-variant space-y-1.5 font-mono text-xs">
-                <div className="font-bold text-primary border-b pb-1 mb-1 border-outline-variant flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm">lists</span>
-                  Columnas Obligatorias del CSV:
-                </div>
-                <div>id_producto_propio <span className="text-on-surface-variant font-sans font-medium">(ID del Producto, ej. P001)</span></div>
-                <div>cadena <span className="text-on-surface-variant font-sans font-medium">(Nombre de la Cadena, ej. Farmatodo)</span></div>
-                <div>marca <span className="text-on-surface-variant font-sans font-medium">(Variante/Nombre en competidor)</span></div>
-                <div>url <span className="text-on-surface-variant font-sans font-medium">(Enlace completo)</span></div>
-                <div>tipo <span className="text-on-surface-variant font-sans font-medium">(Opcional: propio / alternativa)</span></div>
-                <div>activo <span className="text-on-surface-variant font-sans font-medium">(Opcional: true / false)</span></div>
-                <div>laboratorio <span className="text-on-surface-variant font-sans font-medium">(Opcional: Laboratorio fabricante)</span></div>
-                <div>concentracion <span className="text-on-surface-variant font-sans font-medium">(Opcional: Concentración, ej. 500mg)</span></div>
-                <div>tamano <span className="text-on-surface-variant font-sans font-medium">(Opcional: Presentación, ej. 10tab)</span></div>
-              </div>
-              <div className="flex justify-between items-center pt-2">
-                <button type="button" onClick={downloadExampleCsv}
-                  className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">download</span>
-                  Descargar Plantilla Ejemplo CSV
-                </button>
-              </div>
-
-              {/* File drop area */}
-              <div
-                className={`border-2 border-dashed border-outline hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-low ${isUploadingCsv ? 'opacity-50 pointer-events-none' : ''}`}
-                onClick={() => !isUploadingCsv && fileInputRef.current.click()}
-              >
-                {isUploadingCsv ? (
-                  <div className="flex flex-col items-center justify-center py-2">
-                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <p className="mt-3 text-sm font-bold text-primary">Procesando e importando enlaces...</p>
-                    <p className="text-xs text-on-surface-variant mt-1">Por favor espera un momento</p>
-                  </div>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
-                    <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
-                    <p className="text-xs text-on-surface-variant mt-1">Soporta cualquier formato CSV (comas, punto y coma, tabulaciones)</p>
-                  </>
-                )}
-                <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" disabled={isUploadingCsv} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-3 border-t border-outline-variant">
-              <button
-                onClick={() => setShowCsvModal(false)}
-                disabled={isUploadingCsv}
-                className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant disabled:opacity-50"
-              >
-                Cerrar
+            <div className="flex justify-between items-center pt-1">
+              <button type="button" onClick={downloadExampleCsv}
+                className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">download</span>
+                Descargar Plantilla Ejemplo CSV
               </button>
             </div>
+
+            {/* File drop area */}
+            <div
+              className={`border-2 border-dashed border-outline-variant hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-container-low ${isUploadingCsv ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={() => !isUploadingCsv && fileInputRef.current.click()}
+            >
+              {isUploadingCsv ? (
+                <div className="flex flex-col items-center justify-center py-2">
+                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <p className="mt-3 text-sm font-bold text-primary">Procesando e importando enlaces...</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Por favor espera un momento</p>
+                </div>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
+                  <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Soporta cualquier formato CSV (comas, punto y coma, tabulaciones)</p>
+                </>
+              )}
+              <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" disabled={isUploadingCsv} />
+            </div>
           </div>
-        </div>
+        </ModalWrapper>
       )}
 
       {/* CSV Result Summary Modal */}
       {csvSummary && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 space-y-4 border border-outline-variant">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                <span className="material-symbols-outlined text-2xl">check_circle</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-on-background">¡Carga Masiva Finalizada!</h3>
-                <p className="text-xs text-on-surface-variant">Los enlaces de competencia se han actualizado inmediatamente en pantalla.</p>
-              </div>
+        <ModalWrapper
+          isOpen={Boolean(csvSummary)}
+          onClose={() => setCsvSummary(null)}
+          title="¡Carga Masiva Finalizada!"
+          subtitle="Los enlaces de competencia se han actualizado inmediatamente en pantalla."
+          icon="check_circle"
+          maxWidth="max-w-md"
+          footer={
+            <button
+              onClick={() => setCsvSummary(null)}
+              className="m3-btn-primary h-9 w-full text-xs"
+            >
+              Aceptar
+            </button>
+          }
+        >
+          <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/60 space-y-2 text-sm text-on-surface">
+            <div className="flex justify-between py-1 border-b border-outline-variant/40">
+              <span className="text-on-surface-variant text-xs">Total de Filas Procesadas:</span>
+              <span className="font-bold font-mono text-xs">{csvSummary.totalRows}</span>
             </div>
-
-            <div className="bg-surface-low rounded-2xl p-4 border border-outline-variant space-y-2 text-sm text-on-background">
-              <div className="flex justify-between py-1 border-b border-outline-variant/50">
-                <span className="text-on-surface-variant">Total de Filas Procesadas:</span>
-                <span className="font-bold">{csvSummary.totalRows}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-outline-variant/50">
-                <span className="text-on-surface-variant">Enlaces Importados / Actualizados:</span>
-                <span className="font-bold text-emerald-700">{csvSummary.successCount}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-on-surface-variant">Filas Omitidas (Sin Enlace o ID):</span>
-                <span className="font-bold text-slate-600">{csvSummary.skippedCount}</span>
-              </div>
+            <div className="flex justify-between py-1 border-b border-outline-variant/40">
+              <span className="text-on-surface-variant text-xs">Enlaces Importados / Actualizados:</span>
+              <span className="font-bold font-mono text-xs text-secondary">{csvSummary.successCount}</span>
             </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setCsvSummary(null)}
-                className="w-full py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold shadow hover:bg-primary/90 transition-colors"
-              >
-                Aceptar
-              </button>
+            <div className="flex justify-between py-1">
+              <span className="text-on-surface-variant text-xs">Filas Omitidas (Sin Enlace o ID):</span>
+              <span className="font-bold font-mono text-xs text-outline">{csvSummary.skippedCount}</span>
             </div>
           </div>
-        </div>
+        </ModalWrapper>
       )}
 
       {/* Manual Price Override Dialog */}
       {manualPriceItem && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={() => setManualPriceItem(null)}>
-          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-6 space-y-4 border border-outline-variant" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b pb-3 border-outline-variant">
-              <h2 className="text-xl font-display font-extrabold text-primary">Ingresar Precio Manual</h2>
-              <button onClick={() => setManualPriceItem(null)} className="text-on-surface-variant hover:text-on-surface text-2xl leading-none">×</button>
-            </div>
-            <div className="space-y-4 text-sm text-on-background">
-              <p>
-                Anula los errores del scraper automático para <strong>{manualPriceItem.marca}</strong> de <strong>{manualPriceItem.cadena}</strong>.
-              </p>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-on-surface-variant font-mono">Precio en Bolívares (Bs. *):</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Ej: 450.50"
-                  id="manualPriceInput"
-                  defaultValue={manualPriceItem.ultimo_precio_desc_bs || manualPriceItem.ultimo_precio_full_bs || ''}
-                  className="w-full px-4 py-2.5 border border-outline rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans bg-white text-on-surface"
-                />
-              </div>
-              <p className="text-[11px] text-on-surface-variant italic">
-                * Esto establecerá el estado de la URL como "OK" y registrará el precio ingresado en el historial de precios y en el panel.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 border-t pt-3 border-outline-variant">
-              <button onClick={() => setManualPriceItem(null)} className="px-4 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-low rounded-full">
+        <ModalWrapper
+          isOpen={Boolean(manualPriceItem)}
+          onClose={() => setManualPriceItem(null)}
+          title="Ingresar Precio Manual"
+          subtitle={`Anula los errores del scraper para ${manualPriceItem.marca} en ${manualPriceItem.cadena}.`}
+          icon="edit_note"
+          maxWidth="max-w-md"
+          footer={
+            <div className="flex justify-end gap-2 w-full">
+              <button onClick={() => setManualPriceItem(null)} className="m3-btn-outline h-9 px-4 text-xs">
                 Cancelar
               </button>
               <button
@@ -1128,7 +1120,7 @@ export default function Competencia({ user, userDoc }) {
                   const inputVal = document.getElementById('manualPriceInput').value;
                   const price = parseFloat(inputVal);
                   if (isNaN(price) || price <= 0) {
-                    alert('Por favor ingresa un precio válido mayor a 0');
+                    addToast('Por favor ingresa un precio válido mayor a 0', 'error');
                     return;
                   }
                   try {
@@ -1165,13 +1157,30 @@ export default function Competencia({ user, userDoc }) {
                     addToast('Error: ' + err.message, 'error');
                   }
                 }}
-                className="px-5 py-2 text-xs font-bold bg-primary hover:bg-primary/90 text-white rounded-full shadow-sm"
+                className="m3-btn-primary h-9 px-5 text-xs"
               >
                 Guardar Precio
               </button>
             </div>
+          }
+        >
+          <div className="space-y-4 text-sm text-on-surface">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-primary font-mono">Precio en Bolívares (Bs. *):</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Ej: 450.50"
+                id="manualPriceInput"
+                defaultValue={manualPriceItem.ultimo_precio_desc_bs || manualPriceItem.ultimo_precio_full_bs || ''}
+                className="m3-input font-mono"
+              />
+            </div>
+            <p className="text-[11px] text-on-surface-variant italic">
+              * Esto establecerá el estado de la URL como "OK" y registrará el precio ingresado en el historial de precios y en el panel.
+            </p>
           </div>
-        </div>
+        </ModalWrapper>
       )}
 
       <GitHubConfigModal
@@ -1245,127 +1254,127 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
   const probarUrl = () => { if (form.url) window.open(form.url, '_blank', 'noopener,noreferrer'); };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full max-h-[92vh] flex flex-col border border-outline-variant"
-        onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
-          <h2 className="text-xl font-display font-extrabold text-primary">{isNew ? 'Vincular Enlace Competidor' : 'Propiedades de Enlace'}</h2>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl leading-none">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
-          <Field label="Producto en Catálogo Interno *">
-            <select required value={form.id_producto_propio}
-              onChange={e => handleProductSelect(e.target.value)}
+    <ModalWrapper
+      isOpen={true}
+      onClose={onClose}
+      title={isNew ? 'Vincular Enlace Competidor' : 'Propiedades de Enlace'}
+      subtitle={isNew ? 'Asocia una URL de farmacia externa a tu catálogo' : `Editando ${form.marca} (${form.cadena})`}
+      icon="link"
+      maxWidth="max-w-lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Field label="Producto en Catálogo Interno *">
+          <select required value={form.id_producto_propio}
+            onChange={e => handleProductSelect(e.target.value)}
+            disabled={!isNew}
+            className="m3-input bg-surface-container-lowest text-on-surface">
+            <option value="">— Seleccionar —</option>
+            {productosActivos.map(p => (
+              <option key={p.id} value={p.id_interno}>{p.id_interno} · {p.nombre}</option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Cadena de Farmacia *">
+            <select required value={form.cadena}
+              onChange={e => handleChange('cadena', e.target.value)}
               disabled={!isNew}
-              className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm bg-white text-on-surface">
+              className="m3-input bg-surface-container-lowest text-on-surface">
               <option value="">— Seleccionar —</option>
-              {productosActivos.map(p => (
-                <option key={p.id} value={p.id_interno}>{p.id_interno} · {p.nombre}</option>
-              ))}
+              {cadenasActivas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
             </select>
           </Field>
+          
+          <Field label="Tipo de Relación *">
+            <select required value={form.tipo} onChange={e => handleTipoSelect(e.target.value)}
+              className="m3-input bg-surface-container-lowest text-on-surface">
+              {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </Field>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Cadena de Farmacia *">
-              <select required value={form.cadena}
-                onChange={e => handleChange('cadena', e.target.value)}
-                disabled={!isNew}
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm bg-white text-on-surface">
-                <option value="">— Seleccionar —</option>
-                {cadenasActivas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-              </select>
-            </Field>
-            
-            <Field label="Tipo de Relación *">
-              <select required value={form.tipo} onChange={e => handleTipoSelect(e.target.value)}
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm bg-white text-on-surface">
-                {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </Field>
-          </div>
-
-          {form.tipo === 'propio' && selectedProduct && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-3 text-xs space-y-1">
-              <div className="font-bold flex items-center gap-1.5 text-emerald-900">
-                <span className="material-symbols-outlined text-base">check_circle</span>
-                <span>Datos autocompletados desde tu catálogo</span>
-              </div>
-              <p className="text-[11px] text-emerald-700 font-sans">
-                Se usará el nombre <strong>"{selectedProduct.nombre}"</strong> y especificaciones registradas. Solo selecciona la cadena e ingresa la URL.
-              </p>
+        {form.tipo === 'propio' && selectedProduct && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-2xl p-3 text-xs space-y-1">
+            <div className="font-bold flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200">
+              <span className="material-symbols-outlined text-base">check_circle</span>
+              <span>Datos autocompletados desde tu catálogo</span>
             </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Nombre Comercial / Marca *" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Acetaminofén, Atamel'}>
-              <input type="text" required value={form.marca}
-                onChange={e => handleChange('marca', e.target.value)}
-                disabled={!isNew}
-                placeholder="Ej. Atamel"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
-            </Field>
-
-            <Field label="Laboratorio / Fabricante" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Genven, La Santé'}>
-              <input type="text" value={form.laboratorio}
-                onChange={e => handleChange('laboratorio', e.target.value)}
-                placeholder="Ej. Genven"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
-            </Field>
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-sans">
+              Se usará el nombre <strong>"{selectedProduct.nombre}"</strong> y especificaciones registradas. Solo selecciona la cadena e ingresa la URL.
+            </p>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Concentración" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 650mg, 500mg'}>
-              <input type="text" value={form.concentracion}
-                onChange={e => handleChange('concentracion', e.target.value)}
-                placeholder="Ej. 650mg"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
-            </Field>
-
-            <Field label="Tamaño / Presentación" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 10tab, 20tab, 120ml'}>
-              <input type="text" value={form.tamano}
-                onChange={e => handleChange('tamano', e.target.value)}
-                placeholder="Ej. 10tab"
-                className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
-            </Field>
-          </div>
-
-          <Field label="Dirección URL del Producto *" hint="Dirección exacta para el robot de extracción">
-            <div className="flex gap-2">
-              <input type="url" required value={form.url}
-                onChange={e => handleChange('url', e.target.value)}
-                placeholder="https://www.farmatodo.com.ve/producto/..."
-                className="flex-1 px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-xs text-on-surface" />
-              <button type="button" onClick={probarUrl} disabled={!form.url}
-                className="px-4 py-2 text-xs border border-outline-variant font-bold rounded-full hover:bg-surface-low disabled:opacity-50 text-primary transition-all whitespace-nowrap">Probar URL ↗</button>
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Nombre Comercial / Marca *" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Acetaminofén, Atamel'}>
+            <input type="text" required value={form.marca}
+              onChange={e => handleChange('marca', e.target.value)}
+              disabled={!isNew}
+              placeholder="Ej. Atamel"
+              className="m3-input text-on-surface" />
           </Field>
 
-          <Field label="Monitoreo Continuo">
-            <label className="flex items-center gap-2 px-4 py-3 border border-outline rounded-xl cursor-pointer font-bold text-xs text-primary bg-surface-low select-none">
-              <input type="checkbox" checked={form.activo}
-                onChange={e => handleChange('activo', e.target.checked)}
-                className="rounded text-primary focus:ring-primary h-4 w-4" />
-              <span>ACTIVAR EXTRACCIÓN DIARIA PARA ESTE ENLACE</span>
-            </label>
+          <Field label="Laboratorio / Fabricante" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Genven, La Santé'}>
+            <input type="text" value={form.laboratorio}
+              onChange={e => handleChange('laboratorio', e.target.value)}
+              placeholder="Ej. Genven"
+              className="m3-input text-on-surface" />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Concentración" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 650mg, 500mg'}>
+            <input type="text" value={form.concentracion}
+              onChange={e => handleChange('concentracion', e.target.value)}
+              placeholder="Ej. 650mg"
+              className="m3-input text-on-surface" />
           </Field>
 
-          {!isNew && (
-            <div className="bg-surface-low rounded-2xl p-3 text-xs text-on-surface-variant font-mono border border-outline-variant">
-              Nota: El producto, la cadena y la marca variante no se pueden reasignar para mantener la coherencia histórica.
-            </div>
-          )}
+          <Field label="Tamaño / Presentación" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 10tab, 20tab, 120ml'}>
+            <input type="text" value={form.tamano}
+              onChange={e => handleChange('tamano', e.target.value)}
+              placeholder="Ej. 10tab"
+              className="m3-input text-on-surface" />
+          </Field>
+        </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-outline-variant">
-            <button type="button" onClick={onClose}
-              className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant">Cancelar</button>
-            <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-secondary hover:bg-secondary/90 text-on-secondary rounded-full text-xs font-bold shadow-sm transition-all">
-              {saving ? 'Guardando...' : isNew ? 'Vincular' : 'Guardar Cambios'}
-            </button>
+        <Field label="Dirección URL del Producto *" hint="Dirección exacta para el robot de extracción">
+          <div className="flex gap-2">
+            <input type="url" required value={form.url}
+              onChange={e => handleChange('url', e.target.value)}
+              placeholder="https://www.farmatodo.com.ve/producto/..."
+              className="flex-1 m3-input text-xs text-on-surface font-mono" />
+            <button type="button" onClick={probarUrl} disabled={!form.url}
+              className="m3-btn-outline h-9 px-3 text-xs disabled:opacity-50 text-primary whitespace-nowrap">Probar URL ↗</button>
           </div>
-        </form>
-      </div>
-    </div>
+        </Field>
+
+        <Field label="Monitoreo Continuo">
+          <label className="flex items-center gap-2 px-4 py-3 border border-outline-variant/60 rounded-xl cursor-pointer font-bold text-xs text-primary bg-surface-container-low select-none">
+            <input type="checkbox" checked={form.activo}
+              onChange={e => handleChange('activo', e.target.checked)}
+              className="rounded text-primary focus:ring-primary h-4 w-4" />
+            <span>ACTIVAR EXTRACCIÓN DIARIA PARA ESTE ENLACE</span>
+          </label>
+        </Field>
+
+        {!isNew && (
+          <div className="bg-surface-container-low rounded-2xl p-3 text-xs text-on-surface-variant font-mono border border-outline-variant/60">
+            Nota: El producto, la cadena y la marca variante no se pueden reasignar para mantener la coherencia histórica.
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-4 border-t border-outline-variant/60">
+          <button type="button" onClick={onClose}
+            className="m3-btn-outline h-9 px-4 text-xs">Cancelar</button>
+          <button type="submit" disabled={saving}
+            className="m3-btn-primary h-9 px-5 text-xs">
+            {saving ? 'Guardando...' : isNew ? 'Vincular' : 'Guardar Cambios'}
+          </button>
+        </div>
+      </form>
+    </ModalWrapper>
   );
 }
 

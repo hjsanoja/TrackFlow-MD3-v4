@@ -4,6 +4,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
+import ModalWrapper from '../components/ModalWrapper';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import { getGitHubConfig } from '../utils/githubClient';
 import { useToast } from '../context/ToastContext';
@@ -244,40 +245,49 @@ export default function Usuarios({ userDoc }) {
             </table>
           </div>
         ) : usuarios.length === 0 ? (
-          <div className="p-12 text-center text-on-surface-variant italic">
-            Aún no hay usuarios registrados. Invita a alguien para empezar.
+          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-2xl">group_add</span>
+            </div>
+            <div>
+              <div className="font-bold text-on-surface font-display text-base">Aún no hay usuarios registrados</div>
+              <div className="text-xs text-on-surface-variant mt-0.5">Invita a miembros del equipo para delegar acceso y configurar alertas.</div>
+            </div>
+            <button onClick={() => setEditing('new')} className="m3-btn-primary h-8 px-4 text-xs mt-1">
+              + Invitar Primer Usuario
+            </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[750px] relative">
             <table className="m3-table">
-              <thead>
+              <thead className="m3-sticky-header">
                 <tr>
-                  <th>Nombre</th>
+                  <th className="rounded-tl-2xl">Nombre</th>
                   <th>Email</th>
                   <th>Rol</th>
                   <th className="text-center">Alertas Inmediatas</th>
                   <th className="text-center">Resumen Diario</th>
                   <th className="text-center">Estado</th>
-                  <th className="text-right">Acciones</th>
+                  <th className="text-right rounded-tr-2xl">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
                 {usuarios.map(u => {
                   const isCurrent = u.email === userDoc?.email;
                   return (
-                    <tr key={u.id} className="hover:bg-[#f8f9fa] transition-colors">
+                    <tr key={u.id} className="hover:bg-surface-low transition-colors">
                       <td className="px-6 py-4">
-                        <span className="font-bold text-[#1c1b1f] font-display text-sm">{u.nombre}</span>
+                        <span className="font-bold text-on-surface font-display text-sm">{u.nombre}</span>
                         {isCurrent && (
-                          <span className="ml-2 text-[10px] bg-[#dfe0ff] text-[#071155] font-mono uppercase font-bold px-2 py-0.5 rounded-full">
+                          <span className="ml-2 text-[10px] bg-primary-container text-on-primary-container font-mono uppercase font-bold px-2 py-0.5 rounded-full">
                             Tú
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-[#464650]">{u.email}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-on-surface-variant">{u.email}</td>
                       <td className="px-6 py-4">
                         <span className={`text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full ${
-                          u.rol === 'administrador' ? 'bg-[#e0e1f9] text-[#040d53]' : 'bg-[#f3f4f9] text-[#464650] border border-[#e1e2ec]'
+                          u.rol === 'administrador' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
                         }`}>
                           {u.rol}
                         </span>
@@ -350,7 +360,7 @@ export default function Usuarios({ userDoc }) {
           </div>
           <button
             onClick={() => setShowGithubModal(true)}
-            className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full border border-indigo-200/60 transition-all flex items-center gap-2 self-start sm:self-auto"
+            className="m3-btn-outline h-9 px-4 text-xs flex items-center gap-2 self-start sm:self-auto"
           >
             <span className="material-symbols-outlined text-base">key</span>
             <span>{githubInfo ? 'Modificar Token / Configuración' : 'Configurar Token PAT'}</span>
@@ -415,95 +425,97 @@ function UsuarioModal({ usuario, onSave, onClose }) {
   const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full flex flex-col border border-[#e1e2ec]"
-        onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-[#e1e2ec] flex items-center justify-between">
-          <h2 className="text-xl font-display font-extrabold text-[#040d53]">{isNew ? 'Invitar Usuario' : 'Editar Usuario'}</h2>
-          <button onClick={onClose} className="text-[#464650] hover:text-black text-xl leading-none">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <Field label="Correo Electrónico *">
-            <input type="email" required value={form.email}
-              onChange={e => handleChange('email', e.target.value)}
-              disabled={!isNew}
-              placeholder="correo@empresa.com"
-              className="w-full px-4 py-2 border border-[#c6c5d2] rounded-xl disabled:bg-[#f3f4f9] focus:outline-none focus:ring-2 focus:ring-[#040d53]/25 focus:border-[#040d53] font-sans text-sm text-[#1c1b1f]" />
+    <ModalWrapper
+      isOpen={true}
+      onClose={onClose}
+      title={isNew ? 'Invitar Usuario' : 'Editar Usuario'}
+      subtitle={isNew ? 'Registra una nueva cuenta de acceso al sistema' : `Editando permisos de ${form.nombre || form.email}`}
+      icon="person"
+      maxWidth="max-w-lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Field label="Correo Electrónico *">
+          <input type="email" required value={form.email}
+            onChange={e => handleChange('email', e.target.value)}
+            disabled={!isNew}
+            placeholder="correo@empresa.com"
+            className="m3-input disabled:bg-surface-container-low" />
+        </Field>
+        <Field label="Nombre Completo *">
+          <input type="text" required value={form.nombre}
+            onChange={e => handleChange('nombre', e.target.value)}
+            placeholder="Ej. Juan Pérez"
+            className="m3-input" />
+        </Field>
+        {isNew && (
+          <Field label="Contraseña de Acceso (mínimo 6 carácteres) *">
+            <input type="password" required minLength={6} value={form.password}
+              onChange={e => handleChange('password', e.target.value)}
+              placeholder="Ingresa la contraseña del nuevo usuario"
+              className="m3-input" />
           </Field>
-          <Field label="Nombre Completo *">
-            <input type="text" required value={form.nombre}
-              onChange={e => handleChange('nombre', e.target.value)}
-              placeholder="Ej. Juan Pérez"
-              className="w-full px-4 py-2 border border-[#c6c5d2] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040d53]/25 focus:border-[#040d53] font-sans text-sm text-[#1c1b1f]" />
-          </Field>
-          {isNew && (
-            <Field label="Contraseña de Acceso (mínimo 6 carácteres) *">
-              <input type="password" required minLength={6} value={form.password}
-                onChange={e => handleChange('password', e.target.value)}
-                placeholder="Ingresa la contraseña del nuevo usuario"
-                className="w-full px-4 py-2 border border-[#c6c5d2] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#040d53]/25 focus:border-[#040d53] font-sans text-sm text-[#1c1b1f]" />
-            </Field>
-          )}
-          <Field label="Rol Autorizado *">
-            <div className="space-y-2">
-              {ROLES.map(r => (
-                <label key={r.value} className="flex items-start gap-3 p-3.5 border border-[#c6c5d2] rounded-2xl cursor-pointer hover:bg-[#f8f9fa] transition-all select-none">
-                  <input type="radio" name="rol" value={r.value}
-                    checked={form.rol === r.value}
-                    onChange={e => handleChange('rol', e.target.value)}
-                    className="mt-1 text-[#040d53] focus:ring-[#040d53] h-4 w-4" />
-                  <div>
-                    <div className="text-sm font-bold text-[#040d53]">{r.label}</div>
-                    <div className="text-xs text-[#464650] mt-0.5 font-sans">{r.desc}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </Field>
-          <Field label="Preferencias de Notificaciones">
-            <div className="space-y-2 px-4 py-3 border border-[#c6c5d2] rounded-2xl bg-[#f8f9fa]">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={form.recibe_alertas_inmediatas}
-                  onChange={e => handleChange('recibe_alertas_inmediatas', e.target.checked)}
-                  className="rounded text-[#040d53] focus:ring-[#040d53] h-4 w-4" />
-                <span className="text-xs font-bold text-[#040d53]">Alertas inmediatas cuando se cruce un umbral de volatilidad</span>
+        )}
+        <Field label="Rol Autorizado *">
+          <div className="space-y-2">
+            {ROLES.map(r => (
+              <label key={r.value} className={`flex items-start gap-3 p-3.5 border rounded-2xl cursor-pointer transition-all select-none ${
+                form.rol === r.value ? 'bg-primary/10 border-primary shadow-xs' : 'border-outline-variant/60 hover:bg-surface-container-low'
+              }`}>
+                <input type="radio" name="rol" value={r.value}
+                  checked={form.rol === r.value}
+                  onChange={e => handleChange('rol', e.target.value)}
+                  className="mt-1 text-primary focus:ring-primary h-4 w-4" />
+                <div>
+                  <div className="text-sm font-bold font-display text-primary">{r.label}</div>
+                  <div className="text-xs text-on-surface-variant mt-0.5 font-sans">{r.desc}</div>
+                </div>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={form.recibe_resumen_diario}
-                  onChange={e => handleChange('recibe_resumen_diario', e.target.checked)}
-                  className="rounded text-[#040d53] focus:ring-[#040d53] h-4 w-4" />
-                <span className="text-xs font-bold text-[#040d53]">Resumen diario consolidado por correo</span>
-              </label>
-            </div>
-          </Field>
-          <Field label="Estado del Acceso">
-            <label className="flex items-center gap-2 px-4 py-3 border border-[#c6c5d2] rounded-xl cursor-pointer bg-[#f8f9fa] select-none font-bold text-xs text-[#040d53]">
-              <input type="checkbox" checked={form.activo}
-                onChange={e => handleChange('activo', e.target.checked)}
-                className="rounded text-[#040d53] focus:ring-[#040d53] h-4 w-4" />
-              <span>{form.activo ? 'ACCESO ACTIVO (Inicia sesión sin restricción)' : 'ACCESO INACTIVO (Bloqueo temporal)'}</span>
-            </label>
-          </Field>
-          <div className="flex justify-end gap-2 pt-4 border-t border-[#e1e2ec]">
-            <button type="button" onClick={onClose}
-              className="px-5 py-2 border border-[#c6c5d2] rounded-full text-xs font-bold hover:bg-[#f8f9fa] text-[#464650]">Cancelar</button>
-            <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#70C145] hover:bg-[#5ca536] text-[#040d53] rounded-full text-xs font-bold shadow-sm transition-all">
-              {saving ? 'Guardando...' : isNew ? 'Invitar' : 'Guardar Cambios'}
-            </button>
+            ))}
           </div>
-        </form>
-      </div>
-    </div>
+        </Field>
+        <Field label="Preferencias de Notificaciones">
+          <div className="space-y-2.5 px-4 py-3 border border-outline-variant/60 rounded-2xl bg-surface-container-low">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" checked={form.recibe_alertas_inmediatas}
+                onChange={e => handleChange('recibe_alertas_inmediatas', e.target.checked)}
+                className="rounded text-primary focus:ring-primary h-4 w-4" />
+              <span className="text-xs font-bold text-on-surface">Alertas inmediatas cuando se cruce un umbral de volatilidad</span>
+            </label>
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" checked={form.recibe_resumen_diario}
+                onChange={e => handleChange('recibe_resumen_diario', e.target.checked)}
+                className="rounded text-primary focus:ring-primary h-4 w-4" />
+              <span className="text-xs font-bold text-on-surface">Resumen diario consolidado por correo</span>
+            </label>
+          </div>
+        </Field>
+        <Field label="Estado del Acceso">
+          <label className="flex items-center gap-3 px-4 py-3 border border-outline-variant/60 rounded-2xl cursor-pointer bg-surface-container-low select-none font-bold text-xs text-primary hover:bg-surface-container transition-colors">
+            <input type="checkbox" checked={form.activo}
+              onChange={e => handleChange('activo', e.target.checked)}
+              className="rounded text-primary focus:ring-primary h-4 w-4" />
+            <span>{form.activo ? 'ACCESO ACTIVO (Inicia sesión sin restricción)' : 'ACCESO INACTIVO (Bloqueo temporal)'}</span>
+          </label>
+        </Field>
+        <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/60">
+          <button type="button" onClick={onClose}
+            className="m3-btn-outline h-9 px-4 text-xs">Cancelar</button>
+          <button type="submit" disabled={saving}
+            className="m3-btn-primary h-9 px-5 text-xs">
+            {saving ? 'Guardando...' : isNew ? 'Invitar' : 'Guardar Cambios'}
+          </button>
+        </div>
+      </form>
+    </ModalWrapper>
   );
 }
 
 function Field({ label, hint, children }) {
   return (
     <div className="space-y-1">
-      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-[#040d53]">{label}</label>
+      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-[#464650] font-mono">{hint}</p>}
+      {hint && <p className="text-[10px] text-on-surface-variant font-mono">{hint}</p>}
     </div>
   );
 }

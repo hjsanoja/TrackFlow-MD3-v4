@@ -30,8 +30,20 @@ export default function Dashboard({ user, userDoc }) {
   const [localUltimaCorrida, setLocalUltimaCorrida] = useState(null);
   const ultimaCorrida = localUltimaCorrida || globalUltimaCorrida;
 
-  const [currency, setCurrency] = useState('usd');
-  const [analisisMode, setAnalisisMode] = useState('empaque'); // 'empaque' or 'unidosis'
+  const [currency, setCurrency] = useState(() => {
+    try {
+      return localStorage.getItem('trackflow_pref_currency') || 'usd';
+    } catch {
+      return 'usd';
+    }
+  });
+  const [analisisMode, setAnalisisMode] = useState(() => {
+    try {
+      return localStorage.getItem('trackflow_pref_analisis_mode') || 'empaque';
+    } catch {
+      return 'empaque';
+    }
+  });
   const [search, setSearch] = useState('');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todas');
   const [tipoMercadoSeleccionado, setTipoMercadoSeleccionado] = useState('Todos');
@@ -48,6 +60,18 @@ export default function Dashboard({ user, userDoc }) {
   const [scraperTriggerTime, setScraperTriggerTime] = useState(null);
   const [showGithubModal, setShowGithubModal] = useState(false);
   const [showBcvModal, setShowBcvModal] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('trackflow_pref_currency', currency);
+    } catch {}
+  }, [currency]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('trackflow_pref_analisis_mode', analisisMode);
+    } catch {}
+  }, [analisisMode]);
 
   const bcv = useBcvRate();
   const { addToast } = useToast();
@@ -890,11 +914,11 @@ export default function Dashboard({ user, userDoc }) {
 
       {/* BCV and Status Control Bar */}
       <div className="neural-card p-5 flex flex-wrap items-center justify-between gap-4">
-        <BcvController bcv={bcv} />
+        <BcvController bcv={bcv} onOpenHistory={() => setShowBcvModal(true)} />
         
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-on-surface-variant font-sans font-semibold">Último Análisis Scraper:</span>
+            <span className="text-on-surface-variant font-sans font-semibold">Último Scraper:</span>
             {waitingForScraper ? (
               <span className="inline-flex items-center gap-1.5 font-mono bg-amber-500 text-white px-3 py-1 rounded-full font-bold animate-pulse">
                 <span className="material-symbols-outlined text-xs animate-spin leading-none">sync</span>
@@ -925,7 +949,7 @@ export default function Dashboard({ user, userDoc }) {
             <span className={`material-symbols-outlined text-base ${refreshing || waitingForScraper ? 'animate-spin' : ''}`}>
               {refreshing || waitingForScraper ? 'sync' : 'smart_toy'}
             </span>
-            <span>{refreshing ? 'Iniciando...' : waitingForScraper ? 'Ejecutando Robot...' : 'Ejecutar Scraper / Actualizar'}</span>
+            <span>{refreshing ? 'Iniciando...' : waitingForScraper ? 'Ejecutando Robot...' : 'Actualizar'}</span>
           </button>
         </div>
       </div>
@@ -1199,33 +1223,46 @@ export default function Dashboard({ user, userDoc }) {
             {/* Quick Audit: What changed today? */}
             <button
               onClick={() => setMostrarCambiosHoy(!mostrarCambiosHoy)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              className={`h-9 px-3.5 rounded-full text-xs font-bold transition-all inline-flex items-center gap-2 border active:scale-98 select-none ${
                 mostrarCambiosHoy 
-                  ? 'bg-amber-500 border-amber-500 text-white font-extrabold shadow-xs' 
-                  : 'bg-surface-low border-outline-variant/60 text-on-surface-variant hover:bg-surface-variant'
+                  ? 'bg-amber-600 border-amber-600 text-white font-extrabold shadow-xs' 
+                  : 'bg-surface-container-lowest border-outline-variant text-on-surface hover:bg-surface-container-high hover:border-amber-500/50'
               }`}
             >
-              <span className="material-symbols-outlined text-[16px]">notifications_active</span>
-              <span>¿Qué cambió hoy? {kpiStats.totalChangesToday > 0 ? `(${kpiStats.totalChangesToday})` : ''}</span>
+              <span className={`material-symbols-outlined text-[16px] leading-none ${mostrarCambiosHoy ? 'text-white' : 'text-amber-600'}`}>
+                notifications_active
+              </span>
+              <span className="font-medium whitespace-nowrap">¿Qué cambió hoy?</span>
+              {kpiStats.totalChangesToday > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold tracking-tight ${
+                  mostrarCambiosHoy 
+                    ? 'bg-white text-amber-800 shadow-xs' 
+                    : 'bg-amber-100 text-amber-900 border border-amber-300'
+                }`}>
+                  {kpiStats.totalChangesToday}
+                </span>
+              )}
             </button>
 
             {/* Filter: Ocultar productos sin precio */}
             <button
               onClick={() => setOcultarSinPrecios(!ocultarSinPrecios)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              className={`h-9 px-3.5 rounded-full text-xs font-bold transition-all inline-flex items-center gap-2 border active:scale-98 select-none ${
                 ocultarSinPrecios 
                   ? 'bg-primary border-primary text-on-primary font-extrabold shadow-xs' 
-                  : 'bg-surface-low border-outline-variant/60 text-on-surface-variant hover:bg-surface-variant'
+                  : 'bg-surface-container-lowest border-outline-variant text-on-surface hover:bg-surface-container-high hover:border-primary/50'
               }`}
               title="Quitar de la matriz los productos que no tienen ningún precio en ninguna cadena"
             >
-              <span className="material-symbols-outlined text-[16px]">
+              <span className={`material-symbols-outlined text-[16px] leading-none ${ocultarSinPrecios ? 'text-on-primary' : 'text-primary'}`}>
                 {ocultarSinPrecios ? 'visibility_off' : 'filter_alt'}
               </span>
-              <span>Ocultar sin precio</span>
+              <span className="font-medium whitespace-nowrap">Ocultar sin precio</span>
               {sinPreciosCount > 0 && (
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                  ocultarSinPrecios ? 'bg-white/20 text-white' : 'bg-surface-variant text-on-surface-variant'
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold tracking-tight ${
+                  ocultarSinPrecios 
+                    ? 'bg-white text-primary shadow-xs' 
+                    : 'bg-primary-container text-on-primary-container border border-primary/20'
                 }`}>
                   {sinPreciosCount}
                 </span>
@@ -1263,16 +1300,16 @@ export default function Dashboard({ user, userDoc }) {
         {/* Search & Categories Bar */}
         <div className="px-5 py-3 bg-surface-low/50 border-b border-surface-variant flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
-            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar producto en la matriz..."
-              className="m3-input pl-9 pr-8"
+              className="m3-input pl-10 pr-8 h-9 text-xs"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>
             )}
           </div>
 
@@ -1293,26 +1330,47 @@ export default function Dashboard({ user, userDoc }) {
         </div>
 
         {/* Heatmap Grid Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[750px] relative">
           <table className="m3-table">
-            <thead>
+            <thead className="m3-sticky-header">
               <tr>
-                <th>Producto</th>
+                <th className="rounded-tl-2xl">Producto</th>
                 {cadenasUnicas.map(c => (
                   <th key={c} className="text-right">{c}</th>
                 ))}
                 <th className="text-right border-l border-outline-variant/30">Promedio</th>
                 <th className="text-right">Mínimo</th>
-                <th className="text-right bg-emerald-500/10 text-emerald-800 font-bold border-l border-emerald-500/20">Mi Precio</th>
+                <th className="text-right bg-secondary-container/30 text-secondary font-bold border-l border-secondary/20">Mi Precio</th>
                 <th className="text-right text-secondary">Mi Desviación</th>
-                <th className="text-center">Dispersión (%)</th>
+                <th className="text-center rounded-tr-2xl">Dispersión (%)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-variant">
               {filas.length === 0 ? (
                 <tr>
-                  <td colSpan={5 + cadenasUnicas.length} className="px-6 py-8 text-center text-on-surface-variant italic">
-                    No hay productos en esta selección.
+                  <td colSpan={5 + cadenasUnicas.length} className="px-6 py-12 text-center text-on-surface-variant">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+                        <span className="material-symbols-outlined text-2xl">search_off</span>
+                      </div>
+                      <div>
+                        <div className="font-bold text-on-surface font-display text-base">No hay productos en esta selección</div>
+                        <div className="text-xs text-on-surface-variant mt-0.5">Prueba ajustando los filtros de categoría, tipo de mercado o búsqueda.</div>
+                      </div>
+                      {(search || categoriaSeleccionada !== 'Todas' || tipoMercadoSeleccionado !== 'Todos' || unSeleccionada !== 'Todas') && (
+                        <button
+                          onClick={() => {
+                            setSearch('');
+                            setCategoriaSeleccionada('Todas');
+                            setTipoMercadoSeleccionado('Todos');
+                            setUnSeleccionada('Todas');
+                          }}
+                          className="m3-btn-outline h-8 px-4 text-xs mt-1"
+                        >
+                          Limpiar todos los filtros
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -1548,7 +1606,7 @@ function formatDateTime(date) {
   return `${day}/${month}/${year} ${strHours}:${minutes} ${ampm}`;
 }
 
-function BcvController({ bcv }) {
+function BcvController({ bcv, onOpenHistory }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
 
@@ -1568,15 +1626,15 @@ function BcvController({ bcv }) {
         <span className="h-2 w-2 rounded-full bg-secondary animate-ping"></span>
         <span className="text-on-surface-variant uppercase font-bold flex items-center gap-1">
           <span className="material-symbols-outlined text-sm leading-none select-none">payments</span>
-          Tasa Oficial BCV:
+          TASA:
         </span>
       </div>
       {editing ? (
         <div className="flex items-center gap-1.5">
           <input type="text" value={val} onChange={e => setVal(e.target.value)}
-            className="w-24 px-3 py-1.5 border border-outline-variant rounded-xl text-xs font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-primary" placeholder="0.00" />
-          <button onClick={handleSave} className="px-3 py-1.5 bg-primary text-on-primary font-bold rounded-full text-[10px]">Guardar</button>
-          <button onClick={() => setEditing(false)} className="px-3 py-1.5 bg-surface-low text-on-surface-variant rounded-full text-[10px]">Cancelar</button>
+            className="w-24 px-3 py-1.5 border border-outline-variant rounded-xl text-xs font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-primary bg-surface-container-lowest text-on-surface" placeholder="0.00" />
+          <button onClick={handleSave} className="m3-btn-primary h-7 px-3 text-[10px]">Guardar</button>
+          <button onClick={() => setEditing(false)} className="m3-btn-outline h-7 px-3 text-[10px]">Cancelar</button>
           {bcv.error && <span className="text-[10px] text-error font-bold">{bcv.error}</span>}
         </div>
       ) : (
@@ -1588,7 +1646,7 @@ function BcvController({ bcv }) {
             {bcv.source || 'Auto'}
           </span>
           {formattedDate && (
-            <span className="text-[11px] text-on-surface-variant font-sans flex items-center gap-1 bg-surface-low px-2.5 py-1 rounded-full border border-outline-variant/50" title="Fecha y hora de la última actualización de la tasa">
+            <span className="text-[11px] text-on-surface-variant font-sans flex items-center gap-1 bg-surface-container-low px-2.5 py-1 rounded-full border border-outline-variant/50" title="Fecha y hora de la última actualización de la tasa">
               <span className="material-symbols-outlined text-xs text-primary leading-none">schedule</span>
               <span className="font-semibold">{formattedDate}</span>
             </span>

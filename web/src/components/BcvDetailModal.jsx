@@ -1,25 +1,14 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine
 } from 'recharts';
+import ModalWrapper from './ModalWrapper';
 
 export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRate, bcv }) {
   const [timeRange, setTimeRange] = useState('30d'); // '7d', '30d', '90d', 'all'
   const [searchTerm, setSearchTerm] = useState('');
   const [editingManual, setEditingManual] = useState(false);
   const [manualVal, setManualVal] = useState('');
-
-  // Lock scroll when modal is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
 
   // Ensure rates are sorted chronologically ascending
   const sortedRatesAsc = useMemo(() => {
@@ -159,396 +148,360 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div 
-      className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-2 sm:p-4 animate-fade-in text-on-surface"
-      onClick={onClose}
+    <ModalWrapper
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Historial Completo & Análisis Tasa Oficial BCV"
+      subtitle="Evolución de la cotización oficial del Banco Central de Venezuela"
+      icon="show_chart"
+      maxWidth="max-w-5xl"
+      footer={
+        <button
+          onClick={onClose}
+          className="m3-btn-primary h-9 px-6 text-xs"
+        >
+          Entendido / Cerrar
+        </button>
+      }
     >
-      <div 
-        className="bg-white rounded-[28px] shadow-2xl max-w-5xl w-full flex flex-col border border-outline-variant max-h-[92vh] overflow-hidden transform transition-all animate-scale-up"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header Block */}
-        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-low/50">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">show_chart</span>
+      <div className="space-y-6">
+        {/* Top Key Indicator Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Tasa Actual */}
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Tasa Actual</span>
+              <span className="material-symbols-outlined text-primary text-lg">attach_money</span>
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-display font-extrabold text-primary flex items-center gap-2">
-                Historial Completo & Análisis Tasa Oficial BCV
-              </h2>
-              <p className="text-xs text-on-surface-variant font-sans">
-                Evolución de la cotización oficial del Banco Central de Venezuela
+              <div className="text-2xl font-extrabold font-mono text-primary">
+                Bs {latestRate ? latestRate.toFixed(4) : '—'}
+              </div>
+              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+                Tasa de referencia de mercado
+              </div>
+            </div>
+          </div>
+
+          {/* Variación Día (%) */}
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Var. Día</span>
+              <span className={`material-symbols-outlined text-lg ${dailyVar.pct > 0 ? 'text-amber-600' : dailyVar.pct < 0 ? 'text-secondary' : 'text-outline'}`}>
+                {dailyVar.pct > 0 ? 'trending_up' : dailyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
+              </span>
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-xl font-extrabold font-mono ${dailyVar.pct > 0 ? 'text-amber-700' : dailyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
+                  {dailyVar.pct >= 0 ? `+${dailyVar.pct.toFixed(2)}%` : `${dailyVar.pct.toFixed(2)}%`}
+                </span>
+                <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded-full ${dailyVar.pct > 0 ? 'bg-amber-100 text-amber-900' : dailyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                  {dailyVar.diff >= 0 ? `+Bs ${dailyVar.diff.toFixed(2)}` : `Bs ${dailyVar.diff.toFixed(2)}`}
+                </span>
+              </div>
+              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+                vs. anterior: Bs {dailyVar.prevVal ? dailyVar.prevVal.toFixed(2) : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Variación Mes (%) */}
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Var. Mes</span>
+              <span className={`material-symbols-outlined text-lg ${monthlyVar.pct > 0 ? 'text-primary' : monthlyVar.pct < 0 ? 'text-secondary' : 'text-outline'}`}>
+                {monthlyVar.pct > 0 ? 'stacked_line_chart' : monthlyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
+              </span>
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-xl font-extrabold font-mono ${monthlyVar.pct > 0 ? 'text-primary' : monthlyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
+                  {monthlyVar.pct >= 0 ? `+${monthlyVar.pct.toFixed(2)}%` : `${monthlyVar.pct.toFixed(2)}%`}
+                </span>
+                <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded-full ${monthlyVar.pct > 0 ? 'bg-primary-container text-on-primary-container' : monthlyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                  {monthlyVar.diff >= 0 ? `+Bs ${monthlyVar.diff.toFixed(2)}` : `Bs ${monthlyVar.diff.toFixed(2)}`}
+                </span>
+              </div>
+              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+                vs. hace 30 días: Bs {monthlyVar.monthVal ? monthlyVar.monthVal.toFixed(2) : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Rango (Mín / Max) */}
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Rango en Período</span>
+              <span className="material-symbols-outlined text-secondary text-lg">swap_vert</span>
+            </div>
+            <div>
+              <div className="text-base font-extrabold font-mono text-on-surface flex items-center justify-between">
+                <span>Bs {rangeStats.min ? rangeStats.min.toFixed(2) : '—'}</span>
+                <span className="text-xs text-on-surface-variant font-normal">a</span>
+                <span>Bs {rangeStats.max ? rangeStats.max.toFixed(2) : '—'}</span>
+              </div>
+              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+                Promedio: Bs {rangeStats.avg ? rangeStats.avg.toFixed(2) : '—'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Interactive Chart Section */}
+        <div className="p-5 rounded-2xl border border-outline-variant/60 bg-surface-container-lowest space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-base">area_chart</span>
+                Gráfico Interactivo de Evolución
+              </h3>
+              <p className="text-xs text-on-surface-variant">
+                Monitoreo de tendencia por período de tiempo
               </p>
             </div>
+
+            {/* Time Range Selector Buttons */}
+            <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-xl border border-outline-variant/60">
+              {[
+                { id: '7d', label: '7 Días' },
+                { id: '30d', label: '30 Días' },
+                { id: '90d', label: '90 Días' },
+                { id: 'all', label: 'Todo' }
+              ].map(b => (
+                <button
+                  key={b.id}
+                  onClick={() => setTimeRange(b.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
+                    timeRange === b.id
+                      ? 'bg-primary text-on-primary shadow-xs'
+                      : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
+                  }`}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <button 
-            onClick={onClose} 
-            className="p-2 hover:bg-surface-high rounded-full text-on-surface-variant transition-colors flex items-center justify-center"
-            title="Cerrar modal"
-          >
-            <span className="material-symbols-outlined text-xl">close</span>
-          </button>
+          {/* Chart Container */}
+          <div className="h-72 w-full pt-2">
+            {chartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-on-surface-variant italic">
+                No hay suficientes datos para graficar este período.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart 
+                  key={`modal-bcv-${timeRange}-${chartData.length}`}
+                  data={chartData} 
+                  margin={{ top: 10, right: 15, left: -15, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="modalBcvGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#040d53" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#040d53" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e1e2ec" />
+                  <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: '#464650' }} />
+                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#464650' }} />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        const startVal = chartData[0]?.valor || data.valor;
+                        const varStartPct = startVal > 0 ? ((data.valor - startVal) / startVal) * 100 : 0;
+                        return (
+                          <div className="bg-surface-container-lowest p-3 rounded-xl shadow-elevation-3 border border-outline-variant text-xs space-y-1 font-sans">
+                            <p className="font-bold text-primary">{data.fecha} ({data.dayKey})</p>
+                            <p className="font-mono text-sm font-extrabold text-on-surface">
+                              Bs {Number(data.valor).toFixed(4)} / USD
+                            </p>
+                            <p className={`font-mono text-[11px] font-bold ${varStartPct >= 0 ? 'text-amber-700' : 'text-secondary'}`}>
+                              Var. en período: {varStartPct >= 0 ? `+${varStartPct.toFixed(2)}%` : `${varStartPct.toFixed(2)}%`}
+                            </p>
+                            <p className="text-[10px] text-on-surface-variant capitalize">
+                              Fuente: {data.source || 'oficial'}
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <ReferenceLine y={rangeStats.avg} stroke="#c00100" strokeDasharray="3 3" label={{ value: `Prom: ${rangeStats.avg.toFixed(2)}`, fill: '#c00100', fontSize: 10 }} />
+                  <Area 
+                    type="monotone" 
+                    dataKey="valor" 
+                    stroke="#040d53" 
+                    strokeWidth={2.5} 
+                    fillOpacity={1} 
+                    fill="url(#modalBcvGradient)" 
+                    isAnimationActive={true}
+                    animationDuration={750}
+                    animationBegin={0}
+                    animationEasing="ease-out"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
 
-        {/* Modal Scrollable Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
-
-          {/* Top Key Indicator Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            
-            {/* Tasa Actual */}
-            <div className="p-4 rounded-2xl bg-surface-low border border-outline-variant/70 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Tasa Actual</span>
-                <span className="material-symbols-outlined text-primary text-lg">attach_money</span>
-              </div>
-              <div>
-                <div className="text-2xl font-extrabold font-mono text-primary">
-                  Bs {latestRate ? latestRate.toFixed(4) : '—'}
-                </div>
-                <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
-                  Tasa de referencia de mercado
-                </div>
-              </div>
+        {/* Historical Data Table Section */}
+        <div className="p-5 rounded-2xl border border-outline-variant/60 bg-surface-container-lowest space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-base">table_chart</span>
+                Detalle Histórico de Registros ({tableRows.length})
+              </h3>
+              <p className="text-xs text-on-surface-variant">
+                Lista cronológica detallada de tasas oficiales registradas
+              </p>
             </div>
 
-            {/* Variación Día (%) */}
-            <div className="p-4 rounded-2xl bg-surface-low border border-outline-variant/70 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Var. Día</span>
-                <span className={`material-symbols-outlined text-lg ${dailyVar.pct > 0 ? 'text-amber-600' : dailyVar.pct < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  {dailyVar.pct > 0 ? 'trending_up' : dailyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
-                </span>
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-xl font-extrabold font-mono ${dailyVar.pct > 0 ? 'text-amber-700' : dailyVar.pct < 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
-                    {dailyVar.pct >= 0 ? `+${dailyVar.pct.toFixed(2)}%` : `${dailyVar.pct.toFixed(2)}%`}
-                  </span>
-                  <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded-full ${dailyVar.pct > 0 ? 'bg-amber-100 text-amber-800' : dailyVar.pct < 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
-                    {dailyVar.diff >= 0 ? `+Bs ${dailyVar.diff.toFixed(2)}` : `Bs ${dailyVar.diff.toFixed(2)}`}
-                  </span>
-                </div>
-                <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
-                  vs. anterior: Bs {dailyVar.prevVal ? dailyVar.prevVal.toFixed(2) : '—'}
-                </div>
-              </div>
-            </div>
-
-            {/* Variación Mes (%) */}
-            <div className="p-4 rounded-2xl bg-surface-low border border-outline-variant/70 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Var. Mes</span>
-                <span className={`material-symbols-outlined text-lg ${monthlyVar.pct > 0 ? 'text-blue-600' : monthlyVar.pct < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  {monthlyVar.pct > 0 ? 'stacked_line_chart' : monthlyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
-                </span>
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-xl font-extrabold font-mono ${monthlyVar.pct > 0 ? 'text-blue-700' : monthlyVar.pct < 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
-                    {monthlyVar.pct >= 0 ? `+${monthlyVar.pct.toFixed(2)}%` : `${monthlyVar.pct.toFixed(2)}%`}
-                  </span>
-                  <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded-full ${monthlyVar.pct > 0 ? 'bg-blue-100 text-blue-800' : monthlyVar.pct < 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
-                    {monthlyVar.diff >= 0 ? `+Bs ${monthlyVar.diff.toFixed(2)}` : `Bs ${monthlyVar.diff.toFixed(2)}`}
-                  </span>
-                </div>
-                <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
-                  vs. hace 30 días: Bs {monthlyVar.monthVal ? monthlyVar.monthVal.toFixed(2) : '—'}
-                </div>
-              </div>
-            </div>
-
-            {/* Rango (Mín / Max) */}
-            <div className="p-4 rounded-2xl bg-surface-low border border-outline-variant/70 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Rango en Período</span>
-                <span className="material-symbols-outlined text-secondary text-lg">swap_vert</span>
-              </div>
-              <div>
-                <div className="text-base font-extrabold font-mono text-on-surface flex items-center justify-between">
-                  <span>Bs {rangeStats.min ? rangeStats.min.toFixed(2) : '—'}</span>
-                  <span className="text-xs text-on-surface-variant font-normal">a</span>
-                  <span>Bs {rangeStats.max ? rangeStats.max.toFixed(2) : '—'}</span>
-                </div>
-                <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
-                  Promedio: Bs {rangeStats.avg ? rangeStats.avg.toFixed(2) : '—'}
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Interactive Chart Section */}
-          <div className="p-5 rounded-2xl border border-outline-variant bg-white space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-base">area_chart</span>
-                  Gráfico Interactivo de Evolución
-                </h3>
-                <p className="text-xs text-on-surface-variant">
-                  Monitoreo de tendencia por período de tiempo
-                </p>
-              </div>
-
-              {/* Time Range Selector Buttons */}
-              <div className="flex items-center gap-1 bg-surface-low p-1 rounded-xl border border-outline-variant">
-                {[
-                  { id: '7d', label: '7 Días' },
-                  { id: '30d', label: '30 Días' },
-                  { id: '90d', label: '90 Días' },
-                  { id: 'all', label: 'Todo' }
-                ].map(b => (
-                  <button
-                    key={b.id}
-                    onClick={() => setTimeRange(b.id)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
-                      timeRange === b.id
-                        ? 'bg-primary text-on-primary shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-high/50'
-                    }`}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Chart Container */}
-            <div className="h-72 w-full pt-2">
-              {chartData.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-xs text-on-surface-variant italic">
-                  No hay suficientes datos para graficar este período.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart 
-                    key={`modal-bcv-${filterDays}-${chartData.length}`}
-                    data={chartData} 
-                    margin={{ top: 10, right: 15, left: -15, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="modalBcvGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#016874" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#016874" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e8e8ed" />
-                    <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: '#464650' }} />
-                    <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#464650' }} />
-                    <Tooltip 
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          const startVal = chartData[0]?.valor || data.valor;
-                          const varStartPct = startVal > 0 ? ((data.valor - startVal) / startVal) * 100 : 0;
-                          return (
-                            <div className="bg-white p-3 rounded-xl shadow-lg border border-outline-variant text-xs space-y-1 font-sans">
-                              <p className="font-bold text-primary">{data.fecha} ({data.dayKey})</p>
-                              <p className="font-mono text-sm font-extrabold text-on-surface">
-                                Bs {Number(data.valor).toFixed(4)} / USD
-                              </p>
-                              <p className={`font-mono text-[11px] font-bold ${varStartPct >= 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-                                Var. en período: {varStartPct >= 0 ? `+${varStartPct.toFixed(2)}%` : `${varStartPct.toFixed(2)}%`}
-                              </p>
-                              <p className="text-[10px] text-on-surface-variant capitalize">
-                                Fuente: {data.source || 'oficial'}
-                              </p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <ReferenceLine y={rangeStats.avg} stroke="#ea580c" strokeDasharray="3 3" label={{ value: `Prom: ${rangeStats.avg.toFixed(2)}`, fill: '#ea580c', fontSize: 10 }} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="valor" 
-                      stroke="#016874" 
-                      strokeWidth={2.5} 
-                      fillOpacity={1} 
-                      fill="url(#modalBcvGradient)" 
-                      isAnimationActive={true}
-                      animationDuration={750}
-                      animationBegin={0}
-                      animationEasing="ease-out"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-
-          {/* Historical Data Table Section */}
-          <div className="p-5 rounded-2xl border border-outline-variant bg-white space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-base">table_chart</span>
-                  Detalle Histórico de Registros ({tableRows.length})
-                </h3>
-                <p className="text-xs text-on-surface-variant">
-                  Lista cronológica detallada de tasas oficiales registradas
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Search Box */}
-                <div className="relative">
-                  <span className="material-symbols-outlined text-sm text-on-surface-variant absolute left-3 top-2.5">search</span>
-                  <input
-                    type="text"
-                    placeholder="Buscar fecha o tasa..."
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-outline-variant bg-surface-low focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary w-44 sm:w-60 font-sans"
-                  />
-                  {searchTerm && (
-                    <button onClick={() => setSearchTerm('')} className="absolute right-2 top-2 text-on-surface-variant text-xs">×</button>
-                  )}
-                </div>
-
-                {/* Export CSV Button */}
-                <button
-                  onClick={handleExportCSV}
-                  className="px-3 py-1.5 text-xs font-bold font-mono bg-surface-low hover:bg-surface-high border border-outline-variant rounded-xl text-on-surface transition-all flex items-center gap-1.5"
-                  title="Exportar historia a archivo CSV"
-                >
-                  <span className="material-symbols-outlined text-sm">download</span>
-                  <span className="hidden sm:inline">Exportar CSV</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Table Container */}
-            <div className="max-h-64 overflow-y-auto rounded-xl border border-outline-variant">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-surface-low sticky top-0 z-10 border-b border-outline-variant text-on-surface-variant font-mono font-bold">
-                  <tr>
-                    <th className="p-3">Fecha</th>
-                    <th className="p-3">Tasa Oficial (Bs/USD)</th>
-                    <th className="p-3">Variación vs Anterior (%)</th>
-                    <th className="p-3 text-right">Diferencia (Bs)</th>
-                    <th className="p-3 text-center">Fuente</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/60 font-sans">
-                  {tableRows.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="p-6 text-center text-on-surface-variant italic">
-                        No se encontraron registros que coincidan con la búsqueda.
-                      </td>
-                    </tr>
-                  ) : (
-                    tableRows.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-surface-low/60 transition-colors">
-                        <td className="p-3 font-semibold text-on-surface">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-primary font-bold">{row.fecha}</span>
-                            <span className="text-[10px] text-on-surface-variant">({row.dayKey})</span>
-                          </div>
-                        </td>
-                        <td className="p-3 font-mono font-extrabold text-primary text-sm">
-                          Bs {Number(row.valor).toFixed(4)}
-                        </td>
-                        <td className="p-3">
-                          {row.prevVal ? (
-                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold font-mono ${
-                              row.pct > 0 
-                                ? 'bg-amber-50 text-amber-800 border border-amber-200' 
-                                : row.pct < 0 
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
-                                : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              <span className="material-symbols-outlined text-xs">
-                                {row.pct > 0 ? 'arrow_drop_up' : row.pct < 0 ? 'arrow_drop_down' : 'remove'}
-                              </span>
-                              {row.pct >= 0 ? `+${row.pct.toFixed(2)}%` : `${row.pct.toFixed(2)}%`}
-                            </span>
-                          ) : (
-                            <span className="text-on-surface-variant font-mono text-[11px]">—</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right font-mono font-semibold">
-                          {row.prevVal ? (
-                            <span className={row.diff > 0 ? 'text-amber-700' : row.diff < 0 ? 'text-emerald-700' : 'text-slate-600'}>
-                              {row.diff >= 0 ? `+${row.diff.toFixed(2)}` : `${row.diff.toFixed(2)}`}
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono capitalize ${
-                            row.source === 'auto' ? 'bg-purple-100 text-purple-800' : row.source === 'manual' ? 'bg-amber-100 text-amber-800' : 'bg-primary/10 text-primary'
-                          }`}>
-                            {row.source || 'oficial'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Manual Rate Edit Banner / Action */}
-          {editingManual ? (
-            <form onSubmit={handleSaveManual} className="p-4 rounded-2xl bg-surface-low border border-primary/40 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">edit_note</span>
-                <div>
-                  <div className="text-xs font-bold text-primary">Registrar Tasa Manualmente</div>
-                  <div className="text-[11px] text-on-surface-variant">Ingresa la nueva tasa del día en Bolívares</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              {/* Search Box */}
+              <div className="relative">
+                <span className="material-symbols-outlined text-sm text-on-surface-variant absolute left-3 top-2.5">search</span>
                 <input
                   type="text"
-                  placeholder="Ej: 745.50"
-                  value={manualVal}
-                  onChange={e => setManualVal(e.target.value)}
-                  className="px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-outline-variant w-32 focus:outline-none focus:ring-1 focus:ring-primary"
-                  autoFocus
+                  placeholder="Buscar fecha o tasa..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-outline-variant/60 bg-surface-container-low focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary w-44 sm:w-60 font-sans text-on-surface"
                 />
-                <button type="submit" className="px-3 py-1.5 text-xs font-bold font-mono bg-primary text-on-primary rounded-xl hover:bg-primary/90 transition-all">
-                  Guardar
-                </button>
-                <button type="button" onClick={() => setEditingManual(false)} className="px-3 py-1.5 text-xs font-bold font-mono bg-white border border-outline-variant rounded-xl hover:bg-surface-high transition-all">
-                  Cancelar
-                </button>
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="absolute right-2 top-2 text-on-surface-variant text-xs">×</button>
+                )}
               </div>
-            </form>
-          ) : (
-            <div className="flex justify-between items-center text-xs text-on-surface-variant">
-              <span>* Los datos provienen del Banco Central de Venezuela y sincronizaciones automatizadas.</span>
+
+              {/* Export CSV Button */}
               <button
-                onClick={() => { setEditingManual(true); setManualVal(latestRate ? String(latestRate) : ''); }}
-                className="text-primary hover:underline font-bold flex items-center gap-1"
+                onClick={handleExportCSV}
+                className="m3-btn-outline h-8 px-3 text-xs"
+                title="Exportar historia a archivo CSV"
               >
-                <span className="material-symbols-outlined text-sm">edit</span>
-                Ingresar Tasa Manual
+                <span className="material-symbols-outlined text-sm">download</span>
+                <span className="hidden sm:inline">Exportar CSV</span>
               </button>
             </div>
-          )}
+          </div>
 
+          {/* Table Container */}
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-outline-variant/60">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-surface-container-low sticky top-0 z-10 border-b border-outline-variant/60 text-on-surface-variant font-mono font-bold">
+                <tr>
+                  <th className="p-3">Fecha</th>
+                  <th className="p-3">Tasa Oficial (Bs/USD)</th>
+                  <th className="p-3">Variación vs Anterior (%)</th>
+                  <th className="p-3 text-right">Diferencia (Bs)</th>
+                  <th className="p-3 text-center">Fuente</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/40 font-sans">
+                {tableRows.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="p-6 text-center text-on-surface-variant italic">
+                      No se encontraron registros que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                ) : (
+                  tableRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-surface-container-low/60 transition-colors">
+                      <td className="p-3 font-semibold text-on-surface">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-primary font-bold">{row.fecha}</span>
+                          <span className="text-[10px] text-on-surface-variant">({row.dayKey})</span>
+                        </div>
+                      </td>
+                      <td className="p-3 font-mono font-extrabold text-primary text-sm">
+                        Bs {Number(row.valor).toFixed(4)}
+                      </td>
+                      <td className="p-3">
+                        {row.prevVal ? (
+                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold font-mono ${
+                            row.pct > 0 
+                              ? 'bg-amber-50 text-amber-900 border border-amber-200' 
+                              : row.pct < 0 
+                              ? 'bg-secondary-container text-on-secondary-container border border-secondary/20' 
+                              : 'bg-surface-container-high text-on-surface-variant'
+                          }`}>
+                            <span className="material-symbols-outlined text-xs">
+                              {row.pct > 0 ? 'arrow_drop_up' : row.pct < 0 ? 'arrow_drop_down' : 'remove'}
+                            </span>
+                            {row.pct >= 0 ? `+${row.pct.toFixed(2)}%` : `${row.pct.toFixed(2)}%`}
+                          </span>
+                        ) : (
+                          <span className="text-on-surface-variant font-mono text-[11px]">—</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right font-mono font-semibold">
+                        {row.prevVal ? (
+                          <span className={row.diff > 0 ? 'text-amber-800' : row.diff < 0 ? 'text-secondary' : 'text-on-surface-variant'}>
+                            {row.diff >= 0 ? `+${row.diff.toFixed(2)}` : `${row.diff.toFixed(2)}`}
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono capitalize ${
+                          row.source === 'auto' ? 'bg-primary-container text-on-primary-container' : row.source === 'manual' ? 'bg-amber-100 text-amber-900' : 'bg-surface-container-high text-on-surface'
+                        }`}>
+                          {row.source || 'oficial'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-4 bg-surface-low border-t border-outline-variant flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-full hover:bg-primary/90 transition-all shadow-xs"
-          >
-            Entendido / Cerrar
-          </button>
-        </div>
-
+        {/* Manual Rate Edit Banner / Action */}
+        {editingManual ? (
+          <form onSubmit={handleSaveManual} className="p-4 rounded-2xl bg-surface-container-low border border-primary/30 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">edit_note</span>
+              <div>
+                <div className="text-xs font-bold text-primary">Registrar Tasa Manualmente</div>
+                <div className="text-[11px] text-on-surface-variant">Ingresa la nueva tasa del día en Bolívares</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Ej: 745.50"
+                value={manualVal}
+                onChange={e => setManualVal(e.target.value)}
+                className="px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-outline-variant/60 w-32 focus:outline-none focus:ring-2 focus:ring-primary bg-surface-container-lowest text-on-surface"
+                autoFocus
+              />
+              <button type="submit" className="m3-btn-primary h-8 px-3 text-xs">
+                Guardar
+              </button>
+              <button type="button" onClick={() => setEditingManual(false)} className="m3-btn-outline h-8 px-3 text-xs">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex justify-between items-center text-xs text-on-surface-variant">
+            <span>* Los datos provienen del Banco Central de Venezuela y sincronizaciones automatizadas.</span>
+            <button
+              onClick={() => { setEditingManual(true); setManualVal(latestRate ? String(latestRate) : ''); }}
+              className="text-primary hover:underline font-bold flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-sm">edit</span>
+              Ingresar Tasa Manual
+            </button>
+          </div>
+        )}
       </div>
-    </div>
+    </ModalWrapper>
   );
 }

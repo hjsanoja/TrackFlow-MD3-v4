@@ -82,7 +82,7 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface"
+              className="m3-input"
               placeholder="admin@trackflow.com"
             />
           </div>
@@ -95,7 +95,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-4 pr-11 py-2.5 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface"
+                className="m3-input pr-11"
                 placeholder="••••••••"
               />
               <button
@@ -120,17 +120,17 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-secondary hover:bg-secondary/90 text-on-secondary font-extrabold uppercase font-mono tracking-wider text-xs py-3 rounded-full shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+            className="w-full m3-btn-primary h-11 text-xs uppercase font-mono tracking-wider shadow-elevation-1"
           >
             {loading ? (
               <>
-                <span className="material-symbols-outlined text-sm leading-none animate-spin">autorenew</span>
+                <span className="material-symbols-outlined text-base leading-none animate-spin">autorenew</span>
                 <span>Iniciando...</span>
               </>
             ) : (
               <>
                 <span>Acceder al Sistema</span>
-                <span className="material-symbols-outlined text-sm leading-none">login</span>
+                <span className="material-symbols-outlined text-base leading-none">login</span>
               </>
             )}
           </button>
@@ -143,10 +143,10 @@ export default function Login() {
           </span>
           <div className="flex flex-col items-center gap-1">
             <span className="text-[9px] text-primary/90 font-mono font-bold uppercase tracking-widest bg-primary-container px-2.5 py-0.5 rounded-full border border-primary/10">
-              Fase 3 Activa
+              M3 Expressive Activo
             </span>
             <span className="text-[10px] text-on-surface-variant/70 font-mono">
-              V7.3.0 · Inteligencia Predictiva & Simulador
+              V7.4.0 · Material 3 Expressive & Física Cinemática
             </span>
           </div>
         </div>

@@ -1,0 +1,594 @@
+/* ==========================================================================
+   MATERIAL 3 EXPRESSIVE (M3) TOKENS — SINGLE SOURCE OF TRUTH
+   Color Seed: #0F2C59 (Navy & Emerald Expressive)
+   Typography: Roboto Flex Variable (wght 100..1000, wdth 25..151)
+   Motion: Spring Physics Simulation (linear easing curves + cubic-bezier fallback)
+   ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------------------
+     1. COLOR SYSTEM (LIGHT THEME — ROLES M3 EXPRESSIVE)
+     ------------------------------------------------------------------------ */
+  /* Primary: Deep Navy */
+  --md-sys-color-primary: #0F2C59;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #D7E3FF;
+  --md-sys-color-on-primary-container: #001B3E;
+  --md-sys-color-primary-fixed: #D7E3FF;
+  --md-sys-color-primary-fixed-dim: #ABC7FF;
+  --md-sys-color-on-primary-fixed: #001B3E;
+  --md-sys-color-on-primary-fixed-variant: #00438D;
+
+  /* Secondary: Vivid Emerald */
+  --md-sys-color-secondary: #1E6B52;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #A7F3D0;
+  --md-sys-color-on-secondary-container: #002116;
+  --md-sys-color-secondary-fixed: #A7F3D0;
+  --md-sys-color-secondary-fixed-dim: #8BD6B5;
+  --md-sys-color-on-secondary-fixed: #002116;
+  --md-sys-color-on-secondary-fixed-variant: #00513C;
+
+  /* Tertiary: Slate Cyan */
+  --md-sys-color-tertiary: #3B6470;
+  --md-sys-color-on-tertiary: #FFFFFF;
+  --md-sys-color-tertiary-container: #BEEAF7;
+  --md-sys-color-on-tertiary-container: #001F26;
+  --md-sys-color-tertiary-fixed: #BEEAF7;
+  --md-sys-color-tertiary-fixed-dim: #A3CDDA;
+  --md-sys-color-on-tertiary-fixed: #001F26;
+  --md-sys-color-on-tertiary-fixed-variant: #224C58;
+
+  /* Error */
+  --md-sys-color-error: #BA1A1A;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #FFDAD6;
+  --md-sys-color-on-error-container: #410002;
+
+  /* Surfaces & Containers (Tone-differentiated) */
+  --md-sys-color-surface: #F8FAFC;
+  --md-sys-color-on-surface: #0F172A;
+  --md-sys-color-surface-variant: #E2E8F0;
+  --md-sys-color-on-surface-variant: #475569;
+  
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low: #F1F5F9;
+  --md-sys-color-surface-container: #EEF2F6;
+  --md-sys-color-surface-container-high: #E2E8F0;
+  --md-sys-color-surface-container-highest: #CBD5E1;
+
+  /* Outlines & Inverses */
+  --md-sys-color-outline: #64748B;
+  --md-sys-color-outline-variant: #CBD5E1;
+  --md-sys-color-inverse-surface: #1E293B;
+  --md-sys-color-inverse-on-surface: #F8FAFC;
+  --md-sys-color-inverse-primary: #ABC7FF;
+  --md-sys-color-surface-tint: #0F2C59;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-shadow: #000000;
+
+  /* ------------------------------------------------------------------------
+     2. SEMANTIC DATA ROLES (CHARTS, GRAPHS & KPIS)
+     ------------------------------------------------------------------------ */
+  --md-sys-color-data-lowest: #059669;
+  --md-sys-color-on-data-lowest: #FFFFFF;
+  --md-sys-color-data-lowest-container: #D1FAE5;
+  --md-sys-color-on-data-lowest-container: #064E3B;
+
+  --md-sys-color-data-highest: #DC2626;
+  --md-sys-color-on-data-highest: #FFFFFF;
+  --md-sys-color-data-highest-container: #FEE2E2;
+  --md-sys-color-on-data-highest-container: #7F1D1D;
+
+  --md-sys-color-data-neutral: #0F2C59;
+  --md-sys-color-on-data-neutral: #FFFFFF;
+  --md-sys-color-data-neutral-container: #D7E3FF;
+  --md-sys-color-on-data-neutral-container: #001B3E;
+
+  --md-sys-color-data-positive: #16A34A;
+  --md-sys-color-data-negative: #E11D48;
+
+  /* Ordered Chart Data Series Palette */
+  --md-sys-color-data-series-1: #0F2C59; /* Navy (Our brand / Main) */
+  --md-sys-color-data-series-2: #1E6B52; /* Emerald (Market Leader) */
+  --md-sys-color-data-series-3: #3B6470; /* Slate Cyan (Competitor A) */
+  --md-sys-color-data-series-4: #7C3AED; /* Royal Violet (Competitor B) */
+  --md-sys-color-data-series-5: #D97706; /* Amber Gold (Competitor C) */
+  --md-sys-color-data-series-6: #0284C7; /* Sky Blue (Competitor D) */
+  --md-sys-color-data-series-7: #DB2777; /* Deep Pink (Competitor E) */
+  --md-sys-color-data-series-8: #4F46E5; /* Indigo (Competitor F) */
+
+  /* ------------------------------------------------------------------------
+     3. STATE LAYERS (M3 STATE OPACITIES)
+     ------------------------------------------------------------------------ */
+  --md-sys-state-hover-opacity: 0.08;
+  --md-sys-state-focus-opacity: 0.10;
+  --md-sys-state-pressed-opacity: 0.10;
+  --md-sys-state-dragged-opacity: 0.16;
+
+  /* ------------------------------------------------------------------------
+     4. SHAPE SCALE & MORPHING RADII
+     ------------------------------------------------------------------------ */
+  --md-sys-shape-none: 0px;
+  --md-sys-shape-extra-small: 4px;
+  --md-sys-shape-small: 8px;
+  --md-sys-shape-medium: 12px;
+  --md-sys-shape-large: 16px;
+  --md-sys-shape-extra-large: 28px;
+  --md-sys-shape-extra-large-increased: 32px;
+  --md-sys-shape-extra-extra-large: 48px;
+  
+  /* Continuous morphing calculation (dynamic pill derived from height) */
+  --component-height: 40px;
+  --md-sys-shape-pill: calc(var(--component-height) / 2);
+
+  /* ------------------------------------------------------------------------
+     5. SPACING (4dp Grid)
+     ------------------------------------------------------------------------ */
+  --md-sys-spacing-1: 4px;
+  --md-sys-spacing-2: 8px;
+  --md-sys-spacing-3: 12px;
+  --md-sys-spacing-4: 16px;
+  --md-sys-spacing-6: 24px;
+  --md-sys-spacing-8: 32px;
+  --md-sys-spacing-10: 40px;
+  --md-sys-spacing-12: 48px;
+
+  --md-sys-spacing-card-padding: 20px;
+  --md-sys-spacing-card-gap: 16px;
+  --md-sys-spacing-screen-margin: 24px;
+
+  /* ------------------------------------------------------------------------
+     6. ELEVATION LEVELS (0 to 5)
+     ------------------------------------------------------------------------ */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0px 1px 3px 1px rgba(15, 23, 42, 0.08), 0px 1px 2px 0px rgba(15, 23, 42, 0.04);
+  --md-sys-elevation-2: 0px 2px 6px 2px rgba(15, 23, 42, 0.10), 0px 1px 2px 0px rgba(15, 23, 42, 0.06);
+  --md-sys-elevation-3: 0px 4px 8px 3px rgba(15, 23, 42, 0.12), 0px 1px 3px 0px rgba(15, 23, 42, 0.08);
+  --md-sys-elevation-4: 0px 6px 10px 4px rgba(15, 23, 42, 0.14), 0px 2px 3px 0px rgba(15, 23, 42, 0.10);
+  --md-sys-elevation-5: 0px 8px 12px 6px rgba(15, 23, 42, 0.16), 0px 4px 4px 0px rgba(15, 23, 42, 0.12);
+
+  /* ------------------------------------------------------------------------
+     7. MOTION: SPRING PHYSICS TOKENS (EXPRESSIVE SCHEME)
+     ------------------------------------------------------------------------ */
+  /* Spatial Fast (damping 0.6, stiffness 800) -> 280ms */
+  --spring-duration-spatial-fast: 280ms;
+  --spring-curve-spatial-fast: linear(0, 0.006, 0.025, 0.059, 0.106, 0.165, 0.233, 0.31, 0.392, 0.478, 0.564, 0.648, 0.728, 0.801, 0.865, 0.919, 0.963, 0.995, 1.016, 1.028, 1.031, 1.028, 1.02, 1.011, 1.003, 0.997, 0.994, 0.994, 0.996, 0.998, 1);
+  --spring-fallback-spatial-fast: cubic-bezier(0.16, 1.3, 0.3, 1);
+
+  /* Spatial Default (damping 0.8, stiffness 380) -> 450ms */
+  --spring-duration-spatial-default: 450ms;
+  --spring-curve-spatial-default: linear(0, 0.004, 0.016, 0.038, 0.07, 0.111, 0.16, 0.217, 0.28, 0.347, 0.418, 0.489, 0.56, 0.628, 0.693, 0.753, 0.807, 0.854, 0.894, 0.927, 0.953, 0.973, 0.987, 0.996, 1.002, 1.005, 1.006, 1.005, 1.004, 1.002, 1.001, 1);
+  --spring-fallback-spatial-default: cubic-bezier(0.18, 1.15, 0.25, 1);
+
+  /* Spatial Slow (damping 0.8, stiffness 200) -> 650ms */
+  --spring-duration-spatial-slow: 650ms;
+  --spring-curve-spatial-slow: linear(0, 0.002, 0.008, 0.019, 0.036, 0.058, 0.086, 0.119, 0.158, 0.201, 0.248, 0.298, 0.351, 0.405, 0.46, 0.514, 0.567, 0.619, 0.668, 0.714, 0.757, 0.796, 0.831, 0.862, 0.889, 0.912, 0.932, 0.949, 0.962, 0.973, 0.981, 0.988, 0.993, 0.996, 0.999, 1.001, 1.002, 1.002, 1.002, 1.001, 1.001, 1);
+  --spring-fallback-spatial-slow: cubic-bezier(0.2, 1.1, 0.2, 1);
+
+  /* Effects Fast (damping 1.0, stiffness 3800) -> 150ms */
+  --spring-duration-effects-fast: 150ms;
+  --spring-curve-effects-fast: cubic-bezier(0.2, 0, 0, 1);
+  --spring-fallback-effects-fast: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Effects Default (damping 1.0, stiffness 1600) -> 250ms */
+  --spring-duration-effects-default: 250ms;
+  --spring-curve-effects-default: cubic-bezier(0.2, 0, 0, 1);
+  --spring-fallback-effects-default: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Effects Slow (damping 1.0, stiffness 800) -> 380ms */
+  --spring-duration-effects-slow: 380ms;
+  --spring-curve-effects-slow: cubic-bezier(0.2, 0, 0, 1);
+  --spring-fallback-effects-slow: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* --------------------------------------------------------------------------
+   DARK THEME OVERRIDES (WCAG AAA & M3 ROLES)
+   -------------------------------------------------------------------------- */
+.dark, [data-theme="dark"] {
+  --md-sys-color-primary: #ABC7FF;
+  --md-sys-color-on-primary: #002F65;
+  --md-sys-color-primary-container: #00438D;
+  --md-sys-color-on-primary-container: #D7E3FF;
+
+  --md-sys-color-secondary: #8BD6B5;
+  --md-sys-color-on-secondary: #003828;
+  --md-sys-color-secondary-container: #00513C;
+  --md-sys-color-on-secondary-container: #A7F3D0;
+
+  --md-sys-color-tertiary: #A3CDDA;
+  --md-sys-color-on-tertiary: #043540;
+  --md-sys-color-tertiary-container: #224C58;
+  --md-sys-color-on-tertiary-container: #BEEAF7;
+
+  --md-sys-color-error: #FFB4AB;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000A;
+  --md-sys-color-on-error-container: #FFDAD6;
+
+  --md-sys-color-surface: #0B132B;
+  --md-sys-color-on-surface: #E2E8F0;
+  --md-sys-color-surface-variant: #1E293B;
+  --md-sys-color-on-surface-variant: #94A3B8;
+
+  --md-sys-color-surface-container-lowest: #070D1E;
+  --md-sys-color-surface-container-low: #0F172A;
+  --md-sys-color-surface-container: #1E293B;
+  --md-sys-color-surface-container-high: #334155;
+  --md-sys-color-surface-container-highest: #475569;
+
+  --md-sys-color-outline: #94A3B8;
+  --md-sys-color-outline-variant: #334155;
+  --md-sys-color-inverse-surface: #E2E8F0;
+  --md-sys-color-inverse-on-surface: #0F172A;
+  --md-sys-color-inverse-primary: #0F2C59;
+
+  --md-sys-color-data-lowest: #34D399;
+  --md-sys-color-data-lowest-container: #064E3B;
+  --md-sys-color-data-highest: #F87171;
+  --md-sys-color-data-highest-container: #7F1D1D;
+  --md-sys-color-data-neutral: #ABC7FF;
+  --md-sys-color-data-neutral-container: #00438D;
+  --md-sys-color-data-positive: #4ADE80;
+  --md-sys-color-data-negative: #FB7185;
+
+  --md-sys-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.4), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
+  --md-sys-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.45), 0px 1px 2px 0px rgba(0, 0, 0, 0.35);
+  --md-sys-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.5), 0px 1px 3px 0px rgba(0, 0, 0, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   8. TYPOGRAPHY SCALE (ROBOTO FLEX VARIABLE AXES + EMPHASIZED VARIANTS)
+   -------------------------------------------------------------------------- */
+/* Display */
+.m3-display-large {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 3.5625rem; /* 57px */
+  line-height: 4rem; /* 64px */
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+.m3-display-large-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 3.5625rem;
+  line-height: 4rem;
+  font-weight: 700;
+  font-variation-settings: 'wdth' 110, 'wght' 700;
+  letter-spacing: -0.015em;
+}
+.m3-display-medium {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 2.8125rem; /* 45px */
+  line-height: 3.25rem; /* 52px */
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.m3-display-medium-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 2.8125rem;
+  line-height: 3.25rem;
+  font-weight: 700;
+  font-variation-settings: 'wdth' 110, 'wght' 700;
+  letter-spacing: 0;
+}
+.m3-display-small {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 2.25rem; /* 36px */
+  line-height: 2.75rem; /* 44px */
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.m3-display-small-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 2.25rem;
+  line-height: 2.75rem;
+  font-weight: 700;
+  font-variation-settings: 'wdth' 105, 'wght' 700;
+  letter-spacing: 0;
+}
+
+/* Headline */
+.m3-headline-large {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 2rem; /* 32px */
+  line-height: 2.5rem; /* 40px */
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.m3-headline-large-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 2rem;
+  line-height: 2.5rem;
+  font-weight: 700;
+  font-variation-settings: 'wdth' 105, 'wght' 700;
+  letter-spacing: 0;
+}
+.m3-headline-medium {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1.75rem; /* 28px */
+  line-height: 2.25rem; /* 36px */
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.m3-headline-medium-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  font-variation-settings: 'wdth' 105, 'wght' 600;
+  letter-spacing: 0;
+}
+.m3-headline-small {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1.5rem; /* 24px */
+  line-height: 2rem; /* 32px */
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.m3-headline-small-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  font-variation-settings: 'wdth' 100, 'wght' 600;
+  letter-spacing: 0;
+}
+
+/* Title */
+.m3-title-large {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1.375rem; /* 22px */
+  line-height: 1.75rem; /* 28px */
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.m3-title-large-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1.375rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.m3-title-medium {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1rem; /* 16px */
+  line-height: 1.5rem; /* 24px */
+  font-weight: 500;
+  letter-spacing: 0.009em;
+}
+.m3-title-medium-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 700;
+  font-variation-settings: 'wght' 700;
+  letter-spacing: 0.009em;
+}
+.m3-title-small {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.25rem; /* 20px */
+  font-weight: 500;
+  letter-spacing: 0.007em;
+}
+.m3-title-small-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.007em;
+}
+
+/* Body */
+.m3-body-large {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 1rem; /* 16px */
+  line-height: 1.5rem; /* 24px */
+  font-weight: 400;
+  letter-spacing: 0.03em;
+}
+.m3-body-medium {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.25rem; /* 20px */
+  font-weight: 400;
+  letter-spacing: 0.017em;
+}
+.m3-body-small {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.75rem; /* 12px */
+  line-height: 1rem; /* 16px */
+  font-weight: 400;
+  letter-spacing: 0.033em;
+}
+
+/* Label */
+.m3-label-large {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.25rem; /* 20px */
+  font-weight: 500;
+  letter-spacing: 0.007em;
+  white-space: nowrap;
+}
+.m3-label-large-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.007em;
+  white-space: nowrap;
+}
+.m3-label-medium {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.75rem; /* 12px */
+  line-height: 1rem; /* 16px */
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.m3-label-medium-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.m3-label-small {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.6875rem; /* 11px */
+  line-height: 1rem; /* 16px */
+  font-weight: 500;
+  letter-spacing: 0.045em;
+  white-space: nowrap;
+}
+.m3-label-small-emphasized {
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   9. INTERACTIVE STATE LAYERS & ACCESSIBLE FOCUS
+   -------------------------------------------------------------------------- */
+.m3-state-layer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.m3-state-layer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+  z-index: 0;
+}
+
+@media (hover: hover) {
+  .m3-state-layer:hover::before {
+    opacity: var(--md-sys-state-hover-opacity);
+  }
+}
+
+.m3-state-layer:focus-visible::before {
+  opacity: var(--md-sys-state-focus-opacity);
+}
+
+.m3-state-layer:active::before {
+  opacity: var(--md-sys-state-pressed-opacity);
+}
+
+/* M3 Focus Ring (3px outline with 2px offset) */
+.m3-focus-ring:focus-visible {
+  outline: 3px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+/* M3 Shape Morph Gesture on Press */
+.m3-shape-morph {
+  transition: border-radius var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast),
+              transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast);
+}
+
+.m3-shape-morph:active:not(:disabled) {
+  border-radius: var(--md-sys-shape-small);
+  transform: scale(0.98);
+}
+
+/* --------------------------------------------------------------------------
+   10. M3 EXPRESSIVE MODAL & SCRIM SYSTEM
+   -------------------------------------------------------------------------- */
+.m3-modal-scrim {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+  background-color: rgba(15, 23, 42, 0.60);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: m3-scrim-enter var(--spring-duration-effects-default) var(--spring-curve-effects-default) forwards;
+}
+
+@media (min-width: 640px) {
+  .m3-modal-scrim {
+    padding: 2rem 1.5rem;
+  }
+}
+
+@supports not (backdrop-filter: blur(8px)) {
+  .m3-modal-scrim {
+    background-color: rgba(15, 23, 42, 0.75);
+  }
+}
+
+[data-theme="dark"] .m3-modal-scrim {
+  background-color: rgba(7, 13, 30, 0.75);
+}
+
+@keyframes m3-scrim-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.m3-modal-card {
+  position: relative;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2rem);
+  max-height: min(90vh, 880px);
+  margin: auto;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--md-sys-shape-extra-large);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: var(--md-sys-elevation-4);
+  overflow: hidden;
+  animation: m3-card-spatial-enter var(--spring-duration-spatial-default) var(--spring-curve-spatial-default) forwards;
+}
+
+@keyframes m3-card-spatial-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   11. REDUCED MOTION PREFERENCE (A11Y OVERRIDE)
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+    transform: none !important;
+  }
+}

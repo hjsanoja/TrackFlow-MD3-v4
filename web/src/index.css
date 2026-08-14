@@ -1,55 +1,36 @@
+@import "./tokens/m3-tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* --- TEMA CLARO (MD3 + Neural Expressive Gemini) --- */
-  --md-sys-color-background: #FAF8F5;          /* Fondo base cálido */
-  --md-sys-color-on-background: #1C1B1F;       /* Texto de alto contraste */
-  
-  --md-sys-color-primary: #016874;             /* Teal tecnológico principal */
-  --md-sys-color-on-primary: #FFFFFF;          /* Texto sobre teal */
-  --md-sys-color-primary-container: #CCEBF0;   /* Contenedor secundario suave */
-  --md-sys-color-on-primary-container: #002025;
-  
-  --md-sys-color-secondary: #006874;           /* Teal expresivo moderno */
-  --md-sys-color-on-secondary: #FFFFFF;
-  --md-sys-color-secondary-container: #97F0FF;
-  --md-sys-color-on-secondary-container: #001F24;
-  
-  --md-sys-color-tertiary: #6750A4;            /* Accent purple */
-  --md-sys-color-on-tertiary: #FFFFFF;
-  
-  --md-sys-color-surface: #F3EDF7;             /* Fondo de tarjetas y componentes */
-  --md-sys-color-surface-variant: #E7E0EC;     /* Bordes y separadores sutiles */
-  --md-sys-color-on-surface: #1D1B20;
-  --md-sys-color-outline: #79747E;             /* Líneas de enfoque y textos secundarios */
-  --md-sys-color-error: #B3261E;
-
-  --md-transition-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
-  --md-transition-duration-medium: 350ms;
-}
-
 body {
   margin: 0;
-  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: #fbf9f6;
-  color: #1C1B1F;
+  font-family: 'Roboto Flex', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Neural Expressive MD3 Utility Classes */
-.neural-card {
-  background: #ffffff;
-  border-radius: 24px;
-  border: 1px solid rgba(225, 226, 236, 0.8);
-  box-shadow: 0 4px 20px -2px rgba(1, 104, 116, 0.04);
-  transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+/* ==========================================================================
+   MATERIAL 3 EXPRESSIVE CANONICAL CARDS, BUTTONS, AND INTERACTIVE SURFACES
+   ========================================================================== */
+
+/* M3 Expressive Elevated Card & Neural Card Compatibility */
+.m3-card, .neural-card {
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--md-sys-shape-extra-large);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: var(--md-sys-elevation-1);
+  transition: transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast, var(--spring-fallback-spatial-fast)),
+              box-shadow var(--spring-duration-effects-default) var(--spring-curve-effects-default),
+              border-color var(--spring-duration-effects-default) var(--spring-curve-effects-default);
+  will-change: transform, box-shadow;
 }
 
-.neural-card:hover {
-  box-shadow: 0 12px 30px -4px rgba(1, 104, 116, 0.09);
-  border-color: rgba(1, 104, 116, 0.3);
+.m3-card:hover, .neural-card:hover {
+  box-shadow: var(--md-sys-elevation-2);
+  border-color: var(--md-sys-color-primary);
   transform: translateY(-2px);
 }
 
@@ -61,105 +42,53 @@ body {
   content: '';
   position: absolute;
   inset: -2px;
-  border-radius: 28px;
-  background: linear-gradient(135deg, rgba(1, 104, 116, 0.2), rgba(103, 80, 164, 0.15), rgba(112, 193, 69, 0.2));
+  border-radius: var(--md-sys-shape-extra-large-increased);
+  background: linear-gradient(135deg, rgba(15, 44, 89, 0.18), rgba(30, 107, 82, 0.15), rgba(59, 100, 112, 0.18));
   z-index: -1;
   opacity: 0.7;
   filter: blur(8px);
-  transition: opacity 0.3s ease;
+  transition: opacity var(--spring-duration-effects-default) var(--spring-curve-effects-default);
 }
 
 .neural-glow:hover::before {
   opacity: 1;
 }
 
-.m3-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-family: monospace;
-  font-weight: 700;
-  font-size: 0.75rem;
-  line-height: 1;
-}
-
-/* Touch Target Minimum (Accessibility & Mobile Usability) */
-.touch-target {
-  min-height: 44px;
-  min-width: 44px;
-}
-
-/* Unified MD3 Form Controls */
-.m3-input {
-  width: 100%;
-  background-color: #FAF8F5;
-  border: 1px solid rgba(121, 116, 126, 0.35);
-  border-radius: 14px;
-  padding: 0.5rem 0.875rem;
-  font-size: 0.75rem;
-  color: #1C1B1F;
-  transition: all 0.2s ease;
-  font-family: inherit;
-}
-
-.m3-input:focus {
-  outline: none;
-  border-color: var(--md-sys-color-primary);
-  box-shadow: 0 0 0 3px rgba(1, 104, 116, 0.15);
-  background-color: #ffffff;
-}
-
-.m3-select {
-  background-color: #FAF8F5;
-  border: 1px solid rgba(121, 116, 126, 0.35);
-  border-radius: 14px;
-  padding: 0.5rem 0.875rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #1C1B1F;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.m3-select:focus {
-  outline: none;
-  border-color: var(--md-sys-color-primary);
-  box-shadow: 0 0 0 3px rgba(1, 104, 116, 0.15);
-  background-color: #ffffff;
-}
-
-/* Unified MD3 Buttons */
+/* M3 Expressive Buttons */
 .m3-btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
+  gap: var(--md-sys-spacing-1);
+  height: 40px;
+  padding: 0 20px;
+  border-radius: calc(40px / 2);
   background-color: var(--md-sys-color-primary);
-  color: #ffffff;
-  font-size: 0.75rem;
+  color: var(--md-sys-color-on-primary);
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.8125rem;
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  cursor: pointer;
+  box-shadow: var(--md-sys-elevation-1);
   border: none;
+  cursor: pointer;
+  transition: transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast, var(--spring-fallback-spatial-fast)),
+              box-shadow var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
+              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+  will-change: transform;
 }
 
 .m3-btn-primary:hover:not(:disabled) {
-  background-color: #01505a;
-  box-shadow: 0 3px 8px rgba(1, 104, 116, 0.25);
-  transform: translateY(-1px);
+  background-color: var(--md-sys-color-on-primary-fixed-variant);
+  box-shadow: var(--md-sys-elevation-2);
+  transform: translateY(-1px) scale(1.01);
 }
 
 .m3-btn-primary:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 .m3-btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -167,120 +96,193 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  background-color: #CCEBF0;
-  color: #002025;
-  font-size: 0.75rem;
+  gap: var(--md-sys-spacing-1);
+  height: 40px;
+  padding: 0 20px;
+  border-radius: calc(40px / 2);
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.8125rem;
   font-weight: 700;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  cursor: pointer;
   border: none;
+  cursor: pointer;
+  transition: transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast, var(--spring-fallback-spatial-fast)),
+              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
 }
 
 .m3-btn-secondary:hover:not(:disabled) {
-  background-color: #b5e3eb;
+  background-color: var(--md-sys-color-secondary-fixed-dim);
   transform: translateY(-1px);
+}
+
+.m3-btn-secondary:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
 }
 
 .m3-btn-outline {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  background-color: #FAF8F5;
-  border: 1px solid rgba(121, 116, 126, 0.35);
+  gap: var(--md-sys-spacing-1);
+  height: 40px;
+  padding: 0 18px;
+  border-radius: calc(40px / 2);
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
   color: var(--md-sys-color-primary);
-  font-size: 0.75rem;
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.8125rem;
   font-weight: 700;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
   cursor: pointer;
+  transition: transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast, var(--spring-fallback-spatial-fast)),
+              border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
+              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
 }
 
 .m3-btn-outline:hover:not(:disabled) {
-  background-color: #ffffff;
+  background-color: var(--md-sys-color-surface-container-low);
   border-color: var(--md-sys-color-primary);
-  box-shadow: 0 2px 6px rgba(1, 104, 116, 0.1);
+  box-shadow: var(--md-sys-elevation-1);
   transform: translateY(-1px);
+}
+
+.m3-btn-outline:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
 }
 
 /* Unified Segmented Switcher */
 .m3-segmented {
   display: inline-flex;
   align-items: center;
-  background-color: #FAF8F5;
-  border: 1px solid rgba(121, 116, 126, 0.3);
-  border-radius: 9999px;
-  padding: 0.25rem;
-  gap: 0.25rem;
+  background-color: var(--md-sys-color-surface-container-low);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: calc(36px / 2);
+  padding: 3px;
+  gap: 3px;
 }
 
 .m3-segmented-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
+  gap: var(--md-sys-spacing-1);
+  padding: 5px 12px;
+  border-radius: calc(30px / 2);
+  font-family: 'Roboto Flex', sans-serif;
   font-size: 0.75rem;
   font-weight: 700;
-  transition: all 0.2s ease;
+  transition: all var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
   border: none;
   cursor: pointer;
 }
 
 .m3-segmented-item.active {
   background-color: var(--md-sys-color-primary);
-  color: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-sys-elevation-1);
 }
 
 .m3-segmented-item:not(.active) {
   background-color: transparent;
-  color: #49454F;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .m3-segmented-item:not(.active):hover {
   color: var(--md-sys-color-primary);
-  background-color: rgba(1, 104, 116, 0.06);
+  background-color: var(--md-sys-color-surface-container-high);
+}
+.m3-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-1);
+  padding: 4px 12px;
+  height: 32px;
+  border-radius: calc(32px / 2);
+  font-family: 'Roboto Flex', sans-serif;
+  font-weight: 500;
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
-/* Unified Table Styles */
+/* Touch Target Minimum (Accessibility & Mobile Usability) */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* Unified MD3 Expressive Form Controls */
+.m3-input {
+  width: 100%;
+  background-color: var(--md-sys-color-surface-container-low);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-medium);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface);
+  transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
+              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+  font-family: inherit;
+}
+
+.m3-input:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  background-color: var(--md-sys-color-surface-container-lowest);
+}
+
+.m3-select {
+  width: 100%;
+  background-color: var(--md-sys-color-surface-container-low);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-medium);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface);
+  transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+  cursor: pointer;
+}
+
+.m3-select:focus {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+}
+
+/* M3 Expressive Table Styles */
 .m3-table {
   width: 100%;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   text-align: left;
   border-collapse: collapse;
 }
 
 .m3-table th {
-  padding: 0.75rem 0.875rem;
-  background-color: #FAF8F5;
-  color: #1C1B1F;
-  font-size: 0.6875rem;
-  font-family: monospace;
+  padding: 0.75rem 1rem;
+  background-color: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.75rem;
+  font-family: 'Roboto Flex', sans-serif;
   font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid rgba(121, 116, 126, 0.25);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .m3-table td {
-  padding: 0.75rem 0.875rem;
-  border-bottom: 1px solid rgba(121, 116, 126, 0.15);
-  transition: background-color 0.15s ease;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+  transition: background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
 }
 
 .m3-table tr:hover td {
-  background-color: rgba(204, 235, 240, 0.2);
+  background-color: var(--md-sys-color-surface-container-high);
 }
 
-@keyframes fadeInSlide {
+/* Unified Spring-Based Page & Modal Keyframes */
+@keyframes expressiveFadeInSlide {
   0% {
-    opacity: 0.9;
-    transform: translate3d(0, 4px, 0);
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
   }
   100% {
     opacity: 1;
@@ -289,16 +291,15 @@ body {
 }
 
 .animate-fade-in-slide {
-  animation: fadeInSlide 180ms cubic-bezier(0.05, 0.7, 0.1, 1.0) forwards;
+  animation: expressiveFadeInSlide var(--spring-duration-spatial-default) var(--spring-curve-spatial-default, var(--spring-fallback-spatial-default)) forwards;
   will-change: opacity, transform;
   backface-visibility: hidden;
-  -webkit-font-smoothing: antialiased;
 }
 
-@keyframes fadeIn {
+@keyframes expressiveFadeIn {
   0% {
-    opacity: 0.9;
-    transform: translate3d(0, 2px, 0);
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
   }
   100% {
     opacity: 1;
@@ -307,26 +308,79 @@ body {
 }
 
 .animate-fade-in {
-  animation: fadeIn 160ms cubic-bezier(0.05, 0.7, 0.1, 1.0) forwards;
+  animation: expressiveFadeIn var(--spring-duration-effects-default) var(--spring-curve-effects-default) forwards;
   will-change: opacity, transform;
 }
 
-@keyframes pulseBorder {
-  0%, 100% { border-color: rgba(0, 104, 116, 0.2); }
-  50% { border-color: rgba(0, 104, 116, 0.6); }
+/* Pulse animation for skeleton sweep */
+@keyframes m3SkeletonSweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
-.animate-pulse-border {
-  animation: pulseBorder 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+.m3-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--md-sys-color-surface-container-high) 0%,
+    var(--md-sys-color-surface-container-lowest) 50%,
+    var(--md-sys-color-surface-container-high) 100%
+  );
+  background-size: 200% 100%;
+  animation: m3SkeletonSweep 1000ms infinite ease-in-out;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+/* Tabular Figures for high-precision financial & pharmaceutical metrics */
+.tabular-nums, .font-mono {
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-variant-numeric: tabular-nums;
 }
 
-.animate-float {
-  animation: float 3s ease-in-out infinite;
+/* Sticky Data Table Headers */
+.m3-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
+
+/* Pulse indicator for live scraping / system health */
+.m3-live-indicator {
+  position: relative;
+  display: inline-flex;
+  width: 8px;
+  height: 8px;
+}
+
+.m3-live-indicator::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background-color: var(--md-sys-color-secondary);
+  opacity: 0.75;
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.m3-live-indicator::after {
+  content: '';
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--md-sys-color-secondary);
+}
+
+/* Smooth Tab transitions */
+.tab-content-enter {
+  animation: expressiveFadeIn 200ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
 
 

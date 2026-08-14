@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import ConfirmModal from '../components/ConfirmModal';
+import ModalWrapper from '../components/ModalWrapper';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { dbUpsertCadena, dbDeleteCadena } from '../utils/dbClient';
@@ -158,20 +159,29 @@ export default function Cadenas() {
             </table>
           </div>
         ) : cadenas.length === 0 ? (
-          <div className="p-12 text-center text-on-surface-variant italic">
-            Aún no hay cadenas registradas. Crea una para empezar.
+          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-2xl">storefront</span>
+            </div>
+            <div>
+              <div className="font-bold text-on-surface font-display text-base">Aún no hay cadenas registradas</div>
+              <div className="text-xs text-on-surface-variant mt-0.5">Registra una cadena farmacéutica para habilitar el scraping de precios.</div>
+            </div>
+            <button onClick={() => setEditing('new')} className="m3-btn-primary h-8 px-4 text-xs mt-1">
+              + Registrar Primera Cadena
+            </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[750px] relative">
             <table className="m3-table">
-              <thead>
+              <thead className="m3-sticky-header">
                 <tr>
-                  <th>Nombre Cadena</th>
+                  <th className="rounded-tl-2xl">Nombre Cadena</th>
                   <th>Portal Website</th>
                   <th>Identificador Técnico Scraper</th>
                   <th className="text-center">URLs Activas Scrapeadas</th>
                   <th className="text-center">Estado</th>
-                  <th className="text-right">Acciones</th>
+                  <th className="text-right rounded-tr-2xl">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
@@ -284,59 +294,59 @@ function CadenaModal({ cadena, onSave, onClose }) {
   const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full flex flex-col border border-outline-variant"
-        onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
-          <h2 className="text-xl font-display font-extrabold text-primary">{isNew ? 'Registrar Cadena' : 'Editar Cadena'}</h2>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl leading-none">×</button>
+    <ModalWrapper
+      isOpen={true}
+      onClose={onClose}
+      title={isNew ? 'Registrar Cadena' : 'Editar Cadena'}
+      subtitle={isNew ? 'Añade una nueva cadena de farmacias para monitoreo' : `Editando datos de ${form.nombre}`}
+      icon="store"
+      maxWidth="max-w-lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Field label="Nombre Comercial *" hint="Ej. Locatel, Farmatodo, FarmaDON">
+          <input type="text" required value={form.nombre}
+            onChange={e => handleChange('nombre', e.target.value)}
+            disabled={!isNew}
+            placeholder="Nombre comercial de la cadena"
+            className="m3-input disabled:bg-surface-container-low" />
+        </Field>
+
+        <Field label="Website Principal" hint="Sitio web de e-commerce de la cadena">
+          <input type="url" value={form.website}
+            onChange={e => handleChange('website', e.target.value)}
+            placeholder="https://www.ejemplo.com.ve"
+            className="m3-input" />
+        </Field>
+
+        <Field label="Identificador Técnico Robot" hint="Módulo Python de scraping asociado en backend">
+          <select required value={form.scraper_modulo}
+            onChange={e => handleChange('scraper_modulo', e.target.value)}
+            className="m3-select w-full bg-surface-container-lowest text-on-surface">
+            {SCRAPERS_DISPONIBLES.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Estado Monitoreo">
+          <label className="flex items-center gap-3 px-4 py-3 border border-outline-variant/60 rounded-2xl cursor-pointer font-bold text-xs text-primary bg-surface-container-low select-none hover:bg-surface-container transition-colors">
+            <input type="checkbox" checked={form.activo}
+              onChange={e => handleChange('activo', e.target.checked)}
+              className="rounded text-primary focus:ring-primary h-4 w-4" />
+            <span>ACTIVAR ROBOTS DE EXTRACCIÓN DIARIA</span>
+          </label>
+        </Field>
+
+        <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/60">
+          <button type="button" onClick={onClose}
+            className="m3-btn-outline h-9 px-4 text-xs">Cancelar</button>
+          <button type="submit" disabled={saving}
+            className="m3-btn-primary h-9 px-5 text-xs">
+            {saving ? 'Guardando...' : isNew ? 'Registrar' : 'Guardar Cambios'}
+          </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <Field label="Nombre Comercial *" hint="Ej. Locatel, Farmatodo, FarmaDON">
-            <input type="text" required value={form.nombre}
-              onChange={e => handleChange('nombre', e.target.value)}
-              disabled={!isNew}
-              placeholder="Nombre comercial de la cadena"
-              className="w-full px-4 py-2 border border-outline-variant rounded-xl disabled:bg-surface-low focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
-          </Field>
-
-          <Field label="Website Principal" hint="Sitio web de e-commerce de la cadena">
-            <input type="url" value={form.website}
-              onChange={e => handleChange('website', e.target.value)}
-              placeholder="https://www.ejemplo.com.ve"
-              className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm text-on-surface" />
-          </Field>
-
-          <Field label="Identificador Técnico Robot" hint="Módulo Python de scraping asociado en backend">
-            <select required value={form.scraper_modulo}
-              onChange={e => handleChange('scraper_modulo', e.target.value)}
-              className="w-full px-4 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary font-sans text-sm bg-white text-on-surface">
-              {SCRAPERS_DISPONIBLES.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Estado Monitoreo">
-            <label className="flex items-center gap-2 px-4 py-3 border border-outline rounded-xl cursor-pointer font-bold text-xs text-primary bg-surface-low select-none">
-              <input type="checkbox" checked={form.activo}
-                onChange={e => handleChange('activo', e.target.checked)}
-                className="rounded text-primary focus:ring-primary h-4 w-4" />
-              <span>ACTIVAR ROBOTS DE EXTRACCIÓN DIARIA</span>
-            </label>
-          </Field>
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-outline-variant">
-            <button type="button" onClick={onClose}
-              className="px-5 py-2 border border-outline rounded-full text-xs font-bold hover:bg-surface-low text-on-surface-variant">Cancelar</button>
-            <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-secondary hover:bg-secondary/90 text-on-secondary rounded-full text-xs font-bold shadow-sm transition-all">
-              {saving ? 'Guardando...' : isNew ? 'Registrar' : 'Guardar Cambios'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </ModalWrapper>
   );
 }
 
