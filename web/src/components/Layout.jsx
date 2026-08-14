@@ -6,7 +6,8 @@ import { useData } from '../context/DataContext';
 
 export default function Layout({ user, userDoc, children }) {
   const { isRefreshing, refreshData } = useData();
-  const isAdmin = userDoc?.rol === 'administrador';
+  const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
+  const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
   const handleLogout = async () => {
     try {
       localStorage.removeItem('trackflow_demo_user');
@@ -24,9 +25,8 @@ export default function Layout({ user, userDoc, children }) {
   // Para reactivarlos en el futuro, descomentar las siguientes líneas:
   const navItems = [
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
+    { to: '/analisis', label: 'Análisis', icon: 'insights', adminOnly: false },
     { to: '/mapa-calor', label: 'Mapa de Calor', icon: 'thermostat', adminOnly: false },
-    // { to: '/simulador', label: 'Análisis', icon: 'insights', adminOnly: false }, // REAC_ANÁLISIS_V1.2
-    // { to: '/hallazgos', label: 'Hallazgos', icon: 'troubleshoot', adminOnly: false }, // REAC_HALLAZGOS_V1.2
     { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: true },
     { to: '/competencia', label: 'Competencia', icon: 'link', adminOnly: true },
     { to: '/cadenas', label: 'Cadenas', icon: 'storefront', adminOnly: true },
@@ -35,8 +35,8 @@ export default function Layout({ user, userDoc, children }) {
 
   return (
     <div className="min-h-screen bg-background flex font-sans text-on-background">
-      {/* Sidebar - Material Design 3 Navigation Drawer */}
-      <aside className="w-72 bg-white border-r border-surface-variant flex flex-col justify-between py-6 px-4 shrink-0">
+      {/* Sidebar - Material Design 3 Navigation Drawer (Desktop / Tablet) */}
+      <aside className="hidden md:flex w-64 lg:w-72 bg-white border-r border-surface-variant flex-col justify-between py-6 px-4 shrink-0">
         <div>
           {/* Logo & Brand */}
           <div className="px-4 mb-8">
@@ -165,10 +165,38 @@ export default function Layout({ user, userDoc, children }) {
           </div>
         </header>
 
-        <div className="flex-1 p-8 max-w-[1440px] w-full mx-auto">
+        <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto pb-20 md:pb-8">
           {children}
         </div>
       </main>
+
+      {/* Mobile Bottom Navigation Bar (MD3 Style for Mobile Touch Usability) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-surface-variant flex items-center justify-around py-1.5 px-2 shadow-lg">
+        {navItems
+          .filter(item => !item.adminOnly || isAdmin)
+          .slice(0, 5) // Show top 5 main links on bottom bar
+          .map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center py-1 px-3 rounded-2xl min-w-[56px] transition-all ${
+                  isActive
+                    ? 'text-primary font-bold bg-primary-container/60'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`
+              }
+            >
+              <span className="material-symbols-outlined text-xl select-none">
+                {item.icon}
+              </span>
+              <span className="text-[10px] font-medium tracking-tight mt-0.5">
+                {item.label}
+              </span>
+            </NavLink>
+          ))}
+      </nav>
     </div>
   );
 }

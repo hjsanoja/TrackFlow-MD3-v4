@@ -3,6 +3,7 @@ import { collection, query, orderBy, limit, doc, getDoc, getDocs, writeBatch, de
 import { db } from '../firebase';
 import { useBcvRate } from '../hooks/useBcvRate';
 import ProductDetailModal from '../components/ProductDetailModal';
+import BcvDetailModal from '../components/BcvDetailModal';
 import ConfirmModal from '../components/ConfirmModal';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import { useToast } from '../context/ToastContext';
@@ -46,10 +47,37 @@ export default function Dashboard({ user, userDoc }) {
   const [waitingForScraper, setWaitingForScraper] = useState(false);
   const [scraperTriggerTime, setScraperTriggerTime] = useState(null);
   const [showGithubModal, setShowGithubModal] = useState(false);
+  const [showBcvModal, setShowBcvModal] = useState(false);
 
   const bcv = useBcvRate();
   const { addToast } = useToast();
   const isAdmin = userDoc?.rol === 'administrador';
+
+  // Calculated variation percentages for BCV card (day & month)
+  const bcvVariations = useMemo(() => {
+    if (!bcvHistorico || bcvHistorico.length === 0) {
+      return { dailyPct: 0, monthlyPct: 0, latestVal: bcv?.rate || 0 };
+    }
+    const sorted = [...bcvHistorico].sort((a, b) => {
+      const dA = a.rawDate ? new Date(a.rawDate) : new Date(0);
+      const dB = b.rawDate ? new Date(b.rawDate) : new Date(0);
+      return dA - dB;
+    });
+
+    const latestVal = bcv?.rate || (sorted.length > 0 ? sorted[sorted.length - 1].valor : 0);
+
+    // Prev rate
+    const prevRateObj = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
+    const dailyPct = prevRateObj && prevRateObj.valor > 0 ? ((latestVal - prevRateObj.valor) / prevRateObj.valor) * 100 : 0;
+
+    // Month ago rate (closest to 30 days ago)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const monthCandidates = sorted.filter(r => r.rawDate && new Date(r.rawDate) <= thirtyDaysAgo);
+    const monthAgoObj = monthCandidates.length > 0 ? monthCandidates[monthCandidates.length - 1] : sorted[0];
+    const monthlyPct = monthAgoObj && monthAgoObj.valor > 0 ? ((latestVal - monthAgoObj.valor) / monthAgoObj.valor) * 100 : 0;
+
+    return { dailyPct, monthlyPct, latestVal };
+  }, [bcvHistorico, bcv?.rate]);
 
   const cargarDatos = async (showSilently = false) => {
     await refreshData(showSilently);
@@ -917,22 +945,76 @@ export default function Dashboard({ user, userDoc }) {
         </div>
 
         {/* Historical BCV rate chart */}
-        <div className="bg-white rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between">
+        <div 
+          onClick={() => setShowBcvModal(true)}
+          className="bg-white rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between hover:border-primary/60 transition-all hover:shadow-md cursor-pointer group relative"
+        >
           <div>
-            <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider mb-1 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-base">show_chart</span>
-              Evolución de Tasa Oficial BCV
-            </h2>
-            <p className="text-[11px] text-on-surface-variant font-sans mb-4 leading-relaxed">
-              Historial de la tasa oficial del Banco Central de Venezuela.
-            </p>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-base group-hover:scale-110 transition-transform">show_chart</span>
+                Evolución de Tasa Oficial BCV
+              </h2>
+              <button 
+                onClick={(e) => { e.stopPropagation(); setShowBcvModal(true); }}
+                className="text-[11px] font-bold font-mono text-primary hover:bg-primary/10 px-2.5 py-1 rounded-full flex items-center gap-1 transition-all"
+                title="Ver historial completo y detalle"
+              >
+                <span>Ver Detalle</span>
+                <span className="material-symbols-outlined text-xs">open_in_full</span>
+              </button>
+            </div>
+            
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <p className="text-[11px] text-on-surface-variant font-sans leading-relaxed">
+                Evolución de los últimos 7 días de la tasa oficial del BCV.
+              </p>
+
+              {/* Indicadores de % de variación en Día y Mes */}
+              <div className="flex items-center gap-1.5">
+                {/* Badge Día */}
+                <span 
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border flex items-center gap-0.5 ${
+                    bcvVariations.dailyPct > 0 
+                      ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                      : bcvVariations.dailyPct < 0 
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                      : 'bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                  title="Variación % con respecto al registro anterior"
+                >
+                  <span className="material-symbols-outlined text-xs">
+                    {bcvVariations.dailyPct > 0 ? 'trending_up' : bcvVariations.dailyPct < 0 ? 'trending_down' : 'trending_flat'}
+                  </span>
+                  Día: {bcvVariations.dailyPct >= 0 ? `+${bcvVariations.dailyPct.toFixed(2)}%` : `${bcvVariations.dailyPct.toFixed(2)}%`}
+                </span>
+
+                {/* Badge Mes */}
+                <span 
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border flex items-center gap-0.5 ${
+                    bcvVariations.monthlyPct > 0 
+                      ? 'bg-blue-50 text-blue-800 border-blue-200' 
+                      : bcvVariations.monthlyPct < 0 
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                      : 'bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                  title="Variación % con respecto a hace 30 días"
+                >
+                  <span className="material-symbols-outlined text-xs">
+                    {bcvVariations.monthlyPct > 0 ? 'show_chart' : bcvVariations.monthlyPct < 0 ? 'trending_down' : 'trending_flat'}
+                  </span>
+                  Mes: {bcvVariations.monthlyPct >= 0 ? `+${bcvVariations.monthlyPct.toFixed(2)}%` : `${bcvVariations.monthlyPct.toFixed(2)}%`}
+                </span>
+              </div>
+            </div>
           </div>
+
           <div className="h-60 mt-2">
             {bcvHistorico.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-[#464650] italic">No hay registros históricos de tasa cargados.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={bcvHistorico} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <AreaChart data={bcvHistorico.slice(-7)} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorBcv" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#016874" stopOpacity={0.2}/>
@@ -1371,6 +1453,14 @@ export default function Dashboard({ user, userDoc }) {
       <GitHubConfigModal
         isOpen={showGithubModal}
         onClose={() => setShowGithubModal(false)}
+      />
+
+      <BcvDetailModal
+        isOpen={showBcvModal}
+        onClose={() => setShowBcvModal(false)}
+        rates={bcvHistorico}
+        currentRate={bcv?.rate}
+        bcv={bcv}
       />
     </div>
   );

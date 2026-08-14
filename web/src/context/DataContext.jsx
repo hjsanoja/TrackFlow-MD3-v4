@@ -47,11 +47,17 @@ const DEFAULT_HISTORICO = [
 ];
 
 const DEFAULT_RATES = [
-  { dayKey: '29/07/2026', fecha: '29 jul', valor: 744.23 },
-  { dayKey: '28/07/2026', fecha: '28 jul', valor: 744.00 },
-  { dayKey: '27/07/2026', fecha: '27 jul', valor: 743.50 },
-  { dayKey: '26/07/2026', fecha: '26 jul', valor: 742.00 },
-  { dayKey: '25/07/2026', fecha: '25 jul', valor: 741.00 }
+  { dayKey: '01/07/2026', fecha: '01 jul', valor: 712.40, source: 'oficial', rawDate: new Date('2026-07-01') },
+  { dayKey: '05/07/2026', fecha: '05 jul', valor: 716.20, source: 'oficial', rawDate: new Date('2026-07-05') },
+  { dayKey: '10/07/2026', fecha: '10 jul', valor: 720.10, source: 'oficial', rawDate: new Date('2026-07-10') },
+  { dayKey: '15/07/2026', fecha: '15 jul', valor: 725.50, source: 'oficial', rawDate: new Date('2026-07-15') },
+  { dayKey: '20/07/2026', fecha: '20 jul', valor: 731.80, source: 'oficial', rawDate: new Date('2026-07-20') },
+  { dayKey: '25/07/2026', fecha: '25 jul', valor: 736.00, source: 'oficial', rawDate: new Date('2026-07-25') },
+  { dayKey: '26/07/2026', fecha: '26 jul', valor: 738.20, source: 'oficial', rawDate: new Date('2026-07-26') },
+  { dayKey: '27/07/2026', fecha: '27 jul', valor: 740.00, source: 'oficial', rawDate: new Date('2026-07-27') },
+  { dayKey: '28/07/2026', fecha: '28 jul', valor: 741.50, source: 'oficial', rawDate: new Date('2026-07-28') },
+  { dayKey: '29/07/2026', fecha: '29 jul', valor: 742.80, source: 'auto', rawDate: new Date('2026-07-29') },
+  { dayKey: '30/07/2026', fecha: '30 jul', valor: 744.23, source: 'oficial', rawDate: new Date('2026-07-30') },
 ];
 
 const DEFAULT_RUN = {
@@ -113,6 +119,9 @@ export function DataProvider({ children, user }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadedOnce, setIsLoadedOnce] = useState(false);
 
+  const CACHE_KEY = 'trackflow_data_cache_v2';
+  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
   const applyDefaultSeed = useCallback(() => {
     setProductos(DEFAULT_PRODUCTS);
     setProductosCompetencia(DEFAULT_COMPETENCIA);
@@ -124,6 +133,40 @@ export function DataProvider({ children, user }) {
     setIsLoadedOnce(true);
     setLoadingInitial(false);
     setIsRefreshing(false);
+  }, []);
+
+  // Intentar cargar desde caché de sesión para agilizar el arranque
+  useEffect(() => {
+    try {
+      const cachedStr = sessionStorage.getItem(CACHE_KEY);
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr);
+        if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+          if (cached.productos?.length) setProductos(cached.productos);
+          if (cached.productosCompetencia?.length) setProductosCompetencia(cached.productosCompetencia);
+          if (cached.cadenas?.length) setCadenas(cached.cadenas);
+          if (cached.historicoPrecios?.length) setHistoricoPrecios(cached.historicoPrecios);
+          if (cached.bcvRates?.length) setBcvRates(cached.bcvRates);
+          if (cached.ultimaCorrida) setUltimaCorrida(cached.ultimaCorrida);
+          if (cached.usuarios?.length) setUsuarios(cached.usuarios);
+          setIsLoadedOnce(true);
+          setLoadingInitial(false);
+        }
+      }
+    } catch (e) {
+      console.warn('Error leyendo cache:', e);
+    }
+  }, []);
+
+  const saveCache = useCallback((dataToCache) => {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        ...dataToCache
+      }));
+    } catch (e) {
+      console.warn('No se pudo guardar en sessionStorage cache:', e);
+    }
   }, []);
 
   const cargarTodo = useCallback(async (showSilently = false) => {
@@ -197,7 +240,8 @@ export function DataProvider({ children, user }) {
               return {
                 dayKey: dateObj.toLocaleDateString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit' }),
                 fecha: dateObj.toLocaleDateString('es-VE', { month: 'short', day: 'numeric' }) || '—',
-                valor: d.value || d.valor,
+                valor: Number(d.value || d.valor || 0),
+                source: d.source || 'oficial',
                 rawDate: dateObj
               };
             });
@@ -211,16 +255,25 @@ export function DataProvider({ children, user }) {
             });
 
             const uniqueDaysRates = Object.values(ratesByDay)
-              .sort((a, b) => a.rawDate - b.rawDate)
-              .slice(-10);
+              .sort((a, b) => a.rawDate - b.rawDate);
 
-            setBcvRates(uniqueDaysRates.map(({ dayKey, fecha, valor }) => ({ dayKey, fecha, valor })));
+            setBcvRates(uniqueDaysRates.map(({ dayKey, fecha, valor, source, rawDate }) => ({ dayKey, fecha, valor, source, rawDate })));
           } else {
             setBcvRates(DEFAULT_RATES);
           }
 
           const uSorted = [...(Array.isArray(uData) ? uData : [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setUsuarios(uSorted);
+
+          saveCache({
+            productos: prods,
+            productosCompetencia: pc,
+            cadenas: cSorted,
+            historicoPrecios: hData || [],
+            bcvRates: bData || [],
+            ultimaCorrida: rData?.[0] || null,
+            usuarios: uSorted
+          });
 
           setIsLoadedOnce(true);
           setLoadingInitial(false);
@@ -286,11 +339,12 @@ export function DataProvider({ children, user }) {
 
       const rawRates = bSnap.docs.map(d => {
         const data = d.data();
-        const dateObj = data.updated_at?.toDate?.() || new Date();
+        const dateObj = data.updated_at?.toDate?.() || (data.updated_at ? new Date(data.updated_at) : new Date());
         return {
           dayKey: dateObj.toLocaleDateString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit' }),
           fecha: dateObj.toLocaleDateString('es-VE', { month: 'short', day: 'numeric' }) || '—',
-          valor: data.value,
+          valor: Number(data.value || data.valor || 0),
+          source: data.source || 'oficial',
           rawDate: dateObj
         };
       });
@@ -304,10 +358,9 @@ export function DataProvider({ children, user }) {
       });
 
       const uniqueDaysRates = Object.values(ratesByDay)
-        .sort((a, b) => a.rawDate - b.rawDate)
-        .slice(-10);
+        .sort((a, b) => a.rawDate - b.rawDate);
 
-      setBcvRates(uniqueDaysRates.map(({ dayKey, fecha, valor }) => ({ dayKey, fecha, valor })));
+      setBcvRates(uniqueDaysRates.map(({ dayKey, fecha, valor, source, rawDate }) => ({ dayKey, fecha, valor, source, rawDate })));
 
       const uDocs = uSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       uDocs.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));

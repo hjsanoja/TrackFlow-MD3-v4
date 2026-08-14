@@ -42,7 +42,21 @@ export async function executeLiveBatchScrape(items, onProgress) {
     }
 
     const scrapedData = await scrapeSingleUrl(item.url);
-    const hasError = Boolean(scrapedData.error || !scrapedData.precio_full_bs);
+    
+    // Normalizar precios y detectar promociones/descuentos de forma robusta
+    let precioFull = scrapedData.precio_full_bs ? Number(scrapedData.precio_full_bs) : null;
+    let precioDesc = scrapedData.precio_desc_bs ? Number(scrapedData.precio_desc_bs) : null;
+
+    if (precioFull && precioDesc && precioDesc >= precioFull) {
+      // Si el precio de descuento resulta igual o mayor al full, normalizamos
+      precioDesc = null;
+    } else if (precioFull && !precioDesc && scrapedData.precio_oferta) {
+      const oferta = Number(scrapedData.precio_oferta);
+      if (oferta < precioFull) precioDesc = oferta;
+    }
+
+    const tieneDescuento = Boolean(precioDesc && precioDesc < precioFull);
+    const hasError = Boolean(scrapedData.error || !precioFull);
 
     if (hasError) {
       errorCount++;

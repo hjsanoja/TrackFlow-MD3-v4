@@ -6,6 +6,7 @@ import { auth, db } from './firebase';
 import { supabase } from './supabase';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Analisis from './pages/Analisis';
 import Simulador from './pages/Simulador';
 import Hallazgos from './pages/Hallazgos';
 import MapaCalor from './pages/MapaCalor';
@@ -186,13 +187,15 @@ function AppContent() {
     );
   }
 
-  const isAdmin = userDoc?.rol === 'administrador';
+  const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
+  const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
 
   return (
     <DataProvider user={user}>
       <Layout user={user} userDoc={userDoc}>
         <Routes>
           <Route path="/" element={<Dashboard user={user} userDoc={userDoc} />} />
+          <Route path="/analisis" element={<Analisis user={user} userDoc={userDoc} />} />
           <Route path="/mapa-calor" element={<MapaCalor user={user} userDoc={userDoc} />} />
           {/* Versión 1.2: Ocultos del menú en Layout.jsx. Rutas preservadas intactas para cuando se soliciten reactivar */}
           <Route path="/simulador" element={<Simulador user={user} userDoc={userDoc} />} />

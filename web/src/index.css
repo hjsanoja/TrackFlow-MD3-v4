@@ -3,21 +3,21 @@
 @tailwind utilities;
 
 :root {
-  /* --- TEMA CLARO (Warm-Tech Expressive) --- */
+  /* --- TEMA CLARO (MD3 + Neural Expressive Gemini) --- */
   --md-sys-color-background: #FAF8F5;          /* Fondo base cálido */
   --md-sys-color-on-background: #1C1B1F;       /* Texto de alto contraste */
   
-  --md-sys-color-primary: #6750A4;             /* Violeta tecnológico principal */
-  --md-sys-color-on-primary: #FFFFFF;          /* Texto sobre violeta */
-  --md-sys-color-primary-container: #EADDFF;   /* Contenedor secundario suave */
-  --md-sys-color-on-primary-container: #21005D;
+  --md-sys-color-primary: #016874;             /* Teal tecnológico principal */
+  --md-sys-color-on-primary: #FFFFFF;          /* Texto sobre teal */
+  --md-sys-color-primary-container: #CCEBF0;   /* Contenedor secundario suave */
+  --md-sys-color-on-primary-container: #002025;
   
   --md-sys-color-secondary: #006874;           /* Teal expresivo moderno */
   --md-sys-color-on-secondary: #FFFFFF;
   --md-sys-color-secondary-container: #97F0FF;
   --md-sys-color-on-secondary-container: #001F24;
   
-  --md-sys-color-tertiary: #E040FB;            /* Acento eléctrico para CTAs e impacto */
+  --md-sys-color-tertiary: #6750A4;            /* Accent purple */
   --md-sys-color-on-tertiary: #FFFFFF;
   
   --md-sys-color-surface: #F3EDF7;             /* Fondo de tarjetas y componentes */
@@ -35,6 +35,60 @@ body {
   font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background-color: #fbf9f6;
   color: #1C1B1F;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Neural Expressive MD3 Utility Classes */
+.neural-card {
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid rgba(225, 226, 236, 0.8);
+  box-shadow: 0 4px 20px -2px rgba(1, 104, 116, 0.04);
+  transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.neural-card:hover {
+  box-shadow: 0 12px 30px -4px rgba(1, 104, 116, 0.09);
+  border-color: rgba(1, 104, 116, 0.3);
+  transform: translateY(-2px);
+}
+
+.neural-glow {
+  position: relative;
+}
+
+.neural-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(1, 104, 116, 0.2), rgba(103, 80, 164, 0.15), rgba(112, 193, 69, 0.2));
+  z-index: -1;
+  opacity: 0.7;
+  filter: blur(8px);
+  transition: opacity 0.3s ease;
+}
+
+.neural-glow:hover::before {
+  opacity: 1;
+}
+
+.m3-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+/* Touch Target Minimum (Accessibility & Mobile Usability) */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
 }
 
 @keyframes fadeInSlide {

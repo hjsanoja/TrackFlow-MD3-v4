@@ -1,0 +1,16 @@
+{
+  "short_name": "TrackFlow",
+  "name": "TrackFlow - Monitor de Precios Farmacéuticos",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#FAF8F5",
+  "theme_color": "#016874",
+  "display": "standalone",
+  "orientation": "portrait"
+}
