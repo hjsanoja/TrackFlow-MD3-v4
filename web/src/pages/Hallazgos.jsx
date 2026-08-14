@@ -521,7 +521,7 @@ export default function Hallazgos({ user, userDoc }) {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {/* Search box */}
           <div className="relative">
-            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
             <input
               type="text"
               placeholder="Buscar por producto o principio..."

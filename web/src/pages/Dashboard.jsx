@@ -1306,7 +1306,7 @@ export default function Dashboard({ user, userDoc }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar producto en la matriz..."
-              className="m3-input pl-10 pr-8 h-9 text-xs"
+              className="m3-input m3-input-search pr-8 h-9 text-xs"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>

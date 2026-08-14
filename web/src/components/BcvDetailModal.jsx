@@ -366,16 +366,16 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
             <div className="flex items-center gap-2">
               {/* Search Box */}
               <div className="relative">
-                <span className="material-symbols-outlined text-sm text-on-surface-variant absolute left-3 top-2.5">search</span>
+                <span className="material-symbols-outlined text-[16px] text-on-surface-variant absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none select-none">search</span>
                 <input
                   type="text"
                   placeholder="Buscar fecha o tasa..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-outline-variant/60 bg-surface-container-low focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary w-44 sm:w-60 font-sans text-on-surface"
+                  className="pl-9 pr-7 py-1.5 text-xs rounded-xl border border-outline-variant/60 bg-surface-container-low focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary w-44 sm:w-60 font-sans text-on-surface"
                 />
                 {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} className="absolute right-2 top-2 text-on-surface-variant text-xs">×</button>
+                  <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">×</button>
                 )}
               </div>
 

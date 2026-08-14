@@ -672,16 +672,16 @@ export default function Competencia({ user, userDoc }) {
       {/* Filter and Query Section */}
       <div className="neural-card p-4 flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-[240px] relative">
-          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
           <input
             type="text"
             placeholder="Buscar por variante, marca o dirección URL..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="m3-input pl-9 pr-8"
+            className="m3-input m3-input-search pr-8"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>
           )}
         </div>
         

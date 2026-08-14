@@ -210,42 +210,48 @@ body {
   min-width: 48px;
 }
 
-/* Unified MD3 Expressive Form Controls */
-.m3-input {
-  width: 100%;
-  background-color: var(--md-sys-color-surface-container-low);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: var(--md-sys-shape-medium);
-  padding: 0.5rem 0.875rem;
-  font-size: 0.875rem;
-  color: var(--md-sys-color-on-surface);
-  transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
-              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
-  font-family: inherit;
-}
+@layer components {
+  /* Unified MD3 Expressive Form Controls */
+  .m3-input {
+    width: 100%;
+    background-color: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--md-sys-shape-medium);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--md-sys-color-on-surface);
+    transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
+                background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+    font-family: inherit;
+  }
 
-.m3-input:focus {
-  outline: none;
-  border-color: var(--md-sys-color-primary);
-  background-color: var(--md-sys-color-surface-container-lowest);
-}
+  .m3-input:focus {
+    outline: none;
+    border-color: var(--md-sys-color-primary);
+    background-color: var(--md-sys-color-surface-container-lowest);
+  }
 
-.m3-select {
-  width: 100%;
-  background-color: var(--md-sys-color-surface-container-low);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: var(--md-sys-shape-medium);
-  padding: 0.5rem 0.875rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--md-sys-color-on-surface);
-  transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
-  cursor: pointer;
-}
+  .m3-input-search {
+    padding-left: 2.625rem !important;
+  }
 
-.m3-select:focus {
-  outline: none;
-  border-color: var(--md-sys-color-primary);
+  .m3-select {
+    width: 100%;
+    background-color: var(--md-sys-color-surface-container-low);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--md-sys-shape-medium);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--md-sys-color-on-surface);
+    transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+    cursor: pointer;
+  }
+
+  .m3-select:focus {
+    outline: none;
+    border-color: var(--md-sys-color-primary);
+  }
 }
 
 /* M3 Expressive Table Styles */

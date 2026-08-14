@@ -373,16 +373,16 @@ export default function MapaCalor({ user, userDoc }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {/* Search Box */}
           <div className="relative md:col-span-1">
-            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-base">search</span>
+            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
             <input
               type="text"
               placeholder="Buscar producto o principio..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="m3-input pl-9 pr-8"
+              className="m3-input m3-input-search pr-8"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold">×</button>
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>
             )}
           </div>
 

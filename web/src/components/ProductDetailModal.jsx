@@ -682,19 +682,19 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-[#e1e2ec] shadow-2xl z-40 p-3 space-y-2.5 animate-fade-in max-w-2xl w-full">
                 {/* Search Bar */}
                 <div className="relative flex items-center">
-                  <span className="material-symbols-outlined absolute left-3 text-lg text-[#464650]">search</span>
+                  <span className="material-symbols-outlined absolute left-3 text-[18px] text-[#464650] pointer-events-none select-none">search</span>
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar por nombre, id, principio activo o categoría..."
-                    className="w-full pl-9 pr-8 py-2 bg-[#f3f4f9] border border-[#e1e2ec] focus:border-[#040d53] focus:bg-white rounded-xl text-xs font-medium text-[#1c1b1f] placeholder-[#464650]/60 outline-none transition-all"
+                    className="w-full pl-10 pr-8 py-2 bg-[#f3f4f9] border border-[#e1e2ec] focus:border-[#040d53] focus:bg-white rounded-xl text-xs font-medium text-[#1c1b1f] placeholder-[#464650]/60 outline-none transition-all"
                     autoFocus
                   />
                   {searchTerm && (
                     <button
                       onClick={() => setSearchTerm('')}
-                      className="absolute right-2.5 text-[#464650] hover:text-black"
+                      className="absolute right-2.5 text-[#464650] hover:text-black w-5 h-5 flex items-center justify-center rounded-full"
                     >
                       <span className="material-symbols-outlined text-sm">close</span>
                     </button>
