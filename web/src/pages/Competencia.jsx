@@ -34,6 +34,7 @@ export default function Competencia({ user, userDoc }) {
     loadingInitial: loading,
     refreshData: cargar,
     refreshCompetencia,
+    refreshProductos,
     setProductosCompetencia
   } = useData();
 
@@ -376,18 +377,29 @@ export default function Competencia({ user, userDoc }) {
             continue;
           }
 
-          if (!cadena) {
+          if (cadena) {
+            const matchCadena = cadenas?.find(c => c.nombre.toLowerCase().trim() === cadena.toLowerCase().trim());
+            if (matchCadena) {
+              cadena = matchCadena.nombre;
+            } else {
+              cadena = cadena.charAt(0).toUpperCase() + cadena.slice(1).toLowerCase();
+            }
+          } else {
             const urlLower = url.toLowerCase();
             if (urlLower.includes('farmatodo')) cadena = 'Farmatodo';
             else if (urlLower.includes('locatel')) cadena = 'Locatel';
+            else if (urlLower.includes('farmadon')) cadena = 'FarmaDON';
+            else if (urlLower.includes('sanignacio') || urlLower.includes('san_ignacio')) cadena = 'Grupo San Ignacio';
             else if (urlLower.includes('redvital')) cadena = 'Redvital';
             else if (urlLower.includes('meditotal')) cadena = 'Meditotal';
             else if (urlLower.includes('saas')) cadena = 'SAAS';
+            else if (urlLower.includes('farmago')) cadena = 'FarmaGo';
+            else if (urlLower.includes('xana')) cadena = 'Farmacias Xana';
             else cadena = 'Competencia';
           }
 
           if (!id_producto && marca) {
-            const matchedProd = productos.find(p => p.nombre.toLowerCase().trim() === marca.toLowerCase().trim());
+            const matchedProd = productos.find(p => p.nombre?.toLowerCase().trim() === marca.toLowerCase().trim());
             if (matchedProd) {
               id_producto = matchedProd.id_interno || matchedProd.id;
             }
@@ -397,18 +409,21 @@ export default function Competencia({ user, userDoc }) {
             id_producto = `P_${String(idx + 1).padStart(4, '0')}`;
           }
 
+          const id_str = String(id_producto).trim();
+
           // Registrar auto-creación de producto si no existe en el catálogo
-          if (!productos.some(p => p.id_interno === id_producto || p.id === id_producto)) {
-            prodsToAutoCreate.set(id_producto, {
-              id: id_producto,
-              id_interno: id_producto,
-              nombre: marca || `Producto ${id_producto}`,
+          const prodExists = productos.some(p => String(p.id_interno || p.id).trim() === id_str);
+          if (!prodExists && !prodsToAutoCreate.has(id_str)) {
+            prodsToAutoCreate.set(id_str, {
+              id: id_str,
+              id_interno: id_str,
+              nombre: marca || `Producto ${id_str}`,
               laboratorio: laboratorio || 'La Sante',
               concentracion: concentracion || '',
               tamano: tamano || '',
               categoria: 'Otros',
               activo: true,
-              market_type: 'GENERICO',
+              market_type: (laboratorio && laboratorio.toLowerCase().includes('sante')) ? 'GENERICO' : 'MARCA',
               unidad_negocio: 'La Sante'
             });
           }
@@ -428,7 +443,7 @@ export default function Competencia({ user, userDoc }) {
               docId = existingComp.id;
             } else {
               const urlSlug = cleanUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/[^a-z0-9]/g, '_');
-              const baseId = `${id_producto}_${cadena.toLowerCase().replace(/[^a-z0-9]/g, '')}_${urlSlug}`.replace(/_+/g, '_').slice(0, 100);
+              const baseId = `${id_str}_${cadena.toLowerCase().replace(/[^a-z0-9]/g, '')}_${urlSlug}`.replace(/_+/g, '_').slice(0, 100);
               docId = baseId;
               let counter = 1;
               while (seenDocIds.has(docId)) {
@@ -441,12 +456,13 @@ export default function Competencia({ user, userDoc }) {
           seenDocIds.add(docId);
 
           const activoVal = getRowValue(row, 'activo', 'Activo');
+          const isPropio = tipo === 'propio' || tipo === 'propia' || tipo === 'la sante' || tipo === 'lasante' || tipo === 'pharmetique';
 
           compToUpsert.push({
             id: docId,
-            id_producto_propio: id_producto,
+            id_producto_propio: id_str,
             cadena,
-            tipo: (tipo === 'propio' || tipo === 'propia') ? 'propio' : 'alternativa',
+            tipo: isPropio ? 'propio' : 'alternativa',
             marca: marca || existingComp?.marca || 'Competencia',
             url,
             activo: activoVal ? (activoVal.toLowerCase() === 'true' || activoVal === '1') : true,
@@ -458,7 +474,7 @@ export default function Competencia({ user, userDoc }) {
 
         if (prodsToAutoCreate.size > 0) {
           await dbUpsertProductosBulk(Array.from(prodsToAutoCreate.values()));
-          refreshProductos();
+          if (refreshProductos) refreshProductos();
         }
 
         if (compToUpsert.length > 0) {
@@ -470,7 +486,8 @@ export default function Competencia({ user, userDoc }) {
             return Array.from(map.values());
           });
 
-          refreshCompetencia();
+          if (refreshCompetencia) refreshCompetencia();
+          if (cargar) cargar(true);
 
           addToast(`Importación exitosa: ${compToUpsert.length} enlaces cargados.`, 'success');
 
