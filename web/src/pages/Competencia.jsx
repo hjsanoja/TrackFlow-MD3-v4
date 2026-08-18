@@ -15,7 +15,8 @@ import {
   dbDeleteProductoCompetencia,
   dbDeleteAllProductosCompetencia,
   dbAddHistoricoPrecio,
-  dbUpsertCompetenciaBulk
+  dbUpsertCompetenciaBulk,
+  dbUpsertProductosBulk
 } from '../utils/dbClient';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
@@ -785,32 +786,32 @@ export default function Competencia({ user, userDoc }) {
             <table className="m3-table">
               <thead className="m3-sticky-header">
                 <tr>
-                  <th className="rounded-tl-2xl">Mi Producto Local</th>
+                  <th>Mi Producto Local</th>
                   <th>Cadena Farmacia</th>
                   <th>Variante Competidor</th>
                   <th>Tipo Asociación</th>
                   <th className="text-right">Último Precio Detectado</th>
                   <th className="text-center">Status Scrape</th>
                   <th className="text-center">Scraper Activo</th>
-                  <th className="text-right rounded-tr-2xl">Acciones</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
                 {itemsPaginados.map(it => (
                   <tr key={it.id} className="hover:bg-surface-low transition-colors">
-                    <td className="px-6 py-4">
+                    <td>
                       <div className="font-bold text-on-surface font-display text-sm truncate max-w-xs" title={productoNombre(it.id_producto_propio)}>
                         {productoNombre(it.id_producto_propio)}
                       </div>
-                      <div className="text-[10px] text-on-surface-variant font-mono mt-0.5">{it.id_producto_propio}</div>
+                      <div className="text-xs text-on-surface-variant font-mono mt-0.5">{it.id_producto_propio}</div>
                     </td>
-                    <td className="px-6 py-4 font-bold text-primary">{it.cadena}</td>
-                    <td className="px-6 py-4">
+                    <td className="font-bold text-primary font-display text-sm">{it.cadena}</td>
+                    <td>
                       <div className="font-bold text-on-surface text-sm">
                         {it.marca} {it.concentracion || ''} {it.tamano || ''}
                       </div>
                       {it.laboratorio && (
-                        <div className="text-[10px] text-on-surface-variant font-medium mt-0.5">Lab: {it.laboratorio}</div>
+                        <div className="text-xs text-on-surface-variant font-mono mt-0.5">Lab: {it.laboratorio}</div>
                       )}
                       <a href={it.url} target="_blank" rel="noopener noreferrer"
                         className="text-xs text-primary hover:underline truncate max-w-xs font-mono mt-0.5 flex items-center gap-0.5" title={it.url}>
@@ -818,20 +819,20 @@ export default function Competencia({ user, userDoc }) {
                         <span className="material-symbols-outlined text-[11px] leading-none">open_in_new</span>
                       </a>
                       {it.estado === 'error' && it.ultimo_error && (
-                        <div className="text-[10px] text-error bg-error/5 border border-error/15 px-2 py-1 rounded-xl mt-1.5 font-medium max-w-xs leading-normal flex items-start gap-1 shadow-sm">
+                        <div className="text-[10px] text-error bg-error/5 border border-error/15 px-2 py-1 rounded-xl mt-1.5 font-medium max-w-xs leading-normal flex items-start gap-1 shadow-xs">
                           <span className="material-symbols-outlined text-[12px] mt-0.5 flex-shrink-0 text-error leading-none">warning</span>
                           <span><strong>Error lectura:</strong> {it.ultimo_error}</span>
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td>
                       <span className={`text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full border ${
-                        it.tipo === 'propio' ? 'bg-[#e8f5e9] text-[#2e7d32] border-[#a5d6a7]' : 'bg-surface-low text-on-surface-variant border-outline-variant'
+                        it.tipo === 'propio' ? 'bg-secondary/10 text-secondary border-secondary/20' : 'bg-surface-low text-on-surface-variant border-outline-variant'
                       }`}>
                         {it.tipo === 'propio' ? 'Mi Marca' : 'Competencia'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right font-mono font-bold text-primary">
+                    <td className="text-right font-mono font-bold text-primary">
                       {it.ultimo_precio_desc_bs ? (
                         <div>
                           <div className="text-on-surface font-extrabold flex items-center justify-end gap-1">
@@ -852,10 +853,10 @@ export default function Competencia({ user, userDoc }) {
                           <span className="font-extrabold">{formatPrice(it.ultimo_precio_full_bs)}</span>
                         </div>
                       ) : (
-                        <span className="text-gray-300 font-mono select-none">—</span>
+                        <span className="text-on-surface-variant/40 font-mono select-none">—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="text-center">
                       {scrapingItems[it.id] ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 animate-pulse">
                           <span className="material-symbols-outlined animate-spin text-[11px] leading-none">autorenew</span>
@@ -864,7 +865,7 @@ export default function Competencia({ user, userDoc }) {
                       ) : (
                         <>
                           {it.estado === 'ok' && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-[#f0f9eb] text-[#214f00] border border-secondary/30">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-secondary/10 text-secondary border border-secondary/30">
                               <span className="material-symbols-outlined text-[10px] leading-none">check_circle</span>
                               OK
                             </span>
@@ -879,15 +880,15 @@ export default function Competencia({ user, userDoc }) {
                         </>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="text-center">
                       <button onClick={() => handleToggleActivo(it)}
-                        className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full transition-all ${
+                        className={`text-[10px] uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
                           it.activo ? 'bg-secondary/15 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
                         }`}>
                         {it.activo ? 'Monitorear' : 'Pausado'}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap space-x-2.5">
+                    <td className="text-right whitespace-nowrap space-x-2.5">
                       <button onClick={() => handleScrapeIndividual(it)}
                         disabled={!!scrapingItems[it.id] || !it.activo}
                         className={`text-xs font-bold inline-flex items-center gap-0.5 ${

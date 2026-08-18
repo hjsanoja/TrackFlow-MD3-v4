@@ -169,82 +169,82 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
         {/* Top Key Indicator Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Tasa Actual */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Tasa Actual</span>
-              <span className="material-symbols-outlined text-primary text-lg">attach_money</span>
-            </div>
-            <div>
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Tasa Actual</span>
               <div className="text-2xl font-extrabold font-mono text-primary">
                 Bs {latestRate ? latestRate.toFixed(4) : '—'}
               </div>
-              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
-                Tasa de referencia de mercado
-              </div>
+              <p className="text-[11px] text-on-surface-variant font-sans">
+                Tasa oficial BCV
+              </p>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-3">
+              <span className="material-symbols-outlined text-xl select-none">attach_money</span>
             </div>
           </div>
 
           {/* Variación Día (%) */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Var. Día</span>
-              <span className={`material-symbols-outlined text-lg ${dailyVar.pct > 0 ? 'text-amber-600' : dailyVar.pct < 0 ? 'text-secondary' : 'text-outline'}`}>
-                {dailyVar.pct > 0 ? 'trending_up' : dailyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
-              </span>
-            </div>
-            <div>
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Día</span>
               <div className="flex items-center gap-1.5">
                 <span className={`text-xl font-extrabold font-mono ${dailyVar.pct > 0 ? 'text-amber-700' : dailyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
                   {dailyVar.pct >= 0 ? `+${dailyVar.pct.toFixed(2)}%` : `${dailyVar.pct.toFixed(2)}%`}
                 </span>
-                <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded-full ${dailyVar.pct > 0 ? 'bg-amber-100 text-amber-900' : dailyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full ${dailyVar.pct > 0 ? 'bg-amber-100 text-amber-900' : dailyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
                   {dailyVar.diff >= 0 ? `+Bs ${dailyVar.diff.toFixed(2)}` : `Bs ${dailyVar.diff.toFixed(2)}`}
                 </span>
               </div>
-              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+              <p className="text-[11px] text-on-surface-variant font-sans">
                 vs. anterior: Bs {dailyVar.prevVal ? dailyVar.prevVal.toFixed(2) : '—'}
-              </div>
+              </p>
+            </div>
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ml-3 ${dailyVar.pct > 0 ? 'bg-amber-50 border border-amber-200 text-amber-700' : dailyVar.pct < 0 ? 'bg-secondary-container/50 border border-secondary/20 text-secondary' : 'bg-surface-low border border-outline-variant/60 text-outline'}`}>
+              <span className="material-symbols-outlined text-xl select-none">
+                {dailyVar.pct > 0 ? 'trending_up' : dailyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
+              </span>
             </div>
           </div>
 
           {/* Variación Mes (%) */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Var. Mes</span>
-              <span className={`material-symbols-outlined text-lg ${monthlyVar.pct > 0 ? 'text-primary' : monthlyVar.pct < 0 ? 'text-secondary' : 'text-outline'}`}>
-                {monthlyVar.pct > 0 ? 'stacked_line_chart' : monthlyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
-              </span>
-            </div>
-            <div>
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Mes</span>
               <div className="flex items-center gap-1.5">
                 <span className={`text-xl font-extrabold font-mono ${monthlyVar.pct > 0 ? 'text-primary' : monthlyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
                   {monthlyVar.pct >= 0 ? `+${monthlyVar.pct.toFixed(2)}%` : `${monthlyVar.pct.toFixed(2)}%`}
                 </span>
-                <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded-full ${monthlyVar.pct > 0 ? 'bg-primary-container text-on-primary-container' : monthlyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full ${monthlyVar.pct > 0 ? 'bg-primary-container text-on-primary-container' : monthlyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
                   {monthlyVar.diff >= 0 ? `+Bs ${monthlyVar.diff.toFixed(2)}` : `Bs ${monthlyVar.diff.toFixed(2)}`}
                 </span>
               </div>
-              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
-                vs. hace 30 días: Bs {monthlyVar.monthVal ? monthlyVar.monthVal.toFixed(2) : '—'}
-              </div>
+              <p className="text-[11px] text-on-surface-variant font-sans">
+                vs. 30 días: Bs {monthlyVar.monthVal ? monthlyVar.monthVal.toFixed(2) : '—'}
+              </p>
+            </div>
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ml-3 ${monthlyVar.pct > 0 ? 'bg-primary/10 border border-primary/20 text-primary' : monthlyVar.pct < 0 ? 'bg-secondary-container/50 border border-secondary/20 text-secondary' : 'bg-surface-low border border-outline-variant/60 text-outline'}`}>
+              <span className="material-symbols-outlined text-xl select-none">
+                {monthlyVar.pct > 0 ? 'stacked_line_chart' : monthlyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
+              </span>
             </div>
           </div>
 
           {/* Rango (Mín / Max) */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-on-surface-variant uppercase font-mono tracking-wider">Rango en Período</span>
-              <span className="material-symbols-outlined text-secondary text-lg">swap_vert</span>
-            </div>
-            <div>
-              <div className="text-base font-extrabold font-mono text-on-surface flex items-center justify-between">
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Rango en Período</span>
+              <div className="text-sm font-extrabold font-mono text-on-surface flex items-center gap-1.5">
                 <span>Bs {rangeStats.min ? rangeStats.min.toFixed(2) : '—'}</span>
-                <span className="text-xs text-on-surface-variant font-normal">a</span>
+                <span className="text-xs text-on-surface-variant font-normal">→</span>
                 <span>Bs {rangeStats.max ? rangeStats.max.toFixed(2) : '—'}</span>
               </div>
-              <div className="text-[11px] text-on-surface-variant font-medium mt-0.5">
+              <p className="text-[11px] text-on-surface-variant font-sans">
                 Promedio: Bs {rangeStats.avg ? rangeStats.avg.toFixed(2) : '—'}
-              </div>
+              </p>
+            </div>
+            <div className="w-11 h-11 rounded-2xl bg-secondary-container/50 border border-secondary/20 flex items-center justify-center text-secondary shrink-0 ml-3">
+              <span className="material-symbols-outlined text-xl select-none">swap_vert</span>
             </div>
           </div>
         </div>

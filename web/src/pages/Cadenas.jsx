@@ -176,12 +176,12 @@ export default function Cadenas() {
             <table className="m3-table">
               <thead className="m3-sticky-header">
                 <tr>
-                  <th className="rounded-tl-2xl">Nombre Cadena</th>
+                  <th>Nombre Cadena</th>
                   <th>Portal Website</th>
                   <th>Identificador Técnico Scraper</th>
                   <th className="text-center">URLs Activas Scrapeadas</th>
                   <th className="text-center">Estado</th>
-                  <th className="text-right rounded-tr-2xl">Acciones</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
@@ -190,8 +190,8 @@ export default function Cadenas() {
                   const count = urlsPorCadena.get(c.nombre) || 0;
                   return (
                     <tr key={c.id} className="hover:bg-surface-low transition-colors">
-                      <td className="px-6 py-4 font-bold text-on-surface font-display text-sm">{c.nombre}</td>
-                      <td className="px-6 py-4">
+                      <td className="font-bold text-on-surface font-display text-sm">{c.nombre}</td>
+                      <td>
                         {c.website ? (
                           <a href={c.website} target="_blank" rel="noopener noreferrer"
                             className="text-xs font-mono text-primary hover:underline flex items-center gap-0.5">
@@ -199,31 +199,31 @@ export default function Cadenas() {
                             <span className="material-symbols-outlined text-[11px] leading-none">open_in_new</span>
                           </a>
                         ) : (
-                          <span className="text-gray-300 font-mono select-none">—</span>
+                          <span className="text-on-surface-variant/40 font-mono select-none">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-on-surface">
+                      <td className="font-mono text-xs text-on-surface">
                         <code className="bg-surface-low border border-outline-variant px-2.5 py-1 rounded-md font-bold">{c.scraper_modulo}</code>
                         {!implementado && (
                           <span className="ml-2 font-bold uppercase tracking-wider text-[10px] text-error bg-error-container border border-error/20 px-2 py-0.5 rounded-full">Pendiente</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-center font-mono">
+                      <td className="text-center font-mono">
                         <span className={`inline-flex px-3 py-1 text-xs rounded-full font-bold ${
                           count === 0 ? 'bg-surface-low text-on-surface-variant border border-outline-variant' : 'bg-primary-container text-on-primary-container'
                         }`}>
                           {count} URLs
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="text-center">
                         <button onClick={() => handleToggleActivo(c)}
-                          className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full transition-all ${
-                            c.activo ? 'bg-secondary/15 text-secondary border border-secondary/30 shadow-sm' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
+                          className={`text-[10px] uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
+                            c.activo ? 'bg-secondary/15 text-secondary border border-secondary/30 shadow-xs' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
                           }`}>
                           {c.activo ? 'Activo' : 'Inactivo'}
                         </button>
                       </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <td className="text-right whitespace-nowrap">
                         <button onClick={() => setEditing(c.id)}
                           className="text-xs text-primary hover:text-primary/80 font-bold mr-4 inline-flex items-center gap-1">
                           <span className="material-symbols-outlined text-sm">edit</span>

@@ -5,6 +5,7 @@ import { db } from '../firebase';
 import ConfirmModal from './ConfirmModal';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { useData } from '../context/DataContext';
+import { dbClearHistoricoPrecioForProduct } from '../utils/dbClient';
 import {
   LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine
 } from 'recharts';
@@ -107,7 +108,7 @@ function BarChartTooltip({ active, payload, label, currency, analisisMode }) {
 }
 
 export default function ProductDetailModal({ producto, competencia, currency, bcvRate, onClose, initialPriceMode = 'descuento', initialAnalisisMode = 'empaque' }) {
-  const { productos = [], productosCompetencia = [], historicoPrecios = [] } = useData() || {};
+  const { productos = [], productosCompetencia = [], historicoPrecios = [], setHistoricoPrecios } = useData() || {};
 
   const [activeProduct, setActiveProduct] = useState(producto);
   const [activeCompetencia, setActiveCompetencia] = useState(competencia);
@@ -196,26 +197,21 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const handleClearHistory = async () => {
     setClearing(true);
     try {
-      const q = query(
-        collection(db, 'historico_precios'),
-        where('id_producto_propio', '==', activeProduct.id_interno)
-      );
-      const snap = await getDocs(q);
-      const docs = snap.docs;
-      
-      for (let i = 0; i < docs.length; i += 500) {
-        const chunk = docs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
+      await dbClearHistoricoPrecioForProduct(activeProduct.id_interno);
       setHistorico([]);
+      if (setHistoricoPrecios) {
+        setHistoricoPrecios(prev => (prev || []).filter(h => h.id_producto_propio !== activeProduct.id_interno));
+      }
     } catch (err) {
-      console.error('Error clearing product history:', err?.message || String(err));
+      console.warn('Aviso al borrar historial de producto:', err?.message || String(err));
+      setHistorico([]);
+      if (setHistoricoPrecios) {
+        setHistoricoPrecios(prev => (prev || []).filter(h => h.id_producto_propio !== activeProduct.id_interno));
+      }
+    } finally {
+      setClearing(false);
+      setShowClearConfirm(false);
     }
-    setClearing(false);
-    setShowClearConfirm(false);
   };
 
   useEffect(() => {
@@ -945,80 +941,103 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           {validPrices.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
               {/* Mas Barato Card */}
-              <div className="bg-white border border-[#e1e2ec] p-4 rounded-2xl shadow-sm space-y-1 relative">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#464650]">
-                    Más Barato {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
-                  </span>
-                  <InfoTooltip text="El precio mínimo detectado entre todos tus competidores en el mercado para el modo seleccionado (con descuento o de lista)." align="left" />
+              <div className="bg-white border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
+                      Más Barato {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
+                    </span>
+                    <InfoTooltip text="El precio mínimo detectado entre todos tus competidores en el mercado para el modo seleccionado (con descuento o de lista)." align="left" />
+                  </div>
+                  <div className="text-xl font-display font-extrabold text-emerald-700">
+                    {formatHeaderPrice(minPriceItem?.priceBs)}
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant truncate font-sans">
+                    En: {minPriceItem?.cadena} ({minPriceItem?.marca})
+                  </p>
                 </div>
-                <div className="text-lg font-display font-extrabold text-[#70C145]">
-                  {formatHeaderPrice(minPriceItem?.priceBs)}
+                <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+                  <span className="material-symbols-outlined text-xl select-none">savings</span>
                 </div>
-                <p className="text-[10px] text-[#464650] truncate font-semibold">
-                  En: {minPriceItem?.cadena} ({minPriceItem?.marca})
-                </p>
               </div>
 
               {/* Mi Precio Card */}
-              <div className="bg-[#e8f5e9]/30 border border-[#a5d6a7]/50 p-4 rounded-2xl shadow-sm space-y-1 relative">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#2e7d32]">
-                    Mi Precio {analisisMode === 'unidosis' ? '(Unidosis)' : '(Marca Propia)'}
-                  </span>
-                  <InfoTooltip text="El precio actual de tu producto marca propia. Se muestra en verde para resaltar que es la referencia de tu marca." align="left" />
+              <div className="bg-white border border-emerald-500/30 p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-emerald-800 truncate">
+                      Mi Precio {analisisMode === 'unidosis' ? '(Unidosis)' : '(Marca Propia)'}
+                    </span>
+                    <InfoTooltip text="El precio actual de tu producto marca propia. Se muestra en verde para resaltar que es la referencia de tu marca." align="left" />
+                  </div>
+                  <div className="text-xl font-display font-extrabold text-emerald-800">
+                    {propioPriceBs ? formatHeaderPrice(propioPriceBs) : '—'}
+                  </div>
+                  <p className="text-[11px] text-emerald-700 font-sans truncate">
+                    {propioItem ? `Marca: ${propioItem.marca}` : 'No vinculado'}
+                  </p>
                 </div>
-                <div className="text-lg font-display font-extrabold text-[#2e7d32]">
-                  {propioPriceBs ? formatHeaderPrice(propioPriceBs) : '—'}
+                <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-800 shrink-0">
+                  <span className="material-symbols-outlined text-xl select-none">verified_user</span>
                 </div>
-                <p className="text-[10px] text-[#2e7d32]/80 font-bold truncate">
-                  {propioItem ? `Marca: ${propioItem.marca}` : 'No vinculado'}
-                </p>
               </div>
 
               {/* vs Minimo Card */}
-              <div className="bg-white border border-[#e1e2ec] p-4 rounded-2xl shadow-sm space-y-1 relative">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#464650]">Diferencia vs Mínimo</span>
-                  <InfoTooltip text="Calculado como: ((Mi Precio - Precio Mínimo) / Precio Mínimo) * 100. Te indica qué tan por encima del precio más económico del mercado te encuentras. El valor ideal es <= 0%." align="right" />
+              <div className="bg-white border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">Diferencia vs Mínimo</span>
+                    <InfoTooltip text="Calculado como: ((Mi Precio - Precio Mínimo) / Precio Mínimo) * 100. Te indica qué tan por encima del precio más económico del mercado te encuentras. El valor ideal es <= 0%." align="right" />
+                  </div>
+                  {propioPriceBs && minPriceItem ? (
+                    <>
+                      <div className={`text-xl font-display font-extrabold ${pctMin && pctMin > 0.005 ? 'text-error' : 'text-emerald-700'}`}>
+                        {pctMin && pctMin > 0.005 ? `+${pctMin.toFixed(2)}%` : '¡Precio Mínimo!'}
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                        {pctMin && pctMin > 0.005 ? `+${formatHeaderPrice(diffMinBs)} vs mín.` : 'Líder en este producto'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-xl font-display font-bold text-gray-300">—</div>
+                      <p className="text-[11px] text-on-surface-variant font-sans">—</p>
+                    </>
+                  )}
                 </div>
-                {propioPriceBs && minPriceItem ? (
-                  <>
-                    <div className={`text-lg font-display font-extrabold ${pctMin && pctMin > 0.005 ? 'text-[#ba1a1a]' : 'text-[#70C145]'}`}>
-                      {pctMin && pctMin > 0.005 ? `+${pctMin.toFixed(2)}%` : '¡Precio Mínimo!'}
-                    </div>
-                    <p className="text-[10px] text-[#464650] font-semibold">
-                      {pctMin && pctMin > 0.005 ? `+${formatHeaderPrice(diffMinBs)} vs el más barato` : 'Líder en este producto'}
-                    </p>
-                  </>
-                ) : (
-                  <div className="text-lg font-display font-bold text-gray-300">—</div>
-                )}
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${pctMin && pctMin > 0.005 ? 'bg-rose-50 border border-rose-200 text-rose-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}>
+                  <span className="material-symbols-outlined text-xl select-none">balance</span>
+                </div>
               </div>
 
               {/* Precio Promedio Card */}
-              <div className="bg-white border border-[#e1e2ec] p-4 rounded-2xl shadow-sm space-y-1 relative">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-[#464650]">
-                    Promedio {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
-                  </span>
-                  <InfoTooltip text="El precio promedio aritmético calculado entre todos los competidores vigentes en el mercado." align="right" />
-                </div>
-                <div className="text-lg font-display font-extrabold text-[#040d53]">
-                  {avgPriceBs ? formatHeaderPrice(avgPriceBs) : '—'}
-                </div>
-                {propioPriceBs && avgPriceBs ? (
-                  <p className="text-[10.5px] leading-tight font-sans font-semibold">
-                    Mi precio:{' '}
-                    <span className={pctAvg && pctAvg > 0 ? 'text-[#ba1a1a]' : 'text-[#2e7d32]'}>
-                      {pctAvg && pctAvg > 0 ? `+${pctAvg.toFixed(1)}%` : `${pctAvg?.toFixed(1)}%`} ({pctAvg && pctAvg > 0 ? '+' : ''}{formatHeaderPrice(diffAvgBs)})
+              <div className="bg-white border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
+                      Promedio {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
                     </span>
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-[#464650] font-semibold">
-                    Referencia del mercado
-                  </p>
-                )}
+                    <InfoTooltip text="El precio promedio aritmético calculado entre todos los competidores vigentes en el mercado." align="right" />
+                  </div>
+                  <div className="text-xl font-display font-extrabold text-primary">
+                    {avgPriceBs ? formatHeaderPrice(avgPriceBs) : '—'}
+                  </div>
+                  {propioPriceBs && avgPriceBs ? (
+                    <p className="text-[11px] font-sans truncate">
+                      Mi precio:{' '}
+                      <span className={pctAvg && pctAvg > 0 ? 'text-error font-bold' : 'text-emerald-700 font-bold'}>
+                        {pctAvg && pctAvg > 0 ? `+${pctAvg.toFixed(1)}%` : `${pctAvg?.toFixed(1)}%`}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-on-surface-variant font-sans">
+                      Referencia del mercado
+                    </p>
+                  )}
+                </div>
+                <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <span className="material-symbols-outlined text-xl select-none">analytics</span>
+                </div>
               </div>
             </div>
           )}
@@ -1032,161 +1051,163 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               </h3>
             </div>
 
-            <div className="border border-[#e1e2ec] rounded-2xl overflow-hidden bg-white shadow-sm">
-              <table className="w-full text-xs border-collapse">
-                <thead className="bg-[#f8f9fa] text-[#040d53] uppercase font-mono tracking-wider font-bold border-b border-[#e1e2ec]">
-                  <tr>
-                    <th className="text-left px-5 py-3.5">Cadena</th>
-                    <th className="text-left px-5 py-3.5">Marca / Variante</th>
-                    <th className="text-left px-5 py-3.5">Relación</th>
-                    <th className="text-right px-5 py-3.5">
-                      Precio Lista {analisisMode === 'unidosis' ? '(/u)' : ''}
-                    </th>
-                    <th className="text-right px-5 py-3.5">
-                      Precio Oferta {analisisMode === 'unidosis' ? '(/u)' : ''}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#e1e2ec]">
-                  {competenciaFiltrada.length === 0 ? (
+            <div className="border border-outline-variant rounded-2xl overflow-hidden bg-white shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="m3-table">
+                  <thead className="m3-sticky-header">
                     <tr>
-                      <td colSpan="5" className="px-5 py-6 text-center text-[#464650] italic bg-white">
-                        Sin productos que coincidan con los filtros seleccionados.
-                      </td>
+                      <th>Cadena</th>
+                      <th>Marca / Variante</th>
+                      <th>Relación</th>
+                      <th className="text-right">
+                        Precio Lista {analisisMode === 'unidosis' ? '(/u)' : ''}
+                      </th>
+                      <th className="text-right">
+                        Precio Oferta {analisisMode === 'unidosis' ? '(/u)' : ''}
+                      </th>
                     </tr>
-                  ) : (
-                    competenciaFiltrada.map(pc => {
-                      const isCheapestFull = pc.adjustedFullBs && pc.adjustedFullBs === minFullPriceBs;
-                      const isCheapestDesc = pc.adjustedDescBs && pc.adjustedDescBs === minDescPriceBs;
-                      const isMostExpensiveFull = pc.adjustedFullBs && pc.adjustedFullBs === maxFullPriceBs && maxFullPriceBs > minFullPriceBs;
-                      const isMostExpensiveDesc = pc.adjustedDescBs && pc.adjustedDescBs === maxDescPriceBs && maxDescPriceBs > minDescPriceBs;
-                      
-                      return (
-                        <tr key={pc.id} className="hover:bg-[#f8f9fa] transition-colors">
-                          <td className="px-5 py-3 font-bold text-[#040d53]">{pc.cadena}</td>
-                          <td className="px-5 py-3 font-semibold text-[#1c1b1f]">
-                            {pc.url ? (
-                              <a
-                                href={pc.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline hover:text-[#040d53] inline-flex items-center gap-1 group transition-all"
-                                title="Ver enlace de origen del producto ↗"
-                              >
-                                <span className="font-semibold">{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
-                                {pc.unidosisCount > 0 && (
-                                  <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold ml-1">
-                                    {pc.unidosisCount}u
+                  </thead>
+                  <tbody className="divide-y divide-surface-variant">
+                    {competenciaFiltrada.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-8 text-center text-on-surface-variant italic bg-white">
+                          Sin productos que coincidan con los filtros seleccionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      competenciaFiltrada.map(pc => {
+                        const isCheapestFull = pc.adjustedFullBs && pc.adjustedFullBs === minFullPriceBs;
+                        const isCheapestDesc = pc.adjustedDescBs && pc.adjustedDescBs === minDescPriceBs;
+                        const isMostExpensiveFull = pc.adjustedFullBs && pc.adjustedFullBs === maxFullPriceBs && maxFullPriceBs > minFullPriceBs;
+                        const isMostExpensiveDesc = pc.adjustedDescBs && pc.adjustedDescBs === maxDescPriceBs && maxDescPriceBs > minDescPriceBs;
+                        
+                        return (
+                          <tr key={pc.id} className="hover:bg-surface-low transition-colors">
+                            <td className="font-bold text-primary font-display text-sm">{pc.cadena}</td>
+                            <td className="font-semibold text-on-surface">
+                              {pc.url ? (
+                                <a
+                                  href={pc.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline inline-flex items-center gap-1 group transition-all"
+                                  title="Ver enlace de origen del producto ↗"
+                                >
+                                  <span className="font-semibold">{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
+                                  {pc.unidosisCount > 0 && (
+                                    <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold ml-1">
+                                      {pc.unidosisCount}u
+                                    </span>
+                                  )}
+                                  <span className="material-symbols-outlined text-[13px] text-primary/70 group-hover:text-primary transition-colors leading-none">
+                                    open_in_new
+                                  </span>
+                                </a>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <span>{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
+                                  {pc.unidosisCount > 0 && (
+                                    <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold">
+                                      {pc.unidosisCount}u
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {pc.laboratorio && (
+                                <div className="text-xs text-on-surface-variant font-mono mt-0.5">Lab: {pc.laboratorio}</div>
+                              )}
+                            </td>
+                            <td>
+                              <span className={`text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full ${
+                                pc.tipo === 'propio' ? 'bg-secondary/10 text-secondary border border-secondary/20' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
+                              }`}>
+                                {pc.tipo === 'propio' ? 'Mi Marca' : 'Competencia'}
+                              </span>
+                            </td>
+                            <td className="text-right font-mono font-bold text-on-surface">
+                              <div className="flex flex-col items-end justify-center">
+                                <span className={
+                                  isCheapestFull ? 'text-emerald-700 font-extrabold' : 
+                                  isMostExpensiveFull ? 'text-rose-700 font-extrabold' : ''
+                                }>
+                                  {formatHeaderPrice(pc.adjustedFullBs)}
+                                </span>
+                                {isCheapestFull && (
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                    Más bajo
                                   </span>
                                 )}
-                                <span className="material-symbols-outlined text-[13px] text-primary/70 group-hover:text-[#040d53] transition-colors leading-none">
-                                  open_in_new
-                                </span>
-                              </a>
-                            ) : (
-                              <div className="flex items-center gap-1">
-                                <span>{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
-                                {pc.unidosisCount > 0 && (
-                                  <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold">
-                                    {pc.unidosisCount}u
+                                {isMostExpensiveFull && (
+                                  <span className="text-[9px] bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                    Más alto
                                   </span>
                                 )}
                               </div>
-                            )}
-                            {pc.laboratorio && (
-                              <div className="text-[10px] text-[#464650] font-normal mt-0.5">Lab: {pc.laboratorio}</div>
-                            )}
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className={`text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full ${
-                              pc.tipo === 'propio' ? 'bg-[#e8f5e9] text-[#2e7d32] border border-[#a5d6a7]' : 'bg-[#f3f4f9] text-[#464650] border border-[#e1e2ec]'
-                            }`}>
-                              {pc.tipo === 'propio' ? 'Mi Marca' : 'Competencia'}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono font-bold text-[#464650]">
-                            <div className="flex flex-col items-end justify-center">
-                              <span className={
-                                isCheapestFull ? 'text-[#2e7d32] font-extrabold' : 
-                                isMostExpensiveFull ? 'text-[#ba1a1a] font-extrabold' : ''
-                              }>
-                                {formatHeaderPrice(pc.adjustedFullBs)}
-                              </span>
-                              {isCheapestFull && (
-                                <span className="text-[9px] bg-[#e8f5e9] text-[#2e7d32] border border-[#a5d6a7] font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                  Más bajo
+                            </td>
+                            <td className="text-right font-mono font-extrabold text-primary">
+                              <div className="flex flex-col items-end justify-center">
+                                <span className={
+                                  isCheapestDesc ? 'text-emerald-700 font-extrabold' : 
+                                  isMostExpensiveDesc ? 'text-rose-700 font-extrabold' : ''
+                                }>
+                                  {formatHeaderPrice(pc.adjustedDescBs)}
                                 </span>
-                              )}
-                              {isMostExpensiveFull && (
-                                <span className="text-[9px] bg-red-50 text-[#ba1a1a] border border-red-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                  Más alto
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono font-extrabold text-[#040d53]">
-                            <div className="flex flex-col items-end justify-center">
-                              <span className={
-                                isCheapestDesc ? 'text-[#2e7d32] font-extrabold' : 
-                                isMostExpensiveDesc ? 'text-[#ba1a1a] font-extrabold' : ''
-                              }>
-                                {formatHeaderPrice(pc.adjustedDescBs)}
-                              </span>
-                              {isCheapestDesc && (
-                                <span className="text-[9px] bg-[#e8f5e9] text-[#2e7d32] border border-[#a5d6a7] font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                  Más bajo
-                                </span>
-                              )}
-                              {isMostExpensiveDesc && (
-                                <span className="text-[9px] bg-red-50 text-[#ba1a1a] border border-red-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                  Más alto
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                                {isCheapestDesc && (
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                    Más bajo
+                                  </span>
+                                )}
+                                {isMostExpensiveDesc && (
+                                  <span className="text-[9px] bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                    Más alto
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                  {competenciaFiltrada.length > 0 && (
+                    <tfoot className="bg-surface-low border-t-2 border-outline-variant font-mono text-xs font-bold">
+                      <tr className="border-b border-outline-variant/60">
+                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-[10px]">
+                          Mínimo de la Lista
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
+                          {minFullPriceBs ? formatHeaderPrice(minFullPriceBs) : '—'}
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
+                          {minDescPriceBs ? formatHeaderPrice(minDescPriceBs) : '—'}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-outline-variant/60">
+                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-[10px]">
+                          Máximo de la Lista
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
+                          {maxFullPriceBs ? formatHeaderPrice(maxFullPriceBs) : '—'}
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
+                          {maxDescPriceBs ? formatHeaderPrice(maxDescPriceBs) : '—'}
+                        </td>
+                      </tr>
+                      <tr className="bg-surface-container-high/60">
+                        <td colSpan="3" className="px-5 py-3 text-right font-sans text-primary uppercase tracking-wider text-[10px] font-extrabold">
+                          Promedio General ({competenciaFiltrada.length} items)
+                        </td>
+                        <td className="px-5 py-3 text-right text-on-surface font-black text-xs">
+                          {avgFullPriceBs ? formatHeaderPrice(avgFullPriceBs) : '—'}
+                        </td>
+                        <td className="px-5 py-3 text-right text-on-surface font-black text-xs">
+                          {avgDescPriceBs ? formatHeaderPrice(avgDescPriceBs) : '—'}
+                        </td>
+                      </tr>
+                    </tfoot>
                   )}
-                </tbody>
-                {competenciaFiltrada.length > 0 && (
-                  <tfoot className="bg-slate-50 border-t-2 border-[#e1e2ec] font-mono text-[11px] font-bold">
-                    <tr className="border-b border-[#e1e2ec]/60">
-                      <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-slate-500 uppercase tracking-wider text-[10px]">
-                        Mínimo de la Lista
-                      </td>
-                      <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
-                        {minFullPriceBs ? formatHeaderPrice(minFullPriceBs) : '—'}
-                      </td>
-                      <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
-                        {minDescPriceBs ? formatHeaderPrice(minDescPriceBs) : '—'}
-                      </td>
-                    </tr>
-                    <tr className="border-b border-[#e1e2ec]/60">
-                      <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-slate-500 uppercase tracking-wider text-[10px]">
-                        Máximo de la Lista
-                      </td>
-                      <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
-                        {maxFullPriceBs ? formatHeaderPrice(maxFullPriceBs) : '—'}
-                      </td>
-                      <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
-                        {maxDescPriceBs ? formatHeaderPrice(maxDescPriceBs) : '—'}
-                      </td>
-                    </tr>
-                    <tr className="bg-slate-100/70">
-                      <td colSpan="3" className="px-5 py-3 text-right font-sans text-primary uppercase tracking-wider text-[10px] font-extrabold">
-                        Promedio General ({competenciaFiltrada.length} items)
-                      </td>
-                      <td className="px-5 py-3 text-right text-[#040d53] font-black text-xs">
-                        {avgFullPriceBs ? formatHeaderPrice(avgFullPriceBs) : '—'}
-                      </td>
-                      <td className="px-5 py-3 text-right text-[#040d53] font-black text-xs">
-                        {avgDescPriceBs ? formatHeaderPrice(avgDescPriceBs) : '—'}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+                </table>
+              </div>
             </div>
           </div>
 

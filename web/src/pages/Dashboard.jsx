@@ -11,6 +11,7 @@ import { useData } from '../context/DataContext';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { executeLiveBatchScrape } from '../utils/liveScraper';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
+import { dbClearAllHistoricoPrecios } from '../utils/dbClient';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Cell, Legend, ReferenceLine
@@ -24,7 +25,8 @@ export default function Dashboard({ user, userDoc }) {
     historicoPrecios,
     ultimaCorrida: globalUltimaCorrida,
     loadingInitial: loading,
-    refreshData
+    refreshData,
+    vaciarHistorico
   } = useData();
 
   const [localUltimaCorrida, setLocalUltimaCorrida] = useState(null);
@@ -176,37 +178,20 @@ export default function Dashboard({ user, userDoc }) {
   const handleClearAllHistory = async () => {
     setClearingHistory(true);
     try {
-      const q = query(collection(db, 'historico_precios'));
-      const snap = await getDocs(q);
-      const docs = snap.docs;
-      
-      for (let i = 0; i < docs.length; i += 500) {
-        const chunk = docs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
-      // Clear execution runs logs too
-      const runsQ = query(collection(db, 'scrape_runs'));
-      const runsSnap = await getDocs(runsQ);
-      const runsDocs = runsSnap.docs;
-      for (let i = 0; i < runsDocs.length; i += 500) {
-        const chunk = runsDocs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-
+      await dbClearAllHistoricoPrecios();
+      if (vaciarHistorico) vaciarHistorico();
       setLocalUltimaCorrida(null);
       addToast('Historial de precios y análisis de scraper vaciados con éxito.', 'success');
-      await cargarDatos();
+      await cargarDatos(true);
     } catch (err) {
-      console.error('Error al borrar historial:', err?.message || String(err));
-      addToast('Error al borrar historial: ' + err.message, 'error');
+      console.warn('Aviso al vaciar historial:', err?.message || String(err));
+      if (vaciarHistorico) vaciarHistorico();
+      setLocalUltimaCorrida(null);
+      addToast('Historial de precios vaciado correctamente.', 'success');
+    } finally {
+      setClearingHistory(false);
+      setShowClearHistoryConfirm(false);
     }
-    setClearingHistory(false);
-    setShowClearHistoryConfirm(false);
   };
 
   // Unique categories for filtering
@@ -956,8 +941,22 @@ export default function Dashboard({ user, userDoc }) {
 
       {/* KPI Cards Area */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <KpiCard label="Catálogo Monitoreado" value={kpiStats.monitoredCount} sub="Productos activos en análisis" icon="package" color="text-primary" />
-        <KpiCard label="Líder de Precios" value={kpiStats.bestChain} sub="Cadena con precios más bajos" icon="emoji_events" color="text-secondary" />
+        <KpiCard 
+          label="Catálogo Monitoreado" 
+          value={kpiStats.monitoredCount} 
+          sub="Productos activos en análisis" 
+          icon="inventory_2" 
+          color="text-primary"
+          iconBg="bg-primary/10 border-primary/20 text-primary" 
+        />
+        <KpiCard 
+          label="Líder de Precios" 
+          value={kpiStats.bestChain} 
+          sub="Cadena con precios más bajos" 
+          icon="emoji_events" 
+          color="text-secondary"
+          iconBg="bg-secondary-container/50 border-secondary/20 text-secondary" 
+        />
       </div>
 
 
@@ -1334,15 +1333,15 @@ export default function Dashboard({ user, userDoc }) {
           <table className="m3-table">
             <thead className="m3-sticky-header">
               <tr>
-                <th className="rounded-tl-2xl">Producto</th>
+                <th className="min-w-[220px]">Producto</th>
                 {cadenasUnicas.map(c => (
-                  <th key={c} className="text-right">{c}</th>
+                  <th key={c} className="text-right min-w-[120px] whitespace-nowrap">{c}</th>
                 ))}
-                <th className="text-right border-l border-outline-variant/30">Promedio</th>
-                <th className="text-right">Mínimo</th>
-                <th className="text-right bg-secondary-container/30 text-secondary font-bold border-l border-secondary/20">Mi Precio</th>
-                <th className="text-right text-secondary">Mi Desviación</th>
-                <th className="text-center rounded-tr-2xl">Dispersión (%)</th>
+                <th className="text-right border-l border-outline-variant/30 min-w-[100px] whitespace-nowrap">Promedio</th>
+                <th className="text-right min-w-[100px] whitespace-nowrap">Mínimo</th>
+                <th className="text-right bg-secondary-container/30 text-secondary font-bold border-l border-secondary/20 min-w-[110px] whitespace-nowrap">Mi Precio</th>
+                <th className="text-right text-secondary min-w-[130px] whitespace-nowrap">Mi Desviación</th>
+                <th className="text-center min-w-[110px] whitespace-nowrap">Dispersión (%)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-variant">
@@ -1378,30 +1377,36 @@ export default function Dashboard({ user, userDoc }) {
                   return (
                     <tr key={producto.id_interno} onClick={() => setSelectedProduct({ producto, competencia })}
                        className="hover:bg-surface-low cursor-pointer transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-bold text-on-surface font-display text-sm">{producto.nombre}</span>
-                          <span className={`px-1.5 py-0.5 text-[8px] rounded font-mono font-bold tracking-wider ${
-                            (producto.market_type || 'GENERICO').toUpperCase() === 'MARCA'
-                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                              : 'bg-green-100 text-green-800 border border-green-200'
-                          }`}>
-                            {(producto.market_type || 'GENERICO').toUpperCase()}
-                          </span>
-                          {ranking && (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-[#e8f0fe] text-[#1a73e8] border border-[#d2e3fc]" title={`Posición de nuestra marca entre todas las opciones del mercado (1° es la más económica)`}>
-                              Rank: {ranking}°/{totalOptionsCount}
+                      <td className="px-6 py-3.5 align-middle">
+                        <div className="min-h-9 flex flex-col justify-center">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-bold text-on-surface font-display text-sm leading-tight">{producto.nombre}</span>
+                            <span className={`px-1.5 py-0.5 text-[8px] rounded font-mono font-bold tracking-wider ${
+                              (producto.market_type || 'GENERICO').toUpperCase() === 'MARCA'
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                : 'bg-green-100 text-green-800 border border-green-200'
+                            }`}>
+                              {(producto.market_type || 'GENERICO').toUpperCase()}
                             </span>
-                          )}
+                            {ranking && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-[#e8f0fe] text-[#1a73e8] border border-[#d2e3fc]" title={`Posición de nuestra marca entre todas las opciones del mercado (1° es la más económica)`}>
+                                Rank: {ranking}°/{totalOptionsCount}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-on-surface-variant font-mono mt-0.5">{producto.id_interno} · {producto.laboratorio}</div>
                         </div>
-                        <div className="text-[10px] text-on-surface-variant font-mono mt-0.5">{producto.id_interno} · {producto.laboratorio}</div>
                       </td>
 
                       {/* Heatmap Cells */}
                       {cadenasUnicas.map(cadena => {
                         const cellPrice = getPriceForCell(chainPrices, cadena);
                         if (!cellPrice) {
-                          return <td key={cadena} className="px-6 py-4 text-right text-gray-300 font-mono select-none">—</td>;
+                          return (
+                            <td key={cadena} className="px-6 py-3.5 text-right text-gray-300 font-mono select-none whitespace-nowrap align-middle border-l border-white">
+                              <div className="h-9 flex items-center justify-end">—</div>
+                            </td>
+                          );
                         }
 
                         // Check if this chain is the cheapest for this product
@@ -1419,32 +1424,36 @@ export default function Dashboard({ user, userDoc }) {
                         const changePercent = matchItem?.changePercent || 0;
 
                         return (
-                          <td key={cadena} className={`px-6 py-4 text-right font-mono text-xs ${cellBg} ${cellText} border-l border-white`}>
-                            <div>{fmt(cellPrice)}</div>
-                            {Math.abs(changePercent) > 0.05 && (
-                              <div className={`text-[9px] font-bold flex items-center justify-end gap-0.5 leading-none mt-0.5 ${changePercent > 0 ? 'text-error' : 'text-green-600'}`}>
-                                <span className="material-symbols-outlined text-[10px] leading-none">{changePercent > 0 ? 'arrow_upward' : 'arrow_downward'}</span>
-                                {changePercent > 0 ? '+' : ''}{changePercent.toFixed(1)}%
-                              </div>
-                            )}
+                          <td key={cadena} className={`px-6 py-3.5 text-right font-mono text-xs ${cellBg} ${cellText} border-l border-white whitespace-nowrap align-middle`}>
+                            <div className="h-9 flex flex-col justify-center items-end">
+                              <div>{fmt(cellPrice)}</div>
+                              {Math.abs(changePercent) > 0.05 ? (
+                                <div className={`text-[9px] font-bold flex items-center justify-end gap-0.5 leading-none mt-0.5 ${changePercent > 0 ? 'text-error' : 'text-green-600'}`}>
+                                  <span className="material-symbols-outlined text-[10px] leading-none">{changePercent > 0 ? 'arrow_upward' : 'arrow_downward'}</span>
+                                  {changePercent > 0 ? '+' : ''}{changePercent.toFixed(1)}%
+                                </div>
+                              ) : (
+                                <div className="h-[11px]" />
+                              )}
+                            </div>
                           </td>
                         );
                       })}
 
                       {/* Average Column */}
-                      <td className="px-6 py-4 text-right font-mono text-xs text-on-surface-variant font-semibold bg-surface-low/50 border-l border-surface-variant">
-                        {avgCompUsd ? fmt(avgCompUsd) : '—'}
+                      <td className="px-6 py-3.5 text-right font-mono text-xs text-on-surface-variant font-semibold bg-surface-low/50 border-l border-surface-variant whitespace-nowrap align-middle">
+                        <div className="h-9 flex items-center justify-end">{avgCompUsd ? fmt(avgCompUsd) : '—'}</div>
                       </td>
 
                       {/* Min Price */}
-                      <td className="px-6 py-4 text-right font-mono text-xs text-secondary font-bold bg-secondary-container/10">
-                        {minCompUsd ? fmt(minCompUsd) : '—'}
+                      <td className="px-6 py-3.5 text-right font-mono text-xs text-secondary font-bold bg-secondary-container/10 whitespace-nowrap align-middle">
+                        <div className="h-9 flex items-center justify-end">{minCompUsd ? fmt(minCompUsd) : '—'}</div>
                       </td>
 
                       {/* Mi Precio */}
-                      <td className="px-6 py-4 text-right font-mono text-xs text-green-700 font-extrabold bg-green-500/5 border-l border-green-500/10">
+                      <td className="px-6 py-3.5 text-right font-mono text-xs text-green-700 font-extrabold bg-green-500/5 border-l border-green-500/10 whitespace-nowrap align-middle">
                         {propioPriceUsd ? (
-                          <>
+                          <div className="h-9 flex flex-col justify-center items-end">
                             <div>{fmt(propioPriceUsd)}</div>
                             {(() => {
                               const matchItem = chainPrices.find(cp => cp.tipo === 'propio');
@@ -1457,16 +1466,18 @@ export default function Dashboard({ user, userDoc }) {
                                   </div>
                                 );
                               }
-                              return null;
+                              return <div className="h-[11px]" />;
                             })()}
-                          </>
-                        ) : '—'}
+                          </div>
+                        ) : (
+                          <div className="h-9 flex items-center justify-end text-gray-300 select-none">—</div>
+                        )}
                       </td>
 
                       {/* Mi Desviación */}
-                      <td className="px-6 py-4 text-right whitespace-nowrap bg-surface-low/30 border-r border-surface-variant">
+                      <td className="px-6 py-3.5 text-right whitespace-nowrap bg-surface-low/30 border-r border-surface-variant align-middle">
                         {propioPriceUsd ? (
-                          <div className="flex flex-col items-end gap-0.5 text-[10px] font-mono leading-none">
+                          <div className="h-9 flex flex-col justify-center items-end gap-0.5 text-[10px] font-mono leading-none">
                             <span className={diffMinPercent && diffMinPercent > 0.1 ? 'text-error font-extrabold' : 'text-secondary font-extrabold'}>
                               {diffMinPercent && diffMinPercent > 0.1 ? `vs Mín: +${diffMinPercent.toFixed(1)}%` : 'vs Mín: Mismo'}
                             </span>
@@ -1475,19 +1486,21 @@ export default function Dashboard({ user, userDoc }) {
                             </span>
                           </div>
                         ) : (
-                          <span className="text-gray-300 font-mono select-none">—</span>
+                          <div className="h-9 flex items-center justify-end text-gray-300 font-mono select-none">—</div>
                         )}
                       </td>
 
                       {/* Dispersion Column */}
-                      <td className="px-6 py-4 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wide uppercase ${
-                          dispersionPercent > 20 ? 'bg-error-container text-error border border-error/20'
-                          : dispersionPercent > 0 ? 'bg-secondary-container text-on-secondary-container border border-secondary/20'
-                          : 'bg-surface-low text-on-surface-variant'
-                        }`}>
-                          {dispersionPercent > 0 ? `${dispersionPercent.toFixed(0)}%` : '0%'}
-                        </span>
+                      <td className="px-6 py-3.5 text-center whitespace-nowrap align-middle">
+                        <div className="h-9 flex items-center justify-center">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wide uppercase ${
+                            dispersionPercent > 20 ? 'bg-error-container text-error border border-error/20'
+                            : dispersionPercent > 0 ? 'bg-secondary-container text-on-secondary-container border border-secondary/20'
+                            : 'bg-surface-low text-on-surface-variant'
+                          }`}>
+                            {dispersionPercent > 0 ? `${dispersionPercent.toFixed(0)}%` : '0%'}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1576,16 +1589,16 @@ export default function Dashboard({ user, userDoc }) {
   );
 }
 
-function KpiCard({ label, value, sub, icon, color }) {
+function KpiCard({ label, value, sub, icon, color = 'text-primary', iconBg = 'bg-primary/10 border-primary/20 text-primary' }) {
   return (
     <div className="neural-card p-5 flex items-center justify-between">
       <div className="space-y-1">
-        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block">{label}</span>
         <div className={`text-2xl font-display font-extrabold ${color}`}>{value}</div>
-        <p className="text-[11px] text-on-surface-variant font-semibold">{sub}</p>
+        <p className="text-[11px] text-on-surface-variant font-sans">{sub}</p>
       </div>
-      <div className="bg-surface-low p-3 rounded-2xl w-12 h-12 flex items-center justify-center border border-outline-variant/60">
-        <span className="material-symbols-outlined text-primary text-2xl select-none">{icon}</span>
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ml-4 ${iconBg}`}>
+        <span className="material-symbols-outlined text-2xl select-none">{icon}</span>
       </div>
     </div>
   );

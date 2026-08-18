@@ -445,66 +445,66 @@ export default function Hallazgos({ user, userDoc }) {
       {/* Summary KPI grid widgets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total scan */}
-        <div className="bg-white border border-outline-variant p-5 rounded-3xl flex items-center gap-4 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-surface-low flex items-center justify-center text-primary shrink-0 border border-outline-variant/30">
-            <span className="material-symbols-outlined text-2xl">medication</span>
-          </div>
-          <div>
-            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Productos Escaneados</span>
-            <div className="text-2xl font-display font-extrabold text-on-background mt-0.5">
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Escaneados</span>
+            <div className="text-2xl font-display font-extrabold text-primary">
               {productos.filter(p => p.activo).length}
             </div>
-            <span className="text-[10px] text-on-surface-variant block mt-0.5">
+            <p className="text-[11px] text-on-surface-variant font-sans">
               Catálogo de marcas activas
-            </span>
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">medication</span>
           </div>
         </div>
 
         {/* Critical Alerts */}
-        <div className="bg-white border border-outline-variant p-5 rounded-3xl flex items-center gap-4 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-red-500/[0.04] border border-red-200 flex items-center justify-center text-error shrink-0">
-            <span className="material-symbols-outlined text-2xl">gavel</span>
-          </div>
-          <div>
-            <span className="text-[11px] font-mono font-bold text-red-700 uppercase tracking-wider">Alertas Críticas</span>
-            <div className="text-2xl font-display font-extrabold text-error mt-0.5">
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-error uppercase tracking-wider block">Alertas Críticas</span>
+            <div className="text-2xl font-display font-extrabold text-error">
               {totalConAlertasCriticas}
             </div>
-            <span className="text-[10px] text-red-600 font-semibold block mt-0.5">
+            <p className="text-[11px] text-error/80 font-sans">
               Inversión de precios urgentes
-            </span>
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-error shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">gavel</span>
           </div>
         </div>
 
         {/* Moderated Alerts */}
-        <div className="bg-white border border-outline-variant p-5 rounded-3xl flex items-center gap-4 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/[0.04] border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
-            <span className="material-symbols-outlined text-2xl">warning</span>
-          </div>
-          <div>
-            <span className="text-[11px] font-mono font-bold text-amber-700 uppercase tracking-wider">Alertas de Portafolio</span>
-            <div className="text-2xl font-display font-extrabold text-amber-700 mt-0.5">
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-amber-700 uppercase tracking-wider block">Alertas de Portafolio</span>
+            <div className="text-2xl font-display font-extrabold text-amber-700">
               {totalConAlertasModeradas}
             </div>
-            <span className="text-[10px] text-amber-600 block mt-0.5">
+            <p className="text-[11px] text-amber-600 font-sans">
               Canibalización o sobreprecio
-            </span>
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">warning</span>
           </div>
         </div>
 
         {/* EBITDA Opportunities */}
-        <div className="bg-white border border-outline-variant p-5 rounded-3xl flex items-center gap-4 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/[0.04] border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-            <span className="material-symbols-outlined text-2xl">payments</span>
-          </div>
-          <div>
-            <span className="text-[11px] font-mono font-bold text-emerald-700 uppercase tracking-wider">Brechas de EBITDA</span>
-            <div className="text-2xl font-display font-extrabold text-emerald-700 mt-0.5">
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider block">Brechas de EBITDA</span>
+            <div className="text-2xl font-display font-extrabold text-emerald-700">
               {totalOportunidadesEbitda}
             </div>
-            <span className="text-[10px] text-emerald-600 font-semibold block mt-0.5">
+            <p className="text-[11px] text-emerald-600 font-sans">
               Oportunidades de alza de precio
-            </span>
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">payments</span>
           </div>
         </div>
       </div>

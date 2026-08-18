@@ -320,50 +320,50 @@ export default function MapaCalor({ user, userDoc }) {
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total con precio */}
-        <div className="neural-card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-            <span className="material-symbols-outlined text-xl">medication</span>
-          </div>
-          <div>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
             <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Vigentes</span>
-            <div className="text-xl font-display font-extrabold text-primary mt-0.5">{statsSummary.total}</div>
-            <span className="text-[9px] text-on-surface-variant font-semibold">Con precio o competencia activa</span>
+            <div className="text-2xl font-display font-extrabold text-primary">{statsSummary.total}</div>
+            <p className="text-[11px] text-on-surface-variant font-sans">Con precio o competencia activa</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">medication</span>
           </div>
         </div>
 
         {/* Bajo Promedio (Más competitivos) */}
-        <div className="neural-card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0">
-            <span className="material-symbols-outlined text-xl">trending_down</span>
-          </div>
-          <div>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
             <span className="text-[10px] font-mono font-bold text-sky-700 uppercase tracking-wider block">Bajo el Promedio</span>
-            <div className="text-xl font-display font-extrabold text-sky-800 mt-0.5">{statsSummary.bajoPromedio}</div>
-            <span className="text-[9px] text-sky-600 font-semibold">Precios altamente competitivos</span>
+            <div className="text-2xl font-display font-extrabold text-sky-800">{statsSummary.bajoPromedio}</div>
+            <p className="text-[11px] text-sky-600 font-sans">Precios altamente competitivos</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">trending_down</span>
           </div>
         </div>
 
         {/* En Paridad */}
-        <div className="neural-card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-            <span className="material-symbols-outlined text-xl">drag_handle</span>
-          </div>
-          <div>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
             <span className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider block">En Paridad</span>
-            <div className="text-xl font-display font-extrabold text-emerald-800 mt-0.5">{statsSummary.enParidad}</div>
-            <span className="text-[9px] text-emerald-600 font-semibold">Dentro del ±5% del promedio</span>
+            <div className="text-2xl font-display font-extrabold text-emerald-800">{statsSummary.enParidad}</div>
+            <p className="text-[11px] text-emerald-600 font-sans">Dentro del ±5% del promedio</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">drag_handle</span>
           </div>
         </div>
 
         {/* Sobre Promedio */}
-        <div className="neural-card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
-            <span className="material-symbols-outlined text-xl">trending_up</span>
-          </div>
-          <div>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
             <span className="text-[10px] font-mono font-bold text-amber-700 uppercase tracking-wider block">Sobre el Promedio</span>
-            <div className="text-xl font-display font-extrabold text-amber-800 mt-0.5">{statsSummary.sobrePromedio}</div>
-            <span className="text-[9px] text-amber-600 font-semibold">Posibles márgenes premium</span>
+            <div className="text-2xl font-display font-extrabold text-amber-800">{statsSummary.sobrePromedio}</div>
+            <p className="text-[11px] text-amber-600 font-sans">Posibles márgenes premium</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">trending_up</span>
           </div>
         </div>
       </div>
@@ -458,7 +458,7 @@ export default function MapaCalor({ user, userDoc }) {
       <div className="neural-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="m3-table table-fixed min-w-[800px]">
-            <thead>
+            <thead className="m3-sticky-header">
               <tr>
                 <th className="cursor-pointer hover:bg-surface-variant/50 transition-colors w-[30%]" onClick={() => handleSort('nombre')}>
                   <div className="flex items-center gap-1">
@@ -490,14 +490,14 @@ export default function MapaCalor({ user, userDoc }) {
                     <tr 
                       key={item.producto.id_interno} 
                       onClick={() => setSelectedProduct(item)}
-                      className="hover:bg-slate-50/80 transition-all border-b border-[#e1e2ec]/60 cursor-pointer"
+                      className="hover:bg-surface-low transition-colors cursor-pointer"
                       title="Haz clic para ver detalles comparativos de este producto en Góndola"
                     >
                       {/* Product Column */}
-                      <td className="px-6 py-6 align-middle">
+                      <td className="px-6 py-5 align-middle">
                         <div className="flex flex-col space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-[#040d53] text-[13.5px] font-display leading-tight">{item.producto.nombre}</span>
+                            <span className="font-bold text-on-surface text-sm font-display leading-tight">{item.producto.nombre}</span>
                             <span className={`px-1.5 py-0.5 text-[9px] rounded font-mono font-bold tracking-wider uppercase ${
                               (item.producto.market_type || 'GENERICO').toUpperCase() === 'MARCA'
                                 ? 'bg-purple-100 text-purple-800 border border-purple-200'
@@ -507,14 +507,14 @@ export default function MapaCalor({ user, userDoc }) {
                             </span>
                           </div>
                           
-                          <div className="text-[11px] text-[#464650] font-mono space-y-0.5">
-                            <div><strong className="text-[#1c1b1f]/80">Código:</strong> {item.producto.id_interno}</div>
-                            {item.producto.laboratorio && <div><strong className="text-[#1c1b1f]/80">Laboratorio:</strong> {item.producto.laboratorio}</div>}
-                            {item.producto.unidad_negocio && <div><strong className="text-[#1c1b1f]/80">Unidad de Negocio:</strong> {item.producto.unidad_negocio}</div>}
+                          <div className="text-xs text-on-surface-variant font-mono space-y-0.5">
+                            <div><strong className="text-on-surface font-semibold">Código:</strong> {item.producto.id_interno}</div>
+                            {item.producto.laboratorio && <div><strong className="text-on-surface font-semibold">Laboratorio:</strong> {item.producto.laboratorio}</div>}
+                            {item.producto.unidad_negocio && <div><strong className="text-on-surface font-semibold">Unidad de Negocio:</strong> {item.producto.unidad_negocio}</div>}
                           </div>
 
                           <div className="pt-1">
-                            <span className="text-[10px] text-[#040d53] bg-[#040d53]/5 border border-[#040d53]/15 rounded-lg px-2 py-0.5 font-bold inline-flex items-center gap-1 hover:bg-[#040d53]/10 transition-colors">
+                            <span className="text-[10px] text-primary bg-primary/5 border border-primary/15 rounded-lg px-2 py-0.5 font-bold inline-flex items-center gap-1 hover:bg-primary/10 transition-colors">
                               <span className="material-symbols-outlined text-[11px]">visibility</span>
                               Analizar competencia ↗
                             </span>
@@ -522,12 +522,12 @@ export default function MapaCalor({ user, userDoc }) {
                         </div>
                       </td>
 
-                      {/* Redesigned Spectrum bar Column - visually enlarged and polished (Point 11 requirement) */}
-                      <td className="px-8 py-9 align-middle">
-                        <div className="flex flex-col space-y-6.5 justify-center relative pt-8 pb-1">
+                      {/* Redesigned Spectrum bar Column */}
+                      <td className="px-8 py-6 align-middle">
+                        <div className="flex flex-col space-y-5 justify-center relative pt-7 pb-1">
                           {/* Visual Spectrum Bar Container */}
-                          <div className="relative h-3 w-full rounded-full overflow-visible flex bg-slate-100 border border-slate-200/80 shadow-inner">
-                            {/* Premium double gradient spectrum background (Rose/Red extremes, Emerald/Green center) */}
+                          <div className="relative h-3 w-full rounded-full overflow-visible flex bg-surface-low border border-outline-variant/60 shadow-inner">
+                            {/* Double gradient spectrum background */}
                             <div className="w-full h-full rounded-full bg-gradient-to-r from-red-500 via-amber-400 via-emerald-500 via-amber-400 to-red-500 shadow-[inset_0_1.5px_2px_rgba(0,0,0,0.15)]"></div>
 
                             {/* Center and bounds markers on track */}
@@ -543,7 +543,7 @@ export default function MapaCalor({ user, userDoc }) {
                               >
                                 <div className="relative flex flex-col items-center">
                                   {/* Permanent Floating Label above spectrum bar */}
-                                  <div className="absolute bottom-6 mb-1.5 bg-[#040d53] text-white text-[10.5px] px-2.5 py-1 rounded-xl shadow-lg font-mono font-extrabold whitespace-nowrap flex items-center gap-1.5 border border-white/10 transition-all duration-300 transform group-hover:scale-105 group-hover:-translate-y-1">
+                                  <div className="absolute bottom-6 mb-1.5 bg-primary text-on-primary text-[10.5px] px-2.5 py-1 rounded-xl shadow-lg font-mono font-extrabold whitespace-nowrap flex items-center gap-1.5 border border-white/10 transition-all duration-300 transform group-hover:scale-105 group-hover:-translate-y-1">
                                     <span className="text-[9px] uppercase tracking-wider text-white/75 font-sans">MI PRECIO:</span>
                                     <span>{fmt(item.propioPriceUsd)}</span>
                                     {devVal !== null && (
@@ -557,56 +557,56 @@ export default function MapaCalor({ user, userDoc }) {
 
                                   {/* Custom physical pin with glowing radar aura */}
                                   <div className="relative flex items-center justify-center">
-                                    <div className="w-5.5 h-5.5 rounded-full bg-white border-[3.5px] border-[#040d53] shadow-md flex items-center justify-center transition-all duration-300 transform group-hover:scale-115">
-                                      <div className="w-1.5 h-1.5 rounded-full bg-[#040d53]"></div>
+                                    <div className="w-5.5 h-5.5 rounded-full bg-white border-[3.5px] border-primary shadow-md flex items-center justify-center transition-all duration-300 transform group-hover:scale-115">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
                                     </div>
-                                    <div className="absolute top-4.5 w-[2px] h-3 bg-[#040d53]/80"></div>
+                                    <div className="absolute top-4.5 w-[2px] h-3 bg-primary/80"></div>
                                     {/* Pulse aura */}
-                                    <div className="absolute w-8 h-8 rounded-full bg-[#040d53]/10 animate-ping pointer-events-none"></div>
+                                    <div className="absolute w-8 h-8 rounded-full bg-primary/10 animate-ping pointer-events-none"></div>
                                   </div>
                                 </div>
                               </div>
                             ) : (
                               /* Subtle label if no own price is active */
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <span className="text-[10px] text-[#040d53] font-mono font-bold tracking-wider uppercase bg-white/85 px-2 py-0.5 rounded-full shadow-sm border border-slate-100">
+                                <span className="text-[10px] text-primary font-mono font-bold tracking-wider uppercase bg-white/85 px-2 py-0.5 rounded-full shadow-sm border border-outline-variant/50">
                                   COMPETENCIA ÚNICAMENTE (SIN MI PRECIO)
                                 </span>
                               </div>
                             )}
                           </div>
 
-                          {/* Beautiful direct price tag blocks beneath the spectrum bar */}
-                          <div className="grid grid-cols-3 text-[11px] font-mono font-bold pt-2.5 border-t border-slate-100">
+                          {/* Direct price tag blocks beneath the spectrum bar */}
+                          <div className="grid grid-cols-3 text-xs font-mono font-bold pt-2.5 border-t border-outline-variant/30">
                             {/* Left (Min) */}
                             <div className="text-left flex flex-col">
-                              <span className="text-rose-700 flex items-center gap-1 text-[10px]">
+                              <span className="text-rose-700 flex items-center gap-1 text-[10px] font-sans">
                                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
                                 MÍNIMO
                               </span>
-                              <span className="text-slate-800 font-extrabold text-xs mt-1 bg-rose-50/50 rounded-xl py-1 px-2.5 border border-rose-100 w-max shadow-sm">
+                              <span className="text-on-surface font-extrabold text-xs mt-1 bg-rose-50/50 rounded-xl py-1 px-2.5 border border-rose-200/50 w-max shadow-xs">
                                 {fmt(item.absoluteMin)}
                               </span>
                             </div>
 
                             {/* Center (Avg) */}
                             <div className="text-center flex flex-col items-center">
-                              <span className="text-emerald-700 flex items-center gap-1 justify-center text-[10px]">
+                              <span className="text-emerald-700 flex items-center gap-1 justify-center text-[10px] font-sans">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                                 PROMEDIO
                               </span>
-                              <span className="text-slate-800 font-extrabold text-xs mt-1 bg-emerald-50/50 rounded-xl py-1 px-2.5 border border-emerald-100 w-max shadow-sm">
+                              <span className="text-on-surface font-extrabold text-xs mt-1 bg-emerald-50/50 rounded-xl py-1 px-2.5 border border-emerald-200/50 w-max shadow-xs">
                                 {fmt(item.avgCompUsd)}
                               </span>
                             </div>
 
                             {/* Right (Max) */}
                             <div className="text-right flex flex-col items-end">
-                              <span className="text-rose-700 flex items-center gap-1 justify-end text-[10px]">
+                              <span className="text-rose-700 flex items-center gap-1 justify-end text-[10px] font-sans">
                                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
                                 MÁXIMO
                               </span>
-                              <span className="text-slate-800 font-extrabold text-xs mt-1 bg-rose-50/50 rounded-xl py-1 px-2.5 border border-rose-100 w-max shadow-sm">
+                              <span className="text-on-surface font-extrabold text-xs mt-1 bg-rose-50/50 rounded-xl py-1 px-2.5 border border-rose-200/50 w-max shadow-xs">
                                 {fmt(item.absoluteMax)}
                               </span>
                             </div>

@@ -262,13 +262,13 @@ export default function Usuarios({ userDoc }) {
             <table className="m3-table">
               <thead className="m3-sticky-header">
                 <tr>
-                  <th className="rounded-tl-2xl">Nombre</th>
+                  <th>Nombre</th>
                   <th>Email</th>
                   <th>Rol</th>
                   <th className="text-center">Alertas Inmediatas</th>
                   <th className="text-center">Resumen Diario</th>
                   <th className="text-center">Estado</th>
-                  <th className="text-right rounded-tr-2xl">Acciones</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
@@ -276,7 +276,7 @@ export default function Usuarios({ userDoc }) {
                   const isCurrent = u.email === userDoc?.email;
                   return (
                     <tr key={u.id} className="hover:bg-surface-low transition-colors">
-                      <td className="px-6 py-4">
+                      <td>
                         <span className="font-bold text-on-surface font-display text-sm">{u.nombre}</span>
                         {isCurrent && (
                           <span className="ml-2 text-[10px] bg-primary-container text-on-primary-container font-mono uppercase font-bold px-2 py-0.5 rounded-full">
@@ -284,39 +284,39 @@ export default function Usuarios({ userDoc }) {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-on-surface-variant">{u.email}</td>
-                      <td className="px-6 py-4">
+                      <td className="font-mono text-xs text-on-surface-variant">{u.email}</td>
+                      <td>
                         <span className={`text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full ${
                           u.rol === 'administrador' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
                         }`}>
                           {u.rol}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="text-center">
                         {u.recibe_alertas_inmediatas ? (
-                          <span className="material-symbols-outlined text-base text-[#70C145] select-none">check_circle</span>
+                          <span className="material-symbols-outlined text-base text-secondary select-none">check_circle</span>
                         ) : (
-                          <span className="text-gray-300 font-mono select-none">—</span>
+                          <span className="text-on-surface-variant/40 font-mono select-none">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="text-center">
                         {u.recibe_resumen_diario ? (
-                          <span className="material-symbols-outlined text-base text-[#70C145] select-none">check_circle</span>
+                          <span className="material-symbols-outlined text-base text-secondary select-none">check_circle</span>
                         ) : (
-                          <span className="text-gray-300 font-mono select-none">—</span>
+                          <span className="text-on-surface-variant/40 font-mono select-none">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="text-center">
                         <button onClick={() => handleToggleActivo(u)} disabled={isCurrent && u.activo}
-                          className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full transition-all ${
-                            u.activo ? 'bg-[#70C145]/15 text-[#214f00] border border-[#70C145]/30' : 'bg-[#f3f4f9] text-[#464650] border border-[#e1e2ec]'
+                          className={`text-[10px] uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
+                            u.activo ? 'bg-secondary/10 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
                           } ${isCurrent && u.activo ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           {u.activo ? 'Activo' : 'Inactivo'}
                         </button>
                       </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <td className="text-right whitespace-nowrap">
                         <button onClick={() => setEditing(u.id)}
-                          className="text-xs text-[#040d53] hover:text-[#040d53]/80 font-bold mr-4 inline-flex items-center gap-1">
+                          className="text-xs text-primary hover:text-primary/80 font-bold mr-4 inline-flex items-center gap-1">
                           <span className="material-symbols-outlined text-sm">edit</span>
                           Editar
                         </button>
@@ -326,7 +326,7 @@ export default function Usuarios({ userDoc }) {
                           Clave
                         </button>
                         <button onClick={() => handleDelete(u)} disabled={isCurrent}
-                          className={`text-xs text-[#93000a] hover:text-[#93000a]/80 font-bold inline-flex items-center gap-1 ${
+                          className={`text-xs text-error hover:text-error/80 font-bold inline-flex items-center gap-1 ${
                             isCurrent ? 'opacity-30 cursor-not-allowed' : ''
                           }`}>
                           <span className="material-symbols-outlined text-sm">delete</span>

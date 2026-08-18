@@ -473,6 +473,20 @@ export function DataProvider({ children, user }) {
     }
   }, []);
 
+  const vaciarHistorico = useCallback(() => {
+    setHistoricoPrecios([]);
+    setUltimaCorrida(null);
+    try {
+      const cachedStr = sessionStorage.getItem(CACHE_KEY);
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr);
+        cached.historicoPrecios = [];
+        cached.ultimaCorrida = null;
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+      }
+    } catch (_) {}
+  }, []);
+
   const value = useMemo(() => ({
     productos,
     productosCompetencia,
@@ -490,7 +504,10 @@ export function DataProvider({ children, user }) {
     refreshCadenas,
     refreshUsuarios,
     setProductos,
-    setProductosCompetencia
+    setProductosCompetencia,
+    setHistoricoPrecios,
+    setUltimaCorrida,
+    vaciarHistorico
   }), [
     productos,
     productosCompetencia,
@@ -506,7 +523,8 @@ export function DataProvider({ children, user }) {
     refreshProductos,
     refreshCompetencia,
     refreshCadenas,
-    refreshUsuarios
+    refreshUsuarios,
+    vaciarHistorico
   ]);
 
   return (

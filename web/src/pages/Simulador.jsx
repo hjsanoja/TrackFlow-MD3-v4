@@ -1387,74 +1387,86 @@ export default function Simulador({ user, userDoc }) {
           {/* Side-by-side KPI Output Cards */}
           <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Simulated IPR Card */}
-            <div className="bg-white rounded-2xl border border-outline-variant p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
-              <div>
-                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">Paridad Global Simulada</span>
-                <div className="mt-2 flex items-baseline gap-2">
+            <div className="neural-card p-5 flex items-center justify-between">
+              <div className="space-y-1 flex-1 min-w-0 pr-2">
+                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Paridad Global Simulada</span>
+                <div className="flex items-baseline gap-2">
                   <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-primary' : 'text-on-surface-variant'}`}>
                     {simulatedStats.simGlobalIpr ? `${simulatedStats.simGlobalIpr.toFixed(1)}%` : '—'}
                   </div>
                   {simulacionVariacion !== 0 && (
                     <span className={`text-[10px] font-mono font-bold flex items-center ${simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'text-emerald-600' : 'text-error'}`}>
-                      <span className="material-symbols-outlined text-[10px] leading-none">
+                      <span className="material-symbols-outlined text-[12px] leading-none mr-0.5">
                         {simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'arrow_downward' : 'arrow_upward'}
                       </span>
                       {Math.abs(simulatedStats.simGlobalIpr - (kpiStats.globalIpr || 100)).toFixed(1)}%
                     </span>
                   )}
                 </div>
+                <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                  Base: <strong className="font-mono">{kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}</strong>
+                </p>
               </div>
-              <div className="pt-3 border-t border-outline-variant/30 text-[10px] leading-relaxed mt-2 text-on-surface-variant">
-                Paridad Base: <strong className="font-mono">{kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}</strong>. Posición de paridad de tu marca vs promedio.
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-2">
+                <span className="material-symbols-outlined text-2xl select-none">speed</span>
               </div>
             </div>
 
             {/* Simulated Leadership Percentage Card */}
-            <div className="bg-white rounded-2xl border border-outline-variant p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
-              <div>
-                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">Liderazgo Góndola Simulado</span>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-[#4f378a]' : 'text-on-surface-variant'}`}>
+            <div className="neural-card p-5 flex items-center justify-between">
+              <div className="space-y-1 flex-1 min-w-0 pr-2">
+                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Liderazgo Góndola</span>
+                <div className="flex items-baseline gap-2">
+                  <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-secondary' : 'text-on-surface-variant'}`}>
                     {simulatedStats.porcentajeLiderazgoSim}%
                   </div>
                   {simulacionVariacion !== 0 && (
                     <span className={`text-[10px] font-mono font-bold flex items-center ${simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'text-emerald-600' : 'text-error'}`}>
-                      <span className="material-symbols-outlined text-[10px] leading-none">
+                      <span className="material-symbols-outlined text-[12px] leading-none mr-0.5">
                         {simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'arrow_upward' : 'arrow_downward'}
                       </span>
                       {Math.abs(simulatedStats.porcentajeLiderazgoSim - kpiStats.porcentajeLiderazgoPropio)}%
                     </span>
                   )}
                 </div>
+                <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                  Base: <strong className="font-mono">{kpiStats.porcentajeLiderazgoPropio}%</strong>
+                </p>
               </div>
-              <div className="pt-3 border-t border-outline-variant/30 text-[10px] leading-relaxed mt-2 text-on-surface-variant">
-                Liderazgo Base: <strong className="font-mono">{kpiStats.porcentajeLiderazgoPropio}%</strong>. Porcentaje de productos donde ofreces el precio más bajo.
+              <div className="w-12 h-12 rounded-2xl bg-secondary-container/50 border border-secondary/20 flex items-center justify-center text-secondary shrink-0 ml-2">
+                <span className="material-symbols-outlined text-2xl select-none">leaderboard</span>
               </div>
             </div>
 
             {/* Elasticity / Estimated Margin Card */}
-            <div className="bg-white rounded-2xl border border-outline-variant p-4 flex flex-col justify-between shadow-sm relative overflow-hidden">
-              <div>
-                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">Elasticidad & Paridad</span>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <div className={`text-base font-display font-extrabold flex items-center gap-1 ${
-                    simulacionVariacion > 12 ? 'text-error'
-                    : simulacionVariacion > 0 ? 'text-amber-600'
-                    : simulacionVariacion < 0 ? 'text-emerald-700'
-                    : 'text-on-surface-variant'
-                  }`}>
-                    <span className="material-symbols-outlined text-base leading-none">
-                      {simulacionVariacion > 0 ? 'trending_up' : simulacionVariacion < 0 ? 'trending_down' : 'remove'}
-                    </span>
-                    {simulacionVariacion > 12 ? 'Riesgo Crítico'
-                      : simulacionVariacion > 0 ? 'Margen Elevado'
-                      : simulacionVariacion < 0 ? 'Atracción de Volumen'
-                      : 'Estable'}
-                  </div>
+            <div className="neural-card p-5 flex items-center justify-between">
+              <div className="space-y-1 flex-1 min-w-0 pr-2">
+                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Impacto en Góndola</span>
+                <div className={`text-base font-display font-extrabold flex items-center gap-1 ${
+                  simulacionVariacion > 12 ? 'text-error'
+                  : simulacionVariacion > 0 ? 'text-amber-600'
+                  : simulacionVariacion < 0 ? 'text-emerald-700'
+                  : 'text-on-surface-variant'
+                }`}>
+                  <span className="material-symbols-outlined text-base leading-none">
+                    {simulacionVariacion > 0 ? 'trending_up' : simulacionVariacion < 0 ? 'trending_down' : 'remove'}
+                  </span>
+                  {simulacionVariacion > 12 ? 'Riesgo Crítico'
+                    : simulacionVariacion > 0 ? 'Margen Elevado'
+                    : simulacionVariacion < 0 ? 'Volumen Activo'
+                    : 'Estable'}
                 </div>
+                <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                  Brecha mín: <strong className="font-mono">{simulatedStats.brechaPromedioVsMinSim.toFixed(1)}%</strong>
+                </p>
               </div>
-              <div className="pt-3 border-t border-outline-variant/30 text-[10px] leading-relaxed mt-2 text-on-surface-variant">
-                Brecha Mínima Promedio: <strong className="font-mono">{simulatedStats.brechaPromedioVsMinSim.toFixed(1)}%</strong> (era {kpiStats.brechaPromedioVsMin.toFixed(1)}%).
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ml-2 ${
+                simulacionVariacion > 12 ? 'bg-rose-50 border border-rose-200 text-rose-700'
+                : simulacionVariacion > 0 ? 'bg-amber-50 border border-amber-200 text-amber-700'
+                : simulacionVariacion < 0 ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                : 'bg-surface-low border border-outline-variant/60 text-outline'
+              }`}>
+                <span className="material-symbols-outlined text-2xl select-none">insights</span>
               </div>
             </div>
           </div>
@@ -1703,38 +1715,38 @@ export default function Simulador({ user, userDoc }) {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead className="bg-surface-low text-primary uppercase font-mono tracking-wider border-b border-outline-variant">
+            <table className="m3-table">
+              <thead className="m3-sticky-header">
                 <tr>
-                  <th className="text-left px-4 py-3 font-bold">Molécula / Principio Activo</th>
-                  <th className="text-center px-4 py-3 font-bold">SKUs en Catálogo</th>
-                  <th className="text-center px-4 py-3 font-bold">Dispersión Mercado (%)</th>
-                  <th className="text-center px-4 py-3 font-bold">Volatilidad Histórica</th>
-                  <th className="text-center px-4 py-3 font-bold">Clasificación Elasticidad</th>
-                  <th className="text-left px-4 py-3 font-bold">Diagnóstico Strategic EBITDA</th>
+                  <th>Molécula / Principio Activo</th>
+                  <th className="text-center">SKUs en Catálogo</th>
+                  <th className="text-center">Dispersión Mercado (%)</th>
+                  <th className="text-center">Volatilidad Histórica</th>
+                  <th className="text-center">Clasificación Elasticidad</th>
+                  <th>Diagnóstico Strategic EBITDA</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/30 font-sans">
+              <tbody className="divide-y divide-surface-variant font-sans">
                 {elasticidadPorMolecula.map(m => (
-                  <tr key={m.nombre} className="hover:bg-surface-low/50 transition-colors">
-                    <td className="px-4 py-3 font-bold text-primary font-display text-sm">
+                  <tr key={m.nombre} className="hover:bg-surface-low transition-colors">
+                    <td className="font-bold text-on-surface font-display text-sm">
                       {m.nombre}
                     </td>
-                    <td className="px-4 py-3 text-center font-mono">
-                      <span className="font-bold">{m.totalSkus}</span> <span className="text-[10px] text-on-surface-variant">({m.marcasCount} Marca / {m.genericosCount} Gen)</span>
+                    <td className="text-center font-mono">
+                      <span className="font-bold">{m.totalSkus}</span> <span className="text-xs text-on-surface-variant">({m.marcasCount} Marca / {m.genericosCount} Gen)</span>
                     </td>
-                    <td className="px-4 py-3 text-center font-mono font-bold text-on-surface">
+                    <td className="text-center font-mono font-bold text-on-surface">
                       {m.avgDispersion.toFixed(1)}%
                     </td>
-                    <td className="px-4 py-3 text-center font-mono">
+                    <td className="text-center font-mono">
                       {m.avgVolatilidad > 0 ? `${m.avgVolatilidad.toFixed(1)}%` : 'Estable'}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="text-center">
                       <span className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-full border ${m.badgeClass}`}>
                         {m.tipoElasticidad}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-on-surface-variant text-[11px]">
+                    <td className="text-on-surface-variant text-xs font-sans">
                       {m.recomendacion}
                     </td>
                   </tr>

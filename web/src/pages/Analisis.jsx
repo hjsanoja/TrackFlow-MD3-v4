@@ -279,79 +279,70 @@ export default function Analisis() {
       {/* BLOQUE DE KPIs PRINCIPALES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: ICP */}
-        <div className="neural-card p-4 flex flex-col justify-between neural-glow">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-mono font-bold uppercase text-primary">Índice ICP</span>
-              <span className="material-symbols-outlined text-primary text-lg">speed</span>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant block">Índice ICP</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-display font-extrabold text-primary">{analisisData.icpScore}%</span>
+              <span className="text-[10px] font-mono font-semibold text-on-surface-variant">({analisisData.totalAnalizados} SKUs)</span>
             </div>
-            <div className="text-2xl font-display font-extrabold text-on-background">
-              {analisisData.icpScore}%
-            </div>
-            <p className="text-[11px] text-on-surface-variant mt-1 leading-tight">
-              Score de competitividad global de precios vs mercado.
+            <p className="text-[11px] text-on-surface-variant font-sans">
+              Score de competitividad global vs mercado.
             </p>
           </div>
-          <div className="mt-3 pt-2 border-t border-outline-variant/30 flex items-center justify-between text-[10px] font-mono">
-            <span className="text-on-surface-variant">Evaluados:</span>
-            <span className="font-bold text-primary">{analisisData.totalAnalizados} SKUs</span>
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">speed</span>
           </div>
         </div>
 
         {/* KPI 2: Sobreprecio */}
-        <div className="neural-card p-4 flex flex-col justify-between border-l-4 border-l-rose-500">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-mono font-bold uppercase text-rose-700">Sobreprecio</span>
-              <span className="material-symbols-outlined text-rose-600 text-lg">warning</span>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-700 block">Sobreprecio</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-display font-extrabold text-rose-700">{analisisData.carosCount}</span>
+              <span className="text-[10px] font-mono font-semibold text-rose-600">SKUs (&gt;+3%)</span>
             </div>
-            <div className="text-2xl font-display font-extrabold text-rose-700">
-              {analisisData.carosCount} <span className="text-xs font-normal text-on-surface-variant">SKUs</span>
-            </div>
-            <p className="text-[11px] text-on-surface-variant mt-1 leading-tight">
-              Precio propio supera la media del mercado por &gt;3%.
+            <p className="text-[11px] text-on-surface-variant font-sans">
+              Superan la media del mercado por más de 3%.
             </p>
           </div>
-          <div className="mt-3 pt-2 border-t border-outline-variant/30 text-[10px] font-mono text-rose-700 font-bold">
-            Revisar margen
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center justify-center shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">warning</span>
           </div>
         </div>
 
         {/* KPI 3: Alineados */}
-        <div className="neural-card p-4 flex flex-col justify-between border-l-4 border-l-sky-500">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-mono font-bold uppercase text-sky-700">Alineados</span>
-              <span className="material-symbols-outlined text-sky-600 text-lg">balance</span>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-sky-700 block">Alineados</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-display font-extrabold text-sky-700">{analisisData.justosCount}</span>
+              <span className="text-[10px] font-mono font-semibold text-sky-600">SKUs (±3%)</span>
             </div>
-            <div className="text-2xl font-display font-extrabold text-sky-700">
-              {analisisData.justosCount} <span className="text-xs font-normal text-on-surface-variant">SKUs</span>
-            </div>
-            <p className="text-[11px] text-on-surface-variant mt-1 leading-tight">
-              Dentro del rango promedio del mercado (±3%).
+            <p className="text-[11px] text-on-surface-variant font-sans">
+              Dentro del rango promedio del mercado.
             </p>
           </div>
-          <div className="mt-3 pt-2 border-t border-outline-variant/30 text-[10px] font-mono text-sky-700 font-bold">
-            Equilibrio de precio
+          <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">balance</span>
           </div>
         </div>
 
         {/* KPI 4: Más Económicos */}
-        <div className="neural-card p-4 flex flex-col justify-between border-l-4 border-l-emerald-500">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-mono font-bold uppercase text-emerald-700">Económicos</span>
-              <span className="material-symbols-outlined text-emerald-600 text-lg">trending_down</span>
+        <div className="neural-card p-5 flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700 block">Económicos</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-display font-extrabold text-emerald-700">{analisisData.baratosCount}</span>
+              <span className="text-[10px] font-mono font-semibold text-emerald-600">SKUs (&lt;-3%)</span>
             </div>
-            <div className="text-2xl font-display font-extrabold text-emerald-700">
-              {analisisData.baratosCount} <span className="text-xs font-normal text-on-surface-variant">SKUs</span>
-            </div>
-            <p className="text-[11px] text-on-surface-variant mt-1 leading-tight">
-              Más de 3% por debajo del promedio competidor.
+            <p className="text-[11px] text-on-surface-variant font-sans">
+              Ventaja competitiva por debajo del promedio.
             </p>
           </div>
-          <div className="mt-3 pt-2 border-t border-outline-variant/30 text-[10px] font-mono text-emerald-700 font-bold">
-            Ventaja competitiva
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0 ml-4">
+            <span className="material-symbols-outlined text-2xl select-none">trending_down</span>
           </div>
         </div>
       </div>
@@ -488,7 +479,7 @@ export default function Analisis() {
 
         <div className="overflow-x-auto">
           <table className="m3-table">
-            <thead>
+            <thead className="m3-sticky-header">
               <tr>
                 <th className="text-center">Comp.</th>
                 <th>Producto Propio</th>
@@ -503,7 +494,7 @@ export default function Analisis() {
             <tbody className="divide-y divide-surface-variant font-sans">
               {visibleBrechas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-on-surface-variant italic">
+                  <td colSpan={8} className="px-6 py-12 text-center text-on-surface-variant italic">
                     No se encontraron brechas para los filtros aplicados.
                   </td>
                 </tr>
@@ -514,8 +505,8 @@ export default function Analisis() {
                   const labColor = getLabColor(b.producto.laboratorio);
 
                   return (
-                    <tr key={b.producto.id} className="hover:bg-surface-low/60 transition-colors">
-                      <td className="p-2.5 text-center">
+                    <tr key={b.producto.id} className="hover:bg-surface-low transition-colors">
+                      <td className="text-center">
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -524,11 +515,11 @@ export default function Analisis() {
                           className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
                         />
                       </td>
-                      <td className="p-2.5 font-bold text-on-surface">
-                        <div>{b.producto.nombre}</div>
-                        <div className="text-[10px] font-mono font-normal text-on-surface-variant">{b.producto.principio_activo}</div>
+                      <td>
+                        <div className="font-bold text-on-surface text-sm font-display">{b.producto.nombre}</div>
+                        <div className="text-xs font-mono font-normal text-on-surface-variant mt-0.5">{b.producto.principio_activo}</div>
                       </td>
-                      <td className="p-2.5 font-mono">
+                      <td className="font-mono">
                         <span
                           className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white"
                           style={{ backgroundColor: labColor }}
@@ -536,15 +527,15 @@ export default function Analisis() {
                           {b.producto.laboratorio || 'N/A'}
                         </span>
                       </td>
-                      <td className="p-2.5 text-right font-mono font-bold text-on-surface">
+                      <td className="text-right font-mono font-bold text-on-surface">
                         ${b.pvpPropioUsd.toFixed(2)}
                       </td>
-                      <td className="p-2.5 text-right font-mono font-bold text-primary">
+                      <td className="text-right font-mono font-bold text-primary">
                         ${b.cheapestPriceUsd.toFixed(2)}
                       </td>
-                      <td className="p-2.5">
+                      <td>
                         {b.cheapestCompItem ? (
-                          <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                          <div className="flex items-center gap-1.5 font-mono text-xs">
                             <span
                               className="w-2 h-2 rounded-full shrink-0"
                               style={{ backgroundColor: chainColor }}
@@ -555,12 +546,12 @@ export default function Analisis() {
                           <span className="text-on-surface-variant font-mono">—</span>
                         )}
                       </td>
-                      <td className="p-2.5 text-right font-mono font-bold">
+                      <td className="text-right font-mono font-bold">
                         <span className={b.diffVsCheapestPct > 0 ? 'text-rose-600' : 'text-emerald-600'}>
                           {b.diffVsCheapestPct >= 0 ? `+${b.diffVsCheapestPct.toFixed(1)}%` : `${b.diffVsCheapestPct.toFixed(1)}%`}
                         </span>
                       </td>
-                      <td className="p-2.5 text-center">
+                      <td className="text-center">
                         <span className={`m3-chip ${
                           b.status === 'sobreprecio' 
                             ? 'bg-rose-50 text-rose-700 border border-rose-200'

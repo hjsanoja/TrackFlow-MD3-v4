@@ -1,6 +1,6 @@
 import { supabase, isSupabaseActive } from '../supabase';
 import { db } from '../firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, where } from 'firebase/firestore';
 
 export { isSupabaseActive };
 
@@ -357,17 +357,86 @@ export async function dbDeleteAllProductosCompetencia() {
     try {
       const collections = ['productos_competencia', 'historico_precios', 'scrape_runs'];
       for (const colName of collections) {
-        const snap = await getDocs(collection(db, colName));
-        const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += 500) {
-          const chunk = docs.slice(i, i + 500);
-          const batch = writeBatch(db);
-          chunk.forEach(d => batch.delete(d.ref));
-          await batch.commit();
+        try {
+          const snap = await getDocs(collection(db, colName));
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += 500) {
+            const chunk = docs.slice(i, i + 500);
+            const batch = writeBatch(db);
+            chunk.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+        } catch (innerErr) {
+          console.warn(`[Firestore] Aviso al vaciar colección ${colName}:`, innerErr?.message || String(innerErr));
         }
       }
     } catch (e) {
       console.warn('[Firestore] Aviso en deleteAllProductosCompetencia:', e?.message || String(e));
+    }
+  }
+}
+
+// --- HISTORICO PRECIOS ---
+export async function dbClearAllHistoricoPrecios() {
+  if (isSupabaseActive() && supabase) {
+    try {
+      await supabase.from('historico_precios').delete().neq('id', '___none___');
+      await supabase.from('scrape_runs').delete().neq('id', '___none___');
+    } catch (e) {
+      console.warn('[Supabase] Error en dbClearAllHistoricoPrecios:', e?.message || String(e));
+    }
+  }
+
+  if (db) {
+    try {
+      const collections = ['historico_precios', 'scrape_runs'];
+      for (const colName of collections) {
+        try {
+          const snap = await getDocs(collection(db, colName));
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += 500) {
+            const chunk = docs.slice(i, i + 500);
+            const batch = writeBatch(db);
+            chunk.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+        } catch (innerErr) {
+          console.warn(`[Firestore] Permiso o error al vaciar colección ${colName}:`, innerErr?.message || String(innerErr));
+        }
+      }
+    } catch (e) {
+      console.warn('[Firestore] Aviso en dbClearAllHistoricoPrecios:', e?.message || String(e));
+    }
+  }
+}
+
+export async function dbClearHistoricoPrecioForProduct(id_producto_propio) {
+  if (!id_producto_propio) return;
+
+  if (isSupabaseActive() && supabase) {
+    try {
+      await supabase.from('historico_precios').delete().eq('id_producto_propio', id_producto_propio);
+    } catch (e) {
+      console.warn('[Supabase] Error en dbClearHistoricoPrecioForProduct:', e?.message || String(e));
+    }
+  }
+
+  if (db) {
+    try {
+      const q = query(
+        collection(db, 'historico_precios'),
+        where('id_producto_propio', '==', id_producto_propio)
+      );
+      const snap = await getDocs(q);
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += 500) {
+        const chunk = docs.slice(i, i + 500);
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (e) {
+      console.warn('[Firestore] Permiso o aviso en dbClearHistoricoPrecioForProduct:', e?.message || String(e));
     }
   }
 }

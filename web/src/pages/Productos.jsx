@@ -666,7 +666,7 @@ export default function Productos() {
             <table className="m3-table">
               <thead className="m3-sticky-header">
                 <tr>
-                  <th className="rounded-tl-2xl">ID</th>
+                  <th>ID</th>
                   <th>Nombre / Molécula</th>
                   <th>Concentración / Tamaño</th>
                   <th>Tipo</th>
@@ -675,7 +675,7 @@ export default function Productos() {
                   <th>Categoría</th>
                   <th className="text-center">Enlaces Activos</th>
                   <th className="text-center">Estado</th>
-                  <th className="text-right rounded-tr-2xl">Acciones</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-variant">
@@ -684,9 +684,9 @@ export default function Productos() {
                   const count = links.length;
                   return (
                     <tr key={p.id} className="hover:bg-surface-low transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs text-primary font-bold">{p.id_interno}</td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-on-surface text-base font-display flex items-center gap-2 flex-wrap">
+                      <td className="font-mono text-xs text-primary font-bold">{p.id_interno}</td>
+                      <td>
+                        <div className="font-bold text-on-surface text-sm font-display flex items-center gap-2 flex-wrap">
                           <span>{p.nombre}</span>
                           {p.codigo_barra && (
                             <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-low border border-outline-variant text-on-surface-variant font-medium shrink-0" title="Código de barras / EAN">
@@ -696,7 +696,7 @@ export default function Productos() {
                         </div>
                         <div className="text-xs text-on-surface-variant font-mono mt-0.5">{p.principio_activo || 'Sin molécula'}</div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td>
                         <div className="text-on-surface font-semibold">{p.concentracion || '—'}</div>
                         <div className="text-xs text-on-surface-variant font-mono mt-0.5 flex items-center gap-1.5">
                           <span>{p.tamano || '—'}</span>
@@ -707,7 +707,7 @@ export default function Productos() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td>
                         <span className={`px-2.5 py-0.5 text-[10px] rounded font-mono font-bold tracking-wider ${
                           (p.market_type || 'GENERICO').toUpperCase() === 'MARCA'
                             ? 'bg-purple-100 text-purple-800 border border-purple-200'
@@ -716,7 +716,7 @@ export default function Productos() {
                           {p.market_type || 'GENERICO'}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td>
                         <span className={`px-2 py-1 rounded text-xs font-mono font-bold border ${
                           (p.unidad_negocio || 'La Sante') === 'OTC'
                             ? 'bg-amber-100 text-amber-800 border-amber-200'
@@ -727,13 +727,13 @@ export default function Productos() {
                           {p.unidad_negocio || 'La Sante'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-on-surface">{p.laboratorio || '—'}</td>
-                      <td className="px-6 py-4">
+                      <td className="text-on-surface font-sans">{p.laboratorio || '—'}</td>
+                      <td>
                         <span className="px-3 py-1 text-xs rounded-full bg-surface-low text-on-surface font-medium border border-outline-variant">
                           {p.categoria || 'Otros'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="text-center">
                         <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-mono text-xs font-bold ${
                           count === 0
                             ? 'bg-error-container text-error border border-error/20'
@@ -743,15 +743,15 @@ export default function Productos() {
                           {count === 0 ? 'Sin Enlaces' : `${count} Enlace${count > 1 ? 's' : ''}`}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="text-center">
                         <button onClick={() => handleToggleActivo(p)}
-                          className={`text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider transition-all ${
+                          className={`text-xs px-3 py-1 rounded-full font-mono font-bold uppercase tracking-wider transition-all ${
                             p.activo ? 'bg-secondary/15 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
                           }`}>
                           {p.activo ? 'Activo' : 'Inactivo'}
                         </button>
                       </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <td className="text-right whitespace-nowrap">
                         <button onClick={() => setEditing(p.id)}
                           className="text-xs text-primary hover:text-primary/85 font-bold mr-4 inline-flex items-center gap-1">
                           <span className="material-symbols-outlined text-sm">edit</span>
