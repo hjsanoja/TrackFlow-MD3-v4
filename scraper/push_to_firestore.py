@@ -141,11 +141,15 @@ def main():
             for item, es_err, r in cambios:
                 records_to_upsert.append({
                     "id": item["id"],
-                    "id_producto_propio": item.get("id_producto_propio"),
-                    "cadena": item.get("cadena"),
-                    "marca": item.get("marca"),
-                    "tipo": item.get("tipo"),
-                    "url": item.get("url"),
+                    "id_producto_propio": item.get("id_producto_propio") or r.get("id_producto_propio"),
+                    "cadena": item.get("cadena") or r.get("cadena"),
+                    "marca": item.get("marca") or r.get("marca"),
+                    "tipo": item.get("tipo") or r.get("tipo", "alternativa"),
+                    "url": item.get("url") or r.get("url"),
+                    "laboratorio": r.get("laboratorio") or "",
+                    "concentracion": r.get("concentracion") or "",
+                    "tamano": r.get("tamano") or "",
+                    "activo": r.get("activo", True) if isinstance(r.get("activo"), bool) else True,
                     "ultimo_scrape": item.get("ultimo_scrape"),
                     "estado": item.get("estado"),
                     "ultimo_error": item.get("ultimo_error"),
@@ -171,7 +175,7 @@ def main():
                     "nombre": h.get("nombre"),
                     "precio_full_bs": h.get("precio_full_bs"),
                     "precio_desc_bs": h.get("precio_desc_bs"),
-                    "tiene_descuento": Boolean(h.get("tiene_descuento", False)) if "Boolean" in globals() else bool(h.get("tiene_descuento", False)),
+                    "tiene_descuento": bool(h.get("tiene_descuento", False)),
                     "scraped_at": h.get("scraped_at"),
                     "run_id": h.get("run_id")
                 })

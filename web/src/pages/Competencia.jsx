@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import { db } from '../firebase';
+import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
 import GitHubConfigModal from '../components/GitHubConfigModal';
@@ -285,7 +286,59 @@ export default function Competencia({ user, userDoc }) {
       });
 
       setScrapingItems(prev => ({ ...prev, [item.id]: 'esperando' }));
-      addToast(`Robot lanzado para extraer "${item.marca}" vía GitHub Actions.`, 'success');
+      addToast(`Robot extractor lanzado para "${item.marca}". Monitoreando resultado...`, 'info');
+
+      // Sondeo reactivo en segundo plano para reflejar el nuevo precio en cuanto GitHub Actions termine de escribir en la DB
+      const startTime = Date.now();
+      const pollInterval = setInterval(async () => {
+        try {
+          let updatedItem = null;
+          if (isSupabaseActive()) {
+            const { data, error } = await supabase
+              .from('productos_competencia')
+              .select('*')
+              .eq('id', item.id)
+              .maybeSingle();
+            if (!error && data) {
+              updatedItem = data;
+            }
+          }
+          if (!updatedItem && db) {
+            const docSnap = await getDoc(doc(db, 'productos_competencia', item.id));
+            if (docSnap.exists()) {
+              updatedItem = { id: docSnap.id, ...docSnap.data() };
+            }
+          }
+
+          const scrapeTime = updatedItem?.ultimo_scrape
+            ? (updatedItem.ultimo_scrape.toDate?.()?.getTime() || new Date(updatedItem.ultimo_scrape).getTime())
+            : 0;
+
+          // Si el registro se actualizó después del inicio de la ejecución del robot
+          if (updatedItem && (scrapeTime >= startTime - 4000 || (updatedItem.ultimo_precio_full_bs && updatedItem.ultimo_precio_full_bs !== item.ultimo_precio_full_bs))) {
+            clearInterval(pollInterval);
+            setScrapingItems(prev => ({ ...prev, [item.id]: null }));
+            // Actualizar tabla en tiempo real
+            setProductosCompetencia(prev => prev.map(p => p.id === item.id ? { ...p, ...updatedItem } : p));
+            await cargar(true);
+            const precioFormatted = updatedItem.ultimo_precio_full_bs
+              ? `Bs ${Number(updatedItem.ultimo_precio_full_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`
+              : 'Actualizado';
+            addToast(`✅ ¡Precio actualizado con éxito! ${item.marca}: ${precioFormatted}`, 'success');
+            return;
+          }
+
+          // Si transcurren más de 65 segundos sin respuesta, finalizar sondeo
+          if (Date.now() - startTime > 65000) {
+            clearInterval(pollInterval);
+            setScrapingItems(prev => ({ ...prev, [item.id]: null }));
+            await cargar(true);
+          }
+        } catch (e) {
+          console.warn('Error en sondeo del scraper:', e);
+        }
+      }, 3500);
+
       return;
     } catch (err) {
       setScrapingItems(prev => ({ ...prev, [item.id]: null }));

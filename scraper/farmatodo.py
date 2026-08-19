@@ -996,6 +996,9 @@ async def main_async():
                     res["cadena"] = cadena
                     res["tipo"] = fila.get("tipo", "")
                     res["laboratorio"] = fila.get("laboratorio", "")
+                    res["concentracion"] = fila.get("concentracion", "")
+                    res["tamano"] = fila.get("tamano", "")
+                    res["activo"] = fila.get("activo", True)
                     res["_doc_id"] = fila.get("_doc_id")
 
                     await page.close()
