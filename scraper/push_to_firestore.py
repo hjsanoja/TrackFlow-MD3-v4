@@ -110,7 +110,10 @@ def main():
             "ultimo_precio_full_bs": p_full,
             "ultimo_precio_desc_bs": p_desc,
             "ultimo_nombre": r.get("nombre"),
-            "tiene_descuento": r.get("tiene_descuento", False)
+            "tiene_descuento": r.get("tiene_descuento", False),
+            "tipo_promo": r.get("tipo_promo"),
+            "porcentaje_descuento": r.get("porcentaje_descuento"),
+            "metodo_extraccion": r.get("metodo_extraccion"),
         }
         
         if estado_actual != estado_previo:
@@ -126,6 +129,9 @@ def main():
                     "precio_full_bs": p_full,
                     "precio_desc_bs": p_desc,
                     "tiene_descuento": r.get("tiene_descuento", False),
+                    "tipo_promo": r.get("tipo_promo"),
+                    "porcentaje_descuento": r.get("porcentaje_descuento"),
+                    "metodo_extraccion": r.get("metodo_extraccion"),
                     "scraped_at": ahora_iso,
                     "run_id": run_id
                 })
@@ -176,6 +182,9 @@ def main():
                     "precio_full_bs": h.get("precio_full_bs"),
                     "precio_desc_bs": h.get("precio_desc_bs"),
                     "tiene_descuento": bool(h.get("tiene_descuento", False)),
+                    "tipo_promo": h.get("tipo_promo"),
+                    "porcentaje_descuento": h.get("porcentaje_descuento"),
+                    "metodo_extraccion": h.get("metodo_extraccion"),
                     "scraped_at": h.get("scraped_at"),
                     "run_id": h.get("run_id")
                 })

@@ -1,159 +1,157 @@
-# Scraper de Competencia (Farmatodo, Locatel, Farmacias SAAS, etc.) - Version 6.1 Async Multi-Dominio
-#
-# Arquitectura y Mejoras Integradas:
-# 1. Concurrencia Adaptativa por Dominio & Control Anti-429 para Farmatodo:
-#    - Límite global (MAX_GLOBAL_CONCURRENCY=12) y límite por dominio (MAX_PER_DOMAIN_CONCURRENCY=3).
-#    - Concurrencia específica baja para Farmatodo (FARMATODO_CONCURRENCY=1) con pausas previas aleatorias para prevenir HTTP 429.
-# 2. Entrelazado Round-Robin por Cadena:
-#    - Rotación de tiendas (Farmatodo -> Locatel -> SAAS -> Farmatodo) para espaciar
-#      las peticiones de forma natural a miles de productos.
-# 3. Motor de Extracción Universal O(1):
-#    - Compatible con Next.js (__NEXT_DATA__ / bsPrice), VTEX (__STATE__ / cm), Schema.org JSON-LD y DOM.
-# 4. Bloqueo Inteligente de Red y Headers Anti-Bot:
-#    - Cancela recursos pesados (imágenes, fuentes, video, analítica) e inyecta headers de navegador real (Chrome 124, sec-ch-ua).
-# 5. Obtención única de Tasa BCV al inicio para cero redundancia.
+"""
+TrackFlow Scraper - Motor de Monitoreo de Precios Farmacéuticos (Venezuela)
+Soporta: Farmatodo, Locatel, FarmaDON, Grupo San Ignacio, Farmacias Xana y FarmaGo.
+Ejecución: GitHub Actions & Local (Playwright Async + Python).
+"""
 
 import asyncio
-import csv
-import io
-import json
-import os
-import re
-import sys
 import time
 import random
-import urllib.request
-from datetime import datetime, timezone
+import json
+import os
+import sys
+import csv
+import io
+import re
 from pathlib import Path
+from datetime import datetime, timezone
+import urllib.parse
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
-PROJECT_ROOT = Path(__file__).parent.parent if "__file__" in globals() else Path.cwd()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CSV_PATH = PROJECT_ROOT / "productos_competencia.csv"
-RESULTS_PATH = PROJECT_ROOT / "resultados.json"
-
-# Configuración de concurrencia adaptativa por dominio para escalar a miles de links
-MAX_GLOBAL_CONCURRENCY = int(os.environ.get("MAX_GLOBAL_CONCURRENCY", "12"))
-MAX_PER_DOMAIN_CONCURRENCY = int(os.environ.get("MAX_PER_DOMAIN_CONCURRENCY", "3"))
-FARMATODO_CONCURRENCY = int(os.environ.get("FARMATODO_CONCURRENCY", "1"))  # Farmatodo requiere baja concurrencia para evitar HTTP 429
+OUT_PATH = PROJECT_ROOT / "resultados.json"
 
 
 def read_text_robust(path: Path) -> str:
-    """Lee un archivo local probando diferentes codificaciones de texto."""
-    raw = path.read_bytes()
-    for encoding in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    raise RuntimeError("No se pudo decodificar el archivo: " + path.name)
+    """Lee archivos de texto manejando codificaciones utf-8 y latin-1."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="latin-1")
 
 
-def parse_price(text: str):
-    """Limpia y convierte cadenas de texto numéricas en formato de moneda (Bs)."""
+def parse_price(text) -> float | None:
+    """
+    Convierte texto con formato de moneda venezolano (Bs.) a float.
+    Maneja: 'Bs 18.655,00', 'Bs.18.655,00', '18.655,00', '18655.00'.
+    Evita falsos positivos con precios unitarios ('Unidades a...').
+    """
     if not text:
         return None
-    cleaned = str(text).replace("Bs.", "").replace("Bs", "").replace("VES", "").strip()
-    cleaned = re.sub(r"[^\d.,]", "", cleaned)
-    if not cleaned:
+    str_val = str(text).strip()
+    if not str_val:
         return None
-    
-    if "," in cleaned:
-        # Formato venezolano/hispano: punto para miles, coma para decimales
-        cleaned = cleaned.replace(".", "").replace(",", ".")
+
+    # Limpiar prefijos de moneda y espacios especiales
+    cleaned = re.sub(r'(?i)\b(?:bs\.?s?|ves|bolivares?)\b', '', str_val)
+    cleaned = cleaned.replace('\xa0', ' ').replace('\u202f', ' ').strip()
+
+    # Si contiene coma decimal (formato estándar venezolano: 18.655,00)
+    if ',' in cleaned:
+        cleaned = cleaned.replace('.', '').replace(',', '.')
     else:
-        # Formato estándar con punto decimal
-        if cleaned.count(".") == 1:
-            parts = cleaned.split(".")
-            if len(parts[1]) == 3:  # Formato de miles sin decimales
-                cleaned = cleaned.replace(".", "")
-        elif cleaned.count(".") > 1:
-            cleaned = cleaned.replace(".", "")
-            
+        # Si contiene puntos, verificar si es separador de miles o decimal
+        dots = cleaned.count('.')
+        if dots == 1:
+            parts = cleaned.split('.')
+            if len(parts[1]) == 3:  # Ej: 18.655 -> miles
+                cleaned = cleaned.replace('.', '')
+        elif dots > 1:
+            cleaned = cleaned.replace('.', '')
+
+    match = re.search(r'\d+(?:\.\d+)?', cleaned)
+    if not match:
+        return None
     try:
-        val = float(cleaned)
-        return val if val > 0 else None
+        val = float(match.group())
+        return round(val, 2) if val > 0.01 else None
     except ValueError:
         return None
 
 
-def parse_price_usd(text: str):
-    """Extrae montos numéricos limpios etiquetados en divisas USD/Ref."""
+def parse_price_usd(text) -> float | None:
+    """Convierte texto con formato de dólares ($ / USD / REF) a float."""
     if not text:
         return None
-    cleaned = str(text).replace("Ref.", "").replace("Ref", "").replace("$", "").replace("USD", "").replace(":", "").strip()
-    cleaned = re.sub(r"[^\d.,]", "", cleaned)
-    if not cleaned:
+    str_val = str(text).strip()
+    if not str_val:
         return None
-    if "," in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
+
+    cleaned = re.sub(r'(?i)\b(?:usd|\$|ref|dolares?)\b', '', str_val)
+    cleaned = cleaned.replace('\xa0', ' ').replace('\u202f', ' ').strip()
+
+    if ',' in cleaned and '.' in cleaned:
+        if cleaned.find(',') < cleaned.find('.'):
+            cleaned = cleaned.replace(',', '')
+        else:
+            cleaned = cleaned.replace('.', '').replace(',', '.')
+    elif ',' in cleaned:
+        cleaned = cleaned.replace(',', '.')
+
+    match = re.search(r'\d+(?:\.\d+)?', cleaned)
+    if not match:
+        return None
     try:
-        val = float(cleaned)
-        return val if val > 0 else None
+        val = float(match.group())
+        return round(val, 2) if val > 0.01 else None
     except ValueError:
         return None
 
 
-def is_usd_text(text: str) -> bool:
-    """Detecta si un texto contiene indicadores de precio en dólares."""
-    if not text:
-        return False
-    t = str(text).lower()
-    return "ref" in t or "$" in t or "usd" in t or "divisa" in t
-
-
-def fetch_bcv_rate_once() -> float:
-    """
-    Obtiene la tasa oficial del BCV una sola vez al inicio del programa.
-    Consulta Supabase primeramente, luego Firestore, luego DolarAPI.
-    """
+async def get_bcv_rate() -> float:
+    """Obtiene la tasa oficial BCV desde Supabase, Firestore o API externa."""
+    fallback = 775.34
     print("[BCV] Cargando tasa oficial...", flush=True)
-    
-    # 1. Intentar cargar desde Supabase
+
+    # 1. Supabase
     try:
         from supabase_client import is_supabase_configured, select
         if is_supabase_configured():
-            res = select("bcv_rates", "order=updated_at.desc&limit=1")
-            if res and len(res) > 0 and res[0].get("value"):
-                rate = float(res[0]["value"])
-                print(f"[BCV] Tasa cargada desde Supabase: Bs {rate:,.2f}", flush=True)
-                return rate
+            rows = select("bcv_rates", "select=*&order=updated_at.desc&limit=1")
+            if rows and len(rows) > 0:
+                val = float(rows[0].get("value") or rows[0].get("valor") or 0)
+                if val > 10.0:
+                    print(f"[BCV] Tasa cargada desde Supabase: Bs {val:,.2f}", flush=True)
+                    return val
     except Exception as e:
-        print(f"[BCV] Aviso Supabase: {e}", flush=True)
+        print(f"[BCV] Supabase no disponible ({e})", flush=True)
 
-    # 2. Intentar cargar desde Firestore
+    # 2. Firestore
     try:
         from firebase_client import get_db
         db = get_db()
-        docs = list(db.collection("bcv_rates").order_by("updated_at", direction="DESCENDING").limit(1).stream())
-        if docs:
-            rate = float(docs[0].to_dict().get("value"))
-            print(f"[BCV] Tasa cargada desde Firestore: Bs {rate:,.2f}", flush=True)
-            return rate
+        doc_snap = db.collection("bcv_rates").order_by("updated_at", direction="DESCENDING").limit(1).get()
+        if doc_snap and len(doc_snap) > 0:
+            data = doc_snap[0].to_dict()
+            val = float(data.get("value") or data.get("valor") or 0)
+            if val > 10.0:
+                print(f"[BCV] Tasa cargada desde Firestore: Bs {val:,.2f}", flush=True)
+                return val
     except Exception as e:
-        print(f"[BCV] Aviso Firestore: {e}", flush=True)
+        print(f"[BCV] Firestore no disponible ({e})", flush=True)
 
-    # 3. Fallback a DolarAPI
+    # 3. API Externa pydolarve / bcv
     try:
-        url = "https://ve.dolarapi.com/v1/dolares/oficial"
-        req = urllib.request.Request(url, headers={"User-Agent": "TrackFlow/1.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode())
-            rate = data.get("promedio") or data.get("price")
-            if rate:
-                rate = float(rate)
-                print(f"[BCV] Tasa obtenida desde DolarAPI: Bs {rate:,.2f}", flush=True)
-                return rate
-    except Exception as e:
-        print(f"[BCV] Aviso DolarAPI: {e}", flush=True)
+        import urllib.request
+        req = urllib.request.Request("https://pydolarve.org/api/v1/dollar?page=bcv", headers={"User-Agent": "TrackFlow/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                res_data = json.loads(response.read().decode("utf-8"))
+                val = float(res_data.get("monitors", {}).get("usd", {}).get("price", 0))
+                if val > 10.0:
+                    print(f"[BCV] Tasa cargada desde API externa: Bs {val:,.2f}", flush=True)
+                    return val
+    except Exception:
+        pass
 
-    fallback = 744.23
     print(f"[BCV] Usando tasa de seguridad por defecto: Bs {fallback:,.2f}", flush=True)
     return fallback
 
 
 def cargar_filas_de_db():
     """Lee productos_competencia desde Supabase o Firestore."""
-    # 1. Probar Supabase
+    # 1. Supabase
     try:
         from supabase_client import is_supabase_configured, select
         if is_supabase_configured():
@@ -166,7 +164,7 @@ def cargar_filas_de_db():
     except Exception as e:
         print(f"No se pudo cargar desde Supabase: {e}", flush=True)
 
-    # 2. Probar Firestore
+    # 2. Firestore
     try:
         from firebase_client import get_db
         db = get_db()
@@ -195,15 +193,16 @@ def cargar_filas_de_csv():
     return filas
 
 
-# Rate limiting per domain to prevent HTTP 403/429
+# Rate limiting por dominio para prevenir 403 / 429
 LAST_REQUEST_TIME = {}
 DOMAIN_MIN_DELAY = {
-    "farmatodo": 7.0,  # 7 seconds minimum between Farmatodo requests
+    "farmatodo": 6.0,
     "locatel": 2.0,
     "saas": 2.0,
     "farmaciasaas": 2.0,
     "default": 1.5
 }
+
 
 async def wait_for_domain_rate_limit(url: str):
     domain = "default"
@@ -212,17 +211,15 @@ async def wait_for_domain_rate_limit(url: str):
         if d in url_lower:
             domain = d
             break
-            
+
     min_delay = DOMAIN_MIN_DELAY.get(domain, 1.5)
-    
     now = time.time()
     last_time = LAST_REQUEST_TIME.get(domain, 0.0)
     elapsed = now - last_time
     if elapsed < min_delay:
-        sleep_time = min_delay - elapsed
-        sleep_time += random.uniform(0.1, 0.5)
+        sleep_time = (min_delay - elapsed) + random.uniform(0.1, 0.4)
         await asyncio.sleep(sleep_time)
-        
+
     LAST_REQUEST_TIME[domain] = time.time()
 
 
@@ -230,8 +227,6 @@ def interleave_filas_por_producto(filas: list) -> list:
     """
     Agrupa las filas por id_producto_propio y las ordena por producto para que el scraper
     procese los enlaces de un mismo producto en secuencia rotando de cadena en cadena.
-    Ejemplo: Producto A (Farmatodo) -> Producto A (Locatel) -> Producto A (SAAS) -> Producto B (Farmatodo)...
-    Esto rota de forma natural los dominios y espacia las peticiones por dominio.
     """
     por_producto = {}
     for f in filas:
@@ -241,11 +236,9 @@ def interleave_filas_por_producto(filas: list) -> list:
         por_producto[pid].append(f)
 
     pids_ordenados = sorted(por_producto.keys())
-
     interleaved = []
     for pid in pids_ordenados:
         filas_prod = por_producto[pid]
-        # Ordenamos las filas de este producto por cadena (farmatodo, locatel, saas) de forma consistente
         filas_prod_ordenadas = sorted(filas_prod, key=lambda x: str(x.get("cadena", "")).lower())
         interleaved.extend(filas_prod_ordenadas)
 
@@ -255,9 +248,7 @@ def interleave_filas_por_producto(filas: list) -> list:
 
 async def block_unnecessary_resources(route):
     """
-    Bloqueador inteligente de red:
-    Cancela recursos pesados (imágenes, video, fuentes, analíticas) para maximizar la velocidad.
-    Permite CSS/JS necesarios para hidratación VTEX/React.
+    Cancela recursos pesados (imágenes, fuentes, analíticas) pero permite XHR/Fetch/JSON/CSS/JS.
     """
     req = route.request
     res_type = req.resource_type
@@ -281,27 +272,37 @@ async def block_unnecessary_resources(route):
 
 async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dict:
     """
-    Motor universal de extracción de e-commerce.
-    Soporta Angular Components (Farmatodo), Next.js (__NEXT_DATA__),
-    VTEX (__STATE__ / commertialOffer) y Schema.org JSON-LD con extracción complementaria del DOM.
+    Motor universal de extracción del DOM con discriminación de visibilidad efectiva,
+    soporte Angular SPA, Next.js, VTEX y Schema.org.
     """
     return await page.evaluate(r"""
         () => {
             const bodyText = document.body ? document.body.innerText || '' : '';
             const title = document.title || '';
 
-            // 1. Detectar bloqueos de seguridad anti-bot
+            // 1. Detectar bloqueos anti-bot
             if (title.includes('Cloudflare') || title.includes('Just a moment') || 
                 bodyText.includes('Checking your browser') || bodyText.includes('Access Denied') ||
                 bodyText.includes('Too Many Requests') || title.includes('429')) {
                 return { error: "HTTP 429" };
             }
 
-            // 2. Detectar páginas no encontradas o agotadas
+            // 2. Detectar páginas agotadas / 404
             if (title.includes('404') || bodyText.includes('Producto no disponible') || 
                 bodyText.includes('No pudimos encontrar') || bodyText.includes('no encontrado')) {
                 return { error: "Producto no disponible o enlace roto (404 / Agotado)." };
             }
+
+            const isVisible = (el) => {
+                if (!el) return false;
+                try {
+                    const style = window.getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+                    return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+                } catch(e) {
+                    return true;
+                }
+            };
 
             const parsePriceText = (str) => {
                 if (!str) return null;
@@ -313,9 +314,7 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                     const dots = (cleaned.match(/\./g) || []).length;
                     if (dots === 1) {
                         const parts = cleaned.split('.');
-                        if (parts[1].length === 3) {
-                            cleaned = cleaned.replace(/\./g, '');
-                        }
+                        if (parts[1].length === 3) cleaned = cleaned.replace(/\./g, '');
                     } else if (dots > 1) {
                         cleaned = cleaned.replace(/\./g, '');
                     }
@@ -325,55 +324,75 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             };
 
             let nombre = null;
-            let active_price = null;
-            let original_price = null;
+            let precio_lista = null;
+            let precio_oferta = null;
+            let tipo_promo = null;
+            let porcentaje_descuento = null;
+            let metodo_extraccion = null;
 
             const isFarmatodo = window.location.hostname.includes('farmatodo');
 
-            // 3. ESTRATEGIA A: COMPONENTES ANGULAR DE FARMATODO (Alta Fidelidad)
+            // 3. ESTRATEGIA FARMATODO (Angular Componentes + Promociones)
             if (isFarmatodo) {
                 try {
-                    // Extraer nombre del producto en Farmatodo
                     const ftTitleEl = document.querySelector('h1, app-product-detail h1, .product-purchase h1, [class*="product-detail__title"]');
-                    if (ftTitleEl) {
+                    if (ftTitleEl && isVisible(ftTitleEl)) {
                         nombre = (ftTitleEl.innerText || ftTitleEl.textContent || '').trim();
                     }
 
-                    let ftOfferPrice = null;
-                    let ftNormalPrice = null;
+                    // A1. Detectar Badges de Descuento visibles (ej: 'Solo DELIVERY - 15% Dcto. 1era Compra', '15% OFF')
+                    const badgeElements = Array.from(document.querySelectorAll('.badge-discount, .discount-badge, [class*="badge"], [class*="discount"], [class*="dcto"], [class*="tag"], [class*="offer"], .tag'));
+                    for (const badge of badgeElements) {
+                        if (!isVisible(badge)) continue;
+                        if (badge.children.length > 2) continue;
+                        const txt = (badge.innerText || badge.textContent || '').replace(/\s+/g, ' ').trim();
+                        if (!txt || txt.length > 90) continue;
 
-                    // A1. Selectores directos de clases e IDs de Farmatodo
-                    const offerEls = Array.from(document.querySelectorAll('[id^="product-all-price-offer-"], .product-all-price__offer, [class*="product-all-price__offer"]'));
+                        const m = txt.match(/\b(\d{1,2})\s*%\s*(?:dcto|descuento|off)?/i) || txt.match(/(\d{1,2})%/);
+                        if (m) {
+                            const pct = parseInt(m[1], 10);
+                            if (pct >= 3 && pct <= 90) {
+                                porcentaje_descuento = pct;
+                                tipo_promo = txt;
+                                break;
+                            }
+                        }
+                    }
+
+                    // A2. Selectores específicos de componentes de precios visibles
+                    const offerEls = Array.from(document.querySelectorAll('[id^="product-all-price-offer-"], .product-all-price__offer, [class*="product-all-price__offer"]')).filter(isVisible);
                     for (const el of offerEls) {
                         const val = parsePriceText(el.innerText || el.textContent || '');
                         if (val && val > 0.1) {
-                            ftOfferPrice = val;
+                            precio_oferta = val;
+                            metodo_extraccion = "dom";
                             break;
                         }
                     }
 
-                    const normalEls = Array.from(document.querySelectorAll('[id^="product-all-price-normal-"], .product-all-price__normal, [class*="product-all-price__normal"]'));
+                    const normalEls = Array.from(document.querySelectorAll('[id^="product-all-price-normal-"], .product-all-price__normal, [class*="product-all-price__normal"]')).filter(isVisible);
                     for (const el of normalEls) {
                         const val = parsePriceText(el.innerText || el.textContent || '');
                         if (val && val > 0.1) {
-                            ftNormalPrice = val;
+                            precio_lista = val;
                             break;
                         }
                     }
 
-                    // A2. Inspección dentro del bloque contenedor de precios
-                    const priceBox = document.querySelector('app-product-all-price, .product-all-price, .product-purchase__price-section, .product-purchase');
-                    if (priceBox) {
-                        const allPriceElements = Array.from(priceBox.querySelectorAll('span, p, div, del, s, b, strong')).filter(el => {
-                            if (el.children.length > 2) return false;
+                    // A3. Inspección del bloque contenedor de precios visible
+                    const visibleBoxes = Array.from(document.querySelectorAll('app-product-all-price, .product-all-price, .product-purchase__price-section, .product-purchase')).filter(isVisible);
+                    if (visibleBoxes.length > 0) {
+                        const box = visibleBoxes[0];
+                        const priceEls = Array.from(box.querySelectorAll('span, p, div, del, s, b, strong')).filter(el => {
+                            if (!isVisible(el) || el.children.length > 2) return false;
                             const txt = (el.innerText || el.textContent || '').trim();
-                            return (txt.includes('Bs') || txt.includes('VES')) && /\d/.test(txt) && 
-                                   !txt.toLowerCase().includes('unidades a') && 
+                            return (txt.includes('Bs') || txt.includes('VES')) && /\d/.test(txt) &&
+                                   !txt.toLowerCase().includes('unidades a') &&
                                    !txt.toLowerCase().includes('c/u');
                         });
 
                         const parsedList = [];
-                        for (const el of allPriceElements) {
+                        for (const el of priceEls) {
                             const val = parsePriceText(el.innerText || el.textContent || '');
                             if (!val || val <= 0.1) continue;
 
@@ -381,173 +400,89 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                             try {
                                 const style = window.getComputedStyle(el);
                                 const td = style.textDecoration || style.textDecorationLine || '';
-                                if (td.includes('line-through') || el.matches('del, s, strike') || el.closest('del, s, strike') || (el.className || '').includes('tachado')) {
+                                if (td.includes('line-through') || el.matches('del, s, strike') || el.closest('del, s, strike')) {
                                     isStrikethrough = true;
                                 }
                             } catch(e) {}
 
-                            const isOfferClass = (el.className || '').includes('offer') || (el.id || '').includes('offer');
-
-                            parsedList.push({ val, isStrikethrough, isOfferClass, el });
+                            const isOffer = (el.className || '').includes('offer') || (el.id || '').includes('offer');
+                            parsedList.push({ val, isStrikethrough, isOffer });
                         }
 
-                        // Identificar normal (tachado o clase normal) y oferta (destacado o menor)
                         const striked = parsedList.filter(p => p.isStrikethrough);
-                        const offers = parsedList.filter(p => p.isOfferClass);
+                        const offers = parsedList.filter(p => p.isOffer);
 
-                        if (striked.length > 0 && !ftNormalPrice) {
-                            ftNormalPrice = striked[0].val;
-                        }
-                        if (offers.length > 0 && !ftOfferPrice) {
-                            ftOfferPrice = offers[0].val;
+                        if (striked.length > 0 && !precio_lista) precio_lista = striked[0].val;
+                        if (offers.length > 0 && !precio_oferta) {
+                            precio_oferta = offers[0].val;
+                            metodo_extraccion = "dom";
                         }
 
-                        // Si tenemos 2 montos distintos en la caja de precios
-                        const uniquePrices = Array.from(new Set(parsedList.map(p => p.val))).sort((a, b) => b - a);
-                        if (uniquePrices.length >= 2) {
-                            if (!ftNormalPrice) ftNormalPrice = uniquePrices[0]; // Mayor = normal
-                            if (!ftOfferPrice) ftOfferPrice = uniquePrices[1];   // Menor = oferta
-                        }
-                    }
-
-                    // A3. Detección de Badges / Etiquetas de Descuento (ej: "15%", "Solo DELIVERY - 15% Dcto", etc.)
-                    let ftDiscountPct = null;
-                    const allBadgeCandidates = Array.from(document.querySelectorAll('.badge-discount, .discount-badge, [class*="discount"], [class*="dcto"], [class*="badge"], [class*="tag"], [class*="offer"], .badge, .tag'));
-                    for (const badge of allBadgeCandidates) {
-                        if (badge.children.length > 2) continue;
-                        const txt = (badge.innerText || badge.textContent || '').trim();
-                        if (txt.length > 80) continue;
-                        const m = txt.match(/\b(\d{1,2})\s*%\s*(?:dcto|descuento|off)?/i) || txt.match(/(\d{1,2})%/);
-                        if (m) {
-                            const pct = parseInt(m[1], 10);
-                            if (pct >= 3 && pct <= 90) {
-                                ftDiscountPct = pct;
-                                break;
+                        const uniqueVals = Array.from(new Set(parsedList.map(p => p.val))).sort((a, b) => b - a);
+                        if (uniqueVals.length >= 2) {
+                            if (!precio_lista) precio_lista = uniqueVals[0];
+                            if (!precio_oferta) {
+                                precio_oferta = uniqueVals[1];
+                                metodo_extraccion = "dom";
                             }
+                        } else if (uniqueVals.length === 1 && !precio_lista && !precio_oferta) {
+                            precio_lista = uniqueVals[0];
                         }
                     }
 
-                    // A4. Reconciliación matemática si solo se detectó un precio pero hay etiqueta de descuento
-                    if (ftNormalPrice && !ftOfferPrice && ftDiscountPct) {
-                        ftOfferPrice = Math.round((ftNormalPrice * (1 - (ftDiscountPct / 100))) * 100) / 100;
-                    } else if (ftOfferPrice && !ftNormalPrice && ftDiscountPct) {
-                        ftNormalPrice = Math.round((ftOfferPrice / (1 - (ftDiscountPct / 100))) * 100) / 100;
+                    // A4. Derivación matemática desde el porcentaje del badge si solo está presente el precio de lista
+                    if (precio_lista && !precio_oferta && porcentaje_descuento) {
+                        precio_oferta = Math.round((precio_lista * (1 - (porcentaje_descuento / 100))) * 100) / 100;
+                        metodo_extraccion = "derivado";
                     }
 
-                    // Asignación final de Farmatodo
-                    if (ftNormalPrice && ftOfferPrice && Math.abs(ftNormalPrice - ftOfferPrice) > 0.05) {
-                        const higher = Math.max(ftNormalPrice, ftOfferPrice);
-                        const lower = Math.min(ftNormalPrice, ftOfferPrice);
-                        original_price = higher;
-                        active_price = lower;
-                    } else if (ftOfferPrice) {
-                        active_price = ftOfferPrice;
-                    } else if (ftNormalPrice) {
-                        active_price = ftNormalPrice;
-                    }
                 } catch(e) {}
             }
 
-            // 4. ESTRATEGIA B: Next.js __NEXT_DATA__ (Otras plataformas Next)
-            if (!active_price && !original_price) {
-                const nextDataEl = document.querySelector('script#__NEXT_DATA__');
-                if (nextDataEl) {
-                    try {
-                        const json = JSON.parse(nextDataEl.textContent || '{}');
-                        const pageProps = json?.props?.pageProps;
-                        
-                        const findProduct = (obj, depth = 0) => {
-                            if (!obj || depth > 6) return null;
-                            if (obj.product && typeof obj.product === 'object' && (obj.product.price || obj.product.name || obj.product.bsPrice)) return obj.product;
-                            if (obj.productDetail && typeof obj.productDetail === 'object') return obj.productDetail;
-                            if (obj.productData && typeof obj.productData === 'object') return obj.productData;
-                            
-                            for (const k in obj) {
-                                if (k === 'product' || k === 'productDetail' || k === 'productData') {
-                                    if (obj[k] && typeof obj[k] === 'object') return obj[k];
-                                }
-                                if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
-                                    const res = findProduct(obj[k], depth + 1);
-                                    if (res) return res;
-                                }
-                            }
-                            return null;
-                        };
-
-                        const product = findProduct(pageProps) || pageProps?.initialState?.product?.productDetail;
-                        if (product) {
-                            if (!nombre) nombre = product.name || product.description || product.title || product.productName;
-                            
-                            const pBs = parseFloat(product.bsPrice || product.precioBs || product.priceBs);
-                            const p1 = parseFloat(product.price);
-                            const p2 = parseFloat(product.originalPrice || product.regularPrice || product.listPrice || product.fullPrice || product.normalPrice || product.basePrice);
-                            const p3 = parseFloat(product.priceOffer || product.offerPrice || product.priceWithOffer || product.discountPrice || product.salePrice);
-
-                            if (pBs && pBs > 0) {
-                                active_price = pBs;
-                                const active_usd = (p3 && p3 > 0) ? p3 : (p1 && p1 > 0 ? p1 : null);
-                                const original_usd = (p2 && p2 > 0) ? p2 : null;
-                                if (active_usd && original_usd && original_usd > active_usd) {
-                                    original_price = pBs * (original_usd / active_usd);
-                                }
-                            } else if (p3 && p3 > 0) {
-                                active_price = p3;
-                                if (p1 && p1 > p3) original_price = p1;
-                                if (p2 && p2 > p3) original_price = p2;
-                            } else if (p1 && p1 > 0) {
-                                active_price = p1;
-                                if (p2 && p2 > p1) original_price = p2;
-                            } else if (p2 && p2 > 0) {
-                                active_price = p2;
-                            }
-                        }
-                    } catch(e) {}
-                }
-            }
-
-            // 5. ESTRATEGIA C: VTEX __STATE__ (Locatel, Farmacias SAAS)
-            if (!active_price && window.__STATE__) {
+            // 4. ESTRATEGIA VTEX / NEXT / SCHEMA (Para otras cadenas)
+            if (!precio_lista && window.__STATE__) {
                 try {
                     const state = window.__STATE__;
                     for (const k in state) {
                         if (k.includes('Product:') || k.includes('Item:') || k.includes('commertialOffer')) {
                             const item = state[k];
                             if (!nombre && item.productName) nombre = item.productName;
-                            
                             const comm = item.commertialOffer || (item.sellers && item.sellers[0] && item.sellers[0].commertialOffer);
                             if (comm) {
-                                if (comm.Price && parseFloat(comm.Price) > 0) {
-                                    active_price = parseFloat(comm.Price);
+                                const p = parseFloat(comm.Price);
+                                const lp = parseFloat(comm.ListPrice || comm.PriceWithoutDiscount);
+                                if (lp && p && lp > p) {
+                                    precio_lista = lp;
+                                    precio_oferta = p;
+                                    metodo_extraccion = "dom";
+                                } else if (p) {
+                                    precio_lista = p;
+                                    metodo_extraccion = "dom";
                                 }
-                                if (comm.ListPrice && parseFloat(comm.ListPrice) > 0) {
-                                    original_price = parseFloat(comm.ListPrice);
-                                } else if (comm.PriceWithoutDiscount && parseFloat(comm.PriceWithoutDiscount) > 0) {
-                                    original_price = parseFloat(comm.PriceWithoutDiscount);
-                                }
-                                if (active_price) break;
+                                if (precio_lista) break;
                             }
                         }
                     }
                 } catch(e) {}
             }
 
-            // 6. ESTRATEGIA D: Schema.org JSON-LD
-            if (!active_price || !original_price) {
-                const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
-                for (const script of jsonLdScripts) {
+            // Schema.org JSON-LD fallback
+            if (!precio_lista) {
+                const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                for (const s of scripts) {
                     try {
-                        const parsed = JSON.parse(script.textContent || '');
+                        const parsed = JSON.parse(s.textContent || '{}');
                         const items = Array.isArray(parsed) ? parsed : [parsed];
-                        for (const item of items) {
-                            if (item['@type'] === 'Product' || item.offers) {
-                                if (!nombre && item.name) nombre = item.name;
-                                const offers = Array.isArray(item.offers) ? item.offers : [item.offers];
-                                for (const offer of offers) {
-                                    if (!offer) continue;
-                                    if (offer.price && !active_price) active_price = parseFloat(offer.price);
-                                    if (offer.highPrice && parseFloat(offer.highPrice) > 0) {
-                                        const hp = parseFloat(offer.highPrice);
-                                        if (!original_price || hp > original_price) original_price = hp;
+                        for (const it of items) {
+                            if (it['@type'] === 'Product' && it.offers) {
+                                if (!nombre && it.name) nombre = it.name;
+                                const off = Array.isArray(it.offers) ? it.offers[0] : it.offers;
+                                if (off && off.price) {
+                                    precio_lista = parseFloat(off.price);
+                                    if (off.highPrice && parseFloat(off.highPrice) > precio_lista) {
+                                        precio_oferta = precio_lista;
+                                        precio_lista = parseFloat(off.highPrice);
+                                        metodo_extraccion = "dom";
                                     }
                                 }
                             }
@@ -556,167 +491,37 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 }
             }
 
-            // 7. ESTRATEGIA E: DOM EXTRACTION CON ALGORITMO DE SCORING ROBUSTO
-            const h1El = document.querySelector('h1');
             if (!nombre) {
-                nombre = h1El ? (h1El.innerText || h1El.textContent || '').trim() : document.title.split('|')[0].trim();
-            }
-
-            const isParentOfPriceElement = (el) => {
-                return Array.from(el.children).some(child => {
-                    const childTxt = (child.innerText || child.textContent || '').trim();
-                    return /\d/.test(childTxt) && (
-                        childTxt.toLowerCase().includes('bs') || 
-                        childTxt.toLowerCase().includes('ves') || 
-                        childTxt.includes('$') || 
-                        childTxt.toLowerCase().includes('usd') || 
-                        childTxt.toLowerCase().includes('ref')
-                    );
-                });
-            };
-
-            const allElements = Array.from(document.querySelectorAll('span, p, div, s, del, strike, b, strong, font, h1, h2, h3, h4, h5, h6, a, td, li'));
-            
-            let bs_candidates = [];
-            let usd_candidates = [];
-            let fallback_candidates = [];
-
-            for (const el of allElements) {
-                if (el.children.length > 5) continue;
-                if (isParentOfPriceElement(el)) continue;
-                
-                const txt = (el.innerText || el.textContent || '').trim();
-                if (!txt || txt.length > 80) continue;
-                if (!/\d/.test(txt)) continue;
-                
-                if (/unidad\s+a|c\/u|dosis|%\s*off|ahorras?|tabletas?\s+as?|cajas?\s+as?|ahorra/i.test(txt)) {
-                    continue;
-                }
-
-                let isStrikethrough = false;
-                try {
-                    const style = window.getComputedStyle(el);
-                    const td = style.textDecoration || style.textDecorationLine || '';
-                    if (td.includes('line-through') || el.matches('del, s, strike') || el.closest('del, s, strike')) {
-                        isStrikethrough = true;
-                    }
-                } catch(e) {}
-
-                const lower = txt.toLowerCase();
-                const isUsd = lower.includes('ref') || lower.includes('usd') || lower.includes('$');
-                const hasBs = lower.includes('bs') || lower.includes('ves');
-
-                const priceMatch = txt.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/);
-                if (!priceMatch) continue;
-
-                const priceVal = parsePriceText(priceMatch[1]);
-                if (!priceVal || priceVal <= 0.1) continue;
-
-                let fontSize = 14;
-                try {
-                    const style = window.getComputedStyle(el);
-                    const fs = style.fontSize || '';
-                    if (fs) fontSize = parseFloat(fs);
-                } catch(e) {}
-
-                let score = fontSize;
-                const className = (el.className || '').toLowerCase();
-                const idName = (el.id || '').toLowerCase();
-                
-                if (className.includes('price') || className.includes('valor') || className.includes('monto')) score += 15;
-                if (className.includes('active') || className.includes('venta') || className.includes('selling') || className.includes('best') || className.includes('current') || className.includes('offer')) score += 15;
-                if (idName.includes('price') || idName.includes('best') || idName.includes('offer')) score += 15;
-                
-                if (className.includes('unit') || className.includes('secondary') || txt.includes('/') || txt.includes('x')) score -= 25;
-
-                const candidate = {
-                    text: txt,
-                    price: priceVal,
-                    isStrikethrough: isStrikethrough,
-                    fontSize: fontSize,
-                    score: score
-                };
-
-                if (hasBs && !isUsd) {
-                    bs_candidates.push(candidate);
-                } else if (isUsd) {
-                    usd_candidates.push(candidate);
-                } else {
-                    fallback_candidates.push(candidate);
-                }
-            }
-
-            let dom_bs_active_text = '';
-            let dom_bs_original_text = '';
-
-            const bs_orig_cands = bs_candidates.filter(c => c.isStrikethrough);
-            if (bs_orig_cands.length > 0) {
-                bs_orig_cands.sort((a, b) => b.fontSize - a.fontSize);
-                dom_bs_original_text = bs_orig_cands[0].text;
-            }
-
-            const bs_act_cands = bs_candidates.filter(c => !c.isStrikethrough);
-            if (bs_act_cands.length > 0) {
-                bs_act_cands.sort((a, b) => b.score - a.score);
-                dom_bs_active_text = bs_act_cands[0].text;
-            }
-
-            let dom_usd_active_text = '';
-            let dom_usd_original_text = '';
-
-            const usd_orig_cands = usd_candidates.filter(c => c.isStrikethrough);
-            if (usd_orig_cands.length > 0) {
-                usd_orig_cands.sort((a, b) => b.fontSize - a.fontSize);
-                dom_usd_original_text = usd_orig_cands[0].text;
-            }
-
-            const usd_act_cands = usd_candidates.filter(c => !c.isStrikethrough);
-            if (usd_act_cands.length > 0) {
-                usd_act_cands.sort((a, b) => b.score - a.score);
-                dom_usd_active_text = usd_act_cands[0].text;
-            }
-
-            let dom_active_text = '';
-            let dom_original_text = '';
-
-            const fall_orig_cands = fallback_candidates.filter(c => c.isStrikethrough);
-            if (fall_orig_cands.length > 0) {
-                fall_orig_cands.sort((a, b) => b.fontSize - a.fontSize);
-                dom_original_text = fall_orig_cands[0].text;
-            }
-
-            const fall_act_cands = fallback_candidates.filter(c => !c.isStrikethrough);
-            if (fall_act_cands.length > 0) {
-                fall_act_cands.sort((a, b) => b.score - a.score);
-                dom_active_text = fall_act_cands[0].text;
+                const h1El = document.querySelector('h1');
+                nombre = h1El && isVisible(h1El) ? (h1El.innerText || h1El.textContent || '').trim() : document.title.split('|')[0].trim();
             }
 
             return {
-                nombre: nombre,
-                active_price_direct: active_price,
-                original_price_direct: original_price,
-                dom_bs_active_text: dom_bs_active_text,
-                dom_bs_original_text: dom_bs_original_text,
-                dom_usd_active_text: dom_usd_active_text,
-                dom_usd_original_text: dom_usd_original_text,
-                dom_active_text: dom_active_text,
-                dom_original_text: dom_original_text
+                nombre,
+                precio_lista,
+                precio_oferta,
+                tipo_promo,
+                porcentaje_descuento,
+                metodo_extraccion
             };
         }
     """)
 
 
 async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id: str = "1") -> dict:
-    """Ejecuta el ciclo de scraping de una URL con reintentos y retroceso exponencial."""
+    """Ejecuta el ciclo de scraping con intercepción de red y fallback híbrido."""
     intentos = 3
     is_farmatodo = "farmatodo" in url.lower()
-    
+
     result = {
         "url": url,
         "marca": marca,
         "nombre": None,
-        "precio_full_bs": None,
-        "precio_desc_bs": None,
+        "precio_full_bs": None,       # precio_lista
+        "precio_desc_bs": None,       # precio_oferta
+        "tipo_promo": None,
+        "porcentaje_descuento": None,
+        "metodo_extraccion": None,
         "tiene_descuento": False,
         "scraped_at": datetime.now(timezone.utc).isoformat(),
         "error": None,
@@ -726,10 +531,64 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         result["error"] = None
         result["precio_full_bs"] = None
         result["precio_desc_bs"] = None
+        result["tipo_promo"] = None
+        result["porcentaje_descuento"] = None
+        result["metodo_extraccion"] = None
         result["tiene_descuento"] = False
 
-        # Wait for domain rate limit to be respected (e.g. 7s minimum for Farmatodo)
+        # Respetar rate limiting por dominio
         await wait_for_domain_rate_limit(url)
+
+        api_captured_data = {}
+
+        async def handle_response(response):
+            """Intercepción de red para endpoints JSON de productos y promociones."""
+            try:
+                content_type = response.headers.get("content-type", "").lower()
+                resp_url = response.url.lower()
+                if "json" in content_type and any(kw in resp_url for kw in ("product", "item", "articulo", "promotion", "promo", "pricing", "detail")):
+                    if response.status == 200:
+                        json_data = await response.json()
+                        if isinstance(json_data, dict):
+                            # Buscar recursivamente datos de precio y promociones
+                            def search_json(obj, depth=0):
+                                if not obj or depth > 5:
+                                    return
+                                if isinstance(obj, dict):
+                                    p_full = obj.get("fullPrice") or obj.get("normalPrice") or obj.get("listPrice") or obj.get("priceWithoutDiscount") or obj.get("regularPrice")
+                                    p_offer = obj.get("offerPrice") or obj.get("specialPrice") or obj.get("discountPrice") or obj.get("priceOffer") or obj.get("salePrice")
+                                    p_base = obj.get("price") or obj.get("bsPrice") or obj.get("precioBs")
+
+                                    p_disc_pct = obj.get("discountPercentage") or obj.get("discount") or obj.get("discountRate")
+                                    p_promo_name = obj.get("promotionName") or obj.get("promoTitle") or obj.get("badgeText") or obj.get("badge")
+
+                                    if p_full and not api_captured_data.get("precio_lista"):
+                                        api_captured_data["precio_lista"] = float(p_full)
+                                    if p_offer and not api_captured_data.get("precio_oferta"):
+                                        api_captured_data["precio_oferta"] = float(p_offer)
+                                    if p_base and not api_captured_data.get("precio_lista"):
+                                        api_captured_data["precio_lista"] = float(p_base)
+
+                                    if p_disc_pct and not api_captured_data.get("porcentaje_descuento"):
+                                        try:
+                                            api_captured_data["porcentaje_descuento"] = float(p_disc_pct)
+                                        except Exception:
+                                            pass
+                                    if p_promo_name and not api_captured_data.get("tipo_promo"):
+                                        api_captured_data["tipo_promo"] = str(p_promo_name).strip()
+
+                                    for v in obj.values():
+                                        if isinstance(v, (dict, list)):
+                                            search_json(v, depth + 1)
+                                elif isinstance(obj, list):
+                                    for item in obj[:10]:
+                                        search_json(item, depth + 1)
+
+                            search_json(json_data)
+            except Exception:
+                pass
+
+        page.on("response", handle_response)
 
         try:
             timeout = 22000 + (int_num - 1) * 8000
@@ -749,13 +608,11 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
                 continue
 
             if is_farmatodo:
-                # Farmatodo es una SPA de Angular: esperar a que el componente de precios esté montado
                 try:
                     await page.wait_for_selector('app-product-all-price, .product-all-price, [id^="product-all-price-"]', timeout=6000)
                 except Exception:
                     pass
-                # Breve pausa para permitir que Angular aplique descuentos y promociones dinámicas
-                await asyncio.sleep(1.8)
+                await asyncio.sleep(1.5)
             else:
                 await asyncio.sleep(0.8)
 
@@ -767,6 +624,11 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             result["error"] = f"Error de red/carga: {type(e).__name__}"
             await asyncio.sleep(2)
             continue
+        finally:
+            try:
+                page.remove_listener("response", handle_response)
+            except Exception:
+                pass
 
         data = await extract_product_data_from_page(page, url, bcv_rate)
 
@@ -784,100 +646,46 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
 
         result["nombre"] = data.get("nombre")
 
-        # 1. Candidatos directos de JSON/DataLayers
-        p_act_direct = data.get("active_price_direct")
-        p_orig_direct = data.get("original_price_direct")
+        # Priorización de Fuentes: 1. API Interceptada -> 2. DOM / Derivado
+        final_precio_lista = None
+        final_precio_oferta = None
+        final_tipo_promo = None
+        final_pct_desc = None
+        final_metodo = None
 
-        # 2. Candidatos del DOM (Bolívares directos)
-        p_bs_active_dom = parse_price(data.get("dom_bs_active_text"))
-        p_bs_orig_dom = parse_price(data.get("dom_bs_original_text"))
+        if api_captured_data.get("precio_lista") and api_captured_data.get("precio_oferta") and api_captured_data["precio_lista"] > api_captured_data["precio_oferta"]:
+            final_precio_lista = api_captured_data["precio_lista"]
+            final_precio_oferta = api_captured_data["precio_oferta"]
+            final_tipo_promo = api_captured_data.get("tipo_promo")
+            final_pct_desc = api_captured_data.get("porcentaje_descuento")
+            final_metodo = "api"
+        elif data.get("precio_lista"):
+            final_precio_lista = data["precio_lista"]
+            final_precio_oferta = data.get("precio_oferta")
+            final_tipo_promo = data.get("tipo_promo")
+            final_pct_desc = data.get("porcentaje_descuento")
+            final_metodo = data.get("metodo_extraccion") or "dom"
 
-        # 3. Candidatos del DOM (USD directos)
-        p_usd_active_dom = parse_price_usd(data.get("dom_usd_active_text"))
-        p_usd_orig_dom = parse_price_usd(data.get("dom_usd_original_text"))
+        if final_precio_lista:
+            # Reconciliación si vinieron invertidos
+            if final_precio_oferta and final_precio_oferta > final_precio_lista:
+                final_precio_lista, final_precio_oferta = final_precio_oferta, final_precio_lista
 
-        # 4. Candidatos del DOM (Fallback sin moneda explícita)
-        p_fallback_active_dom = parse_price(data.get("dom_active_text"))
-        p_fallback_orig_dom = parse_price(data.get("dom_original_text"))
+            tiene_desc = bool(final_precio_oferta and (final_precio_lista - final_precio_oferta) > 0.05)
+            if not tiene_desc:
+                final_precio_oferta = None
+                final_tipo_promo = None
+                final_pct_desc = None
 
-        # Convertir cualquier precio detectado en USD a Bolívares
-        p_usd_active_in_bs = round(p_usd_active_dom * bcv_rate, 2) if p_usd_active_dom else None
-        p_usd_orig_in_bs = round(p_usd_orig_dom * bcv_rate, 2) if p_usd_orig_dom else None
+            if tiene_desc and not final_pct_desc and final_precio_lista > 0:
+                final_pct_desc = round(((final_precio_lista - final_precio_oferta) / final_precio_lista) * 100, 1)
 
-        # Si los precios directos de VTEX/NextJS parecen estar en USD (ej: < 120.0 en SAAS o Locatel)
-        # convertirlos a Bolívares usando la tasa BCV. Calibramos usando el DOM para evitar falsas conversiones.
-        is_saas_or_locatel = any(x in url.lower() for x in ("saas", "locatel", "farmaciasaas"))
-        
-        if is_saas_or_locatel:
-            if p_act_direct and p_act_direct < 120.0:
-                if p_bs_active_dom:
-                    diff_as_bs = abs(p_bs_active_dom - p_act_direct)
-                    diff_as_usd = abs(p_bs_active_dom - p_act_direct * bcv_rate)
-                    if diff_as_usd < diff_as_bs:
-                        p_act_direct = round(p_act_direct * bcv_rate, 2)
-                else:
-                    p_act_direct = round(p_act_direct * bcv_rate, 2)
-                    
-            if p_orig_direct and p_orig_direct < 120.0:
-                if p_bs_active_dom:
-                    is_base_in_bs = (abs(p_bs_active_dom - (p_act_direct / bcv_rate if bcv_rate else 1)) > abs(p_bs_active_dom - p_act_direct))
-                    if not is_base_in_bs:
-                        p_orig_direct = round(p_orig_direct * bcv_rate, 2)
-                elif p_bs_orig_dom:
-                    diff_as_bs = abs(p_bs_orig_dom - p_orig_direct)
-                    diff_as_usd = abs(p_bs_orig_dom - p_orig_direct * bcv_rate)
-                    if diff_as_usd < diff_as_bs:
-                        p_orig_direct = round(p_orig_direct * bcv_rate, 2)
-                else:
-                    p_orig_direct = round(p_orig_direct * bcv_rate, 2)
-
-        # Selección inteligente del precio ACTIVO (Bolívares)
-        final_active_bs = None
-        if p_bs_active_dom:
-            final_active_bs = p_bs_active_dom
-        elif p_usd_active_in_bs:
-            final_active_bs = p_usd_active_in_bs
-        elif p_act_direct:
-            final_active_bs = p_act_direct
-        elif p_fallback_active_dom:
-            final_active_bs = p_fallback_active_dom
-
-        # Selección inteligente del precio ORIGINAL (Bolívares)
-        final_original_bs = None
-        if p_bs_orig_dom:
-            final_original_bs = p_bs_orig_dom
-        elif p_usd_orig_in_bs:
-            final_original_bs = p_usd_orig_in_bs
-        elif p_orig_direct:
-            final_original_bs = p_orig_direct
-        elif p_fallback_orig_dom:
-            final_original_bs = p_fallback_orig_dom
-
-        precio_full = None
-        precio_desc = None
-        tiene_descuento = False
-
-        if final_original_bs and final_active_bs:
-            if final_original_bs > final_active_bs and (final_original_bs - final_active_bs) > 0.1:
-                precio_full = final_original_bs
-                precio_desc = final_active_bs
-                tiene_descuento = True
-            elif final_active_bs > final_original_bs and (final_active_bs - final_original_bs) > 0.1:
-                # Si vinieron invertidos, los corregimos
-                precio_full = final_active_bs
-                precio_desc = final_original_bs
-                tiene_descuento = True
-            else:
-                precio_full = final_active_bs
-        elif final_active_bs:
-            precio_full = final_active_bs
-        elif final_original_bs:
-            precio_full = final_original_bs
-
-        if precio_full:
-            result["precio_full_bs"] = round(precio_full, 2)
-            result["precio_desc_bs"] = round(precio_desc, 2) if precio_desc else None
-            result["tiene_descuento"] = tiene_descuento
+            result["precio_full_bs"] = round(final_precio_lista, 2)
+            result["precio_desc_bs"] = round(final_precio_oferta, 2) if final_precio_oferta else None
+            result["tipo_promo"] = final_tipo_promo
+            result["porcentaje_descuento"] = final_pct_desc
+            result["metodo_extraccion"] = final_metodo if tiene_desc else ("dom" if final_metodo else None)
+            result["tiene_descuento"] = tiene_desc
             break
         else:
             result["error"] = "Precio no encontrado en la estructura de la página."
@@ -888,108 +696,90 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
 
 async def main_async():
     inicio = time.time()
+    bcv_rate = await get_bcv_rate()
 
-    # 1. Cargar Tasa Oficial BCV una sola vez
-    bcv_rate = fetch_bcv_rate_once()
+    # Cargar filas desde DB o CSV local
+    filas = cargar_filas_de_db()
+    if not filas:
+        filas = cargar_filas_de_csv()
 
-    # 2. Cargar lista de productos desde Supabase/Firestore o CSV local
-    filas_todas = cargar_filas_de_db() or cargar_filas_de_csv()
-    if not filas_todas:
-        print("ERROR: No se encontraron filas de productos para procesar.")
+    if not filas:
+        print("❌ No hay enlaces para procesar.", flush=True)
         sys.exit(1)
 
-    # 3. Filtrar enlaces activos
-    only_prod = os.environ.get("ONLY_PRODUCT_ID")
-    only_doc = os.environ.get("ONLY_DOC_ID")
-
+    # Filtrar enlaces vacíos o inactivos
     filas_activas = []
-    for fila in filas_todas:
-        activo = fila.get("activo")
-        es_activa = activo if isinstance(activo, bool) else str(activo).strip().lower() in ("si", "sí", "true", "1", "yes")
+    for f in filas:
+        activo_val = f.get("activo")
+        if isinstance(activo_val, str):
+            es_activo = activo_val.lower() in ("si", "true", "1", "t")
+        elif isinstance(activo_val, bool):
+            es_activo = activo_val
+        else:
+            es_activo = True
 
-        if not es_activa:
-            continue
+        if es_activo and (f.get("url") or "").strip():
+            filas_activas.append(f)
 
-        if only_doc and str(fila.get("_doc_id")).strip() != only_doc.strip():
-            continue
+    # Soporte para filtrado por argumento CLI o payload de GitHub Actions
+    if len(sys.argv) > 1:
+        arg_target = sys.argv[1].strip()
+        filas_procesar = [f for f in filas_activas if f.get("id_producto_propio") == arg_target or f.get("_doc_id") == arg_target or f.get("id") == arg_target]
+        if not filas_procesar:
+            print(f"Aviso: No se encontró producto con ID o doc_id '{arg_target}', procesando todas las activas.")
+            filas_procesar = filas_activas
+    else:
+        filas_procesar = filas_activas
 
-        if only_prod and str(fila.get("id_producto_propio")).strip() != only_prod.strip():
-            continue
+    filas_procesar = interleave_filas_por_producto(filas_procesar)
+    print(f"\nIniciando scraping de {len(filas_procesar)} URLs (Concurrencia Máx: 12, Farmatodo Concurrencia: 1)...\n", flush=True)
 
-        filas_activas.append(fila)
+    resultados = []
+    sem_general = asyncio.Semaphore(12)
+    sem_farmatodo = asyncio.Semaphore(1)
 
-    if not filas_activas:
-        print("No hay enlaces de productos activos para procesar.")
-        sys.exit(0)
-
-    # 4. Entrelazar filas por producto para procesar enlace por enlace de cada competidor rotando cadenas de forma natural
-    filas_procesar = interleave_filas_por_producto(filas_activas)
-
-    # 5. Crear semáforos de concurrencia globales y por dominio
-    # Farmatodo usa concurrencia reducida (FARMATODO_CONCURRENCY=1) para prevenir HTTP 429
-    global_semaphore = asyncio.Semaphore(MAX_GLOBAL_CONCURRENCY)
-    domain_semaphores = {
-        "farmatodo": asyncio.Semaphore(FARMATODO_CONCURRENCY),
-        "locatel": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY),
-        "farmaciasaas": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY),
-        "saas": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY),
-        "default": asyncio.Semaphore(MAX_PER_DOMAIN_CONCURRENCY)
-    }
-
-    def get_domain_semaphore(cadena_str: str):
-        cad = str(cadena_str).lower()
-        for k in domain_semaphores:
-            if k in cad:
-                return domain_semaphores[k]
-        return domain_semaphores["default"]
-
-    print(f"\nIniciando scraping de {len(filas_procesar)} URLs (Concurrencia Máx: {MAX_GLOBAL_CONCURRENCY}, Farmatodo Concurrencia: {FARMATODO_CONCURRENCY})...\n", flush=True)
-
-    # 6. Lanzar un único navegador Chromium con opciones anti-detección
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True,
             args=[
-                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
                 "--no-sandbox",
-                "--disable-setuid-sandbox"
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
             ]
         )
+
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            viewport={"width": 1366, "height": 768},
+            viewport={"width": 1280, "height": 800},
             locale="es-VE",
-            extra_http_headers={
-                "Accept-Language": "es-VE,es;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Sec-Ch-Ua": '"Not-A.Brand";v="99", "Chromium";v="124", "Google Chrome";v="124"',
-                "Sec-Ch-Ua-Mobile": "?0",
-                "Sec-Ch-Ua-Platform": '"Windows"',
-            }
+            timezone_id="America/Caracas"
         )
-        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
 
-        async def worker(idx, fila):
-            cadena = str(fila.get("cadena", "Farmatodo")).strip()
-            dom_sem = get_domain_semaphore(cadena)
+        # Configurar enrutamiento para cancelar recursos pesados
+        await context.route("**/*", block_unnecessary_resources)
 
-            async with global_semaphore:
-                async with dom_sem:
+        async def worker(fila, idx):
+            cadena = fila.get("cadena", "").strip()
+            url = fila.get("url", "").strip()
+            marca = fila.get("marca", "").strip()
+            id_prod = fila.get("id_producto_propio", "").strip()
+
+            sem_cadena = sem_farmatodo if "farmatodo" in cadena.lower() or "farmatodo" in url.lower() else sem_general
+
+            async with sem_general:
+                async with sem_cadena:
                     page = await context.new_page()
-                    await page.route("**/*", block_unnecessary_resources)
-
-                    marca = str(fila.get("marca", "")).strip() or "?"
-                    url = str(fila.get("url", "")).strip()
-                    id_prod = str(fila.get("id_producto_propio", "")).strip()
-
                     if not url:
                         res = {
                             "url": "", "marca": marca, "nombre": None,
                             "precio_full_bs": None, "precio_desc_bs": None,
+                            "tipo_promo": None, "porcentaje_descuento": None, "metodo_extraccion": None,
                             "tiene_descuento": False, "scraped_at": datetime.now(timezone.utc).isoformat(),
                             "error": "URL vacia"
                         }
                     else:
-                        await asyncio.sleep(random.uniform(0.1, 0.4))
+                        await asyncio.sleep(random.uniform(0.1, 0.3))
                         res = await scrape_url_async(page, url, marca, bcv_rate, task_id=f"{idx}")
 
                     res["id_producto_propio"] = id_prod
@@ -1007,28 +797,37 @@ async def main_async():
                         print(f"[{idx}/{len(filas_procesar)}] ❌ [{cadena}] {marca} - {res['error']}", flush=True)
                     else:
                         status = f"Bs {res['precio_full_bs']:,.2f}"
-                        if res['tiene_descuento']:
-                            status += f" -> Bs {res['precio_desc_bs']:,.2f}"
+                        if res.get('tiene_descuento'):
+                            status += f" -> Oferta: Bs {res['precio_desc_bs']:,.2f} ({res.get('tipo_promo') or (str(res.get('porcentaje_descuento')) + '%')}) [{res.get('metodo_extraccion')}]"
                         print(f"[{idx}/{len(filas_procesar)}] ✅ [{cadena}] {marca} ({id_prod}): {status}", flush=True)
 
                     return res
 
-        tasks = [worker(i + 1, fila) for i, fila in enumerate(filas_procesar)]
+        tasks = [worker(fila, i + 1) for i, fila in enumerate(filas_procesar)]
         resultados = await asyncio.gather(*tasks)
 
+        await context.close()
         await browser.close()
-
-    # 7. Guardar resultados localmente
-    with open(RESULTS_PATH, "w", encoding="utf-8") as f:
-        json.dump(resultados, f, ensure_ascii=False, indent=2, default=str)
 
     duracion = time.time() - inicio
     ok_count = sum(1 for r in resultados if not r.get("error"))
+    err_count = len(resultados) - ok_count
+
     print("\n" + "=" * 60)
     print(f"COMPLETADO en {duracion:.1f}s ({duracion/60:.1f} min) | Éxito: {ok_count}/{len(resultados)} OK")
-    print(f"Resultados guardados localmente en: {RESULTS_PATH}")
-    print("=" * 60)
+    print(f"Resultados guardados localmente en: {OUT_PATH}")
+    print("=" * 60 + "\n")
+
+    OUT_PATH.write_text(json.dumps(resultados, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def main():
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        print("\nScraper cancelado por el usuario.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
-    asyncio.run(main_async())
+    main()
