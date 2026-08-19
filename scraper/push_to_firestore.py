@@ -113,6 +113,7 @@ def main():
             "tiene_descuento": r.get("tiene_descuento", False),
             "tipo_promo": r.get("tipo_promo"),
             "porcentaje_descuento": r.get("porcentaje_descuento"),
+            "promo_condicionada": bool(r.get("promo_condicionada", False)),
             "metodo_extraccion": r.get("metodo_extraccion"),
         }
         
@@ -131,6 +132,7 @@ def main():
                     "tiene_descuento": r.get("tiene_descuento", False),
                     "tipo_promo": r.get("tipo_promo"),
                     "porcentaje_descuento": r.get("porcentaje_descuento"),
+                    "promo_condicionada": bool(r.get("promo_condicionada", False)),
                     "metodo_extraccion": r.get("metodo_extraccion"),
                     "scraped_at": ahora_iso,
                     "run_id": run_id
@@ -161,7 +163,12 @@ def main():
                     "ultimo_error": item.get("ultimo_error"),
                     "ultimo_precio_full_bs": item.get("ultimo_precio_full_bs"),
                     "ultimo_precio_desc_bs": item.get("ultimo_precio_desc_bs"),
-                    "ultimo_nombre": item.get("ultimo_nombre")
+                    "ultimo_nombre": item.get("ultimo_nombre"),
+                    "tiene_descuento": bool(item.get("tiene_descuento", False)),
+                    "tipo_promo": item.get("tipo_promo"),
+                    "porcentaje_descuento": item.get("porcentaje_descuento"),
+                    "promo_condicionada": bool(item.get("promo_condicionada", False)),
+                    "metodo_extraccion": item.get("metodo_extraccion"),
                 })
 
             if records_to_upsert:
@@ -184,6 +191,7 @@ def main():
                     "tiene_descuento": bool(h.get("tiene_descuento", False)),
                     "tipo_promo": h.get("tipo_promo"),
                     "porcentaje_descuento": h.get("porcentaje_descuento"),
+                    "promo_condicionada": bool(h.get("promo_condicionada", False)),
                     "metodo_extraccion": h.get("metodo_extraccion"),
                     "scraped_at": h.get("scraped_at"),
                     "run_id": h.get("run_id")

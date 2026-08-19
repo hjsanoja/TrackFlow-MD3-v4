@@ -1,7 +1,7 @@
 """
 TrackFlow Scraper - Motor de Monitoreo de Precios Farmacéuticos (Venezuela)
 Soporta: Farmatodo, Locatel, FarmaDON, Grupo San Ignacio, Farmacias Xana y FarmaGo.
-Ejecución: GitHub Actions & Local (Playwright Async + Python).
+Ejecución: GitHub Actions & Local (Playwright Async + Python con Supabase).
 """
 
 import asyncio
@@ -43,19 +43,16 @@ def parse_price(text) -> float | None:
     if not str_val:
         return None
 
-    # Limpiar prefijos de moneda y espacios especiales
     cleaned = re.sub(r'(?i)\b(?:bs\.?s?|ves|bolivares?)\b', '', str_val)
     cleaned = cleaned.replace('\xa0', ' ').replace('\u202f', ' ').strip()
 
-    # Si contiene coma decimal (formato estándar venezolano: 18.655,00)
     if ',' in cleaned:
         cleaned = cleaned.replace('.', '').replace(',', '.')
     else:
-        # Si contiene puntos, verificar si es separador de miles o decimal
         dots = cleaned.count('.')
         if dots == 1:
             parts = cleaned.split('.')
-            if len(parts[1]) == 3:  # Ej: 18.655 -> miles
+            if len(parts[1]) == 3:
                 cleaned = cleaned.replace('.', '')
         elif dots > 1:
             cleaned = cleaned.replace('.', '')
@@ -99,8 +96,14 @@ def parse_price_usd(text) -> float | None:
         return None
 
 
+def extract_product_id_from_url(url: str) -> str | None:
+    """Extrae el ID numérico del producto desde la URL (ej: /producto/116415591-pulmolix...)."""
+    m = re.search(r'/producto/(\d+)', url) or re.search(r'[-_/](\d{5,12})(?:[-_.]|$)', url)
+    return m.group(1) if m else None
+
+
 async def get_bcv_rate() -> float:
-    """Obtiene la tasa oficial BCV desde Supabase, Firestore o API externa."""
+    """Obtiene la tasa oficial BCV desde Supabase o API externa (sin código muerto de Firestore)."""
     fallback = 775.34
     print("[BCV] Cargando tasa oficial...", flush=True)
 
@@ -117,21 +120,7 @@ async def get_bcv_rate() -> float:
     except Exception as e:
         print(f"[BCV] Supabase no disponible ({e})", flush=True)
 
-    # 2. Firestore
-    try:
-        from firebase_client import get_db
-        db = get_db()
-        doc_snap = db.collection("bcv_rates").order_by("updated_at", direction="DESCENDING").limit(1).get()
-        if doc_snap and len(doc_snap) > 0:
-            data = doc_snap[0].to_dict()
-            val = float(data.get("value") or data.get("valor") or 0)
-            if val > 10.0:
-                print(f"[BCV] Tasa cargada desde Firestore: Bs {val:,.2f}", flush=True)
-                return val
-    except Exception as e:
-        print(f"[BCV] Firestore no disponible ({e})", flush=True)
-
-    # 3. API Externa pydolarve / bcv
+    # 2. API Externa pydolarve / bcv
     try:
         import urllib.request
         req = urllib.request.Request("https://pydolarve.org/api/v1/dollar?page=bcv", headers={"User-Agent": "TrackFlow/1.0"})
@@ -150,8 +139,7 @@ async def get_bcv_rate() -> float:
 
 
 def cargar_filas_de_db():
-    """Lee productos_competencia desde Supabase o Firestore."""
-    # 1. Supabase
+    """Lee productos_competencia desde Supabase con fallback local CSV."""
     try:
         from supabase_client import is_supabase_configured, select
         if is_supabase_configured():
@@ -164,21 +152,7 @@ def cargar_filas_de_db():
     except Exception as e:
         print(f"No se pudo cargar desde Supabase: {e}", flush=True)
 
-    # 2. Firestore
-    try:
-        from firebase_client import get_db
-        db = get_db()
-        snap = db.collection("productos_competencia").stream()
-        filas = []
-        for doc in snap:
-            data = doc.to_dict()
-            data["_doc_id"] = doc.id
-            filas.append(data)
-        print(f"Cargadas {len(filas)} filas desde Firestore", flush=True)
-        return filas
-    except Exception as e:
-        print(f"No se pudo cargar desde Firestore: {e}", flush=True)
-        return None
+    return None
 
 
 def cargar_filas_de_csv():
@@ -270,10 +244,10 @@ async def block_unnecessary_resources(route):
     await route.continue_()
 
 
-async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dict:
+async def extract_product_data_from_page(page, url: str) -> dict:
     """
-    Motor universal de extracción del DOM con discriminación de visibilidad efectiva,
-    soporte Angular SPA, Next.js, VTEX y Schema.org.
+    Motor universal de extracción del DOM con delimitación estricta de alcance,
+    visibilidad efectiva, soporte Angular SPA, Next.js, VTEX y Schema.org.
     """
     return await page.evaluate(r"""
         () => {
@@ -326,13 +300,12 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
             let nombre = null;
             let precio_lista = null;
             let precio_oferta = null;
-            let tipo_promo = null;
-            let porcentaje_descuento = null;
+            let promo_struct = null; // { tipo: 'porcentaje'|'monto_fijo'|'no_parseable', valor: number|null, texto_literal: string }
             let metodo_extraccion = null;
 
             const isFarmatodo = window.location.hostname.includes('farmatodo');
 
-            // 3. ESTRATEGIA FARMATODO (Angular Componentes + Promociones)
+            // 3. ESTRATEGIA FARMATODO (Alcance acotado al contenedor del producto)
             if (isFarmatodo) {
                 try {
                     const ftTitleEl = document.querySelector('h1, app-product-detail h1, .product-purchase h1, [class*="product-detail__title"]');
@@ -340,50 +313,62 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                         nombre = (ftTitleEl.innerText || ftTitleEl.textContent || '').trim();
                     }
 
-                    // A1. Detectar Badges de Descuento visibles (ej: 'Solo DELIVERY - 15% Dcto. 1era Compra', '15% OFF')
-                    const badgeElements = Array.from(document.querySelectorAll('.badge-discount, .discount-badge, [class*="badge"], [class*="discount"], [class*="dcto"], [class*="tag"], [class*="offer"], .tag'));
-                    for (const badge of badgeElements) {
-                        if (!isVisible(badge)) continue;
-                        if (badge.children.length > 2) continue;
-                        const txt = (badge.innerText || badge.textContent || '').replace(/\s+/g, ' ').trim();
-                        if (!txt || txt.length > 90) continue;
+                    // Delimitar contenedor principal de compra del producto (NUNCA el document global)
+                    const purchaseBox = document.querySelector('app-product-all-price, .product-all-price, .product-purchase__price-section, .product-purchase, app-product-detail, [class*="product-purchase"]');
 
-                        const m = txt.match(/\b(\d{1,2})\s*%\s*(?:dcto|descuento|off)?/i) || txt.match(/(\d{1,2})%/);
-                        if (m) {
-                            const pct = parseInt(m[1], 10);
-                            if (pct >= 3 && pct <= 90) {
-                                porcentaje_descuento = pct;
-                                tipo_promo = txt;
+                    if (purchaseBox) {
+                        // A1. Detectar Badges de Descuento dentro del bloque de compra únicamente
+                        const badgeElements = Array.from(purchaseBox.querySelectorAll('.badge-discount, .discount-badge, [class*="badge"], [class*="discount"], [class*="dcto"], [class*="tag"], [class*="offer"], .badge, .tag')).filter(isVisible);
+                        
+                        for (const badge of badgeElements) {
+                            if (badge.children.length > 2) continue;
+                            const txt = (badge.innerText || badge.textContent || '').replace(/\s+/g, ' ').trim();
+                            if (!txt || txt.length > 90) continue;
+
+                            // Clasificación estricta del badge
+                            const matchPct = txt.match(/\b(\d{1,2})\s*%\s*(?:dcto|descuento|off)?/i) || txt.match(/(\d{1,2})%/);
+                            const matchMonto = txt.match(/(?:ahorra|dcto|descuento|menos)\s*(?:bs\.?s?|ves)?\s*([\d.,]+)/i);
+
+                            if (matchPct) {
+                                const pct = parseInt(matchPct[1], 10);
+                                if (pct >= 2 && pct <= 90) {
+                                    promo_struct = { tipo: "porcentaje", valor: pct, texto_literal: txt };
+                                    break;
+                                }
+                            } else if (matchMonto) {
+                                const monto = parsePriceText(matchMonto[1]);
+                                if (monto && monto > 0) {
+                                    promo_struct = { tipo: "monto_fijo", valor: monto, texto_literal: txt };
+                                    break;
+                                }
+                            } else if (/delivery|1era|primera|app|promo|oferta|dcto|descuento/i.test(txt)) {
+                                promo_struct = { tipo: "no_parseable", valor: null, texto_literal: txt };
                                 break;
                             }
                         }
-                    }
 
-                    // A2. Selectores específicos de componentes de precios visibles
-                    const offerEls = Array.from(document.querySelectorAll('[id^="product-all-price-offer-"], .product-all-price__offer, [class*="product-all-price__offer"]')).filter(isVisible);
-                    for (const el of offerEls) {
-                        const val = parsePriceText(el.innerText || el.textContent || '');
-                        if (val && val > 0.1) {
-                            precio_oferta = val;
-                            metodo_extraccion = "dom";
-                            break;
+                        // A2. Selectores específicos de componentes de precios visibles dentro del purchaseBox
+                        const offerEls = Array.from(purchaseBox.querySelectorAll('[id^="product-all-price-offer-"], .product-all-price__offer, [class*="product-all-price__offer"]')).filter(isVisible);
+                        for (const el of offerEls) {
+                            const val = parsePriceText(el.innerText || el.textContent || '');
+                            if (val && val > 0.1) {
+                                precio_oferta = val;
+                                metodo_extraccion = "dom";
+                                break;
+                            }
                         }
-                    }
 
-                    const normalEls = Array.from(document.querySelectorAll('[id^="product-all-price-normal-"], .product-all-price__normal, [class*="product-all-price__normal"]')).filter(isVisible);
-                    for (const el of normalEls) {
-                        const val = parsePriceText(el.innerText || el.textContent || '');
-                        if (val && val > 0.1) {
-                            precio_lista = val;
-                            break;
+                        const normalEls = Array.from(purchaseBox.querySelectorAll('[id^="product-all-price-normal-"], .product-all-price__normal, [class*="product-all-price__normal"]')).filter(isVisible);
+                        for (const el of normalEls) {
+                            const val = parsePriceText(el.innerText || el.textContent || '');
+                            if (val && val > 0.1) {
+                                precio_lista = val;
+                                break;
+                            }
                         }
-                    }
 
-                    // A3. Inspección del bloque contenedor de precios visible
-                    const visibleBoxes = Array.from(document.querySelectorAll('app-product-all-price, .product-all-price, .product-purchase__price-section, .product-purchase')).filter(isVisible);
-                    if (visibleBoxes.length > 0) {
-                        const box = visibleBoxes[0];
-                        const priceEls = Array.from(box.querySelectorAll('span, p, div, del, s, b, strong')).filter(el => {
+                        // A3. Inspección del bloque contenedor de precios
+                        const priceEls = Array.from(purchaseBox.querySelectorAll('span, p, div, del, s, b, strong')).filter(el => {
                             if (!isVisible(el) || el.children.length > 2) return false;
                             const txt = (el.innerText || el.textContent || '').trim();
                             return (txt.includes('Bs') || txt.includes('VES')) && /\d/.test(txt) &&
@@ -430,10 +415,18 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                         }
                     }
 
-                    // A4. Derivación matemática desde el porcentaje del badge si solo está presente el precio de lista
-                    if (precio_lista && !precio_oferta && porcentaje_descuento) {
-                        precio_oferta = Math.round((precio_lista * (1 - (porcentaje_descuento / 100))) * 100) / 100;
-                        metodo_extraccion = "derivado";
+                    // A4. Aplicar el principio de resolución sobre el badge clasificado
+                    if (precio_lista && !precio_oferta && promo_struct) {
+                        if (promo_struct.tipo === "porcentaje" && promo_struct.valor) {
+                            precio_oferta = Math.round((precio_lista * (1 - (promo_struct.valor / 100))) * 100) / 100;
+                            metodo_extraccion = "derivado";
+                        } else if (promo_struct.tipo === "monto_fijo" && promo_struct.valor && precio_lista > promo_struct.valor) {
+                            precio_oferta = Math.round((precio_lista - promo_struct.valor) * 100) / 100;
+                            metodo_extraccion = "derivado";
+                        } else if (promo_struct.tipo === "no_parseable") {
+                            precio_oferta = null; // NUNCA adivinar precio
+                            metodo_extraccion = "promo_no_resuelta";
+                        }
                     }
 
                 } catch(e) {}
@@ -500,18 +493,18 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 nombre,
                 precio_lista,
                 precio_oferta,
-                tipo_promo,
-                porcentaje_descuento,
+                promo_struct,
                 metodo_extraccion
             };
         }
     """)
 
 
-async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id: str = "1") -> dict:
-    """Ejecuta el ciclo de scraping con intercepción de red y fallback híbrido."""
+async def scrape_url_async(page, url: str, marca: str, task_id: str = "1") -> dict:
+    """Ejecuta el ciclo de scraping con validación de ID en red y fallback híbrido."""
     intentos = 3
     is_farmatodo = "farmatodo" in url.lower()
+    target_product_id = extract_product_id_from_url(url)
 
     result = {
         "url": url,
@@ -521,6 +514,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         "precio_desc_bs": None,       # precio_oferta
         "tipo_promo": None,
         "porcentaje_descuento": None,
+        "promo_condicionada": False,
         "metodo_extraccion": None,
         "tiene_descuento": False,
         "scraped_at": datetime.now(timezone.utc).isoformat(),
@@ -533,6 +527,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         result["precio_desc_bs"] = None
         result["tipo_promo"] = None
         result["porcentaje_descuento"] = None
+        result["promo_condicionada"] = False
         result["metodo_extraccion"] = None
         result["tiene_descuento"] = False
 
@@ -542,16 +537,41 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         api_captured_data = {}
 
         async def handle_response(response):
-            """Intercepción de red para endpoints JSON de productos y promociones."""
+            """
+            Intercepción de red con validación de correspondencia de producto.
+            Solo acepta datos si el JSON contiene el target_product_id o la URL corresponde a la ficha.
+            """
             try:
                 content_type = response.headers.get("content-type", "").lower()
                 resp_url = response.url.lower()
                 if "json" in content_type and any(kw in resp_url for kw in ("product", "item", "articulo", "promotion", "promo", "pricing", "detail")):
                     if response.status == 200:
                         json_data = await response.json()
-                        if isinstance(json_data, dict):
-                            # Buscar recursivamente datos de precio y promociones
-                            def search_json(obj, depth=0):
+                        if isinstance(json_data, (dict, list)):
+                            # Validar que el payload pertenezca al ID del producto
+                            def belongs_to_target_product(obj, depth=0) -> bool:
+                                if not target_product_id:
+                                    return True
+                                if not obj or depth > 4:
+                                    return False
+                                if isinstance(obj, dict):
+                                    for k in ("id", "productId", "itemCode", "sku", "code", "slug", "url"):
+                                        val = str(obj.get(k, "")).strip()
+                                        if val and (target_product_id in val or val == target_product_id):
+                                            return True
+                                    for v in obj.values():
+                                        if isinstance(v, (dict, list)) and belongs_to_target_product(v, depth + 1):
+                                            return True
+                                elif isinstance(obj, list):
+                                    for it in obj[:8]:
+                                        if belongs_to_target_product(it, depth + 1):
+                                            return True
+                                return False
+
+                            if target_product_id and not (target_product_id in resp_url or belongs_to_target_product(json_data)):
+                                return  # Descartar payload no correspondiente al producto inspeccionado
+
+                            def extract_pricing(obj, depth=0):
                                 if not obj or depth > 5:
                                     return
                                 if isinstance(obj, dict):
@@ -579,12 +599,12 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
 
                                     for v in obj.values():
                                         if isinstance(v, (dict, list)):
-                                            search_json(v, depth + 1)
+                                            extract_pricing(v, depth + 1)
                                 elif isinstance(obj, list):
                                     for item in obj[:10]:
-                                        search_json(item, depth + 1)
+                                        extract_pricing(item, depth + 1)
 
-                            search_json(json_data)
+                            extract_pricing(json_data)
             except Exception:
                 pass
 
@@ -630,7 +650,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             except Exception:
                 pass
 
-        data = await extract_product_data_from_page(page, url, bcv_rate)
+        data = await extract_product_data_from_page(page, url)
 
         if data.get("error"):
             result["error"] = data["error"]
@@ -646,12 +666,13 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
 
         result["nombre"] = data.get("nombre")
 
-        # Priorización de Fuentes: 1. API Interceptada -> 2. DOM / Derivado
+        # 1. Resolver fuente de datos (API vs DOM)
         final_precio_lista = None
         final_precio_oferta = None
         final_tipo_promo = None
         final_pct_desc = None
         final_metodo = None
+        promo_struct = data.get("promo_struct")
 
         if api_captured_data.get("precio_lista") and api_captured_data.get("precio_oferta") and api_captured_data["precio_lista"] > api_captured_data["precio_oferta"]:
             final_precio_lista = api_captured_data["precio_lista"]
@@ -659,32 +680,47 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             final_tipo_promo = api_captured_data.get("tipo_promo")
             final_pct_desc = api_captured_data.get("porcentaje_descuento")
             final_metodo = "api"
+        elif api_captured_data.get("precio_lista") and not data.get("precio_lista"):
+            final_precio_lista = api_captured_data["precio_lista"]
+            final_metodo = "api"
         elif data.get("precio_lista"):
             final_precio_lista = data["precio_lista"]
             final_precio_oferta = data.get("precio_oferta")
-            final_tipo_promo = data.get("tipo_promo")
-            final_pct_desc = data.get("porcentaje_descuento")
             final_metodo = data.get("metodo_extraccion") or "dom"
 
+            if promo_struct:
+                final_tipo_promo = promo_struct.get("texto_literal")
+                if promo_struct.get("tipo") == "porcentaje":
+                    final_pct_desc = promo_struct.get("valor")
+
+        # 2. Reconciliación de promociones condicionadas y porcentajes
         if final_precio_lista:
-            # Reconciliación si vinieron invertidos
             if final_precio_oferta and final_precio_oferta > final_precio_lista:
                 final_precio_lista, final_precio_oferta = final_precio_oferta, final_precio_lista
 
             tiene_desc = bool(final_precio_oferta and (final_precio_lista - final_precio_oferta) > 0.05)
-            if not tiene_desc:
-                final_precio_oferta = None
-                final_tipo_promo = None
-                final_pct_desc = None
+            
+            # Evaluar promo condicionada
+            texto_eval = (final_tipo_promo or "").lower()
+            promo_cond = any(pattern in texto_eval for pattern in (
+                "1era compra", "1ra compra", "primera compra", "primer pedido",
+                "solo delivery", "solo app", "solo online", "exclusivo app", "exclusivo online"
+            ))
 
-            if tiene_desc and not final_pct_desc and final_precio_lista > 0:
-                final_pct_desc = round(((final_precio_lista - final_precio_oferta) / final_precio_lista) * 100, 1)
+            if tiene_desc:
+                if not final_pct_desc and final_precio_lista > 0:
+                    final_pct_desc = round(((final_precio_lista - final_precio_oferta) / final_precio_lista) * 100, 1)
+            else:
+                final_precio_oferta = None
+                if final_metodo != "promo_no_resuelta":
+                    final_pct_desc = None
 
             result["precio_full_bs"] = round(final_precio_lista, 2)
             result["precio_desc_bs"] = round(final_precio_oferta, 2) if final_precio_oferta else None
             result["tipo_promo"] = final_tipo_promo
             result["porcentaje_descuento"] = final_pct_desc
-            result["metodo_extraccion"] = final_metodo if tiene_desc else ("dom" if final_metodo else None)
+            result["promo_condicionada"] = promo_cond
+            result["metodo_extraccion"] = final_metodo
             result["tiene_descuento"] = tiene_desc
             break
         else:
@@ -696,9 +732,9 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
 
 async def main_async():
     inicio = time.time()
-    bcv_rate = await get_bcv_rate()
+    await get_bcv_rate()
 
-    # Cargar filas desde DB o CSV local
+    # Cargar filas desde Supabase con fallback CSV
     filas = cargar_filas_de_db()
     if not filas:
         filas = cargar_filas_de_csv()
@@ -707,7 +743,6 @@ async def main_async():
         print("❌ No hay enlaces para procesar.", flush=True)
         sys.exit(1)
 
-    # Filtrar enlaces vacíos o inactivos
     filas_activas = []
     for f in filas:
         activo_val = f.get("activo")
@@ -721,7 +756,6 @@ async def main_async():
         if es_activo and (f.get("url") or "").strip():
             filas_activas.append(f)
 
-    # Soporte para filtrado por argumento CLI o payload de GitHub Actions
     if len(sys.argv) > 1:
         arg_target = sys.argv[1].strip()
         filas_procesar = [f for f in filas_activas if f.get("id_producto_propio") == arg_target or f.get("_doc_id") == arg_target or f.get("id") == arg_target]
@@ -756,52 +790,66 @@ async def main_async():
             timezone_id="America/Caracas"
         )
 
-        # Configurar enrutamiento para cancelar recursos pesados
         await context.route("**/*", block_unnecessary_resources)
 
-        async def worker(fila, idx):
+        async def execute_task(fila, idx):
             cadena = fila.get("cadena", "").strip()
             url = fila.get("url", "").strip()
             marca = fila.get("marca", "").strip()
             id_prod = fila.get("id_producto_propio", "").strip()
 
-            sem_cadena = sem_farmatodo if "farmatodo" in cadena.lower() or "farmatodo" in url.lower() else sem_general
+            page = await context.new_page()
+            if not url:
+                res = {
+                    "url": "", "marca": marca, "nombre": None,
+                    "precio_full_bs": None, "precio_desc_bs": None,
+                    "tipo_promo": None, "porcentaje_descuento": None, "promo_condicionada": False,
+                    "metodo_extraccion": None, "tiene_descuento": False,
+                    "scraped_at": datetime.now(timezone.utc).isoformat(),
+                    "error": "URL vacia"
+                }
+            else:
+                await asyncio.sleep(random.uniform(0.1, 0.3))
+                res = await scrape_url_async(page, url, marca, task_id=f"{idx}")
 
+            res["id_producto_propio"] = id_prod
+            res["cadena"] = cadena
+            res["tipo"] = fila.get("tipo", "")
+            res["laboratorio"] = fila.get("laboratorio", "")
+            res["concentracion"] = fila.get("concentracion", "")
+            res["tamano"] = fila.get("tamano", "")
+            res["activo"] = fila.get("activo", True)
+            res["_doc_id"] = fila.get("_doc_id")
+
+            await page.close()
+
+            if res.get("error"):
+                print(f"[{idx}/{len(filas_procesar)}] ❌ [{cadena}] {marca} - {res['error']}", flush=True)
+            else:
+                status = f"Bs {res['precio_full_bs']:,.2f}"
+                if res.get('tiene_descuento'):
+                    cond_tag = " [CONDICIONADA]" if res.get('promo_condicionada') else ""
+                    status += f" -> Oferta: Bs {res['precio_desc_bs']:,.2f} ({res.get('tipo_promo') or (str(res.get('porcentaje_descuento')) + '%')}){cond_tag} [{res.get('metodo_extraccion')}]"
+                elif res.get('metodo_extraccion') == "promo_no_resuelta":
+                    status += f" (Promo no resuelta: '{res.get('tipo_promo')}') [promo_no_resuelta]"
+                else:
+                    status += f" [{res.get('metodo_extraccion')}]"
+                print(f"[{idx}/{len(filas_procesar)}] ✅ [{cadena}] {marca} ({id_prod}): {status}", flush=True)
+
+            return res
+
+        async def worker(fila, idx):
+            cadena = fila.get("cadena", "").strip()
+            url = fila.get("url", "").strip()
+            is_ft = "farmatodo" in cadena.lower() or "farmatodo" in url.lower()
+
+            # Evitar Deadlock: adquisición de un único semáforo por worker
             async with sem_general:
-                async with sem_cadena:
-                    page = await context.new_page()
-                    if not url:
-                        res = {
-                            "url": "", "marca": marca, "nombre": None,
-                            "precio_full_bs": None, "precio_desc_bs": None,
-                            "tipo_promo": None, "porcentaje_descuento": None, "metodo_extraccion": None,
-                            "tiene_descuento": False, "scraped_at": datetime.now(timezone.utc).isoformat(),
-                            "error": "URL vacia"
-                        }
-                    else:
-                        await asyncio.sleep(random.uniform(0.1, 0.3))
-                        res = await scrape_url_async(page, url, marca, bcv_rate, task_id=f"{idx}")
-
-                    res["id_producto_propio"] = id_prod
-                    res["cadena"] = cadena
-                    res["tipo"] = fila.get("tipo", "")
-                    res["laboratorio"] = fila.get("laboratorio", "")
-                    res["concentracion"] = fila.get("concentracion", "")
-                    res["tamano"] = fila.get("tamano", "")
-                    res["activo"] = fila.get("activo", True)
-                    res["_doc_id"] = fila.get("_doc_id")
-
-                    await page.close()
-
-                    if res.get("error"):
-                        print(f"[{idx}/{len(filas_procesar)}] ❌ [{cadena}] {marca} - {res['error']}", flush=True)
-                    else:
-                        status = f"Bs {res['precio_full_bs']:,.2f}"
-                        if res.get('tiene_descuento'):
-                            status += f" -> Oferta: Bs {res['precio_desc_bs']:,.2f} ({res.get('tipo_promo') or (str(res.get('porcentaje_descuento')) + '%')}) [{res.get('metodo_extraccion')}]"
-                        print(f"[{idx}/{len(filas_procesar)}] ✅ [{cadena}] {marca} ({id_prod}): {status}", flush=True)
-
-                    return res
+                if is_ft:
+                    async with sem_farmatodo:
+                        return await execute_task(fila, idx)
+                else:
+                    return await execute_task(fila, idx)
 
         tasks = [worker(fila, i + 1) for i, fila in enumerate(filas_procesar)]
         resultados = await asyncio.gather(*tasks)
@@ -811,11 +859,32 @@ async def main_async():
 
     duracion = time.time() - inicio
     ok_count = sum(1 for r in resultados if not r.get("error"))
-    err_count = len(resultados) - ok_count
+
+    # Telemetría de métodos de extracción y promociones
+    stats_metodo = {}
+    promos_no_resueltas = []
+    for r in resultados:
+        if not r.get("error"):
+            m = r.get("metodo_extraccion") or "sin_metodo"
+            stats_metodo[m] = stats_metodo.get(m, 0) + 1
+            if m == "promo_no_resuelta":
+                promos_no_resueltas.append(f"{r.get('cadena')} ({r.get('marca')}): '{r.get('tipo_promo')}'")
 
     print("\n" + "=" * 60)
     print(f"COMPLETADO en {duracion:.1f}s ({duracion/60:.1f} min) | Éxito: {ok_count}/{len(resultados)} OK")
-    print(f"Resultados guardados localmente en: {OUT_PATH}")
+    print("\n📊 TELEMETRÍA DE EXTRACCIÓN:")
+    for met, count in sorted(stats_metodo.items()):
+        print(f"  • {met}: {count} productos ({count/max(ok_count,1)*100:.1f}%)")
+
+    if stats_metodo.get("api", 0) == 0:
+        print("\n⚠️  ADVERTENCIA TELEMETRÍA: 0 productos resueltos por vía 'api'. Verificar si los endpoints JSON de red han cambiado o requieren nuevos encabezados.")
+
+    if promos_no_resueltas:
+        print("\n🔍 PROMOCIONES NO RESUELTAS (Para análisis y nuevos patrones):")
+        for p in promos_no_resueltas[:10]:
+            print(f"  - {p}")
+
+    print(f"\nResultados guardados localmente en: {OUT_PATH}")
     print("=" * 60 + "\n")
 
     OUT_PATH.write_text(json.dumps(resultados, ensure_ascii=False, indent=2), encoding="utf-8")
