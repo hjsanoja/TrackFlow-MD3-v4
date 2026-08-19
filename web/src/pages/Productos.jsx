@@ -143,8 +143,11 @@ export default function Productos() {
       addToast(isNew ? 'Producto creado con éxito' : 'Producto actualizado con éxito', 'success');
       setEditing(null);
       await cargar(true);
+      return { success: true };
     } catch (err) {
-      addToast(err.message, 'error');
+      const errMsg = err?.message || 'Error al guardar el producto';
+      addToast(errMsg, 'error');
+      return { success: false, error: errMsg };
     }
   };
 
@@ -488,7 +491,7 @@ export default function Productos() {
           <button
             onClick={() => setConfirmDeleteAll(true)}
             disabled={deletingAll || productos.length === 0}
-            className="touch-target px-4 py-2 bg-surface-low hover:bg-rose-50 text-rose-700 font-mono font-bold text-xs rounded-full border border-rose-200 transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+            className="m3-btn-danger-outline"
             title="Eliminar todos los productos, enlaces de competencia e historial"
           >
             <span className="material-symbols-outlined text-base">delete_sweep</span>
@@ -978,15 +981,27 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
   });
 
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMessage(null);
+    if (!form.id_interno || !form.nombre) {
+      setErrorMessage('Por favor completa los campos obligatorios (*).');
+      return;
+    }
     setSaving(true);
-    await onSave(form, isNew);
+    const res = await onSave(form, isNew);
     setSaving(false);
+    if (res && !res.success) {
+      setErrorMessage(res.error || 'Ocurrió un error al intentar guardar el producto.');
+    }
   };
 
-  const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
+  const handleChange = (key, value) => {
+    setErrorMessage(null);
+    setForm(f => ({ ...f, [key]: value }));
+  };
 
   return (
     <ModalWrapper
@@ -998,6 +1013,22 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
       maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
+        {errorMessage && (
+          <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl flex items-start gap-3 text-red-900 dark:text-red-200 text-xs font-semibold animate-fade-in shadow-xs">
+            <span className="material-symbols-outlined text-red-600 text-xl shrink-0 select-none">error</span>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold">No se pudieron guardar los cambios</div>
+              <div className="text-[11.5px] font-normal text-red-700 dark:text-red-300 mt-0.5 leading-relaxed break-words">{errorMessage}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMessage(null)}
+              className="text-red-500 hover:text-red-800 transition-colors p-0.5"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field label="ID Interno *" hint="Código único (ej: P001)">
             <input type="text" required value={form.id_interno}

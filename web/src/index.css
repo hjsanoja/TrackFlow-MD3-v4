@@ -126,18 +126,21 @@ body {
   justify-content: center;
   gap: var(--md-sys-spacing-1);
   height: 40px;
-  padding: 0 18px;
-  border-radius: calc(40px / 2);
+  padding: 0 16px;
+  border-radius: 9999px;
   background-color: var(--md-sys-color-surface-container-lowest);
   border: 1px solid var(--md-sys-color-outline-variant);
   color: var(--md-sys-color-primary);
   font-family: 'Roboto Flex', sans-serif;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
   transition: transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast, var(--spring-fallback-spatial-fast)),
               border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
-              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
+              box-shadow var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
 }
 
 .m3-btn-outline:hover:not(:disabled) {
@@ -151,29 +154,79 @@ body {
   transform: translateY(0) scale(0.98);
 }
 
+.m3-btn-outline:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.m3-btn-danger-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--md-sys-spacing-1);
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid rgba(186, 26, 26, 0.3);
+  color: #b3261e;
+  font-family: 'Roboto Flex', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  box-shadow: var(--md-sys-elevation-0);
+  transition: transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast, var(--spring-fallback-spatial-fast)),
+              border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
+              background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
+              box-shadow var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+}
+
+.m3-btn-danger-outline:hover:not(:disabled) {
+  background-color: #fff1f0;
+  border-color: #b3261e;
+  box-shadow: var(--md-sys-elevation-1);
+  transform: translateY(-1px);
+}
+
+.m3-btn-danger-outline:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.m3-btn-danger-outline:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Unified Segmented Switcher */
 .m3-segmented {
   display: inline-flex;
   align-items: center;
+  height: 40px;
   background-color: var(--md-sys-color-surface-container-low);
   border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: calc(36px / 2);
+  border-radius: 9999px;
   padding: 3px;
   gap: 3px;
+  box-sizing: border-box;
 }
 
 .m3-segmented-item {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  height: 100%;
   gap: var(--md-sys-spacing-1);
-  padding: 5px 12px;
-  border-radius: calc(30px / 2);
+  padding: 0 14px;
+  border-radius: 9999px;
   font-family: 'Roboto Flex', sans-serif;
   font-size: 0.75rem;
   font-weight: 700;
   transition: all var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
   border: none;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .m3-segmented-item.active {

@@ -23,8 +23,8 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={{ addToast, removeToast }}>
       {children}
       
-      {/* Floating Toast Container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+      {/* Floating Toast Container - z-index higher than modal cards (100000) and scrims (99999) */}
+      <div className="fixed bottom-6 right-6 z-[100005] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
         {toasts.map((t) => {
           let bgColor = 'bg-white border-outline-variant';
           let textColor = 'text-on-surface';

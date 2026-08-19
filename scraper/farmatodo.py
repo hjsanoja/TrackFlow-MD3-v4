@@ -282,8 +282,8 @@ async def block_unnecessary_resources(route):
 async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dict:
     """
     Motor universal de extracción de e-commerce.
-    Soporta Next.js (__NEXT_DATA__), VTEX (__STATE__ / commertialOffer)
-    y Schema.org JSON-LD con extracción complementaria del DOM.
+    Soporta Angular Components (Farmatodo), Next.js (__NEXT_DATA__),
+    VTEX (__STATE__ / commertialOffer) y Schema.org JSON-LD con extracción complementaria del DOM.
     """
     return await page.evaluate(r"""
         () => {
@@ -303,69 +303,210 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 return { error: "Producto no disponible o enlace roto (404 / Agotado)." };
             }
 
+            const parsePriceText = (str) => {
+                if (!str) return null;
+                let cleaned = str.replace(/[^\d.,]/g, '').trim();
+                if (!cleaned) return null;
+                if (cleaned.includes(',')) {
+                    cleaned = cleaned.replace(/\./g, '').replace(/,/g, '.');
+                } else {
+                    const dots = (cleaned.match(/\./g) || []).length;
+                    if (dots === 1) {
+                        const parts = cleaned.split('.');
+                        if (parts[1].length === 3) {
+                            cleaned = cleaned.replace(/\./g, '');
+                        }
+                    } else if (dots > 1) {
+                        cleaned = cleaned.replace(/\./g, '');
+                    }
+                }
+                const val = parseFloat(cleaned);
+                return isNaN(val) ? null : val;
+            };
+
             let nombre = null;
             let active_price = null;
             let original_price = null;
 
-            // 3. ESTRATEGIA A: Next.js __NEXT_DATA__ (Farmatodo)
-            const nextDataEl = document.querySelector('script#__NEXT_DATA__');
-            if (nextDataEl) {
+            const isFarmatodo = window.location.hostname.includes('farmatodo');
+
+            // 3. ESTRATEGIA A: COMPONENTES ANGULAR DE FARMATODO (Alta Fidelidad)
+            if (isFarmatodo) {
                 try {
-                    const json = JSON.parse(nextDataEl.textContent || '{}');
-                    const pageProps = json?.props?.pageProps;
-                    
-                    const findProduct = (obj, depth = 0) => {
-                        if (!obj || depth > 6) return null;
-                        if (obj.product && typeof obj.product === 'object' && (obj.product.price || obj.product.name || obj.product.bsPrice)) return obj.product;
-                        if (obj.productDetail && typeof obj.productDetail === 'object') return obj.productDetail;
-                        if (obj.productData && typeof obj.productData === 'object') return obj.productData;
-                        
-                        for (const k in obj) {
-                            if (k === 'product' || k === 'productDetail' || k === 'productData') {
-                                if (obj[k] && typeof obj[k] === 'object') return obj[k];
-                            }
-                            if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
-                                const res = findProduct(obj[k], depth + 1);
-                                if (res) return res;
+                    // Extraer nombre del producto en Farmatodo
+                    const ftTitleEl = document.querySelector('h1, app-product-detail h1, .product-purchase h1, [class*="product-detail__title"]');
+                    if (ftTitleEl) {
+                        nombre = (ftTitleEl.innerText || ftTitleEl.textContent || '').trim();
+                    }
+
+                    let ftOfferPrice = null;
+                    let ftNormalPrice = null;
+
+                    // A1. Selectores directos de clases e IDs de Farmatodo
+                    const offerEls = Array.from(document.querySelectorAll('[id^="product-all-price-offer-"], .product-all-price__offer, [class*="product-all-price__offer"]'));
+                    for (const el of offerEls) {
+                        const val = parsePriceText(el.innerText || el.textContent || '');
+                        if (val && val > 0.1) {
+                            ftOfferPrice = val;
+                            break;
+                        }
+                    }
+
+                    const normalEls = Array.from(document.querySelectorAll('[id^="product-all-price-normal-"], .product-all-price__normal, [class*="product-all-price__normal"]'));
+                    for (const el of normalEls) {
+                        const val = parsePriceText(el.innerText || el.textContent || '');
+                        if (val && val > 0.1) {
+                            ftNormalPrice = val;
+                            break;
+                        }
+                    }
+
+                    // A2. Inspección dentro del bloque contenedor de precios
+                    const priceBox = document.querySelector('app-product-all-price, .product-all-price, .product-purchase__price-section, .product-purchase');
+                    if (priceBox) {
+                        const allPriceElements = Array.from(priceBox.querySelectorAll('span, p, div, del, s, b, strong')).filter(el => {
+                            if (el.children.length > 2) return false;
+                            const txt = (el.innerText || el.textContent || '').trim();
+                            return (txt.includes('Bs') || txt.includes('VES')) && /\d/.test(txt) && 
+                                   !txt.toLowerCase().includes('unidades a') && 
+                                   !txt.toLowerCase().includes('c/u');
+                        });
+
+                        const parsedList = [];
+                        for (const el of allPriceElements) {
+                            const val = parsePriceText(el.innerText || el.textContent || '');
+                            if (!val || val <= 0.1) continue;
+
+                            let isStrikethrough = false;
+                            try {
+                                const style = window.getComputedStyle(el);
+                                const td = style.textDecoration || style.textDecorationLine || '';
+                                if (td.includes('line-through') || el.matches('del, s, strike') || el.closest('del, s, strike') || (el.className || '').includes('tachado')) {
+                                    isStrikethrough = true;
+                                }
+                            } catch(e) {}
+
+                            const isOfferClass = (el.className || '').includes('offer') || (el.id || '').includes('offer');
+
+                            parsedList.push({ val, isStrikethrough, isOfferClass, el });
+                        }
+
+                        // Identificar normal (tachado o clase normal) y oferta (destacado o menor)
+                        const striked = parsedList.filter(p => p.isStrikethrough);
+                        const offers = parsedList.filter(p => p.isOfferClass);
+
+                        if (striked.length > 0 && !ftNormalPrice) {
+                            ftNormalPrice = striked[0].val;
+                        }
+                        if (offers.length > 0 && !ftOfferPrice) {
+                            ftOfferPrice = offers[0].val;
+                        }
+
+                        // Si tenemos 2 montos distintos en la caja de precios
+                        const uniquePrices = Array.from(new Set(parsedList.map(p => p.val))).sort((a, b) => b - a);
+                        if (uniquePrices.length >= 2) {
+                            if (!ftNormalPrice) ftNormalPrice = uniquePrices[0]; // Mayor = normal
+                            if (!ftOfferPrice) ftOfferPrice = uniquePrices[1];   // Menor = oferta
+                        }
+                    }
+
+                    // A3. Detección de Badges / Etiquetas de Descuento (ej: "15%", "Solo DELIVERY - 15% Dcto", etc.)
+                    let ftDiscountPct = null;
+                    const allBadgeCandidates = Array.from(document.querySelectorAll('.badge-discount, .discount-badge, [class*="discount"], [class*="dcto"], [class*="badge"], [class*="tag"], [class*="offer"], .badge, .tag'));
+                    for (const badge of allBadgeCandidates) {
+                        if (badge.children.length > 2) continue;
+                        const txt = (badge.innerText || badge.textContent || '').trim();
+                        if (txt.length > 80) continue;
+                        const m = txt.match(/\b(\d{1,2})\s*%\s*(?:dcto|descuento|off)?/i) || txt.match(/(\d{1,2})%/);
+                        if (m) {
+                            const pct = parseInt(m[1], 10);
+                            if (pct >= 3 && pct <= 90) {
+                                ftDiscountPct = pct;
+                                break;
                             }
                         }
-                        return null;
-                    };
+                    }
 
-                    const product = findProduct(pageProps) || pageProps?.initialState?.product?.productDetail;
-                    if (product) {
-                        nombre = product.name || product.description || product.title || product.productName;
-                        
-                        // Extraer precios específicos de Farmatodo
-                        const pBs = parseFloat(product.bsPrice || product.precioBs || product.priceBs);
-                        const p1 = parseFloat(product.price);
-                        const p2 = parseFloat(product.originalPrice || product.regularPrice || product.listPrice || product.fullPrice || product.normalPrice || product.basePrice);
-                        const p3 = parseFloat(product.priceOffer || product.offerPrice || product.priceWithOffer || product.discountPrice || product.salePrice);
+                    // A4. Reconciliación matemática si solo se detectó un precio pero hay etiqueta de descuento
+                    if (ftNormalPrice && !ftOfferPrice && ftDiscountPct) {
+                        ftOfferPrice = Math.round((ftNormalPrice * (1 - (ftDiscountPct / 100))) * 100) / 100;
+                    } else if (ftOfferPrice && !ftNormalPrice && ftDiscountPct) {
+                        ftNormalPrice = Math.round((ftOfferPrice / (1 - (ftDiscountPct / 100))) * 100) / 100;
+                    }
 
-                        // Si Farmatodo expone el precio en Bs directo
-                        if (pBs && pBs > 0) {
-                            active_price = pBs;
-                            const active_usd = (p3 && p3 > 0) ? p3 : (p1 && p1 > 0 ? p1 : null);
-                            const original_usd = (p2 && p2 > 0) ? p2 : null;
-                            if (active_usd && original_usd && original_usd > active_usd) {
-                                original_price = pBs * (original_usd / active_usd);
-                            }
-                        } else if (p3 && p3 > 0) {
-                            active_price = p3;
-                            if (p1 && p1 > p3) original_price = p1;
-                            if (p2 && p2 > p3) original_price = p2;
-                        } else if (p1 && p1 > 0) {
-                            active_price = p1;
-                            if (p2 && p2 > p1) original_price = p2;
-                        } else if (p2 && p2 > 0) {
-                            active_price = p2;
-                        }
+                    // Asignación final de Farmatodo
+                    if (ftNormalPrice && ftOfferPrice && Math.abs(ftNormalPrice - ftOfferPrice) > 0.05) {
+                        const higher = Math.max(ftNormalPrice, ftOfferPrice);
+                        const lower = Math.min(ftNormalPrice, ftOfferPrice);
+                        original_price = higher;
+                        active_price = lower;
+                    } else if (ftOfferPrice) {
+                        active_price = ftOfferPrice;
+                    } else if (ftNormalPrice) {
+                        active_price = ftNormalPrice;
                     }
                 } catch(e) {}
             }
 
-            // 4. ESTRATEGIA B: VTEX __STATE__ (Locatel, Farmacias SAAS)
-            if (window.__STATE__) {
+            // 4. ESTRATEGIA B: Next.js __NEXT_DATA__ (Otras plataformas Next)
+            if (!active_price && !original_price) {
+                const nextDataEl = document.querySelector('script#__NEXT_DATA__');
+                if (nextDataEl) {
+                    try {
+                        const json = JSON.parse(nextDataEl.textContent || '{}');
+                        const pageProps = json?.props?.pageProps;
+                        
+                        const findProduct = (obj, depth = 0) => {
+                            if (!obj || depth > 6) return null;
+                            if (obj.product && typeof obj.product === 'object' && (obj.product.price || obj.product.name || obj.product.bsPrice)) return obj.product;
+                            if (obj.productDetail && typeof obj.productDetail === 'object') return obj.productDetail;
+                            if (obj.productData && typeof obj.productData === 'object') return obj.productData;
+                            
+                            for (const k in obj) {
+                                if (k === 'product' || k === 'productDetail' || k === 'productData') {
+                                    if (obj[k] && typeof obj[k] === 'object') return obj[k];
+                                }
+                                if (typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
+                                    const res = findProduct(obj[k], depth + 1);
+                                    if (res) return res;
+                                }
+                            }
+                            return null;
+                        };
+
+                        const product = findProduct(pageProps) || pageProps?.initialState?.product?.productDetail;
+                        if (product) {
+                            if (!nombre) nombre = product.name || product.description || product.title || product.productName;
+                            
+                            const pBs = parseFloat(product.bsPrice || product.precioBs || product.priceBs);
+                            const p1 = parseFloat(product.price);
+                            const p2 = parseFloat(product.originalPrice || product.regularPrice || product.listPrice || product.fullPrice || product.normalPrice || product.basePrice);
+                            const p3 = parseFloat(product.priceOffer || product.offerPrice || product.priceWithOffer || product.discountPrice || product.salePrice);
+
+                            if (pBs && pBs > 0) {
+                                active_price = pBs;
+                                const active_usd = (p3 && p3 > 0) ? p3 : (p1 && p1 > 0 ? p1 : null);
+                                const original_usd = (p2 && p2 > 0) ? p2 : null;
+                                if (active_usd && original_usd && original_usd > active_usd) {
+                                    original_price = pBs * (original_usd / active_usd);
+                                }
+                            } else if (p3 && p3 > 0) {
+                                active_price = p3;
+                                if (p1 && p1 > p3) original_price = p1;
+                                if (p2 && p2 > p3) original_price = p2;
+                            } else if (p1 && p1 > 0) {
+                                active_price = p1;
+                                if (p2 && p2 > p1) original_price = p2;
+                            } else if (p2 && p2 > 0) {
+                                active_price = p2;
+                            }
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            // 5. ESTRATEGIA C: VTEX __STATE__ (Locatel, Farmacias SAAS)
+            if (!active_price && window.__STATE__) {
                 try {
                     const state = window.__STATE__;
                     for (const k in state) {
@@ -390,7 +531,7 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 } catch(e) {}
             }
 
-            // 5. ESTRATEGIA C: Schema.org JSON-LD
+            // 6. ESTRATEGIA D: Schema.org JSON-LD
             if (!active_price || !original_price) {
                 const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
                 for (const script of jsonLdScripts) {
@@ -415,31 +556,11 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 }
             }
 
-            // 6. ESTRATEGIA D: DOM EXTRACTION CON ALGORITMO DE SCORING ROBUSTO
+            // 7. ESTRATEGIA E: DOM EXTRACTION CON ALGORITMO DE SCORING ROBUSTO
             const h1El = document.querySelector('h1');
             if (!nombre) {
                 nombre = h1El ? (h1El.innerText || h1El.textContent || '').trim() : document.title.split('|')[0].trim();
             }
-
-            const parsePriceText = (str) => {
-                if (!str) return null;
-                let cleaned = str.replace(/[^\d.,]/g, '').trim();
-                if (cleaned.includes(',')) {
-                    cleaned = cleaned.replace(/\./g, '').replace(/,/g, '.');
-                } else {
-                    const dots = (cleaned.match(/\./g) || []).length;
-                    if (dots === 1) {
-                        const parts = cleaned.split('.');
-                        if (parts[1].length === 3) {
-                            cleaned = cleaned.replace(/\./g, '');
-                        }
-                    } else if (dots > 1) {
-                        cleaned = cleaned.replace(/\./g, '');
-                    }
-                }
-                const val = parseFloat(cleaned);
-                return isNaN(val) ? null : val;
-            };
 
             const isParentOfPriceElement = (el) => {
                 return Array.from(el.children).some(child => {
@@ -503,8 +624,8 @@ async def extract_product_data_from_page(page, url: str, bcv_rate: float) -> dic
                 const idName = (el.id || '').toLowerCase();
                 
                 if (className.includes('price') || className.includes('valor') || className.includes('monto')) score += 15;
-                if (className.includes('active') || className.includes('venta') || className.includes('selling') || className.includes('best') || className.includes('current')) score += 15;
-                if (idName.includes('price') || idName.includes('best')) score += 15;
+                if (className.includes('active') || className.includes('venta') || className.includes('selling') || className.includes('best') || className.includes('current') || className.includes('offer')) score += 15;
+                if (idName.includes('price') || idName.includes('best') || idName.includes('offer')) score += 15;
                 
                 if (className.includes('unit') || className.includes('secondary') || txt.includes('/') || txt.includes('x')) score -= 25;
 
@@ -627,6 +748,17 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
                 await asyncio.sleep(1.5)
                 continue
 
+            if is_farmatodo:
+                # Farmatodo es una SPA de Angular: esperar a que el componente de precios esté montado
+                try:
+                    await page.wait_for_selector('app-product-all-price, .product-all-price, [id^="product-all-price-"]', timeout=6000)
+                except Exception:
+                    pass
+                # Breve pausa para permitir que Angular aplique descuentos y promociones dinámicas
+                await asyncio.sleep(1.8)
+            else:
+                await asyncio.sleep(0.8)
+
         except PlaywrightTimeout:
             result["error"] = "Timeout cargando la página"
             await asyncio.sleep(2)
@@ -636,7 +768,6 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             await asyncio.sleep(2)
             continue
 
-        await asyncio.sleep(0.5)
         data = await extract_product_data_from_page(page, url, bcv_rate)
 
         if data.get("error"):

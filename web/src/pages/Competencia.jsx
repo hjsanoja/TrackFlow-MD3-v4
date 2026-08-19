@@ -111,6 +111,18 @@ export default function Competencia({ user, userDoc }) {
 
   const handleSave = async (data, isNew) => {
     try {
+      let cleanUrl = (data.url || '').trim();
+      if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        cleanUrl = 'https://' + cleanUrl;
+      }
+
+      if (!cleanUrl) {
+        throw new Error('La dirección URL es obligatoria');
+      }
+
+      const editingId = typeof editing === 'string' ? editing : editing?.id;
+      const currentItem = (!isNew && editingId) ? items.find(i => i.id === editingId) : null;
+
       const labPart = data.laboratorio?.trim() ? `_${data.laboratorio.trim()}` : '';
       const existing = isNew ? (
         items.find(it =>
@@ -124,40 +136,64 @@ export default function Competencia({ user, userDoc }) {
       ) : null;
 
       const docId = !isNew
-        ? editing.id
+        ? (data.id || editingId || currentItem?.id || `${data.id_producto_propio}_${data.cadena}_${data.marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_'))
         : existing
           ? existing.id
           : `${data.id_producto_propio}_${data.cadena}_${data.marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
 
-      const cadenaObj = cadenas.find(c => c.nombre === data.cadena);
-      if (cadenaObj && cadenaObj.website && data.url) {
+      if (!docId) {
+        throw new Error('No se pudo determinar el identificador único del enlace');
+      }
+
+      const cadenaObj = cadenas.find(c => c.nombre.toLowerCase().trim() === data.cadena.toLowerCase().trim());
+      if (cadenaObj && cadenaObj.website && cleanUrl) {
         try {
-          const urlHost = new URL(data.url).hostname.replace(/^www\./, '');
-          const cadenaHost = new URL(cadenaObj.website).hostname.replace(/^www\./, '');
+          const urlHost = new URL(cleanUrl).hostname.replace(/^www\./, '');
+          const websiteWithProto = cadenaObj.website.startsWith('http') ? cadenaObj.website : `https://${cadenaObj.website}`;
+          const cadenaHost = new URL(websiteWithProto).hostname.replace(/^www\./, '');
           if (!urlHost.endsWith(cadenaHost) && !cadenaHost.endsWith(urlHost)) {
             console.warn(`La URL parece ser de "${urlHost}" pero la cadena "${data.cadena}" usa "${cadenaHost}".`);
           }
         } catch {
-          throw new Error('La URL no es válida');
+          // Do not fail if cadena website has strange format, just ensure cleanUrl is valid
+          try {
+            new URL(cleanUrl);
+          } catch {
+            throw new Error('La dirección URL ingresada no es válida. Formato esperado: https://www.ejemplo.com/...');
+          }
         }
       }
+
       await dbUpsertProductoCompetencia({
         id: docId,
         id_producto_propio: data.id_producto_propio,
         cadena: data.cadena,
         tipo: data.tipo,
-        marca: data.marca.trim(),
-        url: data.url.trim(),
+        marca: (data.marca || '').trim(),
+        url: cleanUrl,
         activo: data.activo,
         laboratorio: data.laboratorio?.trim() || '',
         concentracion: data.concentracion?.trim() || '',
         tamano: data.tamano?.trim() || '',
+        // Conservar estado previo si estamos editando
+        ...(currentItem ? {
+          ultimo_precio_full_bs: currentItem.ultimo_precio_full_bs ?? null,
+          ultimo_precio_desc_bs: currentItem.ultimo_precio_desc_bs ?? null,
+          ultimo_nombre: currentItem.ultimo_nombre ?? null,
+          ultimo_scrape: currentItem.ultimo_scrape ?? null,
+          estado: currentItem.estado ?? 'ok',
+          ultimo_error: currentItem.ultimo_error ?? null
+        } : {})
       });
+
       addToast(isNew ? (existing ? 'URL de competencia actualizada con éxito' : 'URL de competencia creada con éxito') : 'Cambios guardados con éxito', 'success');
       setEditing(null);
       await cargar(true);
+      return { success: true };
     } catch (err) {
-      addToast(err.message, 'error');
+      const errMsg = err?.message || 'Error al guardar cambios en el enlace';
+      addToast(errMsg, 'error');
+      return { success: false, error: errMsg };
     }
   };
 
@@ -570,7 +606,7 @@ export default function Competencia({ user, userDoc }) {
           <button
             onClick={() => setConfirmDeleteAll(true)}
             disabled={deletingAll || items.length === 0}
-            className="touch-target px-4 py-2 bg-surface-low hover:bg-rose-50 text-rose-700 font-mono font-bold text-xs rounded-full border border-rose-200 transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+            className="m3-btn-danger-outline"
             title="Eliminar todos los enlaces de competencia e historial"
           >
             <span className="material-symbols-outlined text-base">delete_sweep</span>
@@ -1218,6 +1254,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
   const initialProd = productos.find(p => p.id_interno === initialProdId);
 
   const [form, setForm] = useState({
+    id: item?.id || '',
     id_producto_propio: initialProdId,
     cadena: item?.cadena || '',
     tipo: item?.tipo || 'alternativa',
@@ -1229,12 +1266,14 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
     tamano: item?.tamano || (initialProd ? initialProd.tamano || '' : ''),
   });
   const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const selectedProduct = useMemo(() => {
     return productos.find(p => p.id_interno === form.id_producto_propio);
   }, [productos, form.id_producto_propio]);
 
   const handleProductSelect = (prodId) => {
+    setErrorMessage(null);
     const p = productos.find(x => x.id_interno === prodId);
     setForm(f => ({
       ...f,
@@ -1247,6 +1286,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
   };
 
   const handleTipoSelect = (tipoVal) => {
+    setErrorMessage(null);
     setForm(f => {
       const p = productos.find(x => x.id_interno === f.id_producto_propio);
       return {
@@ -1262,14 +1302,32 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.id_producto_propio || !form.cadena || !form.marca || !form.url) return;
+    setErrorMessage(null);
+    if (!form.id_producto_propio || !form.cadena || !form.marca || !form.url) {
+      setErrorMessage('Por favor completa todos los campos requeridos (*).');
+      return;
+    }
     setSaving(true);
-    await onSave(form, isNew);
+    const res = await onSave(form, isNew);
     setSaving(false);
+    if (res && !res.success) {
+      setErrorMessage(res.error || 'Ocurrió un error al intentar guardar los cambios.');
+    }
   };
 
-  const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
-  const probarUrl = () => { if (form.url) window.open(form.url, '_blank', 'noopener,noreferrer'); };
+  const handleChange = (key, value) => {
+    setErrorMessage(null);
+    setForm(f => ({ ...f, [key]: value }));
+  };
+
+  const probarUrl = () => {
+    if (!form.url) return;
+    let u = form.url.trim();
+    if (!u.startsWith('http://') && !u.startsWith('https://')) {
+      u = 'https://' + u;
+    }
+    window.open(u, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <ModalWrapper
@@ -1281,6 +1339,23 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
       maxWidth="max-w-lg"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        {errorMessage && (
+          <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl flex items-start gap-3 text-red-900 dark:text-red-200 text-xs font-semibold animate-fade-in shadow-xs">
+            <span className="material-symbols-outlined text-red-600 text-xl shrink-0 select-none">error</span>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold">No se pudieron guardar los cambios</div>
+              <div className="text-[11.5px] font-normal text-red-700 dark:text-red-300 mt-0.5 leading-relaxed break-words">{errorMessage}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMessage(null)}
+              className="text-red-500 hover:text-red-800 transition-colors p-0.5"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
+        )}
+
         <Field label="Producto en Catálogo Interno *">
           <select required value={form.id_producto_propio}
             onChange={e => handleProductSelect(e.target.value)}

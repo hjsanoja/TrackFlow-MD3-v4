@@ -841,14 +841,14 @@ export default function Dashboard({ user, userDoc }) {
             Análisis de volatilidad, liderazgo de precios por cadena farmacéutica y tasas de cambio oficial.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Mode Switcher: Empaque vs Unidosis */}
           <div className="m3-segmented">
             <button
               onClick={() => setAnalisisMode('empaque')}
               className={`m3-segmented-item ${analisisMode === 'empaque' ? 'active' : ''}`}
             >
-              <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+              <span className="material-symbols-outlined text-[15px]">inventory_2</span>
               <span>Empaque</span>
             </button>
             <button
@@ -856,7 +856,7 @@ export default function Dashboard({ user, userDoc }) {
               className={`m3-segmented-item ${analisisMode === 'unidosis' ? 'active' : ''}`}
               title="Analizar precios normalizados por 1 unidad/tableta/dosis"
             >
-              <span className="material-symbols-outlined text-[14px]">medication</span>
+              <span className="material-symbols-outlined text-[15px]">medication</span>
               <span>Por Unidosis</span>
             </button>
           </div>
@@ -880,6 +880,7 @@ export default function Dashboard({ user, userDoc }) {
           <button
             onClick={downloadReport}
             className="m3-btn-outline"
+            title="Exportar reporte detallado en formato CSV"
           >
             <span className="material-symbols-outlined text-base">download</span>
             <span>Exportar CSV</span>
@@ -888,7 +889,8 @@ export default function Dashboard({ user, userDoc }) {
           {isAdmin && (
             <button
               onClick={() => setShowClearHistoryConfirm(true)}
-              className="touch-target px-4 py-2 bg-surface-low hover:bg-rose-50 text-rose-700 font-mono font-bold text-xs rounded-full border border-rose-200 transition-all flex items-center gap-1.5 shadow-xs"
+              className="m3-btn-danger-outline"
+              title="Vaciar histórico de precios y corridas de scraper"
             >
               <span className="material-symbols-outlined text-base">delete_sweep</span>
               <span>Borrar Historial</span>
