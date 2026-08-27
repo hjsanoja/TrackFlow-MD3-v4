@@ -1227,13 +1227,13 @@ export default function Dashboard({ user, userDoc }) {
             {/* Quick Audit: What changed today? */}
             <button
               onClick={() => setMostrarCambiosHoy(!mostrarCambiosHoy)}
-              className={`h-9 px-3.5 rounded-full text-xs font-bold transition-all inline-flex items-center gap-2 border active:scale-98 select-none ${
+              className={`h-10 px-4 rounded-full text-xs font-bold transition-all inline-flex items-center gap-2 border active:scale-98 select-none box-border ${
                 mostrarCambiosHoy 
                   ? 'bg-amber-600 border-amber-600 text-white font-extrabold shadow-xs' 
                   : 'bg-surface-container-lowest border-outline-variant text-on-surface hover:bg-surface-container-high hover:border-amber-500/50'
               }`}
             >
-              <span className={`material-symbols-outlined text-[16px] leading-none ${mostrarCambiosHoy ? 'text-white' : 'text-amber-600'}`}>
+              <span className={`material-symbols-outlined text-[17px] leading-none ${mostrarCambiosHoy ? 'text-white' : 'text-amber-600'}`}>
                 notifications_active
               </span>
               <span className="font-medium whitespace-nowrap">¿Qué cambió hoy?</span>
@@ -1251,14 +1251,14 @@ export default function Dashboard({ user, userDoc }) {
             {/* Filter: Ocultar productos sin precio */}
             <button
               onClick={() => setOcultarSinPrecios(!ocultarSinPrecios)}
-              className={`h-9 px-3.5 rounded-full text-xs font-bold transition-all inline-flex items-center gap-2 border active:scale-98 select-none ${
+              className={`h-10 px-4 rounded-full text-xs font-bold transition-all inline-flex items-center gap-2 border active:scale-98 select-none box-border ${
                 ocultarSinPrecios 
                   ? 'bg-primary border-primary text-on-primary font-extrabold shadow-xs' 
                   : 'bg-surface-container-lowest border-outline-variant text-on-surface hover:bg-surface-container-high hover:border-primary/50'
               }`}
               title="Quitar de la matriz los productos que no tienen ningún precio en ninguna cadena"
             >
-              <span className={`material-symbols-outlined text-[16px] leading-none ${ocultarSinPrecios ? 'text-on-primary' : 'text-primary'}`}>
+              <span className={`material-symbols-outlined text-[17px] leading-none ${ocultarSinPrecios ? 'text-on-primary' : 'text-primary'}`}>
                 {ocultarSinPrecios ? 'visibility_off' : 'filter_alt'}
               </span>
               <span className="font-medium whitespace-nowrap">Ocultar sin precio</span>
@@ -1302,7 +1302,7 @@ export default function Dashboard({ user, userDoc }) {
         </div>
 
         {/* Search & Categories Bar */}
-        <div className="px-5 py-3 bg-surface-low/50 border-b border-surface-variant flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="px-5 py-3.5 bg-surface-low/50 border-b border-surface-variant flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
             <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
             <input
@@ -1310,7 +1310,7 @@ export default function Dashboard({ user, userDoc }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar producto en la matriz..."
-              className="m3-input m3-input-search pr-8 h-9 text-xs"
+              className="m3-input m3-input-search pr-8 h-10 text-xs"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>
@@ -1318,11 +1318,11 @@ export default function Dashboard({ user, userDoc }) {
           </div>
 
           {/* Categorías */}
-          <div className="flex gap-1.5 flex-wrap items-center">
+          <div className="flex gap-2 flex-wrap items-center">
             <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase mr-1">Categoría:</span>
             {categorias.map(cat => (
               <button key={cat} onClick={() => setCategoriaSeleccionada(cat)}
-                className={`px-3 py-1 text-xs rounded-full border transition-all ${
+                className={`h-9 px-3.5 text-xs font-semibold rounded-full border transition-all inline-flex items-center justify-center ${
                   categoriaSeleccionada === cat 
                     ? 'bg-primary border-primary text-on-primary font-bold shadow-xs' 
                     : 'bg-white border-outline-variant/60 text-on-background hover:bg-surface-variant'

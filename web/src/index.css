@@ -333,12 +333,14 @@ body {
   /* Unified MD3 Expressive Form Controls */
   .m3-input {
     width: 100%;
+    height: 40px;
     background-color: var(--md-sys-color-surface-container-low);
     border: 1px solid var(--md-sys-color-outline-variant);
     border-radius: var(--md-sys-shape-medium);
     padding: 0.5rem 0.875rem;
     font-size: 0.875rem;
     color: var(--md-sys-color-on-surface);
+    box-sizing: border-box;
     transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast),
                 background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
     font-family: inherit;
@@ -356,6 +358,7 @@ body {
 
   .m3-select {
     width: 100%;
+    height: 40px;
     background-color: var(--md-sys-color-surface-container-low);
     border: 1px solid var(--md-sys-color-outline-variant);
     border-radius: var(--md-sys-shape-medium);
@@ -363,6 +366,7 @@ body {
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--md-sys-color-on-surface);
+    box-sizing: border-box;
     transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
     cursor: pointer;
   }

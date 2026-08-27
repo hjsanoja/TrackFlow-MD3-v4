@@ -14,9 +14,7 @@ import { dbUpsertUsuario, dbDeleteUsuario } from '../utils/dbClient';
 export const AVAILABLE_MENUS = [
   { id: '/', label: 'Dashboard', desc: 'Panel de Inteligencia y KPIs de precios', icon: 'dashboard', isDefault: true },
   { id: '/mapa-calor', label: 'Mapa de Calor', desc: 'Posición relativa frente al mercado', icon: 'thermostat', isDefault: true },
-  { id: '/analisis', label: 'Análisis', desc: 'Dispersión y variaciones de precios', icon: 'insights', isDefault: false },
-  { id: '/simulador', label: 'Simulador', desc: 'Simulador de escenarios y márgenes', icon: 'calculate', isDefault: false },
-  { id: '/hallazgos', label: 'Hallazgos', desc: 'Detección automática de oportunidades', icon: 'lightbulb', isDefault: false },
+  { id: '/experimental', label: 'Experimental', desc: 'Análisis, Simulador y Hallazgos (en evaluación)', icon: 'science', isDefault: false },
   { id: '/productos', label: 'Productos', desc: 'Catálogo de productos propios', icon: 'medication', isDefault: false },
   { id: '/competencia', label: 'Competencia', desc: 'Enlaces y comparativa de competencia', icon: 'link', isDefault: false },
   { id: '/cadenas', label: 'Cadenas', desc: 'Listado de cadenas y sucursales', icon: 'storefront', isDefault: false },

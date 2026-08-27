@@ -17,7 +17,7 @@ export default function Layout({ user, userDoc, children }) {
 
   const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    ? ['/', '/mapa-calor', '/experimental', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -25,6 +25,12 @@ export default function Layout({ user, userDoc, children }) {
   const isNavVisible = (item) => {
     if (item.adminOnly && !isAdmin) return false;
     if (isAdmin) return true;
+    if (item.to === '/experimental') {
+      return allowedMenuIds.includes('/experimental') || 
+             allowedMenuIds.includes('/analisis') || 
+             allowedMenuIds.includes('/simulador') || 
+             allowedMenuIds.includes('/hallazgos');
+    }
     return allowedMenuIds.includes(item.to);
   };
 
@@ -44,9 +50,7 @@ export default function Layout({ user, userDoc, children }) {
   const navItems = [
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
     { to: '/mapa-calor', label: 'Mapa de Calor', icon: 'thermostat', adminOnly: false },
-    { to: '/analisis', label: 'Análisis', icon: 'insights', adminOnly: false },
-    { to: '/simulador', label: 'Simulador', icon: 'calculate', adminOnly: false },
-    { to: '/hallazgos', label: 'Hallazgos', icon: 'lightbulb', adminOnly: false },
+    { to: '/experimental', label: 'Experimental', icon: 'science', adminOnly: false, badge: 'Labs' },
     { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: false },
     { to: '/competencia', label: 'Competencia', icon: 'link', adminOnly: false },
     { to: '/cadenas', label: 'Cadenas', icon: 'storefront', adminOnly: false },
@@ -68,8 +72,21 @@ export default function Layout({ user, userDoc, children }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSearchOpen]);
 
-  // Filtered search results
-  const filteredNav = navItems.filter(isNavVisible).filter(item => {
+  // Filtered search results (including submodules of Experimental)
+  const allSearchNavItems = [
+    ...navItems,
+    ...(isNavVisible({ to: '/experimental', adminOnly: false }) ? [
+      { to: '/experimental?tab=analisis', label: 'Análisis de Precios (Experimental)', icon: 'insights' },
+      { to: '/experimental?tab=simulador', label: 'Simulador de Precios (Experimental)', icon: 'calculate' },
+      { to: '/experimental?tab=hallazgos', label: 'Hallazgos de Mercado (Experimental)', icon: 'lightbulb' }
+    ] : [])
+  ];
+
+  const filteredNav = allSearchNavItems.filter(item => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (!item.to.includes('?tab=')) {
+      if (!isNavVisible(item)) return false;
+    }
     if (!searchQuery.trim()) return true;
     return item.label.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -124,17 +141,24 @@ export default function Layout({ user, userDoc, children }) {
                   to={item.to}
                   end={item.to === '/'}
                   className={({ isActive }) =>
-                    `flex items-center gap-4 px-4 py-3 rounded-full text-sm font-medium transition-all duration-150 ${
+                    `flex items-center justify-between px-4 py-3 rounded-full text-sm font-medium transition-all duration-150 ${
                       isActive
                         ? 'bg-primary-container text-on-primary-container font-bold shadow-elevation-1'
                         : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                     }`
                   }
                 >
-                  <span className="material-symbols-outlined select-none text-[22px] leading-none">
-                    {item.icon}
-                  </span>
-                  <span>{item.label}</span>
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span className="material-symbols-outlined select-none text-[22px] leading-none shrink-0">
+                      {item.icon}
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
+                      {item.badge}
+                    </span>
+                  )}
                 </NavLink>
               ))}
           </nav>

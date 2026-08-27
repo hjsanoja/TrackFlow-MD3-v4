@@ -1493,7 +1493,7 @@ export default function Simulador({ user, userDoc }) {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                key={`sim-bar-${selectedProductKey}-${priceGapData.length}`}
+                key={`sim-bar-${selectedProduct?.producto?.id || 'all'}-${priceGapData.length}`}
                 data={priceGapData} 
                 margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
               >

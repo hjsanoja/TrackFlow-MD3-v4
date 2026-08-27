@@ -6,6 +6,7 @@ import { auth, db } from './firebase';
 import { supabase } from './supabase';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Experimental from './pages/Experimental';
 import Analisis from './pages/Analisis';
 import Simulador from './pages/Simulador';
 import Hallazgos from './pages/Hallazgos';
@@ -209,13 +210,19 @@ function AppContent() {
 
   const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    ? ['/', '/mapa-calor', '/experimental', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
 
   const isAllowed = (path) => {
     if (isAdmin) return true;
+    if (path === '/experimental') {
+      return allowedMenuIds.includes('/experimental') || 
+             allowedMenuIds.includes('/analisis') || 
+             allowedMenuIds.includes('/simulador') || 
+             allowedMenuIds.includes('/hallazgos');
+    }
     return allowedMenuIds.includes(path);
   };
 
@@ -227,9 +234,10 @@ function AppContent() {
         <Routes>
           <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
           <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
-          <Route path="/analisis" element={isAllowed('/analisis') ? <Analisis user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
-          <Route path="/simulador" element={isAllowed('/simulador') ? <Simulador user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
-          <Route path="/hallazgos" element={isAllowed('/hallazgos') ? <Hallazgos user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/experimental" element={isAllowed('/experimental') ? <Experimental user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/analisis" element={<Navigate to="/experimental?tab=analisis" replace />} />
+          <Route path="/simulador" element={<Navigate to="/experimental?tab=simulador" replace />} />
+          <Route path="/hallazgos" element={<Navigate to="/experimental?tab=hallazgos" replace />} />
           <Route path="/productos" element={isAllowed('/productos') ? <Productos /> : <Navigate to={fallbackPath} />} />
           <Route path="/competencia" element={isAllowed('/competencia') ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
           <Route path="/cadenas" element={isAllowed('/cadenas') ? <Cadenas /> : <Navigate to={fallbackPath} />} />
