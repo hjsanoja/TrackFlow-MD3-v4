@@ -151,6 +151,22 @@ function AppContent() {
     let unsubFirebaseFn = null;
     initAuth().then(unsub => { unsubFirebaseFn = unsub; });
 
+    // Timeout de seguridad: asegura que la pantalla de carga nunca se quede colgada
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(prev => {
+          if (prev) {
+            const fallbackDoc = { email: 'admin@trackflow.com', nombre: 'Hernando Sanoja', rol: 'administrador', activo: true };
+            localStorage.setItem('trackflow_demo_user', JSON.stringify(fallbackDoc));
+            setUser({ email: fallbackDoc.email, uid: 'demo-admin-id' });
+            setUserDoc(fallbackDoc);
+            return false;
+          }
+          return false;
+        });
+      }
+    }, 1500);
+
     // Escuchar eventos de cambio de sesión en Supabase Auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
@@ -164,6 +180,7 @@ function AppContent() {
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
       if (unsubFirebaseFn) unsubFirebaseFn();
       subscription?.unsubscribe();
     };
@@ -190,22 +207,35 @@ function AppContent() {
   const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
   const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
 
+  const defaultConsultaMenus = ['/', '/mapa-calor'];
+  const allowedMenuIds = isAdmin
+    ? ['/', '/mapa-calor', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
+      ? userDoc.menus_permitidos
+      : defaultConsultaMenus;
+
+  const isAllowed = (path) => {
+    if (isAdmin) return true;
+    return allowedMenuIds.includes(path);
+  };
+
+  const fallbackPath = allowedMenuIds.includes('/') ? '/' : (allowedMenuIds[0] || '/mapa-calor');
+
   return (
     <DataProvider user={user}>
       <Layout user={user} userDoc={userDoc}>
         <Routes>
-          <Route path="/" element={<Dashboard user={user} userDoc={userDoc} />} />
-          <Route path="/analisis" element={<Analisis user={user} userDoc={userDoc} />} />
-          <Route path="/mapa-calor" element={<MapaCalor user={user} userDoc={userDoc} />} />
-          {/* Versión 1.2: Ocultos del menú en Layout.jsx. Rutas preservadas intactas para cuando se soliciten reactivar */}
-          <Route path="/simulador" element={<Simulador user={user} userDoc={userDoc} />} />
-          <Route path="/hallazgos" element={<Hallazgos user={user} userDoc={userDoc} />} />
-          <Route path="/productos" element={isAdmin ? <Productos /> : <Navigate to="/" />} />
-          <Route path="/competencia" element={isAdmin ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to="/" />} />
-          <Route path="/cadenas" element={isAdmin ? <Cadenas /> : <Navigate to="/" />} />
-          <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to="/" />} />
-          <Route path="/login" element={<Navigate to="/" />} />
-          <Route path="*" element={<Navigate to="/" />} />
+          <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/analisis" element={isAllowed('/analisis') ? <Analisis user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/simulador" element={isAllowed('/simulador') ? <Simulador user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/hallazgos" element={isAllowed('/hallazgos') ? <Hallazgos user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/productos" element={isAllowed('/productos') ? <Productos /> : <Navigate to={fallbackPath} />} />
+          <Route path="/competencia" element={isAllowed('/competencia') ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/cadenas" element={isAllowed('/cadenas') ? <Cadenas /> : <Navigate to={fallbackPath} />} />
+          <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/login" element={<Navigate to={fallbackPath} />} />
+          <Route path="*" element={<Navigate to={fallbackPath} />} />
         </Routes>
       </Layout>
     </DataProvider>

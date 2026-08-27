@@ -51,7 +51,10 @@ export default function MapaCalor({ user, userDoc }) {
       .filter(p => p.activo)
       .map(p => {
         // Find competitor items for this product
-        const compItems = productosCompetencia.filter(pc => pc.id_producto_propio === p.id_interno && pc.activo);
+        const pId = String(p.id_interno || p.id || '').trim();
+        const compItems = pId 
+          ? productosCompetencia.filter(pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === pId)
+          : [];
         
         // Filter competency records by selected chain (Point 7 requirement)
         const compItemsFiltered = compItems.filter(c => {
@@ -264,6 +267,58 @@ export default function MapaCalor({ user, userDoc }) {
     }
   };
 
+  const downloadReport = () => {
+    if (!filteredRows || filteredRows.length === 0) return;
+
+    let csv = 'Código Interno,Producto,Principio Activo,Laboratorio,Unidad de Negocio,Tipo de Mercado,Modo de Análisis,Precio Propio (USD),Precio Propio (Bs),Mínimo Mercado (USD),Mínimo Mercado (Bs),Promedio Mercado (USD),Promedio Mercado (Bs),Máximo Mercado (USD),Máximo Mercado (Bs),Desviación vs Promedio (%),Posicionamiento,Tasa BCV,Fecha Reporte\n';
+
+    filteredRows.forEach(item => {
+      const p = item.producto;
+      const pPropioUsd = item.propioPriceUsd !== null ? item.propioPriceUsd.toFixed(2) : '—';
+      const pPropioBs = (item.propioPriceUsd !== null && bcv.rate) ? (item.propioPriceUsd * bcv.rate).toFixed(2) : '—';
+      const pMinUsd = item.absoluteMin ? item.absoluteMin.toFixed(2) : '—';
+      const pMinBs = (item.absoluteMin && bcv.rate) ? (item.absoluteMin * bcv.rate).toFixed(2) : '—';
+      const pAvgUsd = item.avgCompUsd ? item.avgCompUsd.toFixed(2) : '—';
+      const pAvgBs = (item.avgCompUsd && bcv.rate) ? (item.avgCompUsd * bcv.rate).toFixed(2) : '—';
+      const pMaxUsd = item.absoluteMax ? item.absoluteMax.toFixed(2) : '—';
+      const pMaxBs = (item.absoluteMax && bcv.rate) ? (item.absoluteMax * bcv.rate).toFixed(2) : '—';
+      const devPct = item.diffAvgPercent !== null ? `${item.diffAvgPercent >= 0 ? '+' : ''}${item.diffAvgPercent.toFixed(1)}%` : '—';
+
+      const row = [
+        p.id_interno || p.id || '',
+        p.nombre,
+        p.principio_activo || '—',
+        p.laboratorio || '—',
+        p.unidad_negocio || '—',
+        p.market_type || 'Genérico',
+        analisisMode === 'unidosis' ? 'Por Unidosis' : 'Empaque Completo',
+        pPropioUsd,
+        pPropioBs,
+        pMinUsd,
+        pMinBs,
+        pAvgUsd,
+        pAvgBs,
+        pMaxUsd,
+        pMaxBs,
+        devPct,
+        item.posicionamientoLabel,
+        bcv.rate ? bcv.rate.toFixed(2) : '—',
+        new Date().toLocaleDateString('es-VE')
+      ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',') + '\n';
+      csv += row;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Reporte_Mapa_Calor_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       {/* Page Header */}
@@ -281,7 +336,7 @@ export default function MapaCalor({ user, userDoc }) {
           </p>
         </div>
 
-        {/* Unified Mode Toggle & Currency switcher */}
+        {/* Unified Mode Toggle, Currency switcher & Export Button */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="m3-segmented">
             <button
@@ -314,6 +369,15 @@ export default function MapaCalor({ user, userDoc }) {
               VES (Bs)
             </button>
           </div>
+
+          <button
+            onClick={downloadReport}
+            className="m3-btn-outline"
+            title="Exportar reporte de mapa de calor en formato CSV"
+          >
+            <span className="material-symbols-outlined text-base">download</span>
+            <span>Exportar CSV</span>
+          </button>
         </div>
       </div>
 

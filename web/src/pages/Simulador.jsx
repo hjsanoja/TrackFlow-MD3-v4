@@ -47,7 +47,10 @@ export default function Simulador({ user, userDoc }) {
     return productos
       .filter(p => p.activo)
       .map(p => {
-        const compItems = productosCompetencia.filter(pc => pc.id_producto_propio === p.id_interno && pc.activo);
+        const pId = String(p.id_interno || p.id || '').trim();
+        const compItems = pId 
+          ? productosCompetencia.filter(pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === pId)
+          : [];
         
         const pUnidosisCount = parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis || p.unidades_empaque);
         const pUnitFactor = analisisMode === 'unidosis' ? Math.max(pUnidosisCount, 1) : 1;

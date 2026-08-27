@@ -13,18 +13,37 @@ import {
 const COLORS = ['#040d53', '#70C145', '#ba1a1a', '#004ecb', '#002f6c', '#0891b2', '#db2777'];
 
 function InfoTooltip({ text, align = 'center' }) {
+  const [open, setOpen] = useState(false);
   const alignClass = align === 'left' 
     ? 'left-0 translate-x-0' 
     : align === 'right' 
-      ? 'right-0 translate-x-0 animate-fade-in' 
-      : 'left-1/2 -translate-x-1/2 animate-fade-in';
+      ? 'right-0 translate-x-0' 
+      : 'left-1/2 -translate-x-1/2';
       
   return (
-    <div className="relative group inline-block ml-1 align-middle leading-none">
-      <span className="material-symbols-outlined text-[15px] text-[#464650] hover:text-[#040d53] transition-colors cursor-help select-none">
-        info
-      </span>
-      <div className={`absolute bottom-full mb-2 w-64 p-3 bg-[#1c1b1f] text-white text-[10.5px] leading-relaxed rounded-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 shadow-xl z-50 font-normal normal-case tracking-normal ${alignClass}`}>
+    <div 
+      className="relative group inline-block ml-1 align-middle leading-none"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(prev => !prev);
+        }}
+        className="p-0 bg-transparent border-0 inline-flex items-center justify-center cursor-pointer focus:outline-none"
+        aria-label="Información"
+      >
+        <span className="material-symbols-outlined text-[15px] text-[#464650] hover:text-[#040d53] transition-colors select-none">
+          info
+        </span>
+      </button>
+      <div 
+        className={`absolute bottom-full mb-2 w-64 p-3 bg-[#1c1b1f] text-white text-[10.5px] leading-relaxed rounded-xl shadow-xl z-50 font-normal normal-case tracking-normal transition-all duration-150 pointer-events-none ${
+          open ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible'
+        } ${alignClass}`}
+      >
         {text}
         <div className={`absolute top-full border-4 border-transparent border-t-[#1c1b1f] ${
           align === 'left' ? 'left-3' : align === 'right' ? 'right-3' : 'left-1/2 -translate-x-1/2'
@@ -145,9 +164,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const handleSelectProduct = (newProd) => {
     setActiveProduct(newProd);
     if (productosCompetencia && productosCompetencia.length) {
-      const compItems = productosCompetencia.filter(
-        pc => pc.id_producto_propio === newProd.id_interno && pc.activo
-      );
+      const targetId = String(newProd.id_interno || newProd.id || '').trim();
+      const compItems = targetId ? productosCompetencia.filter(
+        pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === targetId
+      ) : [];
       setActiveCompetencia(compItems);
     } else {
       setActiveCompetencia([]);
@@ -731,7 +751,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   ) : (
                     filteredProducts.map(p => {
                       const isSelected = p.id_interno === activeProduct.id_interno;
-                      const compCount = productosCompetencia.filter(pc => pc.id_producto_propio === p.id_interno && pc.activo).length;
+                      const pId = String(p.id_interno || p.id || '').trim();
+                      const compCount = pId ? productosCompetencia.filter(pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === pId).length : 0;
 
                       return (
                         <button

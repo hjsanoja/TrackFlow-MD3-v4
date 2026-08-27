@@ -15,6 +15,19 @@ export default function Layout({ user, userDoc, children }) {
   const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
   const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
 
+  const defaultConsultaMenus = ['/', '/mapa-calor'];
+  const allowedMenuIds = isAdmin
+    ? ['/', '/mapa-calor', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
+      ? userDoc.menus_permitidos
+      : defaultConsultaMenus;
+
+  const isNavVisible = (item) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (isAdmin) return true;
+    return allowedMenuIds.includes(item.to);
+  };
+
   const handleLogout = async () => {
     try {
       localStorage.removeItem('trackflow_demo_user');
@@ -30,11 +43,13 @@ export default function Layout({ user, userDoc, children }) {
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
-    { to: '/analisis', label: 'Análisis', icon: 'insights', adminOnly: false },
     { to: '/mapa-calor', label: 'Mapa de Calor', icon: 'thermostat', adminOnly: false },
-    { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: true },
-    { to: '/competencia', label: 'Competencia', icon: 'link', adminOnly: true },
-    { to: '/cadenas', label: 'Cadenas', icon: 'storefront', adminOnly: true },
+    { to: '/analisis', label: 'Análisis', icon: 'insights', adminOnly: false },
+    { to: '/simulador', label: 'Simulador', icon: 'calculate', adminOnly: false },
+    { to: '/hallazgos', label: 'Hallazgos', icon: 'lightbulb', adminOnly: false },
+    { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: false },
+    { to: '/competencia', label: 'Competencia', icon: 'link', adminOnly: false },
+    { to: '/cadenas', label: 'Cadenas', icon: 'storefront', adminOnly: false },
     { to: '/usuarios', label: 'Usuarios', icon: 'group', adminOnly: true },
   ];
 
@@ -54,8 +69,7 @@ export default function Layout({ user, userDoc, children }) {
   }, [isSearchOpen]);
 
   // Filtered search results
-  const filteredNav = navItems.filter(item => {
-    if (item.adminOnly && !isAdmin) return false;
+  const filteredNav = navItems.filter(isNavVisible).filter(item => {
     if (!searchQuery.trim()) return true;
     return item.label.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -103,7 +117,7 @@ export default function Layout({ user, userDoc, children }) {
               Menú Principal
             </div>
             {navItems
-              .filter(item => !item.adminOnly || isAdmin)
+              .filter(isNavVisible)
               .map(item => (
                 <NavLink
                   key={item.to}
@@ -143,7 +157,9 @@ export default function Layout({ user, userDoc, children }) {
                       <div className="text-sm font-bold text-on-surface truncate font-display">{displayName}</div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="m3-live-indicator"></span>
-                        <span className="text-[10px] text-on-surface-variant uppercase font-mono font-semibold tracking-wider">{userDoc?.rol || 'administrador'}</span>
+                        <span className="text-[10px] text-on-surface-variant uppercase font-mono font-semibold tracking-wider">
+                          {isAdmin ? 'ADMINISTRADOR' : 'USUARIO CONSULTA'}
+                        </span>
                       </div>
                     </div>
                   </>
@@ -302,7 +318,7 @@ export default function Layout({ user, userDoc, children }) {
       {/* Mobile Bottom Navigation Bar (MD3 Style for Mobile Touch Usability) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-container-lowest/95 backdrop-blur-md border-t border-outline-variant/60 flex items-center justify-around py-1.5 px-2 shadow-lg">
         {navItems
-          .filter(item => !item.adminOnly || isAdmin)
+          .filter(isNavVisible)
           .slice(0, 5)
           .map(item => (
             <NavLink

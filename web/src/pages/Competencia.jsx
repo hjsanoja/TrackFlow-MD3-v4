@@ -32,12 +32,23 @@ export default function Competencia({ user, userDoc }) {
     productosCompetencia: items,
     productos,
     cadenas,
+    bcvRates,
     loadingInitial: loading,
     refreshData: cargar,
     refreshCompetencia,
     refreshProductos,
     setProductosCompetencia
   } = useData();
+
+  const currentBcvRate = useMemo(() => {
+    if (!bcvRates || bcvRates.length === 0) return 0;
+    const sorted = [...bcvRates].sort((a, b) => {
+      const dA = a.rawDate ? new Date(a.rawDate) : new Date(0);
+      const dB = b.rawDate ? new Date(b.rawDate) : new Date(0);
+      return dA - dB;
+    });
+    return sorted[sorted.length - 1]?.valor || 0;
+  }, [bcvRates]);
 
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState('');
@@ -68,19 +79,33 @@ export default function Competencia({ user, userDoc }) {
     }
   }, [searchParams]);
 
+  const prodMap = useMemo(() => {
+    const map = new Map();
+    (productos || []).forEach(p => {
+      const key = String(p.id_interno || p.id || '').trim();
+      if (key) map.set(key, p.nombre || key);
+    });
+    return map;
+  }, [productos]);
+
   const filtrados = useMemo(() => {
     const term = search.toLowerCase().trim();
     return items.filter(it => {
       if (filtroCadena !== 'todas' && it.cadena !== filtroCadena) return false;
-      if (filtroProducto !== 'todos' && it.id_producto_propio !== filtroProducto) return false;
+      if (filtroProducto !== 'todos' && String(it.id_producto_propio).trim() !== String(filtroProducto).trim()) return false;
       if (filtroTipo !== 'todos' && it.tipo !== filtroTipo) return false;
       if (!term) return true;
+      const pNombre = (prodMap.get(String(it.id_producto_propio).trim()) || '').toLowerCase();
+      const pId = String(it.id_producto_propio || '').toLowerCase();
       return (
         (it.marca || '').toLowerCase().includes(term) ||
-        (it.url || '').toLowerCase().includes(term)
+        (it.url || '').toLowerCase().includes(term) ||
+        (it.laboratorio || '').toLowerCase().includes(term) ||
+        pNombre.includes(term) ||
+        pId.includes(term)
       );
     });
-  }, [items, search, filtroCadena, filtroProducto, filtroTipo]);
+  }, [items, search, filtroCadena, filtroProducto, filtroTipo, prodMap]);
 
   const ordenados = useMemo(() => {
     return [...filtrados].sort((a, b) => {
@@ -616,25 +641,48 @@ export default function Competencia({ user, userDoc }) {
 
   const handleExportarEnlaces = () => {
     const headers = [
+      { label: 'ID Producto Propio', key: 'id_producto_propio' },
       { label: 'Producto Propio', key: 'producto_propio' },
       { label: 'Cadena/Competidor', key: 'cadena' },
       { label: 'Marca/Línea', key: 'marca' },
       { label: 'Tipo', key: 'tipo_str' },
       { label: 'Precio Full (Bs)', key: 'ultimo_precio_full_bs' },
       { label: 'Precio Desc (Bs)', key: 'ultimo_precio_desc_bs' },
-      { label: 'Estado del Link', key: 'estado_str' },
+      { label: 'Precio Full (USD)', key: 'ultimo_precio_full_usd' },
+      { label: 'Precio Desc (USD)', key: 'ultimo_precio_desc_usd' },
       { label: 'URL Monitoreada', key: 'url' }
     ];
 
-    const dataRows = ordenados.map(it => ({
-      ...it,
-      producto_propio: productoNombre(it.id_producto_propio),
-      tipo_str: it.tipo === 'propio' ? 'MI MARCA' : 'COMPETENCIA',
-      ultimo_precio_full_bs: it.ultimo_precio_full_bs || '—',
-      ultimo_precio_desc_bs: it.ultimo_precio_desc_bs || '—',
-      estado_str: it.ultimo_exito ? 'OK / ACTIVO' : 'FALLO LECTURA',
-      url: it.url || ''
-    }));
+    const dataRows = ordenados.map(it => {
+      const fullBs = (it.ultimo_precio_full_bs !== null && it.ultimo_precio_full_bs !== undefined && it.ultimo_precio_full_bs !== '')
+        ? Number(it.ultimo_precio_full_bs)
+        : null;
+      const descBs = (it.ultimo_precio_desc_bs !== null && it.ultimo_precio_desc_bs !== undefined && it.ultimo_precio_desc_bs !== '')
+        ? Number(it.ultimo_precio_desc_bs)
+        : null;
+
+      const fullUsd = (fullBs && currentBcvRate > 0)
+        ? (fullBs / currentBcvRate).toFixed(2)
+        : (it.ultimo_precio_full_usd !== null && it.ultimo_precio_full_usd !== undefined && it.ultimo_precio_full_usd !== '' ? Number(it.ultimo_precio_full_usd).toFixed(2) : '');
+
+      const descUsd = (descBs && currentBcvRate > 0)
+        ? (descBs / currentBcvRate).toFixed(2)
+        : (it.ultimo_precio_desc_usd !== null && it.ultimo_precio_desc_usd !== undefined && it.ultimo_precio_desc_usd !== '' ? Number(it.ultimo_precio_desc_usd).toFixed(2) : '');
+
+      return {
+        ...it,
+        id_producto_propio: it.id_producto_propio || '',
+        producto_propio: productoNombre(it.id_producto_propio),
+        cadena: it.cadena || '',
+        marca: it.marca || '',
+        tipo_str: it.tipo === 'propio' ? 'MI MARCA' : 'COMPETENCIA',
+        ultimo_precio_full_bs: fullBs !== null ? fullBs : '',
+        ultimo_precio_desc_bs: descBs !== null ? descBs : '',
+        ultimo_precio_full_usd: fullUsd,
+        ultimo_precio_desc_usd: descUsd,
+        url: it.url || ''
+      };
+    });
 
     exportToCSV('Enlaces_Competencia_Monitoreados', headers, dataRows);
     addToast(`Exportados ${dataRows.length} enlaces a CSV.`, 'success');

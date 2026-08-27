@@ -11,9 +11,30 @@ import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { dbUpsertUsuario, dbDeleteUsuario } from '../utils/dbClient';
 
+export const AVAILABLE_MENUS = [
+  { id: '/', label: 'Dashboard', desc: 'Panel de Inteligencia y KPIs de precios', icon: 'dashboard', isDefault: true },
+  { id: '/mapa-calor', label: 'Mapa de Calor', desc: 'Posición relativa frente al mercado', icon: 'thermostat', isDefault: true },
+  { id: '/analisis', label: 'Análisis', desc: 'Dispersión y variaciones de precios', icon: 'insights', isDefault: false },
+  { id: '/simulador', label: 'Simulador', desc: 'Simulador de escenarios y márgenes', icon: 'calculate', isDefault: false },
+  { id: '/hallazgos', label: 'Hallazgos', desc: 'Detección automática de oportunidades', icon: 'lightbulb', isDefault: false },
+  { id: '/productos', label: 'Productos', desc: 'Catálogo de productos propios', icon: 'medication', isDefault: false },
+  { id: '/competencia', label: 'Competencia', desc: 'Enlaces y comparativa de competencia', icon: 'link', isDefault: false },
+  { id: '/cadenas', label: 'Cadenas', desc: 'Listado de cadenas y sucursales', icon: 'storefront', isDefault: false },
+];
+
+export const DEFAULT_CONSULTA_MENUS = ['/', '/mapa-calor'];
+
 const ROLES = [
-  { value: 'administrador', label: 'Administrador', desc: 'Acceso completo, puede editar todo' },
-  { value: 'lector', label: 'Lector', desc: 'Solo ver y exportar datos' },
+  { 
+    value: 'administrador', 
+    label: 'Administrador', 
+    desc: 'Acceso completo: administración de usuarios, robots de extracción, edición y configuración' 
+  },
+  { 
+    value: 'consulta', 
+    label: 'Usuario de Consulta', 
+    desc: 'Acceso restringido: solo visualiza los menús autorizados y descarga reportes' 
+  },
 ];
 
 function emailToDocId(email) {
@@ -92,11 +113,19 @@ export default function Usuarios({ userDoc }) {
         }
       }
 
+      const rolNormalizado = data.rol === 'administrador' ? 'administrador' : 'consulta';
+      const menusPermitidos = rolNormalizado === 'administrador'
+        ? AVAILABLE_MENUS.map(m => m.id)
+        : (Array.isArray(data.menus_permitidos) && data.menus_permitidos.length > 0
+            ? data.menus_permitidos
+            : DEFAULT_CONSULTA_MENUS);
+
       await dbUpsertUsuario({
         id: docId,
         email,
         nombre: data.nombre.trim(),
-        rol: data.rol,
+        rol: rolNormalizado,
+        menus_permitidos: menusPermitidos,
         recibe_alertas_inmediatas: data.recibe_alertas_inmediatas,
         recibe_resumen_diario: data.recibe_resumen_diario,
         activo: data.activo,
@@ -104,8 +133,8 @@ export default function Usuarios({ userDoc }) {
 
       addToast(
         isNew
-          ? `Usuario creado y registrado correctamente.`
-          : 'Cambios guardados con éxito',
+          ? `Usuario de ${rolNormalizado === 'administrador' ? 'administrador' : 'consulta'} creado correctamente.`
+          : 'Cambios de usuario y permisos guardados con éxito',
         'success'
       );
       setEditing(null);
@@ -185,11 +214,11 @@ export default function Usuarios({ userDoc }) {
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-primary text-3xl">manage_accounts</span>
             <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
-              Usuarios Autorizados
+              Usuarios y Permisos de Acceso
             </h1>
           </div>
           <p className="text-xs text-on-surface-variant font-sans">
-            Administra los roles de acceso, credenciales y perfiles de alertas del sistema.
+            Administra los roles de acceso, usuarios de consulta con menús restringidos y perfiles de descarga de reportes.
           </p>
         </div>
         <button
@@ -201,16 +230,15 @@ export default function Usuarios({ userDoc }) {
         </button>
       </div>
 
-      <div className="bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-xs text-on-background space-y-1.5 shadow-xs">
+      {/* Info banner explaining roles and menu access */}
+      <div className="bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-xs text-on-background space-y-2 shadow-xs">
         <div className="flex items-center gap-2 font-mono font-bold text-sm text-primary">
-          <span className="material-symbols-outlined text-lg leading-none">info</span>
-          <span>Cómo registrar y dar acceso a un colaborador</span>
+          <span className="material-symbols-outlined text-lg leading-none">verified_user</span>
+          <span>Gestión de Roles y Menús para Usuarios de Consulta</span>
         </div>
-        <ol className="list-decimal ml-5 mt-1 space-y-1 text-xs text-on-surface-variant font-sans">
-          <li>Haz clic en el botón <strong>"Invitar Usuario"</strong> para registrar sus datos y crear automáticamente su cuenta.</li>
-          <li>Especifica una contraseña inicial segura (mínimo 6 caracteres) para que el nuevo colaborador pueda iniciar sesión de inmediato.</li>
-          <li>Si un colaborador olvida su contraseña, haz clic en el botón <strong>"Clave"</strong> junto a su nombre para enviarle un correo automático para restablecerla.</li>
-        </ol>
+        <p className="text-xs text-on-surface-variant font-sans leading-relaxed">
+          Puedes agregar <strong>Usuarios de Consulta</strong> para colaboradores o clientes. Por defecto, tendrán acceso exclusivo a <strong>Mapa de Calor</strong> y <strong>Dashboard</strong> para visualizar indicadores y descargar reportes oficiales, sin acceso a módulos de configuración o edición.
+        </p>
       </div>
 
       {/* Main Grid View */}
@@ -222,7 +250,7 @@ export default function Usuarios({ userDoc }) {
                 <tr>
                   <th>Nombre</th>
                   <th>Email</th>
-                  <th>Rol</th>
+                  <th>Rol y Menús Permitidos</th>
                   <th className="text-center">Alertas Inmediatas</th>
                   <th className="text-center">Resumen Diario</th>
                   <th className="text-center">Estado</th>
@@ -234,7 +262,7 @@ export default function Usuarios({ userDoc }) {
                   <tr key={n}>
                     <td><div className="h-4 bg-gray-200 rounded w-32"></div></td>
                     <td><div className="h-4 bg-gray-200 rounded w-48"></div></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-28"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-36"></div></td>
                     <td className="text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
                     <td className="text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
                     <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
@@ -251,7 +279,7 @@ export default function Usuarios({ userDoc }) {
             </div>
             <div>
               <div className="font-bold text-on-surface font-display text-base">Aún no hay usuarios registrados</div>
-              <div className="text-xs text-on-surface-variant mt-0.5">Invita a miembros del equipo para delegar acceso y configurar alertas.</div>
+              <div className="text-xs text-on-surface-variant mt-0.5">Invita a miembros del equipo para delegar acceso y configurar permisos de menú.</div>
             </div>
             <button onClick={() => setEditing('new')} className="m3-btn-primary h-8 px-4 text-xs mt-1">
               + Invitar Primer Usuario
@@ -264,7 +292,7 @@ export default function Usuarios({ userDoc }) {
                 <tr>
                   <th>Nombre</th>
                   <th>Email</th>
-                  <th>Rol</th>
+                  <th>Rol y Menús Permitidos</th>
                   <th className="text-center">Alertas Inmediatas</th>
                   <th className="text-center">Resumen Diario</th>
                   <th className="text-center">Estado</th>
@@ -274,39 +302,74 @@ export default function Usuarios({ userDoc }) {
               <tbody className="divide-y divide-surface-variant">
                 {usuarios.map(u => {
                   const isCurrent = u.email === userDoc?.email;
+                  const isUserAdmin = u.rol === 'administrador';
+                  const userPermittedMenus = isUserAdmin
+                    ? AVAILABLE_MENUS.map(m => m.id)
+                    : (Array.isArray(u.menus_permitidos) && u.menus_permitidos.length > 0
+                        ? u.menus_permitidos
+                        : DEFAULT_CONSULTA_MENUS);
+
                   return (
                     <tr key={u.id} className="hover:bg-surface-low transition-colors">
-                      <td>
-                        <span className="font-bold text-on-surface font-display text-sm">{u.nombre}</span>
-                        {isCurrent && (
-                          <span className="ml-2 text-[10px] bg-primary-container text-on-primary-container font-mono uppercase font-bold px-2 py-0.5 rounded-full">
-                            Tú
-                          </span>
-                        )}
+                      <td className="align-top py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-on-surface font-display text-sm">{u.nombre}</span>
+                          {isCurrent && (
+                            <span className="text-[10px] bg-primary-container text-on-primary-container font-mono uppercase font-bold px-2 py-0.5 rounded-full">
+                              Tú
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="font-mono text-xs text-on-surface-variant">{u.email}</td>
-                      <td>
-                        <span className={`text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full ${
-                          u.rol === 'administrador' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
-                        }`}>
-                          {u.rol}
-                        </span>
+                      <td className="font-mono text-xs text-on-surface-variant align-top py-3.5">{u.email}</td>
+                      <td className="align-top py-3.5 min-w-[220px]">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[10px] uppercase font-mono font-bold px-2.5 py-0.5 rounded-full border ${
+                              isUserAdmin 
+                                ? 'bg-primary/10 text-primary border-primary/30' 
+                                : 'bg-sky-50 text-sky-800 border-sky-200'
+                            }`}>
+                              {isUserAdmin ? 'Administrador' : 'Usuario Consulta'}
+                            </span>
+                            {isUserAdmin && (
+                              <span className="text-[10px] text-on-surface-variant font-mono">
+                                (Acceso Total)
+                              </span>
+                            )}
+                          </div>
+
+                          {!isUserAdmin && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {AVAILABLE_MENUS.filter(m => userPermittedMenus.includes(m.id)).map(m => (
+                                <span
+                                  key={m.id}
+                                  className="inline-flex items-center gap-1 text-[10px] bg-surface-container-high text-on-surface font-sans px-2 py-0.5 rounded-md border border-outline-variant/50"
+                                  title={`Acceso a: ${m.label}`}
+                                >
+                                  <span className="material-symbols-outlined text-[11px] text-primary">{m.icon}</span>
+                                  <span>{m.label}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </td>
-                      <td className="text-center">
+                      <td className="text-center align-top py-3.5">
                         {u.recibe_alertas_inmediatas ? (
                           <span className="material-symbols-outlined text-base text-secondary select-none">check_circle</span>
                         ) : (
                           <span className="text-on-surface-variant/40 font-mono select-none">—</span>
                         )}
                       </td>
-                      <td className="text-center">
+                      <td className="text-center align-top py-3.5">
                         {u.recibe_resumen_diario ? (
                           <span className="material-symbols-outlined text-base text-secondary select-none">check_circle</span>
                         ) : (
                           <span className="text-on-surface-variant/40 font-mono select-none">—</span>
                         )}
                       </td>
-                      <td className="text-center">
+                      <td className="text-center align-top py-3.5">
                         <button onClick={() => handleToggleActivo(u)} disabled={isCurrent && u.activo}
                           className={`text-[10px] uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
                             u.activo ? 'bg-secondary/10 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
@@ -314,7 +377,7 @@ export default function Usuarios({ userDoc }) {
                           {u.activo ? 'Activo' : 'Inactivo'}
                         </button>
                       </td>
-                      <td className="text-right whitespace-nowrap">
+                      <td className="text-right whitespace-nowrap align-top py-3.5">
                         <button onClick={() => setEditing(u.id)}
                           className="text-xs text-primary hover:text-primary/80 font-bold mr-4 inline-flex items-center gap-1">
                           <span className="material-symbols-outlined text-sm">edit</span>
@@ -382,7 +445,7 @@ export default function Usuarios({ userDoc }) {
         title="¿Eliminar Usuario?"
         message={
           confirmDelete 
-            ? `¿Estás seguro de que deseas eliminar a "${confirmDelete.nombre}" (${confirmDelete.email})?\n\nIMPORTANTE: El documento se borrará de Firestore, pero su cuenta de Firebase Auth seguirá activa. Para impedir el inicio de sesión completamente, también debes eliminarla en Firebase Console → Authentication.`
+            ? `¿Estás seguro de que deseas eliminar a "${confirmDelete.nombre}" (${confirmDelete.email})?`
             : ''
         }
         confirmText="Eliminar"
@@ -405,11 +468,17 @@ export default function Usuarios({ userDoc }) {
 
 function UsuarioModal({ usuario, onSave, onClose }) {
   const isNew = !usuario;
+  const initialRole = usuario ? (usuario.rol === 'administrador' ? 'administrador' : 'consulta') : 'consulta';
+  const initialMenus = Array.isArray(usuario?.menus_permitidos) && usuario.menus_permitidos.length > 0
+    ? usuario.menus_permitidos
+    : DEFAULT_CONSULTA_MENUS;
+
   const [form, setForm] = useState({
     email: usuario?.email || '',
     nombre: usuario?.nombre || '',
     password: '',
-    rol: usuario?.rol || 'lector',
+    rol: initialRole,
+    menus_permitidos: initialMenus,
     recibe_alertas_inmediatas: usuario?.recibe_alertas_inmediatas ?? false,
     recibe_resumen_diario: usuario?.recibe_resumen_diario ?? true,
     activo: usuario?.activo ?? true,
@@ -418,11 +487,37 @@ function UsuarioModal({ usuario, onSave, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (form.rol === 'consulta' && (!form.menus_permitidos || form.menus_permitidos.length === 0)) {
+      alert('Debes seleccionar al menos un menú para el usuario de consulta.');
+      return;
+    }
     setSaving(true);
     await onSave(form, isNew);
     setSaving(false);
   };
+
   const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
+
+  const toggleMenuPermission = (menuId) => {
+    setForm(prev => {
+      const current = prev.menus_permitidos || [];
+      const exists = current.includes(menuId);
+      const updated = exists ? current.filter(id => id !== menuId) : [...current, menuId];
+      return { ...prev, menus_permitidos: updated };
+    });
+  };
+
+  const handleSetDefaultMenus = () => {
+    setForm(prev => ({ ...prev, menus_permitidos: [...DEFAULT_CONSULTA_MENUS] }));
+  };
+
+  const handleSelectAllMenus = () => {
+    setForm(prev => ({ ...prev, menus_permitidos: AVAILABLE_MENUS.map(m => m.id) }));
+  };
+
+  const handleClearMenus = () => {
+    setForm(prev => ({ ...prev, menus_permitidos: [] }));
+  };
 
   return (
     <ModalWrapper
@@ -431,22 +526,25 @@ function UsuarioModal({ usuario, onSave, onClose }) {
       title={isNew ? 'Invitar Usuario' : 'Editar Usuario'}
       subtitle={isNew ? 'Registra una nueva cuenta de acceso al sistema' : `Editando permisos de ${form.nombre || form.email}`}
       icon="person"
-      maxWidth="max-w-lg"
+      maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
-        <Field label="Correo Electrónico *">
-          <input type="email" required value={form.email}
-            onChange={e => handleChange('email', e.target.value)}
-            disabled={!isNew}
-            placeholder="correo@empresa.com"
-            className="m3-input disabled:bg-surface-container-low" />
-        </Field>
-        <Field label="Nombre Completo *">
-          <input type="text" required value={form.nombre}
-            onChange={e => handleChange('nombre', e.target.value)}
-            placeholder="Ej. Juan Pérez"
-            className="m3-input" />
-        </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Correo Electrónico *">
+            <input type="email" required value={form.email}
+              onChange={e => handleChange('email', e.target.value)}
+              disabled={!isNew}
+              placeholder="correo@empresa.com"
+              className="m3-input disabled:bg-surface-container-low" />
+          </Field>
+          <Field label="Nombre Completo *">
+            <input type="text" required value={form.nombre}
+              onChange={e => handleChange('nombre', e.target.value)}
+              placeholder="Ej. Juan Pérez"
+              className="m3-input" />
+          </Field>
+        </div>
+
         {isNew && (
           <Field label="Contraseña de Acceso (mínimo 6 carácteres) *">
             <input type="password" required minLength={6} value={form.password}
@@ -455,24 +553,111 @@ function UsuarioModal({ usuario, onSave, onClose }) {
               className="m3-input" />
           </Field>
         )}
-        <Field label="Rol Autorizado *">
-          <div className="space-y-2">
+
+        <Field label="Tipo de Rol *">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ROLES.map(r => (
               <label key={r.value} className={`flex items-start gap-3 p-3.5 border rounded-2xl cursor-pointer transition-all select-none ${
                 form.rol === r.value ? 'bg-primary/10 border-primary shadow-xs' : 'border-outline-variant/60 hover:bg-surface-container-low'
               }`}>
                 <input type="radio" name="rol" value={r.value}
                   checked={form.rol === r.value}
-                  onChange={e => handleChange('rol', e.target.value)}
+                  onChange={e => {
+                    const newRol = e.target.value;
+                    handleChange('rol', newRol);
+                    if (newRol === 'consulta' && (!form.menus_permitidos || form.menus_permitidos.length === 0)) {
+                      handleChange('menus_permitidos', [...DEFAULT_CONSULTA_MENUS]);
+                    }
+                  }}
                   className="mt-1 text-primary focus:ring-primary h-4 w-4" />
                 <div>
                   <div className="text-sm font-bold font-display text-primary">{r.label}</div>
-                  <div className="text-xs text-on-surface-variant mt-0.5 font-sans">{r.desc}</div>
+                  <div className="text-xs text-on-surface-variant mt-0.5 font-sans leading-tight">{r.desc}</div>
                 </div>
               </label>
             ))}
           </div>
         </Field>
+
+        {/* Sección de Selección de Menús Permitidos para Usuario de Consulta */}
+        {form.rol === 'consulta' && (
+          <div className="space-y-3 p-4 border border-primary/20 bg-primary/5 rounded-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-primary/15 pb-2.5">
+              <div>
+                <label className="text-xs font-mono font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">checklist</span>
+                  <span>Menús y Módulos Autorizados</span>
+                </label>
+                <p className="text-[11px] text-on-surface-variant font-sans mt-0.5">
+                  Predefinido: <strong>Dashboard</strong> y <strong>Mapa de Calor</strong> (con descarga de reportes).
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleSetDefaultMenus}
+                  className="text-[10px] font-mono font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded-md transition-colors"
+                >
+                  Predeterminado
+                </button>
+                <span className="text-outline-variant">|</span>
+                <button
+                  type="button"
+                  onClick={handleSelectAllMenus}
+                  className="text-[10px] font-mono font-bold text-on-surface-variant hover:bg-surface-container px-2 py-1 rounded-md transition-colors"
+                >
+                  Todos
+                </button>
+                <span className="text-outline-variant">|</span>
+                <button
+                  type="button"
+                  onClick={handleClearMenus}
+                  className="text-[10px] font-mono font-bold text-error hover:bg-error/10 px-2 py-1 rounded-md transition-colors"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              {AVAILABLE_MENUS.map(menu => {
+                const isChecked = form.menus_permitidos?.includes(menu.id);
+                return (
+                  <label
+                    key={menu.id}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                      isChecked
+                        ? 'bg-white dark:bg-surface-container-high border-primary/40 shadow-xs'
+                        : 'bg-surface-container-lowest/50 border-outline-variant/40 hover:bg-white opacity-70'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleMenuPermission(menu.id)}
+                      className="mt-0.5 rounded text-primary focus:ring-primary h-4 w-4 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[17px] text-primary">{menu.icon}</span>
+                        <span className="text-xs font-bold text-on-surface font-display">{menu.label}</span>
+                        {menu.isDefault && (
+                          <span className="text-[9px] font-mono font-semibold bg-primary-container text-on-primary-container px-1.5 py-0.2 rounded">
+                            Predefinido
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-on-surface-variant font-sans truncate mt-0.5">
+                        {menu.desc}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <Field label="Preferencias de Notificaciones">
           <div className="space-y-2.5 px-4 py-3 border border-outline-variant/60 rounded-2xl bg-surface-container-low">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -489,6 +674,7 @@ function UsuarioModal({ usuario, onSave, onClose }) {
             </label>
           </div>
         </Field>
+
         <Field label="Estado del Acceso">
           <label className="flex items-center gap-3 px-4 py-3 border border-outline-variant/60 rounded-2xl cursor-pointer bg-surface-container-low select-none font-bold text-xs text-primary hover:bg-surface-container transition-colors">
             <input type="checkbox" checked={form.activo}
@@ -497,12 +683,13 @@ function UsuarioModal({ usuario, onSave, onClose }) {
             <span>{form.activo ? 'ACCESO ACTIVO (Inicia sesión sin restricción)' : 'ACCESO INACTIVO (Bloqueo temporal)'}</span>
           </label>
         </Field>
+
         <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/60">
           <button type="button" onClick={onClose}
             className="m3-btn-outline h-9 px-4 text-xs">Cancelar</button>
           <button type="submit" disabled={saving}
             className="m3-btn-primary h-9 px-5 text-xs">
-            {saving ? 'Guardando...' : isNew ? 'Invitar' : 'Guardar Cambios'}
+            {saving ? 'Guardando...' : isNew ? 'Invitar Usuario' : 'Guardar Cambios'}
           </button>
         </div>
       </form>
