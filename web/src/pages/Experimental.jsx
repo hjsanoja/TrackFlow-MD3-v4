@@ -3,20 +3,29 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import Analisis from './Analisis';
 import Simulador from './Simulador';
 import Hallazgos from './Hallazgos';
+import Reporteria from './Reporteria';
 
 export default function Experimental({ user, userDoc }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const tabParam = searchParams.get('tab');
-  const validTabs = ['analisis', 'simulador', 'hallazgos'];
-  const activeTab = validTabs.includes(tabParam) ? tabParam : 'analisis';
+  const validTabs = ['reporteria', 'analisis', 'simulador', 'hallazgos'];
+  const activeTab = validTabs.includes(tabParam) ? tabParam : 'reporteria';
 
   const handleTabChange = (tabId) => {
     setSearchParams({ tab: tabId });
   };
 
   const tabs = [
+    {
+      id: 'reporteria',
+      label: 'Reportería y Brechas',
+      shortLabel: 'Reportería',
+      icon: 'table_chart',
+      desc: 'Reporte comparativo de precios y brechas por ID con descarga CSV/Excel',
+      status: 'En evaluación'
+    },
     {
       id: 'analisis',
       label: 'Análisis de Precios',
@@ -62,7 +71,7 @@ export default function Experimental({ user, userDoc }) {
               </span>
             </div>
             <p className="text-xs text-on-surface-variant font-sans max-w-3xl leading-relaxed">
-              Espacio unificado de herramientas analíticas avanzadas. Aquí evaluamos y afinamos las funciones de <strong>Análisis</strong>, <strong>Simulador</strong> y <strong>Hallazgos</strong> antes de su publicación definitiva en el menú principal.
+              Espacio unificado de herramientas analíticas y de reportería avanzada. Aquí evaluamos las funciones de <strong>Reportería de Brechas</strong>, <strong>Análisis</strong>, <strong>Simulador</strong> y <strong>Hallazgos</strong> antes de su publicación definitiva.
             </p>
           </div>
 
@@ -93,6 +102,7 @@ export default function Experimental({ user, userDoc }) {
 
       {/* Renderizado dinámico del submenú seleccionado */}
       <div className="transition-opacity duration-200">
+        {activeTab === 'reporteria' && <Reporteria user={user} userDoc={userDoc} />}
         {activeTab === 'analisis' && <Analisis user={user} userDoc={userDoc} />}
         {activeTab === 'simulador' && <Simulador user={user} userDoc={userDoc} />}
         {activeTab === 'hallazgos' && <Hallazgos user={user} userDoc={userDoc} />}

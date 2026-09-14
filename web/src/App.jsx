@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Experimental from './pages/Experimental';
+import Reporteria from './pages/Reporteria';
 import Analisis from './pages/Analisis';
 import Simulador from './pages/Simulador';
 import Hallazgos from './pages/Hallazgos';
@@ -208,9 +209,9 @@ function AppContent() {
   const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
   const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
 
-  const defaultConsultaMenus = ['/', '/mapa-calor'];
+  const defaultConsultaMenus = ['/', '/mapa-calor', '/reporteria'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/experimental', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    ? ['/', '/mapa-calor', '/reporteria', '/experimental', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -221,7 +222,8 @@ function AppContent() {
       return allowedMenuIds.includes('/experimental') || 
              allowedMenuIds.includes('/analisis') || 
              allowedMenuIds.includes('/simulador') || 
-             allowedMenuIds.includes('/hallazgos');
+             allowedMenuIds.includes('/hallazgos') ||
+             allowedMenuIds.includes('/reporteria');
     }
     return allowedMenuIds.includes(path);
   };
@@ -234,6 +236,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
           <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/reporteria" element={isAllowed('/reporteria') ? <Reporteria user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
           <Route path="/experimental" element={isAllowed('/experimental') ? <Experimental user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
           <Route path="/analisis" element={<Navigate to="/experimental?tab=analisis" replace />} />
           <Route path="/simulador" element={<Navigate to="/experimental?tab=simulador" replace />} />

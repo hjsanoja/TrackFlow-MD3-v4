@@ -14,13 +14,14 @@ import { dbUpsertUsuario, dbDeleteUsuario } from '../utils/dbClient';
 export const AVAILABLE_MENUS = [
   { id: '/', label: 'Dashboard', desc: 'Panel de Inteligencia y KPIs de precios', icon: 'dashboard', isDefault: true },
   { id: '/mapa-calor', label: 'Mapa de Calor', desc: 'Posición relativa frente al mercado', icon: 'thermostat', isDefault: true },
+  { id: '/reporteria', label: 'Reportería', desc: 'Descarga y auditoría de reportes con brechas por ID (Experimental)', icon: 'table_chart', isDefault: true },
   { id: '/experimental', label: 'Experimental', desc: 'Análisis, Simulador y Hallazgos (en evaluación)', icon: 'science', isDefault: false },
   { id: '/productos', label: 'Productos', desc: 'Catálogo de productos propios', icon: 'medication', isDefault: false },
   { id: '/competencia', label: 'Competencia', desc: 'Enlaces y comparativa de competencia', icon: 'link', isDefault: false },
   { id: '/cadenas', label: 'Cadenas', desc: 'Listado de cadenas y sucursales', icon: 'storefront', isDefault: false },
 ];
 
-export const DEFAULT_CONSULTA_MENUS = ['/', '/mapa-calor'];
+export const DEFAULT_CONSULTA_MENUS = ['/', '/mapa-calor', '/reporteria'];
 
 const ROLES = [
   { 
