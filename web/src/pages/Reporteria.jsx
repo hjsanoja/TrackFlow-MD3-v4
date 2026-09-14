@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { exportToCSV, copyTextToClipboard } from '../utils/exportUtils';
@@ -19,7 +19,7 @@ export default function Reporteria({ user, userDoc }) {
   const [filtroCategoria, setFiltroCategoria] = useState('todas');
   const [filtroLaboratorio, setFiltroLaboratorio] = useState('todos');
   const [filtroBrecha, setFiltroBrecha] = useState('todos'); // 'todos', 'mas_caro', 'mas_barato', 'paridad'
-  const [tipoBrechaBase, setTipoBrechaBase] = useState('efectivo'); // 'efectivo' (desc o full), 'full', 'desc'
+  const [vistaBrecha, setVistaBrecha] = useState('ambas'); // 'ambas', 'desc', 'full'
   const [incluirSinCompetencia, setIncluirSinCompetencia] = useState(false);
   
   // Paginación
@@ -36,6 +36,52 @@ export default function Reporteria({ user, userDoc }) {
     return map;
   }, [productos]);
 
+  // Agrupación de items por ID de producto propio para calcular la referencia "Mi marca" por cada ID
+  const baseMiMarcaMap = useMemo(() => {
+    const map = new Map();
+
+    // 1. Inicializar con PVP propio registrado en el maestro de productos
+    productos.forEach(p => {
+      const idKey = String(p.id_interno || p.id || '').trim();
+      if (!idKey) return;
+      const pvpUsd = Number(p.pvp_propio_usd) || 0;
+      map.set(idKey, {
+        fuente: 'pvp_maestro',
+        fullUsd: pvpUsd,
+        descUsd: pvpUsd,
+        fullBs: pvpUsd * currentBcvRate,
+        descBs: pvpUsd * currentBcvRate,
+        laboratorio: p.laboratorio || p.fabricante || 'La Santé'
+      });
+    });
+
+    // 2. Si existe un enlace de tipo 'propio' en productosCompetencia con precio extraído, usarlo como referencia principal
+    (productosCompetencia || []).forEach(comp => {
+      if (comp.activo === false || comp.tipo !== 'propio') return;
+      const idKey = String(comp.id_producto_propio || '').trim();
+      if (!idKey) return;
+
+      const pFullBs = comp.ultimo_precio_full_bs != null && comp.ultimo_precio_full_bs > 0 ? Number(comp.ultimo_precio_full_bs) : null;
+      const pDescBs = comp.ultimo_precio_desc_bs != null && comp.ultimo_precio_desc_bs > 0 ? Number(comp.ultimo_precio_desc_bs) : pFullBs;
+
+      if (pFullBs || pDescBs) {
+        const fullUsd = pFullBs ? pFullBs / currentBcvRate : (pDescBs ? pDescBs / currentBcvRate : 0);
+        const descUsd = pDescBs ? pDescBs / currentBcvRate : fullUsd;
+        
+        map.set(idKey, {
+          fuente: 'enlace_propio_scraped',
+          fullUsd,
+          descUsd,
+          fullBs: pFullBs || (pDescBs || 0),
+          descBs: pDescBs || pFullBs || 0,
+          laboratorio: comp.laboratorio || comp.fabricante || comp.marca || 'Mi Marca'
+        });
+      }
+    });
+
+    return map;
+  }, [productos, productosCompetencia, currentBcvRate]);
+
   // Lista de categorías únicas
   const categorias = useMemo(() => {
     const set = new Set();
@@ -45,31 +91,38 @@ export default function Reporteria({ user, userDoc }) {
     return ['todas', ...Array.from(set).sort()];
   }, [productos]);
 
-  // Lista de laboratorios / fabricantes únicos
-  const laboratorios = useMemo(() => {
+  // Lista de laboratorios / fabricantes únicos del formulario de competencia
+  const laboratoriosCompetencia = useMemo(() => {
     const set = new Set();
+    (productosCompetencia || []).forEach(comp => {
+      const lab = (comp.laboratorio || comp.fabricante || comp.marca || '').trim();
+      if (lab) set.add(lab);
+    });
     productos.forEach(p => {
       if (p.laboratorio) set.add(p.laboratorio);
-      if (p.fabricante) set.add(p.fabricante);
     });
     return ['todos', ...Array.from(set).sort()];
-  }, [productos]);
+  }, [productosCompetencia, productos]);
 
-  // Construcción unificada del dataset del reporte
+  // Construcción del Dataset de Reportería
   const datasetReporte = useMemo(() => {
     const rows = [];
     const processedProductIds = new Set();
 
-    // 1. Mapeo de cada registro de competencia
     (productosCompetencia || []).forEach((comp, idx) => {
       if (comp.activo === false) return;
       const idPropio = String(comp.id_producto_propio || '').trim();
       const prodPropio = prodMap.get(idPropio) || {};
-
       processedProductIds.add(idPropio);
 
-      const pvpPropioUsd = Number(prodPropio.pvp_propio_usd) || 0;
-      const pvpPropioBs = pvpPropioUsd * currentBcvRate;
+      // Referencia base "Mi marca" para este ID específico
+      const refMiMarca = baseMiMarcaMap.get(idPropio) || {
+        fullUsd: Number(prodPropio.pvp_propio_usd) || 0,
+        descUsd: Number(prodPropio.pvp_propio_usd) || 0,
+        fullBs: (Number(prodPropio.pvp_propio_usd) || 0) * currentBcvRate,
+        descBs: (Number(prodPropio.pvp_propio_usd) || 0) * currentBcvRate,
+        laboratorio: prodPropio.laboratorio || 'Mi Marca'
+      };
 
       const pFullBs = comp.ultimo_precio_full_bs != null && comp.ultimo_precio_full_bs > 0 ? Number(comp.ultimo_precio_full_bs) : null;
       const pDescBs = comp.ultimo_precio_desc_bs != null && comp.ultimo_precio_desc_bs > 0 ? Number(comp.ultimo_precio_desc_bs) : null;
@@ -77,47 +130,45 @@ export default function Reporteria({ user, userDoc }) {
       const pFullUsd = pFullBs ? pFullBs / currentBcvRate : null;
       const pDescUsd = pDescBs ? pDescBs / currentBcvRate : null;
 
-      // Precio efectivo del competidor
-      const compEffectiveUsd = pDescUsd || pFullUsd;
-      const compEffectiveBs = pDescBs || pFullBs;
+      // Laboratorio / Fabricante específico de la tabla de competencias (formulario Vincular Enlace)
+      const labFabricanteSku = (comp.laboratorio || comp.fabricante || (comp.tipo === 'propio' ? (prodPropio.laboratorio || 'La Santé') : comp.marca) || '—').trim();
 
-      // Cálculo de Brecha vs Producto Propio
+      const isMiMarca = comp.tipo === 'propio';
+
+      // Cálculo de la brecha en dólares vs Mi Marca por cada ID
       let brechaFullPct = null;
-      if (pvpPropioUsd > 0 && pFullUsd != null) {
-        brechaFullPct = ((pFullUsd - pvpPropioUsd) / pvpPropioUsd) * 100;
+      if (isMiMarca) {
+        brechaFullPct = 0;
+      } else if (refMiMarca.fullUsd > 0 && pFullUsd != null) {
+        brechaFullPct = ((pFullUsd - refMiMarca.fullUsd) / refMiMarca.fullUsd) * 100;
       }
 
       let brechaDescPct = null;
-      if (pvpPropioUsd > 0 && pDescUsd != null) {
-        brechaDescPct = ((pDescUsd - pvpPropioUsd) / pvpPropioUsd) * 100;
+      if (isMiMarca) {
+        brechaDescPct = 0;
+      } else if (refMiMarca.descUsd > 0 && pDescUsd != null) {
+        brechaDescPct = ((pDescUsd - refMiMarca.descUsd) / refMiMarca.descUsd) * 100;
+      } else if (refMiMarca.descUsd > 0 && pFullUsd != null) {
+        brechaDescPct = ((pFullUsd - refMiMarca.descUsd) / refMiMarca.descUsd) * 100;
       }
 
-      let brechaEfectivaPct = null;
-      if (pvpPropioUsd > 0 && compEffectiveUsd != null) {
-        brechaEfectivaPct = ((compEffectiveUsd - pvpPropioUsd) / pvpPropioUsd) * 100;
-      }
+      // Brecha primaria para ordenamiento y badges (prioriza descuento, si no full)
+      const brechaPrimaria = brechaDescPct !== null ? brechaDescPct : brechaFullPct;
 
-      // Brecha activa según selección
-      const brechaActiva = tipoBrechaBase === 'full' 
-        ? brechaFullPct 
-        : tipoBrechaBase === 'desc' 
-          ? brechaDescPct 
-          : brechaEfectivaPct;
-
-      let estadoBrecha = 'Sin datos de precio';
+      let estadoBrecha = 'Sin precio';
       let estadoBrechaClase = 'neutral';
-      if (comp.tipo === 'propio') {
-        estadoBrecha = 'Mi marca (Canal)';
+      if (isMiMarca) {
+        estadoBrecha = 'Mi marca (Base 100%)';
         estadoBrechaClase = 'propio';
-      } else if (brechaActiva !== null) {
-        if (brechaActiva > 3) {
-          estadoBrecha = `Competidor +${brechaActiva.toFixed(1)}% (Más caro)`;
+      } else if (brechaPrimaria !== null) {
+        if (brechaPrimaria > 3) {
+          estadoBrecha = `Competidor +${brechaPrimaria.toFixed(1)}% (Más caro)`;
           estadoBrechaClase = 'mas_caro';
-        } else if (brechaActiva < -3) {
-          estadoBrecha = `Competidor ${brechaActiva.toFixed(1)}% (Más barato)`;
+        } else if (brechaPrimaria < -3) {
+          estadoBrecha = `Competidor ${brechaPrimaria.toFixed(1)}% (Más barato / Ventaja)`;
           estadoBrechaClase = 'mas_barato';
         } else {
-          estadoBrecha = `En paridad (${brechaActiva >= 0 ? '+' : ''}${brechaActiva.toFixed(1)}%)`;
+          estadoBrecha = `En paridad (${brechaPrimaria >= 0 ? '+' : ''}${brechaPrimaria.toFixed(1)}%)`;
           estadoBrechaClase = 'paridad';
         }
       }
@@ -126,95 +177,88 @@ export default function Reporteria({ user, userDoc }) {
         uid: comp.id || `comp_${idx}`,
         id_producto_propio: idPropio || prodPropio.id_interno || prodPropio.id || 'N/A',
         producto_propio: prodPropio.nombre || 'Producto no identificado',
-        laboratorio_fabricante: prodPropio.laboratorio || prodPropio.fabricante || '—',
-        categoria: prodPropio.categoria || 'Sin categoría',
-        principio_activo: prodPropio.principio_activo || '—',
+        laboratorio_fabricante: labFabricanteSku,
         cadena_competidor: comp.cadena || '—',
         marca_linea: comp.marca || comp.linea || comp.nombre_competidor || '—',
         tipo_raw: comp.tipo || 'alternativa',
-        tipo: comp.tipo === 'propio' ? 'Mi marca' : 'Alternativa',
+        tipo: isMiMarca ? 'Mi marca' : 'Alternativa',
+        is_mi_marca: isMiMarca,
         precio_full_bs: pFullBs,
         precio_desc_bs: pDescBs,
         precio_full_usd: pFullUsd,
         precio_desc_usd: pDescUsd,
-        pvp_propio_usd: pvpPropioUsd,
-        pvp_propio_bs: pvpPropioBs,
+        ref_mi_marca_full_usd: refMiMarca.fullUsd,
+        ref_mi_marca_desc_usd: refMiMarca.descUsd,
         brecha_full_pct: brechaFullPct,
         brecha_desc_pct: brechaDescPct,
-        brecha_efectiva_pct: brechaEfectivaPct,
-        brecha_activa: brechaActiva,
+        brecha_primaria: brechaPrimaria,
         estado_brecha: estadoBrecha,
         estado_brecha_clase: estadoBrechaClase,
+        categoria: prodPropio.categoria || 'Sin categoría',
+        principio_activo: prodPropio.principio_activo || '—',
         url: comp.url || ''
       });
     });
 
-    // 2. Opcional: Agregar productos propios sin competencia mapeada
+    // Opcional: incluir productos propios sin enlaces de competencia
     if (incluirSinCompetencia) {
       productos.forEach((p, idx) => {
         const idPropio = String(p.id_interno || p.id || '').trim();
         if (!processedProductIds.has(idPropio)) {
           const pvpPropioUsd = Number(p.pvp_propio_usd) || 0;
-          const pvpPropioBs = pvpPropioUsd * currentBcvRate;
           rows.push({
             uid: `unmapped_${p.id || idx}`,
             id_producto_propio: idPropio,
             producto_propio: p.nombre || '—',
-            laboratorio_fabricante: p.laboratorio || p.fabricante || '—',
+            laboratorio_fabricante: p.laboratorio || p.fabricante || 'La Santé',
+            cadena_competidor: 'Sin enlaces',
+            marca_linea: '—',
+            tipo_raw: 'propio',
+            tipo: 'Mi marca',
+            is_mi_marca: true,
+            precio_full_bs: pvpPropioUsd * currentBcvRate,
+            precio_desc_bs: null,
+            precio_full_usd: pvpPropioUsd,
+            precio_desc_usd: null,
+            ref_mi_marca_full_usd: pvpPropioUsd,
+            ref_mi_marca_desc_usd: pvpPropioUsd,
+            brecha_full_pct: 0,
+            brecha_desc_pct: 0,
+            brecha_primaria: 0,
+            estado_brecha: 'Mi marca (Base 100%)',
+            estado_brecha_clase: 'propio',
             categoria: p.categoria || 'Sin categoría',
             principio_activo: p.principio_activo || '—',
-            cadena_competidor: 'Sin mapeo aún',
-            marca_linea: '—',
-            tipo_raw: 'sin_mapeo',
-            tipo: 'Sin mapeo',
-            precio_full_bs: null,
-            precio_desc_bs: null,
-            precio_full_usd: null,
-            precio_desc_usd: null,
-            pvp_propio_usd: pvpPropioUsd,
-            pvp_propio_bs: pvpPropioBs,
-            brecha_full_pct: null,
-            brecha_desc_pct: null,
-            brecha_efectiva_pct: null,
-            brecha_activa: null,
-            estado_brecha: 'Sin enlaces asignados',
-            estado_brecha_clase: 'neutral',
             url: ''
           });
         }
       });
     }
 
-    return rows;
-  }, [productosCompetencia, prodMap, productos, currentBcvRate, tipoBrechaBase, incluirSinCompetencia]);
+    // Ordenar de forma natural por ID de producto propio y luego poniendo 'Mi marca' primero en cada grupo
+    return rows.sort((a, b) => {
+      const compId = a.id_producto_propio.localeCompare(b.id_producto_propio, undefined, { numeric: true });
+      if (compId !== 0) return compId;
+      if (a.is_mi_marca && !b.is_mi_marca) return -1;
+      if (!a.is_mi_marca && b.is_mi_marca) return 1;
+      return (a.cadena_competidor || '').localeCompare(b.cadena_competidor || '');
+    });
+  }, [productosCompetencia, prodMap, baseMiMarcaMap, productos, currentBcvRate, incluirSinCompetencia]);
 
   // Filtrado reactivo en memoria
   const rowsFiltradas = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
 
     return datasetReporte.filter(row => {
-      // Filtro de Cadena
-      if (filtroCadena !== 'todas' && row.cadena_competidor !== filtroCadena) {
-        return false;
-      }
-      // Filtro de Tipo
-      if (filtroTipo !== 'todos' && row.tipo_raw !== filtroTipo) {
-        return false;
-      }
-      // Filtro de Categoría
-      if (filtroCategoria !== 'todas' && row.categoria !== filtroCategoria) {
-        return false;
-      }
-      // Filtro de Laboratorio / Fabricante
-      if (filtroLaboratorio !== 'todos' && row.laboratorio_fabricante !== filtroLaboratorio) {
-        return false;
-      }
-      // Filtro de Brecha
+      if (filtroCadena !== 'todas' && row.cadena_competidor !== filtroCadena) return false;
+      if (filtroTipo !== 'todos' && row.tipo_raw !== filtroTipo) return false;
+      if (filtroCategoria !== 'todas' && row.categoria !== filtroCategoria) return false;
+      if (filtroLaboratorio !== 'todos' && row.laboratorio_fabricante !== filtroLaboratorio) return false;
+      
       if (filtroBrecha === 'mas_caro' && row.estado_brecha_clase !== 'mas_caro') return false;
       if (filtroBrecha === 'mas_barato' && row.estado_brecha_clase !== 'mas_barato') return false;
       if (filtroBrecha === 'paridad' && row.estado_brecha_clase !== 'paridad') return false;
 
-      // Búsqueda libre
       if (!term) return true;
       return (
         row.id_producto_propio.toLowerCase().includes(term) ||
@@ -231,15 +275,13 @@ export default function Reporteria({ user, userDoc }) {
   // Resumen de Métricas de Inteligencia
   const metricas = useMemo(() => {
     const totalRegistros = rowsFiltradas.length;
-    const conPrecio = rowsFiltradas.filter(r => r.precio_full_bs || r.precio_desc_bs).length;
     const masCaros = rowsFiltradas.filter(r => r.estado_brecha_clase === 'mas_caro').length;
     const masBaratos = rowsFiltradas.filter(r => r.estado_brecha_clase === 'mas_barato').length;
     const enParidad = rowsFiltradas.filter(r => r.estado_brecha_clase === 'paridad').length;
 
-    // Brecha promedio del mercado
     const brechasValidas = rowsFiltradas
-      .filter(r => r.brecha_activa !== null && r.tipo_raw === 'alternativa')
-      .map(r => r.brecha_activa);
+      .filter(r => r.brecha_primaria !== null && !r.is_mi_marca)
+      .map(r => r.brecha_primaria);
     
     const brechaPromedio = brechasValidas.length > 0
       ? brechasValidas.reduce((a, b) => a + b, 0) / brechasValidas.length
@@ -247,7 +289,6 @@ export default function Reporteria({ user, userDoc }) {
 
     return {
       totalRegistros,
-      conPrecio,
       masCaros,
       masBaratos,
       enParidad,
@@ -255,7 +296,7 @@ export default function Reporteria({ user, userDoc }) {
     };
   }, [rowsFiltradas]);
 
-  // Paginación calculada
+  // Paginación
   const totalPages = Math.ceil(rowsFiltradas.length / itemsPerPage) || 1;
   const paginatedRows = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -280,11 +321,12 @@ export default function Reporteria({ user, userDoc }) {
       { key: 'precio_desc_bs_fmt', label: 'Precio Desc (Bs)' },
       { key: 'precio_full_usd_fmt', label: 'Precio Full (USD)' },
       { key: 'precio_desc_usd_fmt', label: 'Precio Desc (USD)' },
-      { key: 'pvp_propio_usd_fmt', label: 'PVP Propio Ref (USD)' },
-      { key: 'pvp_propio_bs_fmt', label: 'PVP Propio Ref (Bs)' },
-      { key: 'brecha_pct_fmt', label: 'Brecha vs Propio (%)' },
+      { key: 'ref_mi_marca_full_usd_fmt', label: 'Mi Marca Full Ref (USD)' },
+      { key: 'ref_mi_marca_desc_usd_fmt', label: 'Mi Marca Desc Ref (USD)' },
+      { key: 'brecha_full_pct_fmt', label: 'Brecha Full vs Mi Marca (%)' },
+      { key: 'brecha_desc_pct_fmt', label: 'Brecha Desc vs Mi Marca (%)' },
       { key: 'estado_brecha', label: 'Estado Brecha' },
-      { key: 'tasa_bcv_aplicada', label: 'Tasa BCV Aplicada' }
+      { key: 'tasa_bcv_aplicada', label: 'Tasa BCV (Bs/USD)' }
     ];
 
     const exportRows = rowsFiltradas.map(r => ({
@@ -298,14 +340,15 @@ export default function Reporteria({ user, userDoc }) {
       precio_desc_bs_fmt: r.precio_desc_bs != null ? r.precio_desc_bs.toFixed(2) : '',
       precio_full_usd_fmt: r.precio_full_usd != null ? r.precio_full_usd.toFixed(2) : '',
       precio_desc_usd_fmt: r.precio_desc_usd != null ? r.precio_desc_usd.toFixed(2) : '',
-      pvp_propio_usd_fmt: r.pvp_propio_usd > 0 ? r.pvp_propio_usd.toFixed(2) : '',
-      pvp_propio_bs_fmt: r.pvp_propio_bs > 0 ? r.pvp_propio_bs.toFixed(2) : '',
-      brecha_pct_fmt: r.brecha_activa != null ? `${r.brecha_activa >= 0 ? '+' : ''}${r.brecha_activa.toFixed(2)}%` : '—',
+      ref_mi_marca_full_usd_fmt: r.ref_mi_marca_full_usd > 0 ? r.ref_mi_marca_full_usd.toFixed(2) : '',
+      ref_mi_marca_desc_usd_fmt: r.ref_mi_marca_desc_usd > 0 ? r.ref_mi_marca_desc_usd.toFixed(2) : '',
+      brecha_full_pct_fmt: r.is_mi_marca ? '100% (Base)' : (r.brecha_full_pct != null ? `${r.brecha_full_pct >= 0 ? '+' : ''}${r.brecha_full_pct.toFixed(2)}%` : '—'),
+      brecha_desc_pct_fmt: r.is_mi_marca ? '100% (Base)' : (r.brecha_desc_pct != null ? `${r.brecha_desc_pct >= 0 ? '+' : ''}${r.brecha_desc_pct.toFixed(2)}%` : '—'),
       estado_brecha: r.estado_brecha,
       tasa_bcv_aplicada: currentBcvRate.toFixed(2)
     }));
 
-    exportToCSV('reporte_precios_brechas_competencia', headers, exportRows);
+    exportToCSV('reporte_precios_brechas_por_id', headers, exportRows);
     addToast(`Reporte CSV exportado exitosamente (${exportRows.length} registros).`, 'success');
   };
 
@@ -319,7 +362,7 @@ export default function Reporteria({ user, userDoc }) {
     const headers = [
       'ID Producto Propio',
       'Producto Propio',
-      'Laboratorio/Fabricante',
+      'Laboratorio / Fabricante',
       'Cadena/Competidor',
       'Marca/Línea',
       'Tipo',
@@ -327,7 +370,8 @@ export default function Reporteria({ user, userDoc }) {
       'Precio Desc (Bs)',
       'Precio Full (USD)',
       'Precio Desc (USD)',
-      'Brecha vs Propio (%)',
+      'Brecha Full vs Mi Marca (%)',
+      'Brecha Desc vs Mi Marca (%)',
       'Estado Brecha'
     ];
 
@@ -344,7 +388,8 @@ export default function Reporteria({ user, userDoc }) {
         r.precio_desc_bs != null ? r.precio_desc_bs.toFixed(2) : '—',
         r.precio_full_usd != null ? `$${r.precio_full_usd.toFixed(2)}` : '—',
         r.precio_desc_usd != null ? `$${r.precio_desc_usd.toFixed(2)}` : '—',
-        r.brecha_activa != null ? `${r.brecha_activa >= 0 ? '+' : ''}${r.brecha_activa.toFixed(1)}%` : '—',
+        r.is_mi_marca ? '100%' : (r.brecha_full_pct != null ? `${r.brecha_full_pct >= 0 ? '+' : ''}${r.brecha_full_pct.toFixed(1)}%` : '—'),
+        r.is_mi_marca ? '100%' : (r.brecha_desc_pct != null ? `${r.brecha_desc_pct >= 0 ? '+' : ''}${r.brecha_desc_pct.toFixed(1)}%` : '—'),
         r.estado_brecha
       ].join('\t'));
     });
@@ -375,7 +420,7 @@ export default function Reporteria({ user, userDoc }) {
               </span>
             </div>
             <p className="text-xs text-on-surface-variant font-sans max-w-3xl leading-relaxed">
-              Generador oficial de reportes unificados de auditoría y monitoreo. Descarga y analiza la comparativa completa de precios (Bs / USD) con el cálculo automático de <strong>brechas porcentuales frente a tus productos por cada ID</strong>.
+              Reporte comparativo por ID de producto propio. Evalúa la <strong>brecha porcentual en dólares de cada competidor (Calox, Genven, Leti, etc.) frente a tu marca (100% Base)</strong>, tanto a precio full como con descuento.
             </p>
           </div>
 
@@ -403,11 +448,11 @@ export default function Reporteria({ user, userDoc }) {
       </div>
 
       {/* KPI Cards del Reporte */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
           <div className="text-[11px] font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Registros</div>
           <div className="text-xl font-bold font-display text-on-surface mt-1">{metricas.totalRegistros}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">{metricas.conPrecio} con precio activo</div>
+          <div className="text-[10px] text-on-surface-variant mt-0.5">Mapeos activos por SKU</div>
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
@@ -417,29 +462,21 @@ export default function Reporteria({ user, userDoc }) {
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Brecha Media</div>
-          <div className={`text-xl font-bold font-display mt-1 ${metricas.brechaPromedio > 0 ? 'text-rose-600' : metricas.brechaPromedio < 0 ? 'text-emerald-600' : 'text-on-surface'}`}>
-            {metricas.brechaPromedio >= 0 ? '+' : ''}{metricas.brechaPromedio.toFixed(1)}%
-          </div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">vs mercado alternativo</div>
-        </div>
-
-        <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">Comp. Más Caros</div>
+          <div className="text-[11px] font-mono font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">Competidor Más Caro</div>
           <div className="text-xl font-bold font-display text-rose-700 dark:text-rose-400 mt-1">{metricas.masCaros}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">Precio superior al tuyo</div>
+          <div className="text-[10px] text-on-surface-variant mt-0.5">Tu marca tiene ventaja de precio</div>
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Comp. Más Baratos</div>
+          <div className="text-[11px] font-mono font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Competidor Más Barato</div>
           <div className="text-xl font-bold font-display text-emerald-700 dark:text-emerald-400 mt-1">{metricas.masBaratos}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">Precio menor al tuyo</div>
+          <div className="text-[10px] text-on-surface-variant mt-0.5">El competidor tiene ventaja</div>
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
           <div className="text-[11px] font-mono font-semibold text-sky-700 dark:text-sky-400 uppercase tracking-wider">En Paridad</div>
           <div className="text-xl font-bold font-display text-sky-700 dark:text-sky-400 mt-1">{metricas.enParidad}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">Diferencia ±3%</div>
+          <div className="text-[10px] text-on-surface-variant mt-0.5">Diferencia dentro de ±3%</div>
         </div>
       </div>
 
@@ -451,39 +488,39 @@ export default function Reporteria({ user, userDoc }) {
             <span className="text-sm font-bold font-display text-on-surface">Filtros y Parámetros del Reporte</span>
           </div>
 
-          {/* Selector de base de cálculo de la Brecha */}
+          {/* Selector de visualización de columnas de brechas */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-mono font-semibold text-on-surface-variant">Cálculo de Brecha:</span>
+            <span className="text-xs font-mono font-semibold text-on-surface-variant">Columnas de Brecha:</span>
             <div className="inline-flex bg-surface-container-high rounded-full p-0.5 border border-outline-variant/60">
               <button
-                onClick={() => setTipoBrechaBase('efectivo')}
+                onClick={() => setVistaBrecha('ambas')}
                 className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                  tipoBrechaBase === 'efectivo'
+                  vistaBrecha === 'ambas'
                     ? 'bg-primary text-on-primary shadow-xs'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                Precio Efectivo (Desc / Full)
+                Ambas (Full & Desc)
               </button>
               <button
-                onClick={() => setTipoBrechaBase('full')}
+                onClick={() => setVistaBrecha('desc')}
                 className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                  tipoBrechaBase === 'full'
+                  vistaBrecha === 'desc'
                     ? 'bg-primary text-on-primary shadow-xs'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                Solo Full
+                Solo Descuento
               </button>
               <button
-                onClick={() => setTipoBrechaBase('desc')}
+                onClick={() => setVistaBrecha('full')}
                 className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                  tipoBrechaBase === 'desc'
+                  vistaBrecha === 'full'
                     ? 'bg-primary text-on-primary shadow-xs'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                Solo Desc
+                Solo Full / Lista
               </button>
             </div>
           </div>
@@ -498,7 +535,7 @@ export default function Reporteria({ user, userDoc }) {
               type="text"
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              placeholder="Buscar por ID, producto, marca..."
+              placeholder="Buscar por ID, molécula, marca, lab..."
               className="m3-input pl-9 text-xs"
             />
             {searchTerm && (
@@ -535,16 +572,16 @@ export default function Reporteria({ user, userDoc }) {
             </select>
           </div>
 
-          {/* Laboratorio / Fabricante */}
+          {/* Laboratorio / Fabricante (de la tabla Competencias) */}
           <div>
             <select
               value={filtroLaboratorio}
               onChange={e => { setFiltroLaboratorio(e.target.value); setCurrentPage(1); }}
               className="m3-select text-xs"
             >
-              {laboratorios.map(lab => (
+              {laboratoriosCompetencia.map(lab => (
                 <option key={lab} value={lab}>
-                  {lab === 'todos' ? 'Todos los laboratorios' : lab}
+                  {lab === 'todos' ? 'Todos los laboratorios / fabricantes' : lab}
                 </option>
               ))}
             </select>
@@ -559,7 +596,7 @@ export default function Reporteria({ user, userDoc }) {
             >
               <option value="todos">Cualquier brecha</option>
               <option value="mas_caro">Competidores más caros (+)</option>
-              <option value="mas_barato">Competidores más baratos (-)</option>
+              <option value="mas_barato">Competidores más baratos (-) / Ventaja</option>
               <option value="paridad">En paridad (±3%)</option>
             </select>
           </div>
@@ -575,7 +612,7 @@ export default function Reporteria({ user, userDoc }) {
                 onChange={e => setIncluirSinCompetencia(e.target.checked)}
                 className="rounded border-outline-variant text-primary focus:ring-primary w-4 h-4 cursor-pointer"
               />
-              <span className="font-medium text-on-surface">Incluir productos propios sin enlaces asignados</span>
+              <span className="font-medium text-on-surface">Incluir productos propios sin enlaces de competencia</span>
             </label>
 
             <div className="flex items-center gap-2">
@@ -626,20 +663,28 @@ export default function Reporteria({ user, userDoc }) {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-surface-container-low/80 border-b border-outline-variant/60 text-on-surface-variant font-mono text-[11px] uppercase tracking-wider">
-                <th className="py-3 px-3.5 font-bold whitespace-nowrap">ID Propio</th>
-                <th className="py-3 px-3.5 font-bold min-w-[200px]">Producto Propio</th>
-                <th className="py-3 px-3.5 font-bold whitespace-nowrap">Laboratorio / Fabricante</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">ID Producto Propio</th>
+                <th className="py-3 px-3.5 font-bold min-w-[190px]">Producto Propio</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap text-primary">Laboratorio / Fabricante (SKU)</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">Cadena / Competidor</th>
-                <th className="py-3 px-3.5 font-bold min-w-[140px]">Marca / Línea</th>
+                <th className="py-3 px-3.5 font-bold min-w-[130px]">Marca / Línea</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">Tipo</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap">PVP Ref (USD)</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/40">Precio Full (Bs)</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/40">Precio Desc (Bs)</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap">Precio Full ($)</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap">Precio Desc ($)</th>
-                <th className="py-3 px-4 font-bold text-center whitespace-nowrap bg-primary-container/20 text-on-primary-container">
-                  Brecha vs Propio (%)
-                </th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio Full (Bs)</th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio Desc (Bs)</th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-amber-500/10 text-amber-900 dark:text-amber-300">Precio Full ($)</th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-emerald-500/10 text-emerald-900 dark:text-emerald-300">Precio Desc ($)</th>
+                
+                {(vistaBrecha === 'ambas' || vistaBrecha === 'full') && (
+                  <th className="py-3 px-3.5 font-bold text-center whitespace-nowrap bg-amber-500/15 text-amber-950 dark:text-amber-200">
+                    Brecha Full vs Mi Marca (%)
+                  </th>
+                )}
+
+                {(vistaBrecha === 'ambas' || vistaBrecha === 'desc') && (
+                  <th className="py-3 px-3.5 font-bold text-center whitespace-nowrap bg-emerald-500/15 text-emerald-950 dark:text-emerald-200">
+                    Brecha Desc vs Mi Marca (%)
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/30 text-on-surface font-sans">
@@ -657,10 +702,19 @@ export default function Reporteria({ user, userDoc }) {
                   const labColor = getLabColor(row.laboratorio_fabricante);
 
                   return (
-                    <tr key={row.uid} className="hover:bg-surface-container-high/40 transition-colors">
+                    <tr 
+                      key={row.uid} 
+                      className={`hover:bg-surface-container-high/40 transition-colors ${
+                        row.is_mi_marca ? 'bg-primary/5 font-medium' : ''
+                      }`}
+                    >
                       {/* ID Producto Propio */}
                       <td className="py-3 px-3.5 font-mono font-bold text-primary whitespace-nowrap">
-                        <span className="bg-primary-container/50 px-2 py-0.5 rounded border border-primary/20">
+                        <span className={`px-2 py-0.5 rounded border ${
+                          row.is_mi_marca 
+                            ? 'bg-primary text-on-primary border-primary' 
+                            : 'bg-primary-container/50 border-primary/20 text-primary'
+                        }`}>
                           {row.id_producto_propio}
                         </span>
                       </td>
@@ -673,17 +727,17 @@ export default function Reporteria({ user, userDoc }) {
                         </div>
                       </td>
 
-                      {/* Laboratorio / Fabricante */}
+                      {/* Laboratorio / Fabricante (del SKU / Competencia) */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
                         <span 
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border shadow-xs"
                           style={{
                             backgroundColor: getBrandBgTint(labColor),
                             borderColor: `${labColor}40`,
                             color: labColor
                           }}
                         >
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: labColor }}></span>
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: labColor }}></span>
                           {row.laboratorio_fabricante}
                         </span>
                       </td>
@@ -712,7 +766,7 @@ export default function Reporteria({ user, userDoc }) {
                             rel="noopener noreferrer" 
                             className="text-[10px] text-primary hover:underline inline-flex items-center gap-0.5 mt-0.5"
                           >
-                            <span>Ver producto</span>
+                            <span>Ver enlace</span>
                             <span className="material-symbols-outlined text-[11px]">open_in_new</span>
                           </a>
                         )}
@@ -720,20 +774,13 @@ export default function Reporteria({ user, userDoc }) {
 
                       {/* Tipo */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          row.tipo_raw === 'propio'
-                            ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
-                            : row.tipo_raw === 'sin_mapeo'
-                              ? 'bg-surface-container text-on-surface-variant border border-outline-variant'
-                              : 'bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border border-indigo-500/30'
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          row.is_mi_marca
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-surface-container-high text-on-surface-variant border border-outline-variant/60'
                         }`}>
                           {row.tipo}
                         </span>
-                      </td>
-
-                      {/* PVP Ref Propio (USD) */}
-                      <td className="py-3 px-3 text-right font-mono font-bold text-on-surface-variant whitespace-nowrap">
-                        {row.pvp_propio_usd > 0 ? `$${row.pvp_propio_usd.toFixed(2)}` : '—'}
                       </td>
 
                       {/* Precio Full (Bs) */}
@@ -751,48 +798,76 @@ export default function Reporteria({ user, userDoc }) {
                       </td>
 
                       {/* Precio Full (USD) */}
-                      <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                      <td className="py-3 px-3 text-right font-mono whitespace-nowrap bg-amber-500/5 font-semibold">
                         {row.precio_full_usd != null ? `$${row.precio_full_usd.toFixed(2)}` : '—'}
                       </td>
 
                       {/* Precio Desc (USD) */}
-                      <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
+                      <td className="py-3 px-3 text-right font-mono whitespace-nowrap bg-emerald-500/5 font-bold">
                         {row.precio_desc_usd != null ? (
-                          <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                          <span className="text-emerald-700 dark:text-emerald-400">
                             ${row.precio_desc_usd.toFixed(2)}
                           </span>
                         ) : '—'}
                       </td>
 
-                      {/* Brecha vs Propio (%) */}
-                      <td className="py-3 px-4 text-center whitespace-nowrap bg-primary-container/10">
-                        {row.tipo_raw === 'propio' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 px-2.5 py-1 rounded-full border border-emerald-500/30">
-                            <span className="material-symbols-outlined text-xs">verified</span>
-                            Mi marca
-                          </span>
-                        ) : row.brecha_activa !== null ? (
-                          <div className="flex flex-col items-center">
-                            <span className={`inline-flex items-center gap-1 font-mono font-extrabold text-xs px-2.5 py-1 rounded-full border shadow-xs ${
-                              row.brecha_activa > 3
-                                ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30'
-                                : row.brecha_activa < -3
-                                  ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
-                                  : 'bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30'
-                            }`}>
-                              <span className="material-symbols-outlined text-xs leading-none">
-                                {row.brecha_activa > 0 ? 'arrow_upward' : row.brecha_activa < 0 ? 'arrow_downward' : 'equal'}
+                      {/* Brecha Full vs Mi Marca (%) */}
+                      {(vistaBrecha === 'ambas' || vistaBrecha === 'full') && (
+                        <td className="py-3 px-3.5 text-center whitespace-nowrap bg-amber-500/10">
+                          {row.is_mi_marca ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                              <span className="material-symbols-outlined text-xs">verified</span>
+                              100% (Mi marca)
+                            </span>
+                          ) : row.brecha_full_pct !== null ? (
+                            <div className="flex flex-col items-center">
+                              <span className={`inline-flex items-center gap-0.5 font-mono font-extrabold text-xs px-2.5 py-0.5 rounded-full border shadow-xs ${
+                                row.brecha_full_pct > 3
+                                  ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30'
+                                  : row.brecha_full_pct < -3
+                                    ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
+                                    : 'bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30'
+                              }`}>
+                                {row.brecha_full_pct >= 0 ? '+' : ''}{row.brecha_full_pct.toFixed(0)}%
                               </span>
-                              {row.brecha_activa >= 0 ? '+' : ''}{row.brecha_activa.toFixed(1)}%
+                              <span className="text-[9px] text-on-surface-variant font-mono mt-0.5">
+                                {row.brecha_full_pct > 3 ? 'Más caro' : row.brecha_full_pct < -3 ? 'Más barato' : 'Paridad'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-on-surface-variant/60 font-mono text-[11px]">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Brecha Desc vs Mi Marca (%) */}
+                      {(vistaBrecha === 'ambas' || vistaBrecha === 'desc') && (
+                        <td className="py-3 px-3.5 text-center whitespace-nowrap bg-emerald-500/10">
+                          {row.is_mi_marca ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                              <span className="material-symbols-outlined text-xs">verified</span>
+                              100% (Mi marca)
                             </span>
-                            <span className="text-[9px] text-on-surface-variant font-mono mt-0.5">
-                              {row.brecha_activa > 3 ? 'Más caro' : row.brecha_activa < -3 ? 'Más barato' : 'Paridad'}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-on-surface-variant/60 font-mono text-[11px]">—</span>
-                        )}
-                      </td>
+                          ) : row.brecha_desc_pct !== null ? (
+                            <div className="flex flex-col items-center">
+                              <span className={`inline-flex items-center gap-0.5 font-mono font-extrabold text-xs px-2.5 py-0.5 rounded-full border shadow-xs ${
+                                row.brecha_desc_pct > 3
+                                  ? 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30'
+                                  : row.brecha_desc_pct < -3
+                                    ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
+                                    : 'bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30'
+                              }`}>
+                                {row.brecha_desc_pct >= 0 ? '+' : ''}{row.brecha_desc_pct.toFixed(0)}%
+                              </span>
+                              <span className="text-[9px] text-on-surface-variant font-mono mt-0.5">
+                                {row.brecha_desc_pct > 3 ? 'Más caro' : row.brecha_desc_pct < -3 ? 'Más barato' : 'Paridad'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-on-surface-variant/60 font-mono text-[11px]">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -847,11 +922,12 @@ export default function Reporteria({ user, userDoc }) {
       <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/40 flex items-start gap-3 text-xs text-on-surface-variant">
         <span className="material-symbols-outlined text-primary text-xl shrink-0 mt-0.5">info</span>
         <div className="space-y-1">
-          <div className="font-bold text-on-surface font-display">Especificación del Reporte Unificado de Brechas:</div>
+          <div className="font-bold text-on-surface font-display">Lógica de Cálculo de Brechas por ID:</div>
           <p>
-            • Los precios en USD son normalizados en base a la tasa de cambio oficial del BCV vigente (<strong>{currentBcvRate.toFixed(2)} Bs.</strong>).<br />
-            • La <strong>Brecha (%)</strong> representa la variación relativa del precio del competidor frente al PVP de tu producto: un valor positivo indica que el competidor está más caro, y un valor negativo indica que está más barato.<br />
-            • La descarga en CSV incluye codificación UTF-8 con Byte Order Mark (BOM) para abrirse directamente en Microsoft Excel sin problemas de tildes o caracteres especiales.
+            • <strong>Referencia Mi Marca (100% Base):</strong> Se toma el precio en dólares de tu producto propio para cada ID. Si tienes un enlace de tu marca extraído en esa cadena o el PVP maestro, se establece como el 100% de referencia.<br />
+            • <strong>Brecha en Dólares (%):</strong> Se calcula como <code>((Precio Competidor USD - Precio Mi Marca USD) / Precio Mi Marca USD) * 100</code>.<br />
+            • Si un competidor como <em>Calox</em> o <em>Genven</em> está en <strong>-60% o -67%</strong>, significa que su precio es menor y tiene ventaja competitiva de precio. Si está en <strong>+59%</strong>, tu producto es más económico.<br />
+            • El campo <strong>Laboratorio / Fabricante</strong> refleja directamente el fabricante configurado en cada SKU del formulario de competencia.
           </p>
         </div>
       </div>
