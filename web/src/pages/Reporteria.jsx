@@ -178,10 +178,10 @@ export default function Reporteria({ user, userDoc }) {
         id_producto_propio: idPropio || prodPropio.id_interno || prodPropio.id || 'N/A',
         producto_propio: prodPropio.nombre || 'Producto no identificado',
         laboratorio_fabricante: labFabricanteSku,
-        cadena_competidor: comp.cadena || '—',
+        cadena: comp.cadena || '—',
         marca_linea: comp.marca || comp.linea || comp.nombre_competidor || '—',
         tipo_raw: comp.tipo || 'alternativa',
-        tipo: isMiMarca ? 'Mi marca' : 'Alternativa',
+        tipo: isMiMarca ? 'Mi Marca' : 'Competidor',
         is_mi_marca: isMiMarca,
         precio_full_bs: pFullBs,
         precio_desc_bs: pDescBs,
@@ -211,10 +211,10 @@ export default function Reporteria({ user, userDoc }) {
             id_producto_propio: idPropio,
             producto_propio: p.nombre || '—',
             laboratorio_fabricante: p.laboratorio || p.fabricante || 'La Santé',
-            cadena_competidor: 'Sin enlaces',
+            cadena: 'Sin enlaces',
             marca_linea: '—',
             tipo_raw: 'propio',
-            tipo: 'Mi marca',
+            tipo: 'Mi Marca',
             is_mi_marca: true,
             precio_full_bs: pvpPropioUsd * currentBcvRate,
             precio_desc_bs: null,
@@ -235,13 +235,13 @@ export default function Reporteria({ user, userDoc }) {
       });
     }
 
-    // Ordenar de forma natural por ID de producto propio y luego poniendo 'Mi marca' primero en cada grupo
+    // Ordenar de forma natural por ID de producto propio y luego poniendo 'Mi Marca' primero en cada grupo
     return rows.sort((a, b) => {
       const compId = a.id_producto_propio.localeCompare(b.id_producto_propio, undefined, { numeric: true });
       if (compId !== 0) return compId;
       if (a.is_mi_marca && !b.is_mi_marca) return -1;
       if (!a.is_mi_marca && b.is_mi_marca) return 1;
-      return (a.cadena_competidor || '').localeCompare(b.cadena_competidor || '');
+      return (a.cadena || '').localeCompare(b.cadena || '');
     });
   }, [productosCompetencia, prodMap, baseMiMarcaMap, productos, currentBcvRate, incluirSinCompetencia]);
 
@@ -250,7 +250,7 @@ export default function Reporteria({ user, userDoc }) {
     const term = searchTerm.toLowerCase().trim();
 
     return datasetReporte.filter(row => {
-      if (filtroCadena !== 'todas' && row.cadena_competidor !== filtroCadena) return false;
+      if (filtroCadena !== 'todas' && row.cadena !== filtroCadena) return false;
       if (filtroTipo !== 'todos' && row.tipo_raw !== filtroTipo) return false;
       if (filtroCategoria !== 'todas' && row.categoria !== filtroCategoria) return false;
       if (filtroLaboratorio !== 'todos' && row.laboratorio_fabricante !== filtroLaboratorio) return false;
@@ -264,7 +264,7 @@ export default function Reporteria({ user, userDoc }) {
         row.id_producto_propio.toLowerCase().includes(term) ||
         row.producto_propio.toLowerCase().includes(term) ||
         row.laboratorio_fabricante.toLowerCase().includes(term) ||
-        row.cadena_competidor.toLowerCase().includes(term) ||
+        row.cadena.toLowerCase().includes(term) ||
         row.marca_linea.toLowerCase().includes(term) ||
         row.categoria.toLowerCase().includes(term) ||
         row.principio_activo.toLowerCase().includes(term)
@@ -314,7 +314,7 @@ export default function Reporteria({ user, userDoc }) {
       { key: 'id_producto_propio', label: 'ID Producto Propio' },
       { key: 'producto_propio', label: 'Producto Propio' },
       { key: 'laboratorio_fabricante', label: 'Laboratorio' },
-      { key: 'cadena_competidor', label: 'Cadena/Competidor' },
+      { key: 'cadena', label: 'Cadena/Competidor' },
       { key: 'marca_linea', label: 'Marca/Línea' },
       { key: 'tipo', label: 'Tipo' },
       { key: 'precio_full_bs_fmt', label: 'Precio Full (Bs)' },
@@ -333,7 +333,7 @@ export default function Reporteria({ user, userDoc }) {
       id_producto_propio: r.id_producto_propio,
       producto_propio: r.producto_propio,
       laboratorio_fabricante: r.laboratorio_fabricante,
-      cadena_competidor: r.cadena_competidor,
+      cadena: r.cadena,
       marca_linea: r.marca_linea,
       tipo: r.tipo,
       precio_full_bs_fmt: r.precio_full_bs != null ? r.precio_full_bs.toFixed(2) : '',
@@ -381,7 +381,7 @@ export default function Reporteria({ user, userDoc }) {
         r.id_producto_propio,
         r.producto_propio,
         r.laboratorio_fabricante,
-        r.cadena_competidor,
+        r.cadena,
         r.marca_linea,
         r.tipo,
         r.precio_full_bs != null ? r.precio_full_bs.toFixed(2) : '—',
@@ -628,7 +628,7 @@ export default function Reporteria({ user, userDoc }) {
                         : 'bg-surface-container-low border-outline-variant/60 text-on-surface-variant hover:bg-surface-container'
                     }`}
                   >
-                    {t === 'todos' ? 'Todos' : t === 'propio' ? 'Mi marca' : 'Alternativa'}
+                    {t === 'todos' ? 'Todos' : t === 'propio' ? 'Mi Marca' : 'Competidor'}
                   </button>
                 ))}
               </div>
@@ -698,7 +698,7 @@ export default function Reporteria({ user, userDoc }) {
                 </tr>
               ) : (
                 paginatedRows.map((row) => {
-                  const chainColor = getChainColor(row.cadena_competidor);
+                  const chainColor = getChainColor(row.cadena);
                   const labColor = getLabColor(row.laboratorio_fabricante);
 
                   return (
@@ -752,7 +752,7 @@ export default function Reporteria({ user, userDoc }) {
                             color: chainColor
                           }}
                         >
-                          {row.cadena_competidor}
+                          {row.cadena}
                         </span>
                       </td>
 

@@ -22,7 +22,7 @@ import {
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
 const TIPOS = [
-  { value: 'propio', label: 'Mi marca' },
+  { value: 'propio', label: 'Mi Marca' },
   { value: 'alternativa', label: 'Alternativa (competencia)' },
 ];
 
@@ -696,7 +696,7 @@ export default function Competencia({ user, userDoc }) {
         producto_propio: productoNombre(it.id_producto_propio),
         cadena: it.cadena || '',
         marca: it.marca || '',
-        tipo_str: it.tipo === 'propio' ? 'MI MARCA' : 'COMPETENCIA',
+        tipo_str: it.tipo === 'propio' ? 'MI MARCA' : 'COMPETIDOR',
         ultimo_precio_full_bs: fullBs !== null ? fullBs : '',
         ultimo_precio_desc_bs: descBs !== null ? descBs : '',
         ultimo_precio_full_usd: fullUsd,
@@ -1501,7 +1501,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Cadena de Farmacia *">
+          <Field label="Cadena *">
             <select required value={form.cadena}
               onChange={e => handleChange('cadena', e.target.value)}
               disabled={!isNew}

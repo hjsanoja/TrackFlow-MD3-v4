@@ -123,3 +123,48 @@ barra que significa *división* se conserva.
 
 `Bs / USD Oficial` se conserva: ahí la barra es una división real (bolívares
 por dólar), no un alias.
+
+### Terminología de negocio: Cadena ≠ Competidor
+
+Son dos cosas distintas y se habían mezclado en una sola etiqueta
+(`Cadena / Competidor`):
+
+- **Cadena**: la farmacia donde se publica un producto (Farmatodo, Locatel,
+  FarmaDON…). Vive en `dim_cadenas`. Toda etiqueta que decía "Farmacia" o
+  "Cadena Farmacia" ahora dice **Cadena**.
+- **Competidor**: todo producto cuyo laboratorio **no** está marcado como
+  propio, es decir `dim_laboratorios.es_propio = false`. Lo contrario es
+  **Mi Marca**.
+
+Un mismo competidor puede estar en varias cadenas, y una cadena vende tanto
+productos de Mi Marca como de Competidores. Por eso no pueden compartir columna
+ni etiqueta.
+
+Variantes unificadas: `Alternativa`, `COMPETENCIA` y `Competidor` →
+**Competidor** / **COMPETIDOR**. `Mi marca`, `MI MARCA` y `Mi Marca` →
+**Mi Marca** / **MI MARCA**.
+
+## Estado de la estandarización de la base
+
+Auditoría de `fase1_esquema.sql` contra las reglas de arriba.
+
+**Cumplen:**
+
+- Regla 2 (cada dimensión expone `nombre`): las 9 dimensiones con descripción.
+  `dim_tasa_bcv` no tiene `nombre` porque su PK natural es `fecha`, que es
+  deliberado.
+- Regla 3 (las llaves foráneas terminan en `_id`): sin excepciones.
+- Regla 5 (los montos llevan su moneda): `precio_full_bs`, `pvp_usd`, etc.
+
+**Pendientes, por orden de importancia:**
+
+| Columna | Problema | Coste de arreglarlo |
+|---|---|---|
+| `dim_cadenas.scraper_modulo` | Viola la regla 4: debería ser `modulo_scraper` (módulo *del* scraper), igual que `unidad_contenido` o `tipo_equivalencia` | 22 referencias en frontend, scraper y CSV |
+| `scrape_runs.trigger_tipo` | Viola la regla 4: debería ser `tipo_trigger` | Bajo: pocas referencias |
+| `audit_log.fecha` | Viola la regla 6: es la marca de tiempo de un evento, debería terminar en `_at` | Bajo: tabla interna de auditoría |
+| `fact_precios.fecha_captura` | Viola la regla 6 en sentido estricto | Muy alto: aparece en las 4 vistas analíticas, el scraper y el frontend |
+
+`scraper_modulo` quedó así en la Fase 8 por una decisión de coste: se eligió el
+nombre que ya usaban la mayoría de los consumidores para cambiar lo menos
+posible. Es una excepción consciente a la regla 4, no un descuido.

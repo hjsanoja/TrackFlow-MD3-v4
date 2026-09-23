@@ -373,7 +373,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
           {/* Selector de Cadena */}
           <div className="md:col-span-3 space-y-1.5">
             <label className="text-xs font-semibold text-on-surface block">
-              Cadena de Farmacias:
+              Cadena:
             </label>
             <select
               value={cadenaSeleccionada}

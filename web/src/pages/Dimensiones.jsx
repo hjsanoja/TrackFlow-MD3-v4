@@ -50,7 +50,7 @@ const TABLAS_CONFIG = {
     pk: 'id'
   },
   dim_cadenas: {
-    nombre: 'Cadenas de Farmacias',
+    nombre: 'Cadenas',
     icono: 'storefront',
     descripcion: 'Cadenas monitoreadas para el web scraping (Farmatodo, Locatel, Farmacias SAAS, etc.)',
     columnas: [
