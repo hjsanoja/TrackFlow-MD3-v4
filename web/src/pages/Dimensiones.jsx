@@ -12,7 +12,7 @@ const TABLAS_CONFIG = {
     descripcion: 'Gestión de fabricantes, marcas y laboratorios (incluyendo marca propia vs competencia)',
     columnas: [
       { key: 'id', label: 'ID', type: 'number', readOnly: true },
-      { key: 'nombre', label: 'Nombre del Laboratorio', type: 'text', required: true },
+      { key: 'nombre', label: 'Laboratorio', type: 'text', required: true },
       { key: 'es_propio', label: '¿Es Marca Propia?', type: 'boolean', defaultValue: false }
     ],
     pk: 'id'
@@ -54,9 +54,9 @@ const TABLAS_CONFIG = {
     icono: 'storefront',
     descripcion: 'Cadenas monitoreadas para el web scraping (Farmatodo, Locatel, Farmacias SAAS, etc.)',
     columnas: [
-      { key: 'id', label: 'Código ID', type: 'text', required: true },
-      { key: 'nombre', label: 'Nombre Comercial', type: 'text', required: true },
-      { key: 'color_hex', label: 'Color Hex (#RRGGBB)', type: 'color', defaultValue: '#040d53' },
+      { key: 'id', label: 'ID de la Cadena', type: 'text', required: true },
+      { key: 'nombre', label: 'Nombre de la Cadena', type: 'text', required: true },
+      { key: 'color_hex', label: 'Color de la Cadena', type: 'color', defaultValue: '#040d53' },
       { key: 'activo', label: '¿Activo en Monitoreo?', type: 'boolean', defaultValue: true }
     ],
     pk: 'id'
@@ -78,7 +78,7 @@ const TABLAS_CONFIG = {
     descripcion: 'Histórico y precios de venta vigentes fijados para productos propios',
     columnas: [
       { key: 'id', label: 'ID', type: 'number', readOnly: true },
-      { key: 'producto_id', label: 'ID Numérico Producto (dim_productos)', type: 'number', required: true },
+      { key: 'producto_id', label: 'ID Interno del Producto', type: 'number', required: true },
       { key: 'pvp_usd', label: 'PVP Oficial ($ USD)', type: 'number', step: '0.01', required: true },
       { key: 'vigente_desde', label: 'Vigente Desde', type: 'date', required: true },
       { key: 'vigente_hasta', label: 'Vigente Hasta (Opcional)', type: 'date' }

@@ -627,6 +627,13 @@ export async function dbUpsertProductoCompetencia(data) {
 
   let ok = false;
   let lastErr = null;
+  // Se registra aparte del `ok` general: cuando Supabase está activo es la
+  // fuente de verdad, y un fallo suyo NO puede quedar tapado porque la
+  // escritura a Firestore sí funcione. Ese enmascaramiento era la razón de que
+  // el panel dijera "URL de competencia creada con éxito" sin haber guardado
+  // nada: getFirestore() devuelve un objeto válido aunque el proyecto sea el
+  // de mentira, y setDoc() resuelve contra la caché local.
+  let supabaseFallo = null;
 
   if (isSupabaseActive()) {
     try {
@@ -634,8 +641,9 @@ export async function dbUpsertProductoCompetencia(data) {
       await guardarEnlaceCompetencia(cleanData);
       ok = true;
     } catch (e) {
-      console.warn('[Supabase] Error en upsertProductoCompetencia:', e?.message || String(e));
+      console.error('[Supabase] Error en upsertProductoCompetencia:', e);
       lastErr = e;
+      supabaseFallo = e;
     }
 
     // Compatibilidad: si productos_competencia sigue siendo una tabla real
@@ -662,6 +670,11 @@ export async function dbUpsertProductoCompetencia(data) {
 
   if (!isSupabaseActive() && !db) {
     ok = true;
+  }
+
+  // Supabase manda: si falló, se reporta aunque Firestore haya aceptado.
+  if (supabaseFallo) {
+    throw supabaseFallo;
   }
 
   if (!ok && lastErr && isSupabaseActive()) {

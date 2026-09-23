@@ -78,3 +78,26 @@ unidosis. Si quieres control exacto, manda `unidosis` con el número.
   inconsistencias, son claves de negocio en texto que conviven con `nombre`.
 - **`dim_tasa_bcv.fecha`** y **`config_calidad.clave`**: son llaves primarias
   naturales a propósito, no un `id` que falte.
+
+## Etiquetas visibles del panel
+
+Las etiquetas que ve el usuario viven en `web/src/utils/etiquetas.js`. La regla
+es: **un campo se llama igual en la tabla, en el formulario, en el filtro, en el
+desplegable, en el eje del gráfico y en el CSV exportado.**
+
+Cuando necesites el texto de un campo, impórtalo de `ETIQUETAS` en vez de
+escribirlo a mano. Así no vuelven a aparecer tres nombres para el mismo dato.
+
+### Variantes unificadas
+
+| Se llamaba | Dónde | Ahora |
+|---|---|---|
+| `Nombre / Molécula` | tabla de Productos | **Nombre del Producto** |
+| `Nombre Comercial *` | formulario de Productos | **Nombre del Producto** |
+| `Nombre Comercial / Marca *` | formulario de Competencia | **Nombre del Producto** |
+| `Laboratorio / Fabricante` | Competencia y Reportería (8 sitios) | **Laboratorio** |
+| `Identificador Técnico Scraper` | tabla de Cadenas | **Módulo de Scraping** |
+| `Identificador Técnico Robot` | formulario de Cadenas | **Módulo de Scraping** |
+| `Nombre Comercial *` | formulario de Cadenas | **Nombre de la Cadena** |
+| `Código ID` | Dimensiones → Cadenas | **ID de la Cadena** |
+| `ID Numérico Producto (dim_productos)` | Dimensiones → PVP Propio | **ID Interno del Producto** |

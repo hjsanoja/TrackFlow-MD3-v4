@@ -606,7 +606,7 @@ export default function Productos() {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Nombre / Molécula</th>
+                  <th>Nombre del Producto</th>
                   <th>Concentración / Tamaño</th>
                   <th>Tipo</th>
                   <th>Laboratorio</th>
@@ -670,7 +670,7 @@ export default function Productos() {
               <thead className="m3-sticky-header">
                 <tr>
                   <th>ID</th>
-                  <th>Nombre / Molécula</th>
+                  <th>Nombre del Producto</th>
                   <th>Concentración / Tamaño</th>
                   <th>Tipo</th>
                   <th>UN</th>
@@ -1037,7 +1037,7 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
               className="m3-input font-mono disabled:opacity-60" />
           </Field>
           
-          <Field label="Nombre Comercial *" hint="Ej. Atamel">
+          <Field label="Nombre del Producto *" hint="Ej. Atamel">
             <input type="text" required value={form.nombre}
               onChange={e => handleChange('nombre', e.target.value)}
               placeholder="Nombre comercial"

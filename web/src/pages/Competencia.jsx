@@ -1526,7 +1526,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Nombre Comercial / Marca *" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Acetaminofén, Atamel'}>
+          <Field label="Nombre del Producto *" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Acetaminofén, Atamel'}>
             <input type="text" required value={form.marca}
               onChange={e => handleChange('marca', e.target.value)}
               disabled={!isNew}
@@ -1534,7 +1534,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
               className="m3-input text-on-surface" />
           </Field>
 
-          <Field label="Laboratorio / Fabricante" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Genven, La Santé'}>
+          <Field label="Laboratorio" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Genven, La Santé'}>
             <input type="text" value={form.laboratorio}
               onChange={e => handleChange('laboratorio', e.target.value)}
               placeholder="Ej. Genven"

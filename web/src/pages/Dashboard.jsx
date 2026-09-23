@@ -55,6 +55,26 @@ export default function Dashboard({ user, userDoc }) {
   const [ocultarSinPrecios, setOcultarSinPrecios] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [dashboardPriceMode, setDashboardPriceMode] = useState('lista');
+
+  // Ventana contra la que se calcula la variación de precio, en días.
+  // Antes se comparaba la corrida actual contra la anterior usando run_id,
+  // pero fase2_migracion_datos.sql migró los 20.153 precios históricos con
+  // scrape_run_id = NULL, así que `x.run_id !== currentHist.run_id` era
+  // siempre falso y la variación salía en 0% para todo.
+  const [ventanaVariacion, setVentanaVariacion] = useState(() => {
+    try {
+      const guardado = parseInt(localStorage.getItem('trackflow_pref_ventana_variacion'), 10);
+      return [1, 7, 15].includes(guardado) ? guardado : 1;
+    } catch {
+      return 1;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('trackflow_pref_ventana_variacion', String(ventanaVariacion));
+    } catch (_) {}
+  }, [ventanaVariacion]);
   const [refreshing, setRefreshing] = useState(false);
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
   const [clearingHistory, setClearingHistory] = useState(false);
@@ -245,7 +265,20 @@ export default function Dashboard({ user, userDoc }) {
           const k = getHistoryKey(p.id_interno, c.cadena, c.marca);
           const hList = historyGrouped[k] || [];
           const currentHist = hList[0];
-          const previousHist = hList.find(x => x.run_id !== currentHist?.run_id);
+
+          // La lista viene ordenada por fecha descendente, así que el precio
+          // de referencia es la primera captura con al menos `ventanaVariacion`
+          // días de antigüedad respecto de la más reciente. Si no hay ninguna
+          // tan vieja, no hay con qué comparar y no se dibuja flecha.
+          let previousHist = null;
+          if (currentHist?.scraped_at) {
+            const fechaActual = new Date(currentHist.scraped_at).getTime();
+            const corte = fechaActual - (ventanaVariacion * 24 * 60 * 60 * 1000);
+            previousHist = hList.find(x => {
+              if (!x.scraped_at) return false;
+              return new Date(x.scraped_at).getTime() <= corte;
+            }) || null;
+          }
           
           const currentVal = currentHist ? (dashboardPriceMode === 'descuento' ? (currentHist.precio_desc_bs || currentHist.precio_full_bs) : currentHist.precio_full_bs) : null;
           const prevVal = previousHist ? (dashboardPriceMode === 'descuento' ? (previousHist.precio_desc_bs || previousHist.precio_full_bs) : previousHist.precio_full_bs) : null;
@@ -340,7 +373,7 @@ export default function Dashboard({ user, userDoc }) {
           pUnidosisCount,
         };
       });
-  }, [productos, productosCompetencia, bcv.rate, dashboardPriceMode, historicoPrecios, analisisMode]);
+  }, [productos, productosCompetencia, bcv.rate, dashboardPriceMode, historicoPrecios, analisisMode, ventanaVariacion]);
 
   // Count products with no price in any chain
   const sinPreciosCount = useMemo(() => {
@@ -863,6 +896,20 @@ export default function Dashboard({ user, userDoc }) {
               <span className="material-symbols-outlined text-[15px]">medication</span>
               <span>Por Unidosis</span>
             </button>
+          </div>
+
+          {/* Ventana de comparación para la variación de precio */}
+          <div className="m3-segmented" title="Contra qué fecha se compara el precio actual para calcular la variación">
+            {[1, 7, 15].map(dias => (
+              <button
+                key={dias}
+                onClick={() => setVentanaVariacion(dias)}
+                className={`m3-segmented-item ${ventanaVariacion === dias ? 'active' : ''}`}
+              >
+                <span className="material-symbols-outlined text-[15px]">trending_up</span>
+                <span>{dias === 1 ? '24 h' : `${dias} días`}</span>
+              </button>
+            ))}
           </div>
 
           {/* Currency Switcher widget */}
