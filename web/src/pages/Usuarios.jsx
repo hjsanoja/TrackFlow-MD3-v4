@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { db, firebaseConfig } from '../firebase';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import { db } from '../firebase';
 import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
@@ -14,14 +12,13 @@ import { dbUpsertUsuario, dbDeleteUsuario } from '../utils/dbClient';
 export const AVAILABLE_MENUS = [
   { id: '/', label: 'Dashboard', desc: 'Panel de Inteligencia y KPIs de precios', icon: 'dashboard', isDefault: true },
   { id: '/mapa-calor', label: 'Mapa de Calor', desc: 'Posición relativa frente al mercado', icon: 'thermostat', isDefault: true },
-  { id: '/reporteria', label: 'Reportería', desc: 'Descarga y auditoría de reportes con brechas por ID (Experimental)', icon: 'table_chart', isDefault: true },
-  { id: '/experimental', label: 'Experimental', desc: 'Análisis, Simulador y Hallazgos (en evaluación)', icon: 'science', isDefault: false },
+  { id: '/experimental', label: 'Experimental', desc: 'Reportería de brechas por ID, Análisis, Simulador y Hallazgos', icon: 'science', isDefault: false },
   { id: '/productos', label: 'Productos', desc: 'Catálogo de productos propios', icon: 'medication', isDefault: false },
   { id: '/competencia', label: 'Competencia', desc: 'Enlaces y comparativa de competencia', icon: 'link', isDefault: false },
   { id: '/cadenas', label: 'Cadenas', desc: 'Listado de cadenas y sucursales', icon: 'storefront', isDefault: false },
 ];
 
-export const DEFAULT_CONSULTA_MENUS = ['/', '/mapa-calor', '/reporteria'];
+export const DEFAULT_CONSULTA_MENUS = ['/', '/mapa-calor'];
 
 const ROLES = [
   { 
@@ -64,7 +61,6 @@ export default function Usuarios({ userDoc }) {
   }, []);
 
   const handleSave = async (data, isNew) => {
-    let secondaryApp = null;
     try {
       const email = data.email.trim().toLowerCase();
       if (!email || !/\S+@\S+\.\S+/.test(email)) {
@@ -80,34 +76,18 @@ export default function Usuarios({ userDoc }) {
           throw new Error('La contraseña debe tener al menos 6 caracteres');
         }
 
-        // 1. Intentar registro en Supabase Auth si está activo
+        // Registro en Supabase Auth
         if (isSupabaseActive()) {
           try {
-            await supabase.auth.signUp({
+            const { error: sbErr } = await supabase.auth.signUp({
               email,
               password: data.password,
             });
+            if (sbErr) {
+              console.warn('[Supabase Auth Warning]:', sbErr?.message || sbErr);
+            }
           } catch (sbErr) {
             console.warn('[Supabase Auth Warning]:', sbErr?.message || sbErr);
-          }
-        }
-
-        // 2. Intentar registro en Firebase Auth solo si la API key no es mock
-        const isMockFirebaseKey = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('MockKey') || firebaseConfig.apiKey.includes('123456');
-        if (!isMockFirebaseKey) {
-          try {
-            secondaryApp = initializeApp(firebaseConfig, `secondary-app-${Date.now()}`);
-            const secondaryAuth = getAuth(secondaryApp);
-            await createUserWithEmailAndPassword(secondaryAuth, email, data.password);
-            await signOut(secondaryAuth);
-            await deleteApp(secondaryApp);
-            secondaryApp = null;
-          } catch (fbErr) {
-            console.warn('[Firebase Auth Warning]:', fbErr?.message || fbErr);
-            if (secondaryApp) {
-              try { await deleteApp(secondaryApp); } catch (e) {}
-              secondaryApp = null;
-            }
           }
         }
       }
@@ -139,9 +119,6 @@ export default function Usuarios({ userDoc }) {
       setEditing(null);
       await cargar(true);
     } catch (err) {
-      if (secondaryApp) {
-        try { await deleteApp(secondaryApp); } catch (e) {}
-      }
       addToast(err.message, 'error');
     }
   };
@@ -153,13 +130,9 @@ export default function Usuarios({ userDoc }) {
         if (!error) {
           addToast(`Se ha enviado un correo para restablecer la contraseña a ${email}`, 'success');
           return;
+        } else {
+          throw error;
         }
-      }
-      const isMockFirebaseKey = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('MockKey') || firebaseConfig.apiKey.includes('123456');
-      if (!isMockFirebaseKey) {
-        const authInstance = getAuth();
-        await sendPasswordResetEmail(authInstance, email);
-        addToast(`Se ha enviado un correo para restablecer la contraseña a ${email}`, 'success');
       } else {
         addToast(`Solicitud de restablecimiento registrada para ${email}`, 'info');
       }

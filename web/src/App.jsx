@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
 import { supabase } from './supabase';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Experimental from './pages/Experimental';
-import Reporteria from './pages/Reporteria';
-import Analisis from './pages/Analisis';
-import Simulador from './pages/Simulador';
-import Hallazgos from './pages/Hallazgos';
 import MapaCalor from './pages/MapaCalor';
 import Productos from './pages/Productos';
 import Competencia from './pages/Competencia';
@@ -34,7 +27,7 @@ function AppContent() {
   useEffect(() => {
     let isMounted = true;
 
-    // 0. Check local demo session or default demo mode
+    // 0. Revisar sesión demo local guardada previamente
     const storedDemo = localStorage.getItem('trackflow_demo_user');
     if (storedDemo) {
       try {
@@ -55,9 +48,8 @@ function AppContent() {
     }
 
     const hasSbEnv = Boolean(import.meta.env.VITE_SUPABASE_URL);
-    const hasFbEnv = Boolean(import.meta.env.VITE_FIREBASE_API_KEY);
 
-    if (!hasSbEnv && !hasFbEnv) {
+    if (!hasSbEnv) {
       const demoDoc = { email: 'admin@trackflow.com', nombre: 'Hernando Sanoja', rol: 'administrador', activo: true };
       localStorage.setItem('trackflow_demo_user', JSON.stringify(demoDoc));
       setUser({ email: demoDoc.email, uid: 'demo-admin-id' });
@@ -66,15 +58,13 @@ function AppContent() {
       return;
     }
 
-    // 1. Verificar sesión activa con Supabase
-    const checkSupabaseAuth = async () => {
-
-      if (!import.meta.env.VITE_SUPABASE_URL) return false;
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const email = session.user.email.toLowerCase();
-          const { data: uData, error } = await supabase
+    // 1. Manejo reactivo de sesión con Supabase Auth exclusivo
+    const syncUserSession = async (session) => {
+      if (!isMounted) return;
+      if (session?.user) {
+        const email = session.user.email.toLowerCase();
+        try {
+          const { data: uData } = await supabase
             .from('usuarios')
             .select('*')
             .or(`email.eq.${email},id.eq.${emailToDocId(email)}`)
@@ -88,72 +78,48 @@ function AppContent() {
                 setUserDoc(uData);
                 setLoading(false);
               }
-              return true;
+              return;
             } else {
               await supabase.auth.signOut();
-              addToast('Tu usuario está inactivo. Contacta a un administrador.', 'error');
-            }
-          } else {
-            // Usuario en Supabase Auth pero sin perfil en la tabla usuarios todavía
-            if (isMounted) {
-              setUser({ email: session.user.email, uid: session.user.id });
-              setUserDoc({ email: session.user.email, nombre: session.user.email.split('@')[0], rol: 'administrador', activo: true });
-              setLoading(false);
-            }
-            return true;
-          }
-        }
-      } catch (err) {
-        console.warn('Error verificando Supabase session:', err);
-      }
-      return false;
-    };
-
-    const initAuth = async () => {
-      const hasSbUser = await checkSupabaseAuth();
-      if (hasSbUser) return;
-
-      // 2. Escuchar cambios en Firebase Auth como fallback
-      const unsubFirebase = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (!isMounted) return;
-        if (firebaseUser) {
-          try {
-            const docId = emailToDocId(firebaseUser.email);
-            const snap = await getDoc(doc(db, 'usuarios', docId));
-            if (snap.exists()) {
-              const data = snap.data();
-              const isActive = data.activo === true || data.activo === 'si' || data.activo === 'sí';
-              if (isActive) {
-                setUser(firebaseUser);
-                setUserDoc(data);
-              } else {
-                await signOut(auth);
+              if (isMounted) {
+                setUser(null);
+                setUserDoc(null);
+                setLoading(false);
                 addToast('Tu usuario está inactivo. Contacta a un administrador.', 'error');
               }
-            } else {
-              // Permitir ingreso con perfil por defecto si no existe doc en Firestore
-              setUser(firebaseUser);
-              setUserDoc({ email: firebaseUser.email, nombre: firebaseUser.email.split('@')[0], rol: 'administrador', activo: true });
+              return;
             }
-          } catch (err) {
-            console.error('Error:', err?.message || String(err));
-            setUser(firebaseUser);
-            setUserDoc({ email: firebaseUser.email, nombre: firebaseUser.email.split('@')[0], rol: 'administrador', activo: true });
           }
-        } else {
+        } catch (err) {
+          console.warn('Aviso verificando perfil de usuario en Supabase:', err);
+        }
+
+        // Perfil por defecto si aún no está dado de alta en la tabla usuarios
+        if (isMounted) {
+          setUser({ email: session.user.email, uid: session.user.id });
+          setUserDoc({ email: session.user.email, nombre: session.user.email.split('@')[0], rol: 'administrador', activo: true });
+          setLoading(false);
+        }
+      } else {
+        if (isMounted) {
           setUser(null);
           setUserDoc(null);
+          setLoading(false);
         }
-        setLoading(false);
-      });
-
-      return unsubFirebase;
+      }
     };
 
-    let unsubFirebaseFn = null;
-    initAuth().then(unsub => { unsubFirebaseFn = unsub; });
+    // Obtener sesión inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      syncUserSession(session);
+    });
 
-    // Timeout de seguridad: asegura que la pantalla de carga nunca se quede colgada
+    // Escuchar cambios de estado en Supabase Auth en tiempo real
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      syncUserSession(session);
+    });
+
+    // Timeout de seguridad: asegura que la pantalla de carga nunca se quede congelada
     const safetyTimer = setTimeout(() => {
       if (isMounted) {
         setLoading(prev => {
@@ -167,23 +133,11 @@ function AppContent() {
           return false;
         });
       }
-    }, 1500);
-
-    // Escuchar eventos de cambio de sesión en Supabase Auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await checkSupabaseAuth();
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setUserDoc(null);
-        setLoading(false);
-      }
-    });
+    }, 2000);
 
     return () => {
       isMounted = false;
       clearTimeout(safetyTimer);
-      if (unsubFirebaseFn) unsubFirebaseFn();
       subscription?.unsubscribe();
     };
   }, [addToast]);
@@ -209,9 +163,9 @@ function AppContent() {
   const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
   const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
 
-  const defaultConsultaMenus = ['/', '/mapa-calor', '/reporteria'];
+  const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/reporteria', '/experimental', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    ? ['/', '/mapa-calor', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -220,10 +174,10 @@ function AppContent() {
     if (isAdmin) return true;
     if (path === '/experimental') {
       return allowedMenuIds.includes('/experimental') || 
+             allowedMenuIds.includes('/reporteria') || 
              allowedMenuIds.includes('/analisis') || 
              allowedMenuIds.includes('/simulador') || 
-             allowedMenuIds.includes('/hallazgos') ||
-             allowedMenuIds.includes('/reporteria');
+             allowedMenuIds.includes('/hallazgos');
     }
     return allowedMenuIds.includes(path);
   };
@@ -236,7 +190,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
           <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
-          <Route path="/reporteria" element={isAllowed('/reporteria') ? <Reporteria user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/reporteria" element={<Navigate to="/experimental?tab=reporteria" replace />} />
           <Route path="/experimental" element={isAllowed('/experimental') ? <Experimental user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
           <Route path="/analisis" element={<Navigate to="/experimental?tab=analisis" replace />} />
           <Route path="/simulador" element={<Navigate to="/experimental?tab=simulador" replace />} />
@@ -262,4 +216,3 @@ export default function App() {
     </ErrorBoundary>
   );
 }
-

@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase';
 import { supabase } from '../supabase';
 import { useData } from '../context/DataContext';
 
@@ -15,9 +13,9 @@ export default function Layout({ user, userDoc, children }) {
   const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
   const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
 
-  const defaultConsultaMenus = ['/', '/mapa-calor', '/reporteria'];
+  const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/reporteria', '/experimental', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    ? ['/', '/mapa-calor', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -27,6 +25,7 @@ export default function Layout({ user, userDoc, children }) {
     if (isAdmin) return true;
     if (item.to === '/experimental') {
       return allowedMenuIds.includes('/experimental') || 
+             allowedMenuIds.includes('/reporteria') || 
              allowedMenuIds.includes('/analisis') || 
              allowedMenuIds.includes('/simulador') || 
              allowedMenuIds.includes('/hallazgos');
@@ -41,16 +40,12 @@ export default function Layout({ user, userDoc, children }) {
     try {
       await supabase.auth.signOut();
     } catch (e) {}
-    try {
-      await signOut(auth);
-    } catch (e) {}
     window.location.reload();
   };
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
     { to: '/mapa-calor', label: 'Mapa de Calor', icon: 'thermostat', adminOnly: false },
-    { to: '/reporteria', label: 'Reportería', icon: 'table_chart', adminOnly: false, badge: 'Labs' },
     { to: '/experimental', label: 'Experimental', icon: 'science', adminOnly: false, badge: 'Labs' },
     { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: false },
     { to: '/competencia', label: 'Competencia', icon: 'link', adminOnly: false },
@@ -76,8 +71,8 @@ export default function Layout({ user, userDoc, children }) {
   // Filtered search results (including submodules of Experimental)
   const allSearchNavItems = [
     ...navItems,
-    { to: '/reporteria', label: 'Reporte Comparativo y Brechas (Reportería)', icon: 'table_chart' },
     ...(isNavVisible({ to: '/experimental', adminOnly: false }) ? [
+      { to: '/experimental?tab=reporteria', label: 'Reportería de Precios y Brechas (Experimental)', icon: 'table_chart' },
       { to: '/experimental?tab=analisis', label: 'Análisis de Precios (Experimental)', icon: 'insights' },
       { to: '/experimental?tab=simulador', label: 'Simulador de Precios (Experimental)', icon: 'calculate' },
       { to: '/experimental?tab=hallazgos', label: 'Hallazgos de Mercado (Experimental)', icon: 'lightbulb' }

@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
 import { supabase } from '../supabase';
 
 export default function Login() {
@@ -30,7 +28,7 @@ export default function Login() {
 
     const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
-    // 1. Intentar inicio de sesión con Supabase Auth si está configurado
+    // 1. Inicio de sesión exclusivo con Supabase Auth
     if (hasSupabase) {
       try {
         const { data, error: sbError } = await supabase.auth.signInWithPassword({
@@ -38,28 +36,30 @@ export default function Login() {
           password: password,
         });
 
-        if (!sbError && data?.user) {
+        if (sbError) {
+          // Si el usuario intentó con credenciales demo en ambiente local sin usuario en Supabase
+          if (email.trim().toLowerCase() === 'admin@trackflow.com' && password === 'demo1234') {
+            handleDemoLogin();
+            return;
+          }
+          setError(sbError.message || 'Error al autenticar credenciales en Supabase.');
+          setLoading(false);
+          return;
+        }
+
+        if (data?.user) {
           setLoading(false);
           return;
         }
       } catch (err) {
-        console.warn('Fallback por aviso de Supabase Auth:', err?.message);
-      }
-    }
-
-    // 2. Fallback a Firebase Auth si está disponible
-    if (auth) {
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
+        setError(err?.message || 'Error inesperado al conectar con Supabase Auth.');
         setLoading(false);
         return;
-      } catch (err) {
-        console.warn('Firebase login attempt failed, switching to local session mode:', err?.message);
       }
+    } else {
+      // Fallback a modo demo solo en caso de ausencia total de variables de entorno
+      handleDemoLogin();
     }
-
-    // 3. Fallback a Sesión Demo
-    handleDemoLogin();
   };
 
   return (
@@ -146,7 +146,7 @@ export default function Login() {
               M3 Expressive Activo
             </span>
             <span className="text-[10px] text-on-surface-variant/70 font-mono">
-              V7.4.0 · Material 3 Expressive & Física Cinemática
+              V7.4.0 · Material 3 Expressive & Supabase Auth Exclusivo
             </span>
           </div>
         </div>
@@ -154,4 +154,3 @@ export default function Login() {
     </div>
   );
 }
-
