@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.dim_cadenas (
     nombre VARCHAR(100) NOT NULL UNIQUE,
     website VARCHAR(255),
     color_hex VARCHAR(7) DEFAULT '#3B82F6',
-    scraper_modulo VARCHAR(50),
+    modulo_scraper VARCHAR(50),
     activo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() -- A1: UTC
 );
@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS public.scrape_runs (
     exitosos INT DEFAULT 0,
     fallidos INT DEFAULT 0,
     estado VARCHAR(30) NOT NULL DEFAULT 'en_proceso' CHECK (estado IN ('en_proceso', 'completada', 'fallida', 'parcial')),
-    trigger_tipo VARCHAR(30) NOT NULL DEFAULT 'cron' CHECK (trigger_tipo IN ('cron', 'manual', 'dispatch'))
+    tipo_trigger VARCHAR(30) NOT NULL DEFAULT 'cron' CHECK (tipo_trigger IN ('cron', 'manual', 'dispatch'))
 );
 
 -- ----------------------------------------------------------------------------
@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS public.audit_log (
     valor_anterior TEXT,
     valor_nuevo TEXT,
     usuario TEXT,
-    fecha TIMESTAMPTZ NOT NULL DEFAULT NOW() -- A1: UTC
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() -- A1: UTC
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_tabla_registro ON audit_log (tabla, registro_id);

@@ -1,4 +1,4 @@
-id,nombre,website,scraper_modulo,color_hex,activo
+id,nombre,website,modulo_scraper,color_hex,activo
 farmatodo,Farmatodo,https://www.farmatodo.com.ve,farmatodo,#004B87,si
 locatel,Locatel,https://www.locatel.com.ve,locatel,#E30613,si
 farmadon,FarmaDON,https://www.farmadon.com,farmadon,#0072BC,si

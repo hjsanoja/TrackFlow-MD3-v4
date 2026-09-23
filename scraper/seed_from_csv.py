@@ -81,7 +81,7 @@ def seed_cadenas(db):
         db.collection("cadenas").document(doc_id).set({
             "nombre": row.get("nombre", "").strip(),
             "website": row.get("website", "").strip(),
-            "scraper_modulo": row.get("scraper_modulo", "").strip(),
+            "modulo_scraper": row.get("modulo_scraper", "").strip(),
             "activo": es_si(row.get("activo", "")),
         })
 

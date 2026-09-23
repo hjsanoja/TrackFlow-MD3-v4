@@ -54,8 +54,13 @@ BEGIN
         WHERE table_schema = 'public' AND table_name = 'dim_cadenas'
           AND column_name = 'scraper_modulo'
     ) THEN
-        ALTER TABLE public.dim_cadenas RENAME COLUMN modulo_scraper TO scraper_modulo;
-        RAISE NOTICE 'dim_cadenas.modulo_scraper renombrada a scraper_modulo.';
+        -- SUPERSEDIDO POR fase10_nomenclatura_final.sql
+        -- Este paso renombraba a scraper_modulo, que viola la regla 4 del
+        -- diccionario (sustantivo primero: es el modulo DEL scraper). La
+        -- Fase 10 lo deja en modulo_scraper y alinea los 22 consumidores, y
+        -- fase1_esquema.sql ya crea la columna con el nombre correcto. Se
+        -- conserva el bloque para no alterar el historial de migraciones.
+        RAISE NOTICE 'Paso supersedido por fase10_nomenclatura_final.sql: no se renombra nada.';
     ELSE
         RAISE NOTICE 'dim_cadenas.scraper_modulo ya existe: nada que renombrar.';
     END IF;

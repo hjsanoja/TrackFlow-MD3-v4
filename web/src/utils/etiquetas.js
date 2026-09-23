@@ -30,7 +30,7 @@ export const ETIQUETAS = {
   nombre_cadena: 'Nombre de la Cadena',
   id_cadena: 'ID de la Cadena',
   website: 'Sitio Web',
-  scraper_modulo: 'Módulo de Scraping',
+  modulo_scraper: 'Módulo de Scraping',
   color_cadena: 'Color de la Cadena',
 
   // --- Enlace de competencia ---

@@ -34,7 +34,7 @@ SELECT
     id,
     nombre,
     website,
-    scraper_modulo,
+    modulo_scraper,
     activo
 FROM public.dim_cadenas;
 
