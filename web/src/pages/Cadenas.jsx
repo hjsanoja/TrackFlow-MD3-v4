@@ -138,7 +138,7 @@ export default function Cadenas() {
                 <tr>
                   <th>Nombre Cadena</th>
                   <th>Portal Website</th>
-                  <th>Identificador Técnico Scraper</th>
+                  <th>Módulo de Scraping</th>
                   <th className="text-center">URLs Activas Scrapeadas</th>
                   <th className="text-center">Estado</th>
                   <th className="text-right">Acciones</th>
@@ -178,7 +178,7 @@ export default function Cadenas() {
                 <tr>
                   <th>Nombre Cadena</th>
                   <th>Portal Website</th>
-                  <th>Identificador Técnico Scraper</th>
+                  <th>Módulo de Scraping</th>
                   <th className="text-center">URLs Activas Scrapeadas</th>
                   <th className="text-center">Estado</th>
                   <th className="text-right">Acciones</th>
@@ -303,7 +303,7 @@ function CadenaModal({ cadena, onSave, onClose }) {
       maxWidth="max-w-lg"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
-        <Field label="Nombre Comercial *" hint="Ej. Locatel, Farmatodo, FarmaDON">
+        <Field label="Nombre de la Cadena *" hint="Ej. Locatel, Farmatodo, FarmaDON">
           <input type="text" required value={form.nombre}
             onChange={e => handleChange('nombre', e.target.value)}
             disabled={!isNew}
@@ -318,7 +318,7 @@ function CadenaModal({ cadena, onSave, onClose }) {
             className="m3-input" />
         </Field>
 
-        <Field label="Identificador Técnico Robot" hint="Módulo Python de scraping asociado en backend">
+        <Field label="Módulo de Scraping" hint="Módulo Python de scraping asociado en backend">
           <select required value={form.scraper_modulo}
             onChange={e => handleChange('scraper_modulo', e.target.value)}
             className="m3-select w-full bg-surface-container-lowest text-on-surface">

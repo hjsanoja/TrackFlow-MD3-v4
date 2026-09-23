@@ -69,7 +69,15 @@ export default function Simulador({ user, userDoc }) {
           const k = getHistoryKey(p.id_interno, c.cadena, c.marca);
           const hList = historyGrouped[k] || [];
           const currentHist = hList[0];
-          const previousHist = hList.find(x => x.run_id !== currentHist?.run_id);
+          // Mismo criterio que el Dashboard: se compara por fecha, no por
+          // corrida. Los precios migrados tienen scrape_run_id = NULL, así que
+          // comparar run_id nunca encontraba un precio anterior.
+          const corteSim = currentHist?.scraped_at
+            ? new Date(currentHist.scraped_at).getTime() - (24 * 60 * 60 * 1000)
+            : null;
+          const previousHist = corteSim
+            ? hList.find(x => x.scraped_at && new Date(x.scraped_at).getTime() <= corteSim)
+            : null;
           
           const currentVal = currentHist ? (dashboardPriceMode === 'descuento' ? (currentHist.precio_desc_bs || currentHist.precio_full_bs) : currentHist.precio_full_bs) : null;
           const prevVal = previousHist ? (dashboardPriceMode === 'descuento' ? (previousHist.precio_desc_bs || previousHist.precio_full_bs) : previousHist.precio_full_bs) : null;

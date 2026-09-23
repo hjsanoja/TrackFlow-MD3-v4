@@ -130,7 +130,7 @@ export default function Reporteria({ user, userDoc }) {
       const pFullUsd = pFullBs ? pFullBs / currentBcvRate : null;
       const pDescUsd = pDescBs ? pDescBs / currentBcvRate : null;
 
-      // Laboratorio / Fabricante específico de la tabla de competencias (formulario Vincular Enlace)
+      // Laboratorio específico de la tabla de competencias (formulario Vincular Enlace)
       const labFabricanteSku = (comp.laboratorio || comp.fabricante || (comp.tipo === 'propio' ? (prodPropio.laboratorio || 'La Santé') : comp.marca) || '—').trim();
 
       const isMiMarca = comp.tipo === 'propio';
@@ -313,7 +313,7 @@ export default function Reporteria({ user, userDoc }) {
     const headers = [
       { key: 'id_producto_propio', label: 'ID Producto Propio' },
       { key: 'producto_propio', label: 'Producto Propio' },
-      { key: 'laboratorio_fabricante', label: 'Laboratorio / Fabricante' },
+      { key: 'laboratorio_fabricante', label: 'Laboratorio' },
       { key: 'cadena_competidor', label: 'Cadena/Competidor' },
       { key: 'marca_linea', label: 'Marca/Línea' },
       { key: 'tipo', label: 'Tipo' },
@@ -362,7 +362,7 @@ export default function Reporteria({ user, userDoc }) {
     const headers = [
       'ID Producto Propio',
       'Producto Propio',
-      'Laboratorio / Fabricante',
+      'Laboratorio',
       'Cadena/Competidor',
       'Marca/Línea',
       'Tipo',
@@ -572,7 +572,7 @@ export default function Reporteria({ user, userDoc }) {
             </select>
           </div>
 
-          {/* Laboratorio / Fabricante (de la tabla Competencias) */}
+          {/* Laboratorio (de la tabla Competencias) */}
           <div>
             <select
               value={filtroLaboratorio}
@@ -665,7 +665,7 @@ export default function Reporteria({ user, userDoc }) {
               <tr className="bg-surface-container-low/80 border-b border-outline-variant/60 text-on-surface-variant font-mono text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">ID Producto Propio</th>
                 <th className="py-3 px-3.5 font-bold min-w-[190px]">Producto Propio</th>
-                <th className="py-3 px-3.5 font-bold whitespace-nowrap text-primary">Laboratorio / Fabricante (SKU)</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap text-primary">Laboratorio (SKU)</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">Cadena / Competidor</th>
                 <th className="py-3 px-3.5 font-bold min-w-[130px]">Marca / Línea</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">Tipo</th>
@@ -727,7 +727,7 @@ export default function Reporteria({ user, userDoc }) {
                         </div>
                       </td>
 
-                      {/* Laboratorio / Fabricante (del SKU / Competencia) */}
+                      {/* Laboratorio (del SKU / Competencia) */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
                         <span 
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border shadow-xs"
@@ -927,7 +927,7 @@ export default function Reporteria({ user, userDoc }) {
             • <strong>Referencia Mi Marca (100% Base):</strong> Se toma el precio en dólares de tu producto propio para cada ID. Si tienes un enlace de tu marca extraído en esa cadena o el PVP maestro, se establece como el 100% de referencia.<br />
             • <strong>Brecha en Dólares (%):</strong> Se calcula como <code>((Precio Competidor USD - Precio Mi Marca USD) / Precio Mi Marca USD) * 100</code>.<br />
             • Si un competidor como <em>Calox</em> o <em>Genven</em> está en <strong>-60% o -67%</strong>, significa que su precio es menor y tiene ventaja competitiva de precio. Si está en <strong>+59%</strong>, tu producto es más económico.<br />
-            • El campo <strong>Laboratorio / Fabricante</strong> refleja directamente el fabricante configurado en cada SKU del formulario de competencia.
+            • El campo <strong>Laboratorio</strong> refleja directamente el fabricante configurado en cada SKU del formulario de competencia.
           </p>
         </div>
       </div>
