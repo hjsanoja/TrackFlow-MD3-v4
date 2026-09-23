@@ -543,8 +543,8 @@ export default function Dimensiones() {
           isOpen={true}
           title={`Eliminar Registro de ${config.nombre}`}
           message={`¿Estás seguro de que deseas eliminar este registro (${confirmDelete[config.pk] || confirmDelete.nombre || 'ID'})? Esta acción no se puede deshacer y puede fallar si existen productos relacionados.`}
-          confirmLabel={deleting ? 'Eliminando...' : 'Eliminar Registro'}
-          variant="danger"
+          confirmText={deleting ? 'Eliminando...' : 'Eliminar Registro'}
+          isDanger={true}
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(null)}
         />

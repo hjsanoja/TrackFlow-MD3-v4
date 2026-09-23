@@ -192,13 +192,14 @@ export function DataProvider({ children, user }) {
   const CACHE_KEY = 'trackflow_data_cache_v3';
   const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 
+  // Si la app está en blanco, no inyectar mock data por defecto
   const applyDefaultSeed = useCallback(() => {
-    setProductos(DEFAULT_PRODUCTS);
-    setProductosCompetencia(DEFAULT_COMPETENCIA);
+    setProductos([]);
+    setProductosCompetencia([]);
     setCadenas(DEFAULT_CADENAS);
-    setHistoricoPrecios(DEFAULT_HISTORICO);
+    setHistoricoPrecios([]);
     setBcvRates(DEFAULT_RATES);
-    setUltimaCorrida(DEFAULT_RUN);
+    setUltimaCorrida(null);
     setUsuarios(DEFAULT_USUARIOS);
     setIsLoadedOnce(true);
     setLoadingInitial(false);
@@ -531,7 +532,7 @@ export function DataProvider({ children, user }) {
     try {
       if (isSupabaseActive()) {
         const data = await fetchDimProductos();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const prods = data.map(p => ({
             ...p,
             id: p.id || p.id_interno || p.ID || '',
@@ -541,13 +542,14 @@ export function DataProvider({ children, user }) {
           return;
         }
       }
-      if (!db) return;
-      const snap = await getDocs(collection(db, 'productos'));
-      if (!snap.empty) {
-        const prods = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        prods.sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
-        setProductos(prods);
+      if (!db) {
+        setProductos([]);
+        return;
       }
+      const snap = await getDocs(collection(db, 'productos'));
+      const prods = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      prods.sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
+      setProductos(prods);
     } catch (e) {
       console.warn('Aviso actualizando productos:', e?.message || String(e));
     }
@@ -608,11 +610,12 @@ export function DataProvider({ children, user }) {
           return;
         }
       }
-      if (!db) return;
-      const snap = await getDocs(collection(db, 'productos_competencia'));
-      if (!snap.empty) {
-        setProductosCompetencia(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      if (!db) {
+        setProductosCompetencia([]);
+        return;
       }
+      const snap = await getDocs(collection(db, 'productos_competencia'));
+      setProductosCompetencia(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.warn('Aviso actualizando competencia:', e?.message || String(e));
     }
