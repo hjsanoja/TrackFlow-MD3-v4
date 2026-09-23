@@ -107,6 +107,75 @@ async function fetchAllSupabaseRows(tableName, pageSize = 1000) {
   return allRows;
 }
 
+// Cargar catálogo de productos propios desde dim_productos con soporte relacional
+async function fetchDimProductos() {
+  if (!isSupabaseActive() || !supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('dim_productos')
+      .select(`
+        id,
+        id_interno,
+        codigo_barra,
+        nombre,
+        activo,
+        cantidad_contenido,
+        unidad_contenido,
+        laboratorio_id,
+        dim_laboratorios ( id, nombre, es_propio ),
+        dim_categorias ( nombre ),
+        dim_unidades_negocio ( nombre ),
+        dim_formas_farmaceuticas ( nombre ),
+        pvp_propio ( pvp_usd, vigente_desde, vigente_hasta )
+      `);
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data.map(d => {
+        // Encontrar PVP vigente actual
+        let pvpUsd = 0;
+        if (Array.isArray(d.pvp_propio) && d.pvp_propio.length > 0) {
+          const sortedPvp = [...d.pvp_propio].sort((a, b) => new Date(b.vigente_desde) - new Date(a.vigente_desde));
+          pvpUsd = Number(sortedPvp[0].pvp_usd) || 0;
+        }
+
+        const labNombre = d.dim_laboratorios?.nombre || 'La Sante';
+        const unNombre = d.dim_unidades_negocio?.nombre || 'La Sante';
+        const isPropio = d.dim_laboratorios?.es_propio !== false;
+
+        return {
+          id: d.id_interno || String(d.id),
+          id_interno: d.id_interno || String(d.id),
+          db_id: d.id,
+          nombre: d.nombre || '',
+          codigo_barra: d.codigo_barra || '',
+          laboratorio: labNombre,
+          es_propio: isPropio,
+          categoria: d.dim_categorias?.nombre || 'Otros',
+          unidad_negocio: unNombre,
+          forma_farmaceutica: d.dim_formas_farmaceuticas?.nombre || '',
+          tamano: d.cantidad_contenido ? `${d.cantidad_contenido} ${d.unidad_contenido || 'unidad'}` : '',
+          unidosis: d.cantidad_contenido ? Number(d.cantidad_contenido) : null,
+          pvp_propio_usd: pvpUsd,
+          activo: d.activo !== false,
+          market_type: (unNombre.toLowerCase().includes('pharmetique') || labNombre.toLowerCase().includes('pharmetique')) ? 'MARCA' : 'GENERICO'
+        };
+      });
+    }
+
+    // Fallback: probar tabla productos o legacy_productos si dim_productos estuviese vacía
+    const fallbackData = await fetchAllSupabaseRows('productos');
+    if (fallbackData && fallbackData.length > 0) return fallbackData;
+
+    const legacyData = await fetchAllSupabaseRows('legacy_productos');
+    if (legacyData && legacyData.length > 0) return legacyData;
+
+    return [];
+  } catch (err) {
+    console.warn('[Supabase] Error en fetchDimProductos, probando tabla fallback:', err);
+    return fetchAllSupabaseRows('productos');
+  }
+}
+
 export function DataProvider({ children, user }) {
   const [productos, setProductos] = useState([]);
   const [productosCompetencia, setProductosCompetencia] = useState([]);
@@ -120,7 +189,7 @@ export function DataProvider({ children, user }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadedOnce, setIsLoadedOnce] = useState(false);
 
-  const CACHE_KEY = 'trackflow_data_cache_v2';
+  const CACHE_KEY = 'trackflow_data_cache_v3';
   const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 
   const applyDefaultSeed = useCallback(() => {
@@ -191,7 +260,7 @@ export function DataProvider({ children, user }) {
           { data: rData },
           { data: bData }
         ] = await Promise.all([
-          fetchAllSupabaseRows('productos'),
+          fetchDimProductos(),
           fetchAllSupabaseRows('productos_competencia'),
           fetchAllSupabaseRows('v_ultimo_precio_valido'),
           fetchAllSupabaseRows('dim_cadenas').then(res => (res && res.length > 0) ? res : fetchAllSupabaseRows('cadenas')),
@@ -440,8 +509,8 @@ export function DataProvider({ children, user }) {
   const refreshProductos = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
-        const data = await fetchAllSupabaseRows('productos');
-        if (Array.isArray(data)) {
+        const data = await fetchDimProductos();
+        if (Array.isArray(data) && data.length > 0) {
           const prods = data.map(p => ({
             ...p,
             id: p.id || p.id_interno || p.ID || '',

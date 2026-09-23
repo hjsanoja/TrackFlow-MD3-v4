@@ -298,11 +298,12 @@ export default function Dashboard({ user, userDoc }) {
           .filter(x => Math.abs(x.priceUsd - maxCompUsd) < 0.001)
           .map(x => x.cadena);
 
-        // Find own price (most economical one among all own listings)
+        // Find own price (most economical one among all own listings or fallback to pvp_propio_usd)
         const propioOptions = chainPrices.filter(x => x.tipo === 'propio');
+        const fallbackPvpUsd = Number(p.pvp_propio_usd || 0) > 0 ? (Number(p.pvp_propio_usd) / pUnitFactor) : null;
         const propioPriceUsd = propioOptions.length > 0 
           ? Math.min(...propioOptions.map(x => x.priceUsd)) 
-          : null;
+          : fallbackPvpUsd;
 
         // Difference vs cheapest (minCompUsd)
         const diffMinUsd = (propioPriceUsd !== null && minCompUsd !== null) ? propioPriceUsd - minCompUsd : null;

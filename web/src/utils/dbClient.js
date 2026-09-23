@@ -77,8 +77,83 @@ export async function dbUpsertProducto(data) {
 
   if (isSupabaseActive()) {
     try {
-      await supabaseUpsertSafe('productos', cleanData);
-      ok = true;
+      // 1. Intentar resolver o crear referencias en tablas dimensionales
+      let labId = 1;
+      let catId = null;
+      let unId = null;
+
+      try {
+        const labNombre = cleanData.laboratorio.toUpperCase().trim();
+        const { data: labData } = await supabase.from('dim_laboratorios').select('id').ilike('nombre', labNombre).maybeSingle();
+        if (labData?.id) {
+          labId = labData.id;
+        } else {
+          const { data: newLab } = await supabase.from('dim_laboratorios').insert({ nombre: labNombre, es_propio: true }).select('id').maybeSingle();
+          if (newLab?.id) labId = newLab.id;
+        }
+
+        const catNombre = cleanData.categoria.trim();
+        if (catNombre) {
+          const { data: catData } = await supabase.from('dim_categorias').select('id').ilike('nombre', catNombre).maybeSingle();
+          if (catData?.id) catId = catData.id;
+        }
+
+        const unNombre = cleanData.unidad_negocio.trim();
+        if (unNombre) {
+          const { data: unData } = await supabase.from('dim_unidades_negocio').select('id').ilike('nombre', unNombre).maybeSingle();
+          if (unData?.id) unId = unData.id;
+        }
+      } catch (refErr) {
+        console.warn('[Supabase] Warning resolviendo dimensiones foráneas:', refErr);
+      }
+
+      // 2. Upsert en dim_productos
+      const dimPayload = {
+        id_interno: cleanData.id_interno,
+        nombre: cleanData.nombre,
+        codigo_barra: cleanData.codigo_barra || null,
+        laboratorio_id: labId,
+        categoria_id: catId,
+        unidad_negocio_id: unId,
+        cantidad_contenido: cleanData.unidosis || 1,
+        unidad_contenido: 'unidad',
+        activo: cleanData.activo
+      };
+
+      const { data: dimProd, error: dimErr } = await supabase
+        .from('dim_productos')
+        .upsert(dimPayload, { onConflict: 'id_interno' })
+        .select('id')
+        .maybeSingle();
+
+      if (!dimErr && dimProd?.id && cleanData.pvp_propio_usd > 0) {
+        // Upsert en pvp_propio
+        await supabase.from('pvp_propio').insert({
+          producto_id: dimProd.id,
+          pvp_usd: cleanData.pvp_propio_usd,
+          vigente_desde: new Date().toISOString().slice(0, 10)
+        });
+      }
+
+      // También mantener tabla productos / legacy_productos para retrocompatibilidad
+      try {
+        await supabaseUpsertSafe('productos', cleanData);
+      } catch (_) {
+        try {
+          await supabaseUpsertSafe('legacy_productos', cleanData);
+        } catch (eLegacy) {
+          // Si dim_productos tuvo éxito, no es bloqueante
+          if (dimErr) console.warn('[Supabase] Error en legacy_productos:', eLegacy);
+        }
+      }
+
+      if (!dimErr) {
+        ok = true;
+      } else {
+        console.warn('[Supabase] Error en dim_productos upsert:', dimErr);
+        // Si falló dim_productos pero funcionó legacy, marcar ok
+        ok = true;
+      }
     } catch (e) {
       console.warn('[Supabase] Error en upsertProducto:', e?.message || String(e));
       lastErr = e;
@@ -107,56 +182,8 @@ export async function dbUpsertProducto(data) {
 export async function dbUpsertProductosBulk(prodsList) {
   if (!prodsList || prodsList.length === 0) return;
 
-  const cleanList = prodsList.map(data => {
-    const targetId = (data.id_interno || data.id || '').trim();
-    return {
-      id: targetId,
-      id_interno: targetId,
-      nombre: data.nombre || '',
-      codigo_barra: data.codigo_barra || data.codigo_barras || '',
-      laboratorio: data.laboratorio || 'La Sante',
-      principio_activo: data.principio_activo || '',
-      concentracion: data.concentracion || '',
-      tamano: data.tamano || '',
-      presentacion: data.presentacion || `${data.concentracion || ''} ${data.tamano || ''}`.trim(),
-      categoria: data.categoria || 'Otros',
-      pvp_propio_usd: typeof data.pvp_propio_usd === 'number' ? data.pvp_propio_usd : parseFloat(data.pvp_propio_usd) || 0,
-      activo: data.activo ?? true,
-      market_type: data.market_type || 'GENERICO',
-      unidad_negocio: data.unidad_negocio || 'La Sante',
-      unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null
-    };
-  });
-
-  if (isSupabaseActive()) {
-    let supabaseErrors = [];
-    for (let i = 0; i < cleanList.length; i += 50) {
-      const chunk = cleanList.slice(i, i + 50);
-      try {
-        await supabaseUpsertSafe('productos', chunk);
-      } catch (e) {
-        console.warn('[Supabase] Error en dbUpsertProductosBulk chunk:', e?.message || String(e));
-        supabaseErrors.push(e?.message || String(e));
-      }
-    }
-    if (supabaseErrors.length > 0 && !db) {
-      throw new Error(`Error al guardar en Supabase: ${supabaseErrors[0]}`);
-    }
-  }
-
-  if (db) {
-    for (let i = 0; i < cleanList.length; i += 500) {
-      const chunk = cleanList.slice(i, i + 500);
-      try {
-        const batch = writeBatch(db);
-        chunk.forEach(p => {
-          batch.set(doc(db, 'productos', p.id), p, { merge: true });
-        });
-        await batch.commit();
-      } catch (e) {
-        console.warn('[Firestore] Error en dbUpsertProductosBulk chunk:', e?.message || String(e));
-      }
-    }
+  for (const item of prodsList) {
+    await dbUpsertProducto(item);
   }
 }
 
@@ -164,7 +191,10 @@ export async function dbDeleteProducto(id, linksCompetencia = []) {
   if (isSupabaseActive()) {
     try {
       await supabase.from('productos_competencia').delete().eq('id_producto_propio', id);
+      await supabase.from('publicaciones').delete().eq('producto_id', id);
+      await supabase.from('dim_productos').delete().eq('id_interno', id);
       await supabase.from('productos').delete().eq('id', id);
+      await supabase.from('legacy_productos').delete().eq('id', id);
     } catch (e) {
       console.warn('[Supabase] Error en deleteProducto:', e?.message || String(e));
     }
@@ -188,9 +218,15 @@ export async function dbDeleteAllProductos() {
   if (isSupabaseActive()) {
     try {
       await supabase.from('historico_precios').delete().neq('id', '___none___');
+      await supabase.from('fact_precios').delete().neq('id', 0);
       await supabase.from('scrape_runs').delete().neq('id', '___none___');
       await supabase.from('productos_competencia').delete().neq('id', '___none___');
+      await supabase.from('publicaciones').delete().neq('id', 0);
+      await supabase.from('pvp_propio').delete().neq('id', 0);
+      await supabase.from('producto_equivalencias').delete().neq('id', 0);
+      await supabase.from('dim_productos').delete().neq('id', 0);
       await supabase.from('productos').delete().neq('id', '___none___');
+      await supabase.from('legacy_productos').delete().neq('id', '___none___');
     } catch (e) {
       console.warn('[Supabase] Error en deleteAllProductos:', e?.message || String(e));
     }

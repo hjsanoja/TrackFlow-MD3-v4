@@ -15,7 +15,7 @@ export default function Layout({ user, userDoc, children }) {
 
   const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    ? ['/', '/mapa-calor', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -49,6 +49,7 @@ export default function Layout({ user, userDoc, children }) {
     { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: false },
     { to: '/competencia', label: 'Competencia', icon: 'link', adminOnly: false },
     { to: '/cadenas', label: 'Cadenas', icon: 'storefront', adminOnly: false },
+    { to: '/dimensiones', label: 'Dimensiones', icon: 'schema', adminOnly: false },
     { to: '/usuarios', label: 'Usuarios', icon: 'group', adminOnly: true },
   ];
 

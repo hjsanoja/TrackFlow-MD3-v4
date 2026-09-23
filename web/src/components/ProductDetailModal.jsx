@@ -579,11 +579,19 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     : null;
 
   const propioItem = competenciaFiltrada.find(c => c.tipo === 'propio') || competenciaWithUnidosis.find(c => c.tipo === 'propio');
+  
+  // Si no hay un scrape propio en cadenas pero el producto tiene PVP fijado en dim_productos / pvp_propio
+  const fallbackPropioUsd = Number(activeProduct?.pvp_propio_usd || 0);
+  const fallbackPropioFactor = analisisMode === 'unidosis' ? Math.max(ownProductCount, 1) : 1;
+  const fallbackPropioBs = (fallbackPropioUsd > 0 && bcvRate) 
+    ? (fallbackPropioUsd * bcvRate) / fallbackPropioFactor 
+    : null;
+
   const propioPriceBs = propioItem 
     ? (priceMode === 'descuento' 
         ? (propioItem.adjustedDescBs || propioItem.adjustedFullBs)
         : propioItem.adjustedFullBs)
-    : null;
+    : fallbackPropioBs;
 
   const diffMinBs = (propioPriceBs !== null && minPriceItem !== null) ? propioPriceBs - minPriceItem.priceBs : null;
   const pctMin = (diffMinBs !== null && minPriceItem.priceBs > 0) ? (diffMinBs / minPriceItem.priceBs) * 100 : null;
@@ -995,7 +1003,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     {propioPriceBs ? formatHeaderPrice(propioPriceBs) : '—'}
                   </div>
                   <p className="text-[11px] text-emerald-700 font-sans truncate">
-                    {propioItem ? `Marca: ${propioItem.marca}` : 'No vinculado'}
+                    {propioItem?.marca ? `Marca: ${propioItem.marca}` : activeProduct?.laboratorio ? `Lab: ${activeProduct.laboratorio}` : 'Catálogo Propio'}
                   </p>
                 </div>
                 <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-800 shrink-0">

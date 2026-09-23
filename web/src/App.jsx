@@ -9,6 +9,7 @@ import Productos from './pages/Productos';
 import Competencia from './pages/Competencia';
 import Cadenas from './pages/Cadenas';
 import Usuarios from './pages/Usuarios';
+import Dimensiones from './pages/Dimensiones';
 import Layout from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './context/ToastContext';
@@ -182,7 +183,7 @@ function AppContent() {
 
   const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/usuarios']
+    ? ['/', '/mapa-calor', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -215,6 +216,7 @@ function AppContent() {
           <Route path="/productos" element={isAllowed('/productos') ? <Productos /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/competencia" element={isAllowed('/competencia') ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/cadenas" element={isAllowed('/cadenas') ? <Cadenas /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/dimensiones" element={isAllowed('/dimensiones') ? <Dimensiones /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/login" element={<Navigate to={fallbackPath} replace />} />
           <Route path="*" element={<Navigate to={fallbackPath} replace />} />

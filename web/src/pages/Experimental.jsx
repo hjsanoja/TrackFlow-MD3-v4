@@ -4,20 +4,38 @@ import Analisis from './Analisis';
 import Simulador from './Simulador';
 import Hallazgos from './Hallazgos';
 import Reporteria from './Reporteria';
+import CanibalizacionInterna from '../components/CanibalizacionInterna';
+import BrechaHistoricaUsd from '../components/BrechaHistoricaUsd';
 
 export default function Experimental({ user, userDoc }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const tabParam = searchParams.get('tab');
-  const validTabs = ['reporteria', 'analisis', 'simulador', 'hallazgos'];
-  const activeTab = validTabs.includes(tabParam) ? tabParam : 'reporteria';
+  const validTabs = ['canibalizacion', 'brecha_usd', 'reporteria', 'analisis', 'simulador', 'hallazgos'];
+  const activeTab = validTabs.includes(tabParam) ? tabParam : 'canibalizacion';
 
   const handleTabChange = (tabId) => {
     setSearchParams({ tab: tabId });
   };
 
   const tabs = [
+    {
+      id: 'canibalizacion',
+      label: 'Canibalización de Marcas',
+      shortLabel: 'Canibalización Marcas',
+      icon: 'compare_arrows',
+      desc: 'Detección de canibalización y márgenes invertidos entre La Santé y Pharmetique',
+      status: 'Nuevo'
+    },
+    {
+      id: 'brecha_usd',
+      label: 'Brechas USD Diarias (BCV)',
+      shortLabel: 'Brechas USD Diarias',
+      icon: 'currency_exchange',
+      desc: 'Histórico de brechas calculadas con la tasa oficial BCV de cada día',
+      status: 'Nuevo'
+    },
     {
       id: 'reporteria',
       label: 'Reportería y Brechas',
@@ -102,6 +120,8 @@ export default function Experimental({ user, userDoc }) {
 
       {/* Renderizado dinámico del submenú seleccionado */}
       <div className="transition-opacity duration-200">
+        {activeTab === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
+        {activeTab === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
         {activeTab === 'reporteria' && <Reporteria user={user} userDoc={userDoc} />}
         {activeTab === 'analisis' && <Analisis user={user} userDoc={userDoc} />}
         {activeTab === 'simulador' && <Simulador user={user} userDoc={userDoc} />}
