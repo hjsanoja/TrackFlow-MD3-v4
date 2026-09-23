@@ -406,15 +406,36 @@ export function DataProvider({ children, user }) {
           setIsRefreshing(false);
           return;
         } else {
-          console.warn('[Supabase] Error al leer tabla productos');
+          console.warn('[Supabase] No se encontraron registros de productos en Supabase');
           setProductos([]);
+          setProductosCompetencia([]);
+          setUltimosPreciosValidos([]);
+          setHistoricoPrecios([]);
           setIsLoadedOnce(true);
           setLoadingInitial(false);
           setIsRefreshing(false);
+          saveCache({
+            productos: [],
+            productosCompetencia: [],
+            cadenas: [],
+            historicoPrecios: [],
+            bcvRates: [],
+            ultimaCorrida: null,
+            usuarios: []
+          });
           return;
         }
       } catch (sbErr) {
-        console.warn('Supabase no devolvió datos:', sbErr);
+        console.warn('Supabase retornó error o estado vacío:', sbErr);
+        // Si Supabase está configurado pero falló, no resucitar mock data automáticamente si el usuario lo vació
+        if (hasSupabase) {
+          setProductos([]);
+          setProductosCompetencia([]);
+          setLoadingInitial(false);
+          setIsRefreshing(false);
+          setIsLoadedOnce(true);
+          return;
+        }
       }
     }
 

@@ -188,15 +188,27 @@ export async function dbUpsertProductosBulk(prodsList) {
 }
 
 export async function dbDeleteProducto(id, linksCompetencia = []) {
+  let anyError = null;
   if (isSupabaseActive()) {
     try {
+      // Eliminar dependencias primero en orden de integridad referencial
+      await supabase.from('historico_precios').delete().eq('id_producto_propio', id);
       await supabase.from('productos_competencia').delete().eq('id_producto_propio', id);
       await supabase.from('publicaciones').delete().eq('producto_id', id);
-      await supabase.from('dim_productos').delete().eq('id_interno', id);
-      await supabase.from('productos').delete().eq('id', id);
+      
+      // Eliminar pvp propio si tiene db_id numérico o id_interno
+      await supabase.from('pvp_propio').delete().eq('producto_id', id);
+
+      const resDim = await supabase.from('dim_productos').delete().or(`id_interno.eq.${id},id.eq.${id}`);
+      const resProd = await supabase.from('productos').delete().eq('id', id);
       await supabase.from('legacy_productos').delete().eq('id', id);
+
+      if (resDim.error && resProd.error) {
+        anyError = resDim.error;
+      }
     } catch (e) {
       console.warn('[Supabase] Error en deleteProducto:', e?.message || String(e));
+      anyError = e;
     }
   }
 
@@ -212,23 +224,34 @@ export async function dbDeleteProducto(id, linksCompetencia = []) {
       console.warn('[Firestore] Error en deleteProducto:', e?.message || String(e));
     }
   }
+
+  // Limpiar cache local de sesión para forzar render fresco
+  try {
+    sessionStorage.removeItem('trackflow_data_cache_v3');
+  } catch (_) {}
+
+  if (anyError && isSupabaseActive()) {
+    throw anyError;
+  }
 }
 
 export async function dbDeleteAllProductos() {
+  let anyError = null;
   if (isSupabaseActive()) {
     try {
       await supabase.from('historico_precios').delete().neq('id', '___none___');
-      await supabase.from('fact_precios').delete().neq('id', 0);
+      await supabase.from('fact_precios').delete().neq('id', -999999);
       await supabase.from('scrape_runs').delete().neq('id', '___none___');
       await supabase.from('productos_competencia').delete().neq('id', '___none___');
-      await supabase.from('publicaciones').delete().neq('id', 0);
-      await supabase.from('pvp_propio').delete().neq('id', 0);
-      await supabase.from('producto_equivalencias').delete().neq('id', 0);
-      await supabase.from('dim_productos').delete().neq('id', 0);
+      await supabase.from('publicaciones').delete().neq('id', -999999);
+      await supabase.from('pvp_propio').delete().neq('id', -999999);
+      await supabase.from('producto_equivalencias').delete().neq('id', -999999);
+      await supabase.from('dim_productos').delete().neq('id', -999999);
       await supabase.from('productos').delete().neq('id', '___none___');
       await supabase.from('legacy_productos').delete().neq('id', '___none___');
     } catch (e) {
       console.warn('[Supabase] Error en deleteAllProductos:', e?.message || String(e));
+      anyError = e;
     }
   }
 
@@ -248,6 +271,14 @@ export async function dbDeleteAllProductos() {
     } catch (e) {
       console.warn('[Firestore] Aviso en deleteAllProductos (Firestore omitido):', e?.message || String(e));
     }
+  }
+
+  try {
+    sessionStorage.removeItem('trackflow_data_cache_v3');
+  } catch (_) {}
+
+  if (anyError && isSupabaseActive()) {
+    throw anyError;
   }
 }
 
@@ -361,11 +392,15 @@ export async function dbUpsertCompetenciaBulk(compList) {
 }
 
 export async function dbDeleteProductoCompetencia(id) {
+  let anyError = null;
   if (isSupabaseActive()) {
     try {
-      await supabase.from('productos_competencia').delete().eq('id', id);
+      await supabase.from('historico_precios').delete().eq('id_producto_competencia', id);
+      const res = await supabase.from('productos_competencia').delete().eq('id', id);
+      if (res.error) anyError = res.error;
     } catch (e) {
       console.warn('[Supabase] Error en deleteProductoCompetencia:', e?.message || String(e));
+      anyError = e;
     }
   }
 
@@ -376,16 +411,27 @@ export async function dbDeleteProductoCompetencia(id) {
       console.warn('[Firestore] Error en deleteProductoCompetencia:', e?.message || String(e));
     }
   }
+
+  try {
+    sessionStorage.removeItem('trackflow_data_cache_v3');
+  } catch (_) {}
+
+  if (anyError && isSupabaseActive()) {
+    throw anyError;
+  }
 }
 
 export async function dbDeleteAllProductosCompetencia() {
+  let anyError = null;
   if (isSupabaseActive()) {
     try {
       await supabase.from('historico_precios').delete().neq('id', '___none___');
       await supabase.from('scrape_runs').delete().neq('id', '___none___');
-      await supabase.from('productos_competencia').delete().neq('id', '___none___');
+      const res = await supabase.from('productos_competencia').delete().neq('id', '___none___');
+      if (res.error) anyError = res.error;
     } catch (e) {
       console.warn('[Supabase] Error en deleteAllProductosCompetencia:', e?.message || String(e));
+      anyError = e;
     }
   }
 
@@ -402,13 +448,19 @@ export async function dbDeleteAllProductosCompetencia() {
             chunk.forEach(d => batch.delete(d.ref));
             await batch.commit();
           }
-        } catch (innerErr) {
-          console.warn(`[Firestore] Aviso al vaciar colección ${colName}:`, innerErr?.message || String(innerErr));
-        }
+        } catch (_) {}
       }
     } catch (e) {
       console.warn('[Firestore] Aviso en deleteAllProductosCompetencia:', e?.message || String(e));
     }
+  }
+
+  try {
+    sessionStorage.removeItem('trackflow_data_cache_v3');
+  } catch (_) {}
+
+  if (anyError && isSupabaseActive()) {
+    throw anyError;
   }
 }
 

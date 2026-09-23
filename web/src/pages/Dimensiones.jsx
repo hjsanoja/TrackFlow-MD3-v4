@@ -105,28 +105,31 @@ export default function Dimensiones() {
   const { refreshData } = useData();
 
   const handleResetTables = async () => {
-    if (!isSupabaseActive()) {
-      addToast('Supabase no está activo para ejecutar la limpieza.', 'error');
-      return;
-    }
     setResetting(true);
     try {
-      if (resetType === 'scrapes' || resetType === 'all') {
-        await supabase.from('historico_precios').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('scrape_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (isSupabaseActive()) {
+        if (resetType === 'scrapes' || resetType === 'all') {
+          await supabase.from('historico_precios').delete().neq('id', '___none___');
+          await supabase.from('fact_precios').delete().neq('id', -999999);
+          await supabase.from('scrape_runs').delete().neq('id', '___none___');
+        }
+
+        if (resetType === 'products' || resetType === 'all') {
+          await supabase.from('historico_precios').delete().neq('id', '___none___');
+          await supabase.from('fact_precios').delete().neq('id', -999999);
+          await supabase.from('productos_competencia').delete().neq('id', '___none___');
+          await supabase.from('publicaciones').delete().neq('id', -999999);
+          await supabase.from('pvp_propio').delete().neq('id', -999999);
+          await supabase.from('producto_equivalencias').delete().neq('id', -999999);
+          await supabase.from('dim_productos').delete().neq('id', -999999);
+          await supabase.from('productos').delete().neq('id', '___none___');
+          await supabase.from('legacy_productos').delete().neq('id', '___none___');
+        }
       }
 
-      if (resetType === 'products' || resetType === 'all') {
-        await supabase.from('productos_competencia').delete().neq('id', '0');
-        await supabase.from('pvp_propio').delete().neq('id', -999);
-        await supabase.from('dim_productos').delete().neq('id', -999);
-        await supabase.from('productos').delete().neq('id', '0');
-      }
-
-      if (resetType === 'all') {
-        // Limpiar opcionalmente dimensiones si se desea empezar 100% en blanco
-        // No borramos dim_cadenas o dim_tasa_bcv por defecto a menos que lo desee
-      }
+      try {
+        sessionStorage.removeItem('trackflow_data_cache_v3');
+      } catch (_) {}
 
       addToast(
         resetType === 'scrapes'
