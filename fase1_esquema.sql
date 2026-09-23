@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.dim_cadenas (
     nombre VARCHAR(100) NOT NULL UNIQUE,
     website VARCHAR(255),
     color_hex VARCHAR(7) DEFAULT '#3B82F6',
-    modulo_scraper VARCHAR(50),
+    scraper_modulo VARCHAR(50),
     activo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() -- A1: UTC
 );
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS public.dim_tipos_promocion (
 -- Principios activos (DCI) con sinónimos
 CREATE TABLE IF NOT EXISTS public.dim_principios_activos (
     id BIGSERIAL PRIMARY KEY,
-    nombre_dci VARCHAR(150) NOT NULL UNIQUE,
+    nombre VARCHAR(150) NOT NULL UNIQUE,
     sinonimos TEXT[] DEFAULT '{}',
     activo BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() -- A1: UTC

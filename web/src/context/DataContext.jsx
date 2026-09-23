@@ -384,7 +384,7 @@ export function DataProvider({ children, user }) {
             nombre: c.nombre || c.id,
             website: c.website || '',
             color_hex: c.color_hex || '#002855',
-            scraper_modulo: c.modulo_scraper || c.scraper_modulo || '',
+            scraper_modulo: c.scraper_modulo || c.modulo_scraper || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cSorted);
@@ -682,7 +682,7 @@ export function DataProvider({ children, user }) {
             nombre: c.nombre || c.id,
             website: c.website || '',
             color_hex: c.color_hex || '#002855',
-            scraper_modulo: c.modulo_scraper || c.scraper_modulo || '',
+            scraper_modulo: c.scraper_modulo || c.modulo_scraper || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cDocs);

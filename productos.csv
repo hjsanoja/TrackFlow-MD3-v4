@@ -1,6 +1,4 @@
-id_interno;nombre;laboratorio;principio_activo;presentacion;categoria;pvp_propio_usd;activo
-P001;Acetaminofen 650mg La Sante;La Sante;Acetaminofen;650 mg x 10 tabletas;Analgesicos;1;si
-P002;Diclofenac Potásico 50mg La Sante;La Sante;Diclofenac Potásico;50 mg x 10 tabletas;Analgesicos;1;si
-P003;Tiocolfen Pharmetique Labs;La Sante;Ibuprofeno + Tiocolchicosido;Ibuprofeno 600mg + Tiocolchicosido 4mg;Analgesicos;1;si
-P004;Ibuprofeno 800mg La Sante;La Sante;Ibuprofeno;800 mg x 10 tabletas;Analgesicos;1;si
-P005;Vitamina C 500 mg Naranja La Sante;La Sante;Vitamina C;500 mg  x 10 tabletas Naranja;Analgesicos;1;si
+id_interno,nombre,laboratorio,unidad_negocio,categoria,principio_activo,concentracion,presentacion,unidosis,codigo_barra,pvp_propio_usd,activo
+P001,Acetaminofén 650mg La Santé,La Sante,La Sante,Analgésicos,Acetaminofén,650mg,650 mg x 10 tabletas,10,7591234567890,1.00,si
+P002,Diclofenac Potásico 50mg La Santé,La Sante,La Sante,Analgésicos,Diclofenac Potásico,50mg,50 mg x 10 tabletas,10,,1.20,si
+P003,Tiocolfen Pharmetique Labs,Pharmetique,Pharmetique,Analgésicos,Ibuprofeno + Tiocolchicósido,600mg + 4mg,600 mg x 10 cápsulas,10,,2.50,si

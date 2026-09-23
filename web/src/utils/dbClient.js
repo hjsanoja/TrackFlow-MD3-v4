@@ -241,6 +241,8 @@ export async function dbUpsertProducto(data) {
     id: targetId,
     id_interno: targetId,
     nombre: data.nombre || '',
+    // Canonico: codigo_barra (ver DICCIONARIO_CAMPOS.md). Se sigue aceptando
+    // 'codigo_barras' en la entrada por compatibilidad con CSV antiguos.
     codigo_barra: data.codigo_barra || data.codigo_barras || '',
     laboratorio: data.laboratorio || 'La Sante',
     principio_activo: data.principio_activo || '',

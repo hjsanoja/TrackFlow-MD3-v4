@@ -1,0 +1,65 @@
+# Carga de datos por CSV
+
+Los cuatro CSV de la raíz del repositorio son **plantillas de ejemplo** con los
+nombres de columna canónicos (ver `DICCIONARIO_CAMPOS.md`). No son tus datos
+reales: son el formato que espera el panel. Descárgalos, reemplaza las filas y
+súbelos desde la pantalla correspondiente.
+
+Usan coma como separador y UTF-8. El lector del panel también acepta punto y
+coma o tabulador, y reconoce los nombres de columna aunque cambien mayúsculas,
+acentos o guiones.
+
+## Orden de carga (no es opcional)
+
+Las llaves foráneas son `ON DELETE RESTRICT`: cada paso exige que el anterior
+exista.
+
+1. `cadenas.csv` → pantalla **Cadenas**
+2. `productos.csv` → pantalla **Productos**
+3. PVP propio → pantalla **Dimensiones → PVP Propio Vigente**
+4. `productos_competencia.csv` → pantalla **Competencia**
+5. Scraper → pestaña **Actions** de GitHub, workflow *Scraper diario*
+
+## productos.csv
+
+Una fila por producto propio.
+
+- **`id_interno`** es tu SKU y la llave de todo lo demás. El CSV de competencia
+  lo referencia con ese mismo valor. Si se repite, la segunda fila actualiza a
+  la primera.
+- `laboratorio`, `unidad_negocio` y `categoria` se crean solos si no existen.
+- `pvp_propio_usd` es tu precio oficial en dólares; queda registrado con la
+  fecha de carga como inicio de vigencia.
+- `presentacion` en texto libre basta: el sistema deduce la unidosis. Manda
+  `unidosis` solo si quieres fijar el número a mano.
+
+## productos_competencia.csv
+
+Una fila por URL monitoreada.
+
+- **`id_producto_propio` debe coincidir con un `id_interno` ya cargado.** Es lo
+  que construye la equivalencia entre tu producto y el del competidor. Si no
+  coincide, la fila se rechaza con un mensaje que nombra el producto.
+- **`tipo`**: `propio` si la URL es de **tu** producto en esa cadena;
+  `alternativa` si es de un competidor.
+- **`laboratorio`** es obligatorio en las filas `alternativa`: con él se crea el
+  producto del competidor y se decide si cuenta como marca propia.
+- `cadena` acepta el id (`farmatodo`) o el nombre comercial (`Farmatodo`). Si no
+  existe, se registra.
+- La clave real de un enlace es **cadena + URL**. Si repites esa combinación, la
+  fila se descarta como duplicada y el resumen de importación te lo dice.
+
+## cadenas.csv
+
+- **`id`** es un código corto en minúsculas, sin espacios ni acentos. Es lo que
+  referencia `productos_competencia.csv`.
+- **`scraper_modulo`** debe coincidir con un módulo implementado en `scraper/`.
+  Hoy: `farmatodo`, `locatel`, `farmadon`, `grupo_san_ignacio`, `xana`,
+  `farmago`.
+- `color_hex` es el color de la cadena en los gráficos.
+
+## Nota sobre el scraper
+
+`scraper/farmatodo.py` lee los enlaces desde Supabase. Solo si Supabase no está
+configurado cae en `productos_competencia.csv` de la raíz. Por eso ese archivo
+debe seguir siendo un CSV válido aunque solo tenga filas de ejemplo.
