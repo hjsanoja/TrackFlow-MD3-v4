@@ -22,7 +22,7 @@ import {
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
 const TIPOS = [
-  { value: 'propio', label: 'Mi marca' },
+  { value: 'propio', label: 'Mi Marca' },
   { value: 'alternativa', label: 'Alternativa (competencia)' },
 ];
 
@@ -696,7 +696,7 @@ export default function Competencia({ user, userDoc }) {
         producto_propio: productoNombre(it.id_producto_propio),
         cadena: it.cadena || '',
         marca: it.marca || '',
-        tipo_str: it.tipo === 'propio' ? 'MI MARCA' : 'COMPETENCIA',
+        tipo_str: it.tipo === 'propio' ? 'MI MARCA' : 'COMPETIDOR',
         ultimo_precio_full_bs: fullBs !== null ? fullBs : '',
         ultimo_precio_desc_bs: descBs !== null ? descBs : '',
         ultimo_precio_full_usd: fullUsd,
@@ -903,7 +903,7 @@ export default function Competencia({ user, userDoc }) {
               <thead>
                 <tr>
                   <th>Mi Producto Local</th>
-                  <th>Cadena Farmacia</th>
+                  <th>Cadena</th>
                   <th>Variante Competidor</th>
                   <th>Tipo Asociación</th>
                   <th className="text-right">Último Precio Detectado</th>
@@ -962,7 +962,7 @@ export default function Competencia({ user, userDoc }) {
               <thead className="m3-sticky-header">
                 <tr>
                   <th>Mi Producto Local</th>
-                  <th>Cadena Farmacia</th>
+                  <th>Cadena</th>
                   <th>Variante Competidor</th>
                   <th>Tipo Asociación</th>
                   <th className="text-right">Último Precio Detectado</th>
@@ -993,6 +993,12 @@ export default function Competencia({ user, userDoc }) {
                         <span>Ver Enlace Destino</span>
                         <span className="material-symbols-outlined text-[11px] leading-none">open_in_new</span>
                       </a>
+                      {it.estado === 'pendiente' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600">
+                          <span className="material-symbols-outlined text-[12px]">schedule</span>
+                          Pendiente de primera captura
+                        </span>
+                      )}
                       {it.estado === 'error' && it.ultimo_error && (
                         <div className="text-[10px] text-error bg-error/5 border border-error/15 px-2 py-1 rounded-xl mt-1.5 font-medium max-w-xs leading-normal flex items-start gap-1 shadow-xs">
                           <span className="material-symbols-outlined text-[12px] mt-0.5 flex-shrink-0 text-error leading-none">warning</span>
@@ -1495,7 +1501,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Cadena de Farmacia *">
+          <Field label="Cadena *">
             <select required value={form.cadena}
               onChange={e => handleChange('cadena', e.target.value)}
               disabled={!isNew}
@@ -1550,7 +1556,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
               className="m3-input text-on-surface" />
           </Field>
 
-          <Field label="Tamaño / Presentación" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 10tab, 20tab, 120ml'}>
+          <Field label="Presentación" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 10tab, 20tab, 120ml'}>
             <input type="text" value={form.tamano}
               onChange={e => handleChange('tamano', e.target.value)}
               placeholder="Ej. 10tab"

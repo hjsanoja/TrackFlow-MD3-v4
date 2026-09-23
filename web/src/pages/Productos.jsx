@@ -607,7 +607,7 @@ export default function Productos() {
                 <tr>
                   <th>ID</th>
                   <th>Nombre del Producto</th>
-                  <th>Concentración / Tamaño</th>
+                  <th>Presentación</th>
                   <th>Tipo</th>
                   <th>Laboratorio</th>
                   <th>Categoría</th>
@@ -671,7 +671,7 @@ export default function Productos() {
                 <tr>
                   <th>ID</th>
                   <th>Nombre del Producto</th>
-                  <th>Concentración / Tamaño</th>
+                  <th>Presentación</th>
                   <th>Tipo</th>
                   <th>UN</th>
                   <th>Laboratorio</th>
@@ -1053,7 +1053,7 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Field label="Molécula / Principio">
+          <Field label="Principio Activo">
             <input type="text" value={form.principio_activo}
               onChange={e => handleChange('principio_activo', e.target.value)}
               placeholder="Acetaminofén"
@@ -1067,7 +1067,7 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
               className="m3-input" />
           </Field>
 
-          <Field label="Tamaño / Unidades" hint="Ej: 10 tabletas">
+          <Field label="Presentación" hint="Ej: 10 tabletas">
             <input type="text" value={form.tamano}
               onChange={e => handleChange('tamano', e.target.value)}
               placeholder="10 tabletas"

@@ -45,6 +45,17 @@ export const ETIQUETAS = {
   variacion: 'Variación',
   ultima_captura: 'Última Captura',
 
+  // --- Terminologia de negocio ---
+  // Competidor = todo producto cuyo laboratorio NO esta marcado como propio
+  // (dim_laboratorios.es_propio = false). No confundir con Cadena, que es la
+  // farmacia donde se publica el producto.
+  mi_marca: 'Mi Marca',
+  competidor: 'Competidor',
+
+  // --- Analisis ---
+  marca: 'Marca',
+  costo_unidad: 'Costo por Unidad',
+
   // --- Comunes ---
   activo: 'Activo',
   acciones: 'Acciones',

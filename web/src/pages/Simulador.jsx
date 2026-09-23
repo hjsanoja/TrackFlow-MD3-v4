@@ -1729,7 +1729,7 @@ export default function Simulador({ user, userDoc }) {
             <table className="m3-table">
               <thead className="m3-sticky-header">
                 <tr>
-                  <th>Molécula / Principio Activo</th>
+                  <th>Principio Activo</th>
                   <th className="text-center">SKUs en Catálogo</th>
                   <th className="text-center">Dispersión Mercado (%)</th>
                   <th className="text-center">Volatilidad Histórica</th>

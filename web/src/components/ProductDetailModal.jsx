@@ -1086,7 +1086,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <thead className="m3-sticky-header">
                     <tr>
                       <th>Cadena</th>
-                      <th>Marca / Variante</th>
+                      <th>Marca</th>
                       <th>Relación</th>
                       <th className="text-right">
                         Precio Lista {analisisMode === 'unidosis' ? '(/u)' : ''}
