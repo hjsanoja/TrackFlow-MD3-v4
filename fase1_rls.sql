@@ -11,31 +11,31 @@
 --    para authenticated (Supabase Auth).
 -- ============================================================================
 
-BEGIN;
+SET search_path = public, extensions;
 
 -- ----------------------------------------------------------------------------
 -- 6. POLÍTICAS RLS (A2: Granulares, sin 'anon', sin service_role innecesario)
 -- ----------------------------------------------------------------------------
 
 -- Habilitar RLS en todas las tablas
-ALTER TABLE dim_cadenas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_laboratorios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_marcas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_categorias ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_unidades_negocio ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_formas_farmaceuticas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_tipos_promocion ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_principios_activos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_tasa_bcv ENABLE ROW LEVEL SECURITY;
-ALTER TABLE scrape_runs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE dim_productos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE producto_principios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pvp_propio ENABLE ROW LEVEL SECURITY;
-ALTER TABLE producto_equivalencias ENABLE ROW LEVEL SECURITY;
-ALTER TABLE publicaciones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE config_calidad ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE fact_precios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_cadenas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_laboratorios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_marcas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_categorias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_unidades_negocio ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_formas_farmaceuticas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_tipos_promocion ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_principios_activos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_tasa_bcv ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scrape_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dim_productos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.producto_principios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pvp_propio ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.producto_equivalencias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.publicaciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.config_calidad ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fact_precios ENABLE ROW LEVEL SECURITY;
 
 -- Catálogos y Entidades: SELECT, INSERT, UPDATE para authenticated (sin DELETE por borrado lógico)
 DO $$ 
@@ -75,7 +75,6 @@ BEGIN
     END LOOP;
 END $$;
 
-COMMIT;
 
 -- ----------------------------------------------------------------------------
 -- CONSULTAS DE VERIFICACIÓN POST-EJECUCIÓN RLS

@@ -108,11 +108,11 @@ def upsert(table: str, records: List[Dict[str, Any]], on_conflict: str = "") -> 
         endpoint = f"{table}?on_conflict={on_conflict}"
     return _request(endpoint, method="POST", data=records, headers_extra=headers)
 
-def insert(table: str, records: List[Dict[str, Any]]) -> Any:
+def insert(table: str, records: List[Dict[str, Any]], return_representation: bool = False) -> Any:
     if not records:
         return None
     headers = {
-        "Prefer": "return=minimal"
+        "Prefer": "return=representation" if return_representation else "return=minimal"
     }
     return _request(endpoint=table, method="POST", data=records, headers_extra=headers)
 

@@ -25,20 +25,19 @@ WHERE table_schema = 'public'
   );
 */
 
-BEGIN;
-
 -- ----------------------------------------------------------------------------
 -- C1. EXTENSIONES EN EL ESQUEMA CORRECTO (extensions)
 -- ----------------------------------------------------------------------------
-CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+SET search_path = public, extensions;
 
 -- ----------------------------------------------------------------------------
 -- 1. CATÁLOGOS MAESTROS (DIMENSIONES PURAS)
 -- ----------------------------------------------------------------------------
 
 -- Cadenas de farmacias monitoreadas
-CREATE TABLE IF NOT EXISTS dim_cadenas (
+CREATE TABLE IF NOT EXISTS public.dim_cadenas (
     id VARCHAR(50) PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE,
     website VARCHAR(255),
@@ -49,7 +48,7 @@ CREATE TABLE IF NOT EXISTS dim_cadenas (
 );
 
 -- Laboratorios farmacéuticos / Fabricantes
-CREATE TABLE IF NOT EXISTS dim_laboratorios (
+CREATE TABLE IF NOT EXISTS public.dim_laboratorios (
     id BIGSERIAL PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL UNIQUE,
     es_propio BOOLEAN NOT NULL DEFAULT FALSE,
@@ -58,7 +57,7 @@ CREATE TABLE IF NOT EXISTS dim_laboratorios (
 );
 
 -- Marcas comerciales
-CREATE TABLE IF NOT EXISTS dim_marcas (
+CREATE TABLE IF NOT EXISTS public.dim_marcas (
     id BIGSERIAL PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL,
     laboratorio_id BIGINT NOT NULL REFERENCES dim_laboratorios(id) ON DELETE RESTRICT,
@@ -68,7 +67,7 @@ CREATE TABLE IF NOT EXISTS dim_marcas (
 );
 
 -- Categorías terapéuticas
-CREATE TABLE IF NOT EXISTS dim_categorias (
+CREATE TABLE IF NOT EXISTS public.dim_categorias (
     id BIGSERIAL PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE,
     descripcion TEXT,
@@ -77,7 +76,7 @@ CREATE TABLE IF NOT EXISTS dim_categorias (
 );
 
 -- Unidades de negocio internas
-CREATE TABLE IF NOT EXISTS dim_unidades_negocio (
+CREATE TABLE IF NOT EXISTS public.dim_unidades_negocio (
     id BIGSERIAL PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE,
     activo BOOLEAN DEFAULT TRUE,
@@ -85,7 +84,7 @@ CREATE TABLE IF NOT EXISTS dim_unidades_negocio (
 );
 
 -- Formas farmacéuticas estandarizadas
-CREATE TABLE IF NOT EXISTS dim_formas_farmaceuticas (
+CREATE TABLE IF NOT EXISTS public.dim_formas_farmaceuticas (
     id BIGSERIAL PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE,
     activo BOOLEAN DEFAULT TRUE,
@@ -93,7 +92,7 @@ CREATE TABLE IF NOT EXISTS dim_formas_farmaceuticas (
 );
 
 -- B7. Tipos de promociones detectables con cálculo atómico
-CREATE TABLE IF NOT EXISTS dim_tipos_promocion (
+CREATE TABLE IF NOT EXISTS public.dim_tipos_promocion (
     id BIGSERIAL PRIMARY KEY,
     codigo VARCHAR(50) NOT NULL UNIQUE,
     nombre VARCHAR(100) NOT NULL,
@@ -103,7 +102,7 @@ CREATE TABLE IF NOT EXISTS dim_tipos_promocion (
 );
 
 -- Principios activos (DCI) con sinónimos
-CREATE TABLE IF NOT EXISTS dim_principios_activos (
+CREATE TABLE IF NOT EXISTS public.dim_principios_activos (
     id BIGSERIAL PRIMARY KEY,
     nombre_dci VARCHAR(150) NOT NULL UNIQUE,
     sinonimos TEXT[] DEFAULT '{}',
@@ -112,15 +111,31 @@ CREATE TABLE IF NOT EXISTS dim_principios_activos (
 );
 
 -- Tasas de cambio oficiales diarias
-CREATE TABLE IF NOT EXISTS dim_tasa_bcv (
+CREATE TABLE IF NOT EXISTS public.dim_tasa_bcv (
     fecha DATE PRIMARY KEY,
     tasa NUMERIC(12, 4) NOT NULL CHECK (tasa > 0),
     fuente VARCHAR(50) DEFAULT 'BCV',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() -- A1: UTC
 );
 
+-- B1. Manejo de compatibilidad: Si existe la tabla scrape_runs antigua de Firestore (cuya PK era 'run_id' y no 'id'),
+-- la renombramos a 'scrape_runs_legacy' para preservar sus datos históricos y permitir que el nuevo esquema
+-- cree la tabla normalizada con PK UUID id.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'scrape_runs'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'scrape_runs' AND column_name = 'id'
+    ) THEN
+        ALTER TABLE public.scrape_runs RENAME TO scrape_runs_legacy;
+    END IF;
+END $$;
+
 -- B1. Registro de ejecuciones de Scraping (PK UUID)
-CREATE TABLE IF NOT EXISTS scrape_runs (
+CREATE TABLE IF NOT EXISTS public.scrape_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     github_run_id VARCHAR(100),
     cadena_id VARCHAR(50) NOT NULL REFERENCES dim_cadenas(id) ON DELETE RESTRICT,
@@ -138,9 +153,9 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
 -- ----------------------------------------------------------------------------
 
 -- Catálogo Maestro de Productos (Propios y de la Competencia)
-CREATE TABLE IF NOT EXISTS dim_productos (
+CREATE TABLE IF NOT EXISTS public.dim_productos (
     id BIGSERIAL PRIMARY KEY,
-    id_interno VARCHAR(50) NOT NULL UNIQUE, -- C3: UNIQUE ya crea el índice
+    id_interno VARCHAR(150) NOT NULL UNIQUE, -- C3: UNIQUE ya crea el índice
     codigo_barra VARCHAR(50),
     nombre VARCHAR(255) NOT NULL,
     marca_id BIGINT REFERENCES dim_marcas(id) ON DELETE RESTRICT,
@@ -161,7 +176,7 @@ CREATE TABLE IF NOT EXISTS dim_productos (
 CREATE INDEX IF NOT EXISTS idx_productos_laboratorio ON dim_productos(laboratorio_id);
 
 -- Principios activos por producto (Relación N:M atómica para concentraciones)
-CREATE TABLE IF NOT EXISTS producto_principios (
+CREATE TABLE IF NOT EXISTS public.producto_principios (
     id BIGSERIAL PRIMARY KEY,
     producto_id BIGINT NOT NULL REFERENCES dim_productos(id) ON DELETE CASCADE,
     principio_activo_id BIGINT NOT NULL REFERENCES dim_principios_activos(id) ON DELETE RESTRICT,
@@ -179,7 +194,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_un_principal_por_producto
 ON producto_principios (producto_id) WHERE es_principal;
 
 -- B2. Histórico de PVP Propio con rango temporal sin solapamiento
-CREATE TABLE IF NOT EXISTS pvp_propio (
+CREATE TABLE IF NOT EXISTS public.pvp_propio (
     id BIGSERIAL PRIMARY KEY,
     producto_id BIGINT NOT NULL REFERENCES dim_productos(id) ON DELETE RESTRICT,
     pvp_usd NUMERIC(10, 2) NOT NULL CHECK (pvp_usd >= 0),
@@ -194,7 +209,7 @@ CREATE TABLE IF NOT EXISTS pvp_propio (
 );
 
 -- Tabla de Equivalencias Comerciales (N:M Producto Propio vs Competidor)
-CREATE TABLE IF NOT EXISTS producto_equivalencias (
+CREATE TABLE IF NOT EXISTS public.producto_equivalencias (
     id BIGSERIAL PRIMARY KEY,
     producto_propio_id BIGINT NOT NULL REFERENCES dim_productos(id) ON DELETE RESTRICT,
     producto_competidor_id BIGINT NOT NULL REFERENCES dim_productos(id) ON DELETE RESTRICT,
@@ -206,7 +221,7 @@ CREATE TABLE IF NOT EXISTS producto_equivalencias (
 );
 
 -- Publicaciones / URLs de seguimiento en las Cadenas
-CREATE TABLE IF NOT EXISTS publicaciones (
+CREATE TABLE IF NOT EXISTS public.publicaciones (
     id BIGSERIAL PRIMARY KEY,
     producto_id BIGINT NOT NULL REFERENCES dim_productos(id) ON DELETE RESTRICT,
     cadena_id VARCHAR(50) NOT NULL REFERENCES dim_cadenas(id) ON DELETE RESTRICT,
@@ -224,7 +239,7 @@ CREATE INDEX IF NOT EXISTS idx_publicaciones_producto ON publicaciones(producto_
 -- ----------------------------------------------------------------------------
 -- B6. TABLA DE CONFIGURACIÓN DE CALIDAD DE DATOS
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS config_calidad (
+CREATE TABLE IF NOT EXISTS public.config_calidad (
     clave VARCHAR(50) PRIMARY KEY,
     valor NUMERIC(6, 3) NOT NULL,
     descripcion TEXT,
@@ -240,7 +255,7 @@ ON CONFLICT (clave) DO NOTHING;
 -- ----------------------------------------------------------------------------
 -- C6. TABLA DE AUDITORÍA DE CAMBIOS (AUDIT LOG)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS audit_log (
+CREATE TABLE IF NOT EXISTS public.audit_log (
     id BIGSERIAL PRIMARY KEY,
     tabla VARCHAR(100) NOT NULL,
     registro_id TEXT NOT NULL,
@@ -257,7 +272,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_tabla_registro ON audit_log (tabla, reg
 -- ----------------------------------------------------------------------------
 -- 3. TABLA DE HECHOS (AUDITORÍA HISTÓRICA INMUTABLE)
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS fact_precios (
+CREATE TABLE IF NOT EXISTS public.fact_precios (
     id BIGSERIAL PRIMARY KEY,
     publicacion_id BIGINT NOT NULL REFERENCES publicaciones(id) ON DELETE RESTRICT,
     scrape_run_id UUID REFERENCES scrape_runs(id) ON DELETE SET NULL, -- B1
@@ -450,7 +465,7 @@ BEGIN
         WHERE pub.id = NEW.publicacion_id;
 
         IF v_nombre_esperado IS NOT NULL AND LENGTH(v_nombre_esperado) > 0 THEN
-            v_similitud := extensions.word_similarity(LOWER(v_nombre_esperado), LOWER(NEW.nombre_capturado));
+            v_similitud := word_similarity(LOWER(v_nombre_esperado), LOWER(NEW.nombre_capturado));
             NEW.similitud_nombre := v_similitud;
             IF v_similitud < v_umbral_similitud THEN
                 v_falla_nombre := TRUE;
@@ -613,7 +628,6 @@ WHERE fp.estado = 'ok'
   AND fp.disponible = TRUE
 ORDER BY fp.publicacion_id, fp.fecha_captura DESC;
 
-COMMIT;
 
 -- ----------------------------------------------------------------------------
 -- CONSULTAS DE VERIFICACIÓN POST-EJECUCIÓN DEL ESQUEMA

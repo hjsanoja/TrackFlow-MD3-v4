@@ -1,21 +1,57 @@
 """
 TrackFlow - Sincronizador a Base de Datos Supabase.
-Lee resultados.json y persiste en las tablas:
-- productos_competencia (upsert estado actual)
-- historico_precios (insert registro histórico de cambios)
-- scrape_runs (registro de ejecución)
+Dual-Write:
+- Modelo Legacy: productos_competencia, historico_precios
+- Modelo Relacional: scrape_runs, fact_precios, dim_tasa_bcv
 """
 
 import json
 import os
 import sys
+import re
 from pathlib import Path
 from datetime import datetime, timezone
+from collections import defaultdict
 import uuid
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RESULTADOS_PATH = PROJECT_ROOT / "resultados.json"
 CACHE_PATH = PROJECT_ROOT / ".scrape_cache.json"
+
+
+def normalizar_cadena_id(cadena_str: str, cadenas_validas: list) -> str:
+    cad_clean = (cadena_str or "").strip().lower()
+    for cid in cadenas_validas:
+        if cid.lower() == cad_clean:
+            return cid
+    if "farmatodo" in cad_clean:
+        return "Farmatodo"
+    if "locatel" in cad_clean:
+        return "Locatel"
+    if "saas" in cad_clean:
+        return "Saas"
+    if "farmadon" in cad_clean:
+        return "FarmaDON"
+    if "ignacio" in cad_clean:
+        return "Grupo San Ignacio"
+    if "xana" in cad_clean:
+        return "Farmacias Xana"
+    if "farmago" in cad_clean or "go" in cad_clean:
+        return "FarmaGo"
+    return cadenas_validas[0] if cadenas_validas else "Farmatodo"
+
+
+def resolver_tipo_promocion_id(tipo_promo_str: str, promo_map: dict) -> int | None:
+    if not tipo_promo_str:
+        return promo_map.get("sin_promocion")
+    tp = tipo_promo_str.lower()
+    if "2x1" in tp:
+        return promo_map.get("2x1")
+    if "3x2" in tp:
+        return promo_map.get("3x2")
+    if "segunda" in tp or "2da" in tp:
+        return promo_map.get("segunda_unidad_descuento")
+    return promo_map.get("descuento_directo") or promo_map.get("sin_promocion")
 
 
 def main():
@@ -47,6 +83,8 @@ def main():
     ahora_iso = ahora.isoformat()
     run_id = os.environ.get("GITHUB_RUN_ID") or f"local_{int(ahora.timestamp())}"
     trigger = os.environ.get("GITHUB_EVENT_NAME") or "manual"
+    if trigger not in ("cron", "manual", "dispatch"):
+        trigger = "manual"
 
     nuevo_cache = {}
     cambios = []
@@ -154,13 +192,15 @@ def main():
                     "run_id": run_id
                 })
 
-    # SINCRONIZAR A SUPABASE
+    # SINCRONIZAR A SUPABASE (DUAL-WRITE)
     try:
-        from supabase_client import is_supabase_configured, upsert, insert
+        from supabase_client import is_supabase_configured, upsert, insert, select
         if is_supabase_configured():
             print("\n[SUPABASE] Sincronizando datos con Supabase...")
 
-            # 1. Upsert en productos_competencia
+            # -----------------------------------------------------------------
+            # 1. ACTUALIZAR MODELO LEGACY (productos_competencia e historico_precios)
+            # -----------------------------------------------------------------
             records_to_upsert = []
             for item, es_err, r in cambios:
                 records_to_upsert.append({
@@ -192,9 +232,8 @@ def main():
             if records_to_upsert:
                 for i in range(0, len(records_to_upsert), 100):
                     upsert("productos_competencia", records_to_upsert[i:i+100])
-                print(f"[SUPABASE] ✅ Actualizados {len(records_to_upsert)} productos en productos_competencia.")
+                print(f"[SUPABASE-LEGACY] ✅ Actualizados {len(records_to_upsert)} productos en productos_competencia.")
 
-            # 2. Insertar en historico_precios
             supabase_historico = []
             for h in historico_items:
                 supabase_historico.append({
@@ -219,22 +258,100 @@ def main():
             if supabase_historico:
                 for i in range(0, len(supabase_historico), 100):
                     insert("historico_precios", supabase_historico[i:i+100])
-                print(f"[SUPABASE] ✅ Insertados {len(supabase_historico)} registros en historico_precios.")
+                print(f"[SUPABASE-LEGACY] ✅ Insertados {len(supabase_historico)} registros en historico_precios.")
 
-            # 3. Registrar scrape_run
-            run_data = [{
-                "run_id": run_id,
-                "started_at": ahora_iso,
-                "total": len(resultados),
-                "ok": ok,
-                "errores": errores,
-                "trigger": trigger,
-            }]
+            # -----------------------------------------------------------------
+            # 2. ACTUALIZAR NUEVO MODELO RELACIONAL (scrape_runs y fact_precios)
+            # -----------------------------------------------------------------
             try:
-                insert("scrape_runs", run_data)
-            except Exception:
-                pass
-            print("[SUPABASE] ✅ Sincronización con Supabase finalizada.")
+                # A. Cargar catálogos auxiliares
+                cadenas_db = select("dim_cadenas", "select=id")
+                cadenas_validas = [c["id"] for c in cadenas_db] if cadenas_db else ["Farmatodo"]
+
+                promos_db = select("dim_tipos_promocion", "select=id,codigo")
+                promo_map = {p["codigo"]: p["id"] for p in promos_db} if promos_db else {}
+
+                tasa_db = select("dim_tasa_bcv", "order=fecha.desc&limit=1")
+                tasa_bcv_actual = float(tasa_db[0]["tasa"]) if tasa_db else 850.0
+
+                pubs_db = select("publicaciones", "select=id,cadena_id,url_normalizada")
+                map_pubs = {(p["cadena_id"].lower(), p["url_normalizada"]): p["id"] for p in pubs_db}
+                map_urls = {p["url_normalizada"]: p["id"] for p in pubs_db}
+
+                # B. Agrupar resultados por cadena para registrar runs
+                por_cadena = defaultdict(list)
+                for r in resultados:
+                    c_id = normalizar_cadena_id(r.get("cadena", ""), cadenas_validas)
+                    por_cadena[c_id].append(r)
+
+                cadena_run_uuids = {}
+                for cid, items_c in por_cadena.items():
+                    c_tot = len(items_c)
+                    c_err = sum(1 for it in items_c if it.get("error") or not it.get("precio_full_bs"))
+                    c_ok = c_tot - c_err
+                    c_estado = "completada" if c_err == 0 else ("parcial" if c_ok > 0 else "fallida")
+
+                    run_rec = {
+                        "github_run_id": str(run_id)[:100],
+                        "cadena_id": cid,
+                        "started_at": ahora_iso,
+                        "finished_at": ahora_iso,
+                        "total_urls": c_tot,
+                        "exitosos": c_ok,
+                        "fallidos": c_err,
+                        "estado": c_estado,
+                        "trigger_tipo": trigger
+                    }
+                    try:
+                        run_res = insert("scrape_runs", [run_rec], return_representation=True)
+                        if run_res and isinstance(run_res, list) and len(run_res) > 0:
+                            cadena_run_uuids[cid] = run_res[0].get("id")
+                    except Exception as ex_run:
+                        print(f"[RELACIONAL] Aviso al registrar run para {cid}: {ex_run}")
+
+                # C. Preparar e insertar hechos en fact_precios
+                fact_records = []
+                for r in resultados:
+                    url_raw = r.get("url") or ""
+                    url_norm = re.sub(r'\?.*$', '', url_raw).strip().lower()
+                    c_id = normalizar_cadena_id(r.get("cadena", ""), cadenas_validas)
+
+                    pub_id = r.get("publicacion_id") or map_pubs.get((c_id.lower(), url_norm)) or map_urls.get(url_norm)
+                    if not pub_id:
+                        continue
+
+                    es_err = bool(r.get("error") or not r.get("precio_full_bs") or r.get("precio_full_bs") <= 0.01)
+                    error_msg_item = r.get("error") or ("Sin precio visible" if es_err else None)
+
+                    promo_id = resolver_tipo_promocion_id(r.get("tipo_promo"), promo_map)
+
+                    fact_records.append({
+                        "publicacion_id": pub_id,
+                        "scrape_run_id": cadena_run_uuids.get(c_id),
+                        "fecha_captura": r.get("scraped_at") or ahora_iso,
+                        "precio_full_bs": r.get("precio_full_bs"),
+                        "precio_desc_bs": r.get("precio_desc_bs"),
+                        "tasa_bcv": tasa_bcv_actual,
+                        "tasa_origen": "bcv_del_dia",
+                        "disponible": not es_err,
+                        "estado": "error" if es_err else "ok",
+                        "error_mensaje": (error_msg_item[:500] if error_msg_item else None),
+                        "nombre_capturado": (r.get("nombre") or r.get("marca") or "")[:255] or None,
+                        "tiene_promocion": bool(r.get("tiene_descuento", False)),
+                        "tipo_promocion_id": promo_id,
+                        "promo_texto_raw": r.get("tipo_promo"),
+                        "origen": "scraper"
+                    })
+
+                if fact_records:
+                    for i in range(0, len(fact_records), 100):
+                        insert("fact_precios", fact_records[i:i+100])
+                    print(f"[RELACIONAL] ✅ Insertados {len(fact_records)} hechos de precios en fact_precios.")
+
+            except Exception as ex_rel:
+                print(f"[RELACIONAL] Aviso sincronización nuevo modelo: {ex_rel}")
+
+            print("[SUPABASE] ✅ Sincronización Dual-Write finalizada con éxito.")
 
     except Exception as e:
         print(f"[SUPABASE] Aviso: No se pudo completar la sincronización ({e})")
@@ -249,7 +366,7 @@ def main():
     print(f"Sincronización completada | Total: {len(resultados)} | OK: {ok} | Errores: {errores}")
     print(f"Cambios procesados: {len(cambios)} | Ahorrados por delta: {len(resultados) - len(cambios)}")
     print("Trigger: " + trigger)
-    print("Run ID: " + run_id)
+    print("Run ID: " + str(run_id))
     print("=" * 60)
 
 

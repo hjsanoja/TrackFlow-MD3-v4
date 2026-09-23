@@ -123,15 +123,26 @@ async def get_bcv_rate() -> float:
 
 
 def cargar_filas_de_db():
-    """Lee productos_competencia desde Supabase con fallback local CSV."""
+    """Lee productos_competencia desde Supabase y enriquece con publicacion_id del nuevo catálogo relacional."""
     try:
         from supabase_client import is_supabase_configured, select
         if is_supabase_configured():
             filas = select("productos_competencia", "select=*")
             if filas:
+                try:
+                    pubs = select("publicaciones", "select=id,cadena_id,url_normalizada")
+                    pub_map = {(p["cadena_id"].lower(), p["url_normalizada"]): p["id"] for p in pubs}
+                    url_map = {p["url_normalizada"]: p["id"] for p in pubs}
+                    for f in filas:
+                        url_norm = re.sub(r'\?.*$', '', (f.get("url") or "")).strip().lower()
+                        cad = (f.get("cadena") or "").lower()
+                        f["publicacion_id"] = pub_map.get((cad, url_norm)) or url_map.get(url_norm)
+                except Exception as ex_pub:
+                    print(f"Aviso mapeo publicaciones: {ex_pub}", flush=True)
+
                 for f in filas:
                     f["_doc_id"] = str(f.get("id") or f.get("_doc_id") or "")
-                print(f"Cargadas {len(filas)} filas desde Supabase", flush=True)
+                print(f"Cargadas {len(filas)} filas desde Supabase (con mapeo a publicaciones)", flush=True)
                 return filas
     except Exception as e:
         print(f"No se pudo cargar desde Supabase: {e}", flush=True)
@@ -831,6 +842,7 @@ async def main_async():
             res["tamano"] = fila.get("tamano", "")
             res["activo"] = fila.get("activo", True)
             res["_doc_id"] = fila.get("_doc_id")
+            res["publicacion_id"] = fila.get("publicacion_id")
 
             await page.close()
 

@@ -57,15 +57,22 @@ def update_bcv_rate():
     print(f"  Tasa BCV: Bs {rate:,.4f} / USD")
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # 1. Guardar en Supabase
+    # 1. Guardar en Supabase (Legacy y Modelo Relacional)
     try:
-        from supabase_client import is_supabase_configured, insert
+        from supabase_client import is_supabase_configured, insert, upsert
         if is_supabase_configured():
             insert("bcv_rates", [{
                 "value": rate,
                 "updated_at": now_iso
             }])
-            print("  ✅ Tasa BCV guardada en Supabase")
+            # Nuevo catálogo dimensional dim_tasa_bcv
+            fecha_hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            upsert("dim_tasa_bcv", [{
+                "fecha": fecha_hoy,
+                "tasa": round(rate, 4),
+                "fuente": "BCV"
+            }], on_conflict="fecha")
+            print("  ✅ Tasa BCV guardada en Supabase (bcv_rates y dim_tasa_bcv)")
     except Exception as e:
         print(f"  Aviso Supabase BCV: {e}")
 
