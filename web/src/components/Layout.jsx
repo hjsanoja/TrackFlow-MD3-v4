@@ -10,8 +10,8 @@ export default function Layout({ user, userDoc, children }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
-  const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
+  // El rol se toma EXCLUSIVAMENTE de la tabla usuarios
+  const isAdmin = userDoc?.rol === 'administrador';
 
   const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
@@ -35,11 +35,10 @@ export default function Layout({ user, userDoc, children }) {
 
   const handleLogout = async () => {
     try {
-      localStorage.removeItem('trackflow_demo_user');
-    } catch (e) {}
-    try {
       await supabase.auth.signOut();
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Error durante el cierre de sesión en Supabase:', e);
+    }
     window.location.reload();
   };
 
@@ -166,9 +165,7 @@ export default function Layout({ user, userDoc, children }) {
           <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/40">
             <div className="flex items-center gap-3">
               {(() => {
-                const displayName = (!userDoc?.nombre || userDoc.nombre === 'Administrador TrackFlow' || userDoc.nombre === 'admin')
-                  ? 'Hernando Sanoja'
-                  : userDoc.nombre;
+                const displayName = userDoc?.nombre || user?.email?.split('@')[0] || 'Usuario';
                 return (
                   <>
                     <div className="w-10 h-10 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-sm font-display shadow-elevation-1">
@@ -197,19 +194,14 @@ export default function Layout({ user, userDoc, children }) {
             <span>Cerrar Sesión</span>
           </button>
 
-          {/* Developer attribution & Version */}
+          {/* Version Footer */}
           <div className="pt-3 text-center border-t border-outline-variant/40 flex flex-col items-center gap-1">
             <span className="text-[10px] text-on-surface-variant font-mono tracking-wide">
-              Desarrollador: <span className="font-bold text-primary">Hernando Sanoja</span>
+              Sistema de Inteligencia Competitiva
             </span>
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[9px] text-primary font-mono font-bold uppercase tracking-wider bg-primary-container/60 px-2.5 py-0.5 rounded-full border border-primary/15">
-                M3 Expressive Activo
-              </span>
-              <span className="text-[9px] text-on-surface-variant/70 font-mono">
-                V7.4.0 · Material 3 Expressive & Cinemática
-              </span>
-            </div>
+            <span className="text-[9px] text-on-surface-variant/70 font-mono">
+              TrackFlow v7.4 · Supabase RLS Ready
+            </span>
           </div>
         </div>
       </aside>
@@ -336,7 +328,7 @@ export default function Layout({ user, userDoc, children }) {
         document.body
       )}
 
-      {/* Mobile Bottom Navigation Bar (MD3 Style for Mobile Touch Usability) */}
+      {/* Mobile Bottom Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-container-lowest/95 backdrop-blur-md border-t border-outline-variant/60 flex items-center justify-around py-1.5 px-2 shadow-lg">
         {navItems
           .filter(isNavVisible)

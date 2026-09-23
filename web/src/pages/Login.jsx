@@ -2,63 +2,48 @@ import { useState } from 'react';
 import { supabase } from '../supabase';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@trackflow.com');
-  const [password, setPassword] = useState('demo1234');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const handleDemoLogin = () => {
-    const rawName = email.split('@')[0] || '';
-    const nameToUse = (!rawName || rawName === 'admin' || rawName.toLowerCase().includes('administrador')) ? 'Hernando Sanoja' : rawName;
-    const demoDoc = {
-      email: email.trim() || 'admin@trackflow.com',
-      nombre: nameToUse,
-      rol: 'administrador',
-      activo: true
-    };
-    localStorage.setItem('trackflow_demo_user', JSON.stringify(demoDoc));
-    window.location.reload();
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL);
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-    // 1. Inicio de sesión exclusivo con Supabase Auth
-    if (hasSupabase) {
-      try {
-        const { data, error: sbError } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password: password,
-        });
+    // Validación estricta de configuración de entorno
+    if (!supabaseUrl) {
+      setError('Error de configuración: La variable VITE_SUPABASE_URL no está definida en el entorno.');
+      setLoading(false);
+      return;
+    }
 
-        if (sbError) {
-          // Si el usuario intentó con credenciales demo en ambiente local sin usuario en Supabase
-          if (email.trim().toLowerCase() === 'admin@trackflow.com' && password === 'demo1234') {
-            handleDemoLogin();
-            return;
-          }
-          setError(sbError.message || 'Error al autenticar credenciales en Supabase.');
-          setLoading(false);
-          return;
-        }
+    try {
+      const { data, error: sbError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: password,
+      });
 
-        if (data?.user) {
-          setLoading(false);
-          return;
-        }
-      } catch (err) {
-        setError(err?.message || 'Error inesperado al conectar con Supabase Auth.');
+      if (sbError) {
+        setError(sbError.message || 'Error al autenticar credenciales en Supabase.');
         setLoading(false);
         return;
       }
-    } else {
-      // Fallback a modo demo solo en caso de ausencia total de variables de entorno
-      handleDemoLogin();
+
+      if (!data?.user) {
+        setError('No se recibió una sesión válida del servidor de autenticación.');
+        setLoading(false);
+        return;
+      }
+
+      // El listener en App.jsx procesará la sesión y validará autorización en la tabla usuarios
+    } catch (err) {
+      setError(err?.message || 'Error inesperado al conectar con Supabase Auth.');
+      setLoading(false);
     }
   };
 
@@ -66,7 +51,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 text-on-background">
       <div className="w-full max-w-md bg-white rounded-[32px] border border-outline-variant p-10 shadow-sm space-y-8">
         <div className="text-center space-y-2">
-          {/* Elegant Logo / Icon Header */}
+          {/* Logo TrackFlow */}
           <div className="mx-auto w-16 h-16 rounded-[20px] bg-primary flex items-center justify-center shadow-inner">
             <span className="material-symbols-outlined text-secondary-container text-3xl select-none">monitoring</span>
           </div>
@@ -83,7 +68,8 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="m3-input"
-              placeholder="admin@trackflow.com"
+              placeholder="usuario@empresa.com"
+              autoComplete="email"
             />
           </div>
 
@@ -97,6 +83,7 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="m3-input pr-11"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
               <button
                 type="button"
@@ -125,7 +112,7 @@ export default function Login() {
             {loading ? (
               <>
                 <span className="material-symbols-outlined text-base leading-none animate-spin">autorenew</span>
-                <span>Iniciando...</span>
+                <span>Iniciando sesión...</span>
               </>
             ) : (
               <>
@@ -136,19 +123,13 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Developer attribution & Version */}
         <div className="pt-5 border-t border-outline-variant text-center flex flex-col items-center gap-1.5">
           <span className="text-[11px] text-on-surface-variant font-mono tracking-wide">
-            Desarrollador: <span className="font-bold text-primary">Hernando Sanoja</span>
+            TrackFlow · Acceso Restringido a Personal Autorizado
           </span>
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-[9px] text-primary/90 font-mono font-bold uppercase tracking-widest bg-primary-container px-2.5 py-0.5 rounded-full border border-primary/10">
-              M3 Expressive Activo
-            </span>
-            <span className="text-[10px] text-on-surface-variant/70 font-mono">
-              V7.4.0 · Material 3 Expressive & Supabase Auth Exclusivo
-            </span>
-          </div>
+          <span className="text-[10px] text-on-surface-variant/70 font-mono">
+            Autenticación Administrada por Supabase Auth
+          </span>
         </div>
       </div>
     </div>

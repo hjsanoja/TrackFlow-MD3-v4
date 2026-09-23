@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { db } from '../firebase';
 import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
@@ -64,32 +63,11 @@ export default function Usuarios({ userDoc }) {
     try {
       const email = data.email.trim().toLowerCase();
       if (!email || !/\S+@\S+\.\S+/.test(email)) {
-        throw new Error('Email inválido');
+        throw new Error('El correo electrónico no es válido.');
       }
       const docId = emailToDocId(email);
-      if (isNew && usuarios.some(u => u.id === docId)) {
-        throw new Error('Ya existe un usuario con ese email en la base de datos');
-      }
-
-      if (isNew) {
-        if (!data.password || data.password.length < 6) {
-          throw new Error('La contraseña debe tener al menos 6 caracteres');
-        }
-
-        // Registro en Supabase Auth
-        if (isSupabaseActive()) {
-          try {
-            const { error: sbErr } = await supabase.auth.signUp({
-              email,
-              password: data.password,
-            });
-            if (sbErr) {
-              console.warn('[Supabase Auth Warning]:', sbErr?.message || sbErr);
-            }
-          } catch (sbErr) {
-            console.warn('[Supabase Auth Warning]:', sbErr?.message || sbErr);
-          }
-        }
+      if (isNew && usuarios.some(u => u.id === docId || u.email?.toLowerCase() === email)) {
+        throw new Error('Ya existe un usuario con ese email en el sistema.');
       }
 
       const rolNormalizado = data.rol === 'administrador' ? 'administrador' : 'consulta';
@@ -99,27 +77,54 @@ export default function Usuarios({ userDoc }) {
             ? data.menus_permitidos
             : DEFAULT_CONSULTA_MENUS);
 
-      await dbUpsertUsuario({
-        id: docId,
-        email,
-        nombre: data.nombre.trim(),
-        rol: rolNormalizado,
-        menus_permitidos: menusPermitidos,
-        recibe_alertas_inmediatas: data.recibe_alertas_inmediatas,
-        recibe_resumen_diario: data.recibe_resumen_diario,
-        activo: data.activo,
-      });
+      if (isNew) {
+        if (!data.password || data.password.length < 6) {
+          throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        }
 
-      addToast(
-        isNew
-          ? `Usuario de ${rolNormalizado === 'administrador' ? 'administrador' : 'consulta'} creado correctamente.`
-          : 'Cambios de usuario y permisos guardados con éxito',
-        'success'
-      );
+        // Creación delegada a la Edge Function que usa service_role key en el servidor
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('crear-usuario', {
+          body: {
+            email,
+            password: data.password,
+            nombre: data.nombre.trim(),
+            rol: rolNormalizado,
+            menus_permitidos: menusPermitidos,
+            recibe_alertas_inmediatas: data.recibe_alertas_inmediatas,
+            recibe_resumen_diario: data.recibe_resumen_diario,
+            activo: data.activo,
+          },
+        });
+
+        if (fnError) {
+          throw new Error(fnError.message || 'Error al comunicarse con la función de creación de usuario en Supabase.');
+        }
+
+        if (fnData?.error) {
+          throw new Error(fnData.error);
+        }
+
+        addToast(`Usuario ${email} registrado exitosamente con rol ${rolNormalizado}.`, 'success');
+      } else {
+        // Actualización de datos de perfil en la base de datos
+        await dbUpsertUsuario({
+          id: docId,
+          email,
+          nombre: data.nombre.trim(),
+          rol: rolNormalizado,
+          menus_permitidos: menusPermitidos,
+          recibe_alertas_inmediatas: data.recibe_alertas_inmediatas,
+          recibe_resumen_diario: data.recibe_resumen_diario,
+          activo: data.activo,
+        });
+
+        addToast('Cambios de usuario y permisos guardados con éxito.', 'success');
+      }
+
       setEditing(null);
       await cargar(true);
     } catch (err) {
-      addToast(err.message, 'error');
+      addToast(err.message || 'Error al procesar la solicitud de usuario.', 'error');
     }
   };
 
@@ -202,7 +207,7 @@ export default function Usuarios({ userDoc }) {
         </button>
       </div>
 
-      {/* Info banner explaining roles and menu access */}
+      {/* Info banner */}
       <div className="bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-xs text-on-background space-y-2 shadow-xs">
         <div className="flex items-center gap-2 font-mono font-bold text-sm text-primary">
           <span className="material-symbols-outlined text-lg leading-none">verified_user</span>

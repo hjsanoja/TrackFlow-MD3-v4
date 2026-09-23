@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import Login from './pages/Login';
@@ -14,139 +14,156 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { DataProvider } from './context/DataContext';
 
-function emailToDocId(email) {
-  return email.toLowerCase().replace('@', '_at_').replaceAll('.', '_');
-}
-
 function AppContent() {
   const [user, setUser] = useState(null);
   const [userDoc, setUserDoc] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
   const { addToast } = useToast();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    // 0. Revisar sesión demo local guardada previamente
-    const storedDemo = localStorage.getItem('trackflow_demo_user');
-    if (storedDemo) {
-      try {
-        const parsed = JSON.parse(storedDemo);
-        if (parsed && parsed.email) {
-          if (!parsed.nombre || parsed.nombre === 'Administrador TrackFlow' || parsed.nombre === 'admin') {
-            parsed.nombre = 'Hernando Sanoja';
-            localStorage.setItem('trackflow_demo_user', JSON.stringify(parsed));
-          }
-          setUser({ email: parsed.email, uid: 'demo-user-id' });
-          setUserDoc(parsed);
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        localStorage.removeItem('trackflow_demo_user');
-      }
-    }
-
-    const hasSbEnv = Boolean(import.meta.env.VITE_SUPABASE_URL);
-
-    if (!hasSbEnv) {
-      const demoDoc = { email: 'admin@trackflow.com', nombre: 'Hernando Sanoja', rol: 'administrador', activo: true };
-      localStorage.setItem('trackflow_demo_user', JSON.stringify(demoDoc));
-      setUser({ email: demoDoc.email, uid: 'demo-admin-id' });
-      setUserDoc(demoDoc);
+  const syncUserSession = useCallback(async (session) => {
+    if (!session?.user) {
+      setUser(null);
+      setUserDoc(null);
       setLoading(false);
       return;
     }
 
-    // 1. Manejo reactivo de sesión con Supabase Auth exclusivo
-    const syncUserSession = async (session) => {
-      if (!isMounted) return;
-      if (session?.user) {
-        const email = session.user.email.toLowerCase();
-        try {
-          const { data: uData } = await supabase
-            .from('usuarios')
-            .select('*')
-            .or(`email.eq.${email},id.eq.${emailToDocId(email)}`)
-            .maybeSingle();
+    const email = session.user.email?.toLowerCase();
+    if (!email) {
+      await supabase.auth.signOut();
+      setUser(null);
+      setUserDoc(null);
+      setLoading(false);
+      setAuthError('La cuenta no tiene un correo electrónico asociado.');
+      return;
+    }
 
-          if (uData) {
-            const isActive = uData.activo === true || uData.activo === 'si' || uData.activo === 'sí';
-            if (isActive) {
-              if (isMounted) {
-                setUser({ email: session.user.email, uid: session.user.id });
-                setUserDoc(uData);
-                setLoading(false);
-              }
-              return;
-            } else {
-              await supabase.auth.signOut();
-              if (isMounted) {
-                setUser(null);
-                setUserDoc(null);
-                setLoading(false);
-                addToast('Tu usuario está inactivo. Contacta a un administrador.', 'error');
-              }
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn('Aviso verificando perfil de usuario en Supabase:', err);
-        }
+    try {
+      // Filtrar estrictamente por columna email con .eq()
+      const { data: uData, error: dbError } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
 
-        // Perfil por defecto si aún no está dado de alta en la tabla usuarios
-        if (isMounted) {
-          setUser({ email: session.user.email, uid: session.user.id });
-          setUserDoc({ email: session.user.email, nombre: session.user.email.split('@')[0], rol: 'administrador', activo: true });
-          setLoading(false);
-        }
-      } else {
-        if (isMounted) {
-          setUser(null);
-          setUserDoc(null);
-          setLoading(false);
-        }
+      if (dbError) {
+        throw dbError;
       }
-    };
 
-    // Obtener sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      syncUserSession(session);
-    });
+      // Si el usuario no existe en la tabla usuarios o no está activo, rechazar acceso
+      const isActive = uData && (uData.activo === true || uData.activo === 'si' || uData.activo === 'sí');
+      if (!uData || !isActive) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setUserDoc(null);
+        setLoading(false);
+        const motivo = !uData 
+          ? 'Usuario no autorizado: no estás registrado en el sistema.' 
+          : 'Usuario no autorizado: tu cuenta se encuentra inactiva.';
+        setAuthError(motivo);
+        addToast(motivo, 'error');
+        return;
+      }
 
-    // Escuchar cambios de estado en Supabase Auth en tiempo real
+      // Usuario autorizado y activo según la base de datos
+      setUser({ email: session.user.email, uid: session.user.id });
+      setUserDoc(uData);
+      setAuthError(null);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error al validar autorización del usuario:', err);
+      setAuthError('Error de conexión al verificar permisos de usuario.');
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  const checkInitialSession = useCallback(async () => {
+    setLoading(true);
+    setAuthError(null);
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      await syncUserSession(session);
+    } catch (err) {
+      console.error('Error al obtener sesión inicial:', err);
+      setAuthError('No se pudo verificar la sesión. Por favor reintenta.');
+      setLoading(false);
+    }
+  }, [syncUserSession]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    checkInitialSession();
+
+    // Suscribirse a cambios de sesión en Supabase Auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      syncUserSession(session);
+      if (isMounted) {
+        await syncUserSession(session);
+      }
     });
 
-    // Timeout de seguridad: asegura que la pantalla de carga nunca se quede congelada
-    const safetyTimer = setTimeout(() => {
+    // Timeout de cortesía para advertir problemas de red si la sesión demora más de 10 segundos
+    const networkTimeout = setTimeout(() => {
       if (isMounted) {
-        setLoading(prev => {
-          if (prev) {
-            const fallbackDoc = { email: 'admin@trackflow.com', nombre: 'Hernando Sanoja', rol: 'administrador', activo: true };
-            localStorage.setItem('trackflow_demo_user', JSON.stringify(fallbackDoc));
-            setUser({ email: fallbackDoc.email, uid: 'demo-admin-id' });
-            setUserDoc(fallbackDoc);
+        setLoading((prevLoading) => {
+          if (prevLoading) {
+            setAuthError('La conexión con el servidor de autenticación está demorando más de lo esperado.');
             return false;
           }
           return false;
         });
       }
-    }, 2000);
+    }, 10000);
 
     return () => {
       isMounted = false;
-      clearTimeout(safetyTimer);
+      clearTimeout(networkTimeout);
       subscription?.unsubscribe();
     };
-  }, [addToast]);
+  }, [checkInitialSession, syncUserSession]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-mono font-bold text-primary mt-4 animate-pulse">Cargando TrackFlow...</p>
+        <p className="text-sm font-mono font-bold text-primary mt-4 animate-pulse">Verificando credenciales...</p>
+      </div>
+    );
+  }
+
+  // Si ocurrió un error de red o timeout durante la verificación inicial
+  if (authError && !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 text-on-background">
+        <div className="w-full max-w-md bg-white rounded-[32px] border border-outline-variant p-8 shadow-sm text-center space-y-6">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-error-container text-error flex items-center justify-center">
+            <span className="material-symbols-outlined text-3xl">lock_person</span>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-display font-bold text-primary">Acceso Denegado</h2>
+            <p className="text-xs text-on-surface-variant font-mono">{authError}</p>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={() => {
+                setAuthError(null);
+                checkInitialSession();
+              }}
+              className="m3-btn-primary h-11 text-xs uppercase font-mono tracking-wider"
+            >
+              Reintentar Conexión
+            </button>
+            <a
+              href="/login"
+              onClick={() => setAuthError(null)}
+              className="text-xs font-mono font-bold text-primary hover:underline py-2"
+            >
+              Ir a la pantalla de inicio de sesión
+            </a>
+          </div>
+        </div>
       </div>
     );
   }
@@ -155,13 +172,13 @@ function AppContent() {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
   }
 
-  const userEmail = (userDoc?.email || user?.email || '').toLowerCase();
-  const isAdmin = userDoc?.rol === 'administrador' || userEmail === 'hjsanoja@gmail.com' || userEmail === 'admin@trackflow.com';
+  // El rol se toma EXCLUSIVAMENTE de la tabla usuarios
+  const isAdmin = userDoc?.rol === 'administrador';
 
   const defaultConsultaMenus = ['/', '/mapa-calor'];
   const allowedMenuIds = isAdmin
@@ -188,19 +205,19 @@ function AppContent() {
     <DataProvider user={user}>
       <Layout user={user} userDoc={userDoc}>
         <Routes>
-          <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
-          <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/reporteria" element={<Navigate to="/experimental?tab=reporteria" replace />} />
-          <Route path="/experimental" element={isAllowed('/experimental') ? <Experimental user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
+          <Route path="/experimental" element={isAllowed('/experimental') ? <Experimental user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/analisis" element={<Navigate to="/experimental?tab=analisis" replace />} />
           <Route path="/simulador" element={<Navigate to="/experimental?tab=simulador" replace />} />
           <Route path="/hallazgos" element={<Navigate to="/experimental?tab=hallazgos" replace />} />
-          <Route path="/productos" element={isAllowed('/productos') ? <Productos /> : <Navigate to={fallbackPath} />} />
-          <Route path="/competencia" element={isAllowed('/competencia') ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
-          <Route path="/cadenas" element={isAllowed('/cadenas') ? <Cadenas /> : <Navigate to={fallbackPath} />} />
-          <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to={fallbackPath} />} />
-          <Route path="/login" element={<Navigate to={fallbackPath} />} />
-          <Route path="*" element={<Navigate to={fallbackPath} />} />
+          <Route path="/productos" element={isAllowed('/productos') ? <Productos /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/competencia" element={isAllowed('/competencia') ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/cadenas" element={isAllowed('/cadenas') ? <Cadenas /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/login" element={<Navigate to={fallbackPath} replace />} />
+          <Route path="*" element={<Navigate to={fallbackPath} replace />} />
         </Routes>
       </Layout>
     </DataProvider>
