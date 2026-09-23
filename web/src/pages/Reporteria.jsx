@@ -666,8 +666,8 @@ export default function Reporteria({ user, userDoc }) {
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">ID Producto Propio</th>
                 <th className="py-3 px-3.5 font-bold min-w-[190px]">Producto Propio</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap text-primary">Laboratorio (SKU)</th>
-                <th className="py-3 px-3.5 font-bold whitespace-nowrap">Cadena / Competidor</th>
-                <th className="py-3 px-3.5 font-bold min-w-[130px]">Marca / Línea</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">Cadena</th>
+                <th className="py-3 px-3.5 font-bold min-w-[130px]">Marca</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">Tipo</th>
                 <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio Full (Bs)</th>
                 <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio Desc (Bs)</th>

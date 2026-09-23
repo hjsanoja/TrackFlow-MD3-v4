@@ -45,6 +45,10 @@ export const ETIQUETAS = {
   variacion: 'Variación',
   ultima_captura: 'Última Captura',
 
+  // --- Analisis ---
+  marca: 'Marca',
+  costo_unidad: 'Costo por Unidad',
+
   // --- Comunes ---
   activo: 'Activo',
   acciones: 'Acciones',

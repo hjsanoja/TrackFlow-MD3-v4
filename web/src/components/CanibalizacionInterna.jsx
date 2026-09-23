@@ -538,7 +538,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-on-surface-variant block">Costo / Pastilla</span>
+                        <span className="text-[10px] text-on-surface-variant block">Costo por Unidad</span>
                         <span className="text-xs font-mono font-semibold text-on-surface-variant">
                           ${par.generico.costo_unidosis.toFixed(3)}
                         </span>
@@ -592,7 +592,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-on-surface-variant block">Costo / Pastilla</span>
+                        <span className="text-[10px] text-on-surface-variant block">Costo por Unidad</span>
                         <span className="text-xs font-mono font-semibold text-on-surface-variant">
                           ${par.marca.costo_unidosis.toFixed(3)}
                         </span>

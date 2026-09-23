@@ -526,7 +526,7 @@ export default function MapaCalor({ user, userDoc }) {
               <tr>
                 <th className="cursor-pointer hover:bg-surface-variant/50 transition-colors w-[30%]" onClick={() => handleSort('nombre')}>
                   <div className="flex items-center gap-1">
-                    <span>Medicamento / Producto</span>
+                    <span>Producto</span>
                     {sortField === 'nombre' && (
                       <span className="material-symbols-outlined text-sm font-bold">{sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}</span>
                     )}

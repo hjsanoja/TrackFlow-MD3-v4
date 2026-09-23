@@ -101,3 +101,25 @@ escribirlo a mano. Así no vuelven a aparecer tres nombres para el mismo dato.
 | `Nombre Comercial *` | formulario de Cadenas | **Nombre de la Cadena** |
 | `Código ID` | Dimensiones → Cadenas | **ID de la Cadena** |
 | `ID Numérico Producto (dim_productos)` | Dimensiones → PVP Propio | **ID Interno del Producto** |
+
+### Alias con barra eliminados
+
+Una barra que significa *"o dicho de otra forma"* es un alias y se elimina. Una
+barra que significa *división* se conserva.
+
+| Se llamaba | Dónde | Ahora |
+|---|---|---|
+| `Cadena Farmacia` | tabla de Competencia (2 sitios) | **Cadena** |
+| `Cadena / Competidor` | Reportería | **Cadena** |
+| `Medicamento / Producto` | Mapa de Calor | **Producto** |
+| `Concentración / Tamaño` | tabla de Productos | **Presentación** |
+| `Tamaño / Presentación` | formulario de Competencia | **Presentación** |
+| `Tamaño / Unidades` | formulario de Productos | **Presentación** |
+| `Molécula / Principio Activo` | Simulador | **Principio Activo** |
+| `Molécula / Principio` | formulario de Productos | **Principio Activo** |
+| `Marca / Línea` | Reportería | **Marca** |
+| `Marca / Variante` | detalle de Producto | **Marca** |
+| `Costo / Pastilla` | Canibalización | **Costo por Unidad** |
+
+`Bs / USD Oficial` se conserva: ahí la barra es una división real (bolívares
+por dólar), no un alias.
