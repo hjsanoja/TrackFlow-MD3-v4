@@ -123,8 +123,12 @@ export default function Dimensiones() {
         .select('id');
 
       if (error) {
-        // 42P01: la tabla no existe en este proyecto (legacy opcional).
-        if (error.code === '42P01') return 0;
+        // Esperado tras fase5_archivo_deprecacion.sql, no es un fallo:
+        //  42P01 = la tabla se renombró a legacy_* (historico_precios, productos).
+        //  55000 = es una vista de compatibilidad no actualizable
+        //          (productos_competencia); se vacía sola al limpiar
+        //          fact_precios y publicaciones.
+        if (error.code === '42P01' || error.code === '55000') return 0;
         fallos.push(`${tabla}: ${error.message}`);
         return 0;
       }

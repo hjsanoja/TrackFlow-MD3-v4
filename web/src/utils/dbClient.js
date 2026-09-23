@@ -248,9 +248,16 @@ async function vaciarTablaCompleta(tabla) {
     .not('id', 'is', null)
     .select('id');
 
-  // 42P01: la tabla no existe en este proyecto (tablas legacy opcionales).
-  if (error && error.code === '42P01') {
-    return { data: [], error: null };
+  // Errores esperados tras fase5_archivo_deprecacion.sql, que NO son fallos:
+  //  42P01 = la tabla ya no existe (historico_precios, productos: renombradas
+  //          a legacy_* por la Fase 5).
+  //  55000 = es una vista de compatibilidad no actualizable
+  //          (productos_competencia pasó a ser una vista sobre
+  //          v_ultimo_precio_valido, que usa DISTINCT ON). No hay nada que
+  //          borrar en ella: se vacía sola al limpiar fact_precios y
+  //          publicaciones, que son sus tablas de origen.
+  if (error && (error.code === '42P01' || error.code === '55000')) {
+    return { data: [], error: null, omitida: true };
   }
 
   if (error) {

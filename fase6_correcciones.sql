@@ -177,9 +177,128 @@ UPDATE dim_productos
 SET nombre = TRIM(REGEXP_REPLACE(nombre, '^[\s/|·•-]+', ''))
 WHERE nombre ~ '^[\s/|·•-]+';
 
-UPDATE productos_competencia
-SET ultimo_nombre = TRIM(REGEXP_REPLACE(ultimo_nombre, '^[\s/|·•-]+', ''))
-WHERE ultimo_nombre ~ '^[\s/|·•-]+';
+-- OJO: despues de fase5_archivo_deprecacion.sql, 'productos_competencia' ya no
+-- es una tabla sino una VISTA sobre v_ultimo_precio_valido, y esa vista usa
+-- DISTINCT ON, asi que no es actualizable:
+--   ERROR 55000: cannot update view "v_ultimo_precio_valido"
+-- Por eso el UPDATE se aplica solo si sigue siendo una tabla real. Si ya es
+-- vista, el nombre se limpia solo, porque la vista lee de dim_productos.
+DO $limpieza$
+DECLARE
+    v_relkind "char";
+BEGIN
+    SELECT c.relkind INTO v_relkind
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'productos_competencia';
+
+    IF v_relkind = 'r' THEN
+        EXECUTE $sql$
+            UPDATE productos_competencia
+            SET ultimo_nombre = TRIM(REGEXP_REPLACE(ultimo_nombre, '^[\s/|·•-]+', ''))
+            WHERE ultimo_nombre ~ '^[\s/|·•-]+'
+        $sql$;
+        RAISE NOTICE 'productos_competencia es tabla: nombres limpiados.';
+    ELSIF v_relkind = 'v' THEN
+        RAISE NOTICE 'productos_competencia es una vista de compatibilidad: se omite el UPDATE (se corrige en el paso 7).';
+    ELSE
+        RAISE NOTICE 'productos_competencia no existe en este proyecto: se omite.';
+    END IF;
+END
+$limpieza$;
+
+-- Misma situacion para la tabla legacy archivada por la Fase 5.
+DO $limpieza_legacy$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relname = 'legacy_productos_competencia'
+          AND c.relkind = 'r'
+    ) THEN
+        EXECUTE $sql$
+            UPDATE legacy_productos_competencia
+            SET ultimo_nombre = TRIM(REGEXP_REPLACE(ultimo_nombre, '^[\s/|·•-]+', ''))
+            WHERE ultimo_nombre ~ '^[\s/|·•-]+'
+        $sql$;
+    END IF;
+END
+$limpieza_legacy$;
+
+-- ----------------------------------------------------------------------------
+-- 7. CORRECCION DE LA VISTA DE COMPATIBILIDAD productos_competencia
+-- ----------------------------------------------------------------------------
+-- ESTA ES LA CAUSA REAL DE QUE EL PANEL MUESTRE LOS DATOS MAL RELACIONADOS.
+--
+-- La vista creada por fase5_archivo_deprecacion.sql hace:
+--     v.id_interno AS id,
+--     v.id_interno AS id_producto_propio,   <-- el mismo valor en ambas
+--
+-- Es decir, cada producto de la competencia queda apuntando A SI MISMO como si
+-- fuera su propio "producto propio". El frontend cruza
+-- productos_competencia.id_producto_propio contra dim_productos.id_interno, asi
+-- que los COMP_* se emparejaban consigo mismos y aparecian como filas propias
+-- con "Rank: 1°/1". La relacion verdadera vive en producto_equivalencias y la
+-- vista nunca la consultaba.
+--
+-- Otros dos defectos que se corrigen aqui:
+--   * 'marca' devolvia el nombre del LABORATORIO, no el del producto.
+--   * 'id' no era unico: un competidor con URL en dos cadenas producia dos
+--     filas con el mismo id.
+DO $vista$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relname = 'productos_competencia'
+          AND c.relkind = 'v'
+    ) THEN
+        -- DROP + CREATE (no CREATE OR REPLACE): cambian nombres y tipos de
+        -- columnas, y CREATE OR REPLACE VIEW no lo permite.
+        DROP VIEW public.productos_competencia;
+
+        CREATE VIEW public.productos_competencia AS
+        SELECT
+            -- Unico por (publicacion, producto propio al que se compara)
+            v.publicacion_id::text || '_' ||
+                COALESCE(pe.producto_propio_id, v.producto_id)::text AS id,
+            -- La relacion real: competidor -> producto propio equivalente
+            COALESCE(p_propio.id_interno, v.id_interno) AS id_producto_propio,
+            v.cadena_id AS cadena,
+            v.producto_nombre AS marca,
+            CASE WHEN v.es_propio THEN 'propio' ELSE 'alternativa' END AS tipo,
+            v.url,
+            v.fecha_captura AS ultimo_scrape,
+            'ok'::text AS estado,
+            NULL::text AS ultimo_error,
+            v.precio_full_bs AS ultimo_precio_full_bs,
+            v.precio_desc_bs AS ultimo_precio_desc_bs,
+            CASE WHEN v.tasa_bcv > 0
+                 THEN ROUND((v.precio_full_bs / v.tasa_bcv)::numeric, 2)
+                 ELSE NULL END AS ultimo_precio_full_usd,
+            CASE WHEN v.tasa_bcv > 0 AND v.precio_desc_bs IS NOT NULL
+                 THEN ROUND((v.precio_desc_bs / v.tasa_bcv)::numeric, 2)
+                 ELSE NULL END AS ultimo_precio_desc_usd,
+            v.producto_nombre AS ultimo_nombre,
+            v.tiene_promocion AS tiene_descuento,
+            v.promo_texto_raw AS tipo_promo,
+            v.laboratorio_nombre AS laboratorio,
+            TRUE AS activo
+        FROM public.v_ultimo_precio_valido v
+        LEFT JOIN public.producto_equivalencias pe
+               ON pe.producto_competidor_id = v.producto_id
+              AND pe.activo
+        LEFT JOIN public.dim_productos p_propio
+               ON p_propio.id = pe.producto_propio_id;
+
+        RAISE NOTICE 'Vista productos_competencia recreada con la relacion correcta via producto_equivalencias.';
+    ELSE
+        RAISE NOTICE 'productos_competencia no es una vista (Fase 5 no aplicada): no hay nada que corregir aqui.';
+    END IF;
+END
+$vista$;
 
 -- ----------------------------------------------------------------------------
 -- CONSULTAS DE VERIFICACION
@@ -216,4 +335,33 @@ SELECT url_normalizada, COUNT(*) AS veces, ARRAY_AGG(producto_id)
 FROM publicaciones
 GROUP BY url_normalizada
 HAVING COUNT(*) > 1;
+*/
+
+-- V5. Competidores SIN equivalencia hacia un producto propio.
+--     Estos siguen sin poder compararse con nada: sus precios no apareceran
+--     en ninguna fila del Dashboard. Si la lista no esta vacia, hay que
+--     poblar producto_equivalencias para ellos.
+/*
+SELECT p.id_interno, p.nombre, l.nombre AS laboratorio
+FROM dim_productos p
+JOIN dim_laboratorios l ON l.id = p.laboratorio_id
+WHERE p.id_interno LIKE 'COMP\_%'
+  AND NOT EXISTS (
+      SELECT 1 FROM producto_equivalencias pe
+      WHERE pe.producto_competidor_id = p.id AND pe.activo
+  )
+ORDER BY p.id_interno;
+*/
+
+-- V6. Que es cada objeto hoy (tabla 'r' o vista 'v'), tras la Fase 5
+/*
+SELECT c.relname,
+       CASE c.relkind WHEN 'r' THEN 'tabla' WHEN 'v' THEN 'vista' ELSE c.relkind::text END AS tipo
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relname IN ('productos', 'productos_competencia', 'historico_precios',
+                    'cadenas', 'bcv_rates', 'legacy_productos',
+                    'legacy_productos_competencia', 'legacy_historico_precios')
+ORDER BY c.relname;
 */
