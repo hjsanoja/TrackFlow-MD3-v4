@@ -106,24 +106,58 @@ export default function Dimensiones() {
 
   const handleResetTables = async () => {
     setResetting(true);
+    const fallos = [];
+    let totalBorradas = 0;
+
+    // Vacía una tabla y reporta el resultado real.
+    // - `.not('id', 'is', null)` sirve para cualquier tipo de PK (uuid, text o
+    //   bigint); el `.neq('id', -999999)` anterior reventaba contra las tablas
+    //   de PK uuid/text y el error se descartaba en silencio.
+    // - `.select('id')` es obligatorio: sin él PostgREST responde 204 y no hay
+    //   forma de distinguir "borré todo" de "RLS bloqueó el DELETE".
+    const vaciarTabla = async (tabla) => {
+      const { data, error } = await supabase
+        .from(tabla)
+        .delete()
+        .not('id', 'is', null)
+        .select('id');
+
+      if (error) {
+        // Esperado tras fase5_archivo_deprecacion.sql, no es un fallo:
+        //  42P01 = la tabla se renombró a legacy_* (historico_precios, productos).
+        //  55000 = es una vista de compatibilidad no actualizable
+        //          (productos_competencia); se vacía sola al limpiar
+        //          fact_precios y publicaciones.
+        if (error.code === '42P01' || error.code === '55000') return 0;
+        fallos.push(`${tabla}: ${error.message}`);
+        return 0;
+      }
+
+      const n = Array.isArray(data) ? data.length : 0;
+      totalBorradas += n;
+      return n;
+    };
+
     try {
       if (isSupabaseActive()) {
+        // Orden obligatorio: todas las FK del esquema son ON DELETE RESTRICT,
+        // así que los hijos van siempre antes que los padres.
         if (resetType === 'scrapes' || resetType === 'all') {
-          await supabase.from('historico_precios').delete().neq('id', '___none___');
-          await supabase.from('fact_precios').delete().neq('id', -999999);
-          await supabase.from('scrape_runs').delete().neq('id', '___none___');
+          await vaciarTabla('historico_precios');
+          await vaciarTabla('fact_precios');
+          await vaciarTabla('scrape_runs');
         }
 
         if (resetType === 'products' || resetType === 'all') {
-          await supabase.from('historico_precios').delete().neq('id', '___none___');
-          await supabase.from('fact_precios').delete().neq('id', -999999);
-          await supabase.from('productos_competencia').delete().neq('id', '___none___');
-          await supabase.from('publicaciones').delete().neq('id', -999999);
-          await supabase.from('pvp_propio').delete().neq('id', -999999);
-          await supabase.from('producto_equivalencias').delete().neq('id', -999999);
-          await supabase.from('dim_productos').delete().neq('id', -999999);
-          await supabase.from('productos').delete().neq('id', '___none___');
-          await supabase.from('legacy_productos').delete().neq('id', '___none___');
+          await vaciarTabla('historico_precios');
+          await vaciarTabla('fact_precios');
+          await vaciarTabla('productos_competencia');
+          await vaciarTabla('publicaciones');
+          await vaciarTabla('pvp_propio');
+          await vaciarTabla('producto_equivalencias');
+          await vaciarTabla('dim_productos');
+          await vaciarTabla('productos');
+          await vaciarTabla('legacy_productos');
         }
       }
 
@@ -131,14 +165,27 @@ export default function Dimensiones() {
         sessionStorage.removeItem('trackflow_data_cache_v3');
       } catch (_) {}
 
-      addToast(
-        resetType === 'scrapes'
-          ? 'Histórico de precios y corridas de scraping limpiados exitosamente.'
-          : resetType === 'products'
-          ? 'Catálogo de productos y PVP propio limpiados para nueva carga.'
-          : 'Tablas operativas reiniciadas exitosamente. Puedes cargar las dimensiones y productos limpios.',
-        'success'
-      );
+      if (fallos.length > 0) {
+        addToast(
+          `La limpieza terminó con errores (${fallos.length}). Revisa la consola. Primero: ${fallos[0]}`,
+          'error'
+        );
+        console.error('Tablas que no se pudieron limpiar:', fallos);
+      } else if (totalBorradas === 0) {
+        addToast(
+          'No se borró ninguna fila. O las tablas ya estaban vacías, o falta la política DELETE de RLS (ejecuta fase6_correcciones.sql).',
+          'warning'
+        );
+      } else {
+        addToast(
+          resetType === 'scrapes'
+            ? `Scraping e histórico limpiados: ${totalBorradas} filas eliminadas.`
+            : resetType === 'products'
+            ? `Catálogo y PVP propio limpiados: ${totalBorradas} filas eliminadas.`
+            : `Tablas operativas reiniciadas: ${totalBorradas} filas eliminadas.`,
+          'success'
+        );
+      }
 
       setShowResetModal(false);
       await fetchTableData(activeTab);
@@ -269,12 +316,25 @@ export default function Dimensiones() {
     setDeleting(true);
     try {
       const pkVal = confirmDelete[config.pk];
-      const { error } = await supabase
+
+      // `.select()` es imprescindible. Sin él PostgREST devuelve 204 No Content
+      // y un DELETE bloqueado por RLS se ve idéntico a uno exitoso: por eso el
+      // panel mostraba "Registro eliminado" y la fila seguía ahí al recargar.
+      const { data, error } = await supabase
         .from(activeTab)
         .delete()
-        .eq(config.pk, pkVal);
+        .eq(config.pk, pkVal)
+        .select();
 
       if (error) throw error;
+
+      if (!Array.isArray(data) || data.length === 0) {
+        addToast(
+          `No se eliminó nada de ${config.nombre}. La fila existe pero RLS no permite DELETE a tu usuario: ejecuta fase6_correcciones.sql en el SQL Editor de Supabase.`,
+          'error'
+        );
+        return;
+      }
 
       addToast(`Registro eliminado de ${config.nombre}`, 'success');
       setConfirmDelete(null);
@@ -282,7 +342,14 @@ export default function Dimensiones() {
       if (refreshData) refreshData(true);
     } catch (err) {
       console.error('Error al eliminar fila:', err);
-      addToast(`No se pudo eliminar (puede tener registros relacionados): ${err.message}`, 'error');
+
+      // 23503 = foreign_key_violation. Con FKs ON DELETE RESTRICT es el caso
+      // más común y el mensaje crudo de Postgres no le dice nada al usuario.
+      const msg = err.code === '23503'
+        ? `No se puede eliminar: hay registros que dependen de esta fila (${err.details || 'revisa productos, publicaciones o precios asociados'}). Elimina primero los dependientes.`
+        : `No se pudo eliminar: ${err.message}`;
+
+      addToast(msg, 'error');
     } finally {
       setDeleting(false);
     }

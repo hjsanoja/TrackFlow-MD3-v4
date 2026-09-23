@@ -78,17 +78,40 @@ export async function dbUpsertProducto(data) {
   if (isSupabaseActive()) {
     try {
       // 1. Intentar resolver o crear referencias en tablas dimensionales
-      let labId = 1;
+      // `null` en vez de 1: dim_productos.laboratorio_id es NOT NULL, así que
+      // un fallo al resolver produce un error visible en vez de colgar el
+      // producto del laboratorio que casualmente tenga id = 1.
+      let labId = null;
       let catId = null;
       let unId = null;
 
       try {
         const labNombre = cleanData.laboratorio.toUpperCase().trim();
-        const { data: labData } = await supabase.from('dim_laboratorios').select('id').ilike('nombre', labNombre).maybeSingle();
+
+        // Solo estos son marca propia. Antes se insertaba TODO laboratorio
+        // nuevo con es_propio: true, así que Calox, Genven o Megalabs
+        // terminaban contados como marca propia en los análisis.
+        const LABS_PROPIOS = ['LA SANTE', 'LA SANTÉ', 'PHARMETIQUE', 'PHARMETIQUE LABS', 'PHARMETIQUELABS'];
+        const esLabPropio = LABS_PROPIOS.includes(labNombre);
+
+        // `.limit(1)` antes de maybeSingle(): si hay dos laboratorios con
+        // nombres equivalentes, maybeSingle() devolvía error y se creaba un
+        // duplicado más.
+        const { data: labData } = await supabase
+          .from('dim_laboratorios')
+          .select('id')
+          .ilike('nombre', labNombre)
+          .limit(1)
+          .maybeSingle();
+
         if (labData?.id) {
           labId = labData.id;
         } else {
-          const { data: newLab } = await supabase.from('dim_laboratorios').insert({ nombre: labNombre, es_propio: true }).select('id').maybeSingle();
+          const { data: newLab } = await supabase
+            .from('dim_laboratorios')
+            .insert({ nombre: labNombre, es_propio: esLabPropio })
+            .select('id')
+            .maybeSingle();
           if (newLab?.id) labId = newLab.id;
         }
 
@@ -105,6 +128,29 @@ export async function dbUpsertProducto(data) {
         }
       } catch (refErr) {
         console.warn('[Supabase] Warning resolviendo dimensiones foráneas:', refErr);
+      }
+
+      // Red de seguridad: dim_productos.laboratorio_id es NOT NULL. Si no se
+      // pudo resolver ni crear el laboratorio, se cuelga de 'OTRO' (creándolo
+      // si hace falta) en vez de asumir un id fijo.
+      if (labId === null) {
+        const { data: otroLab } = await supabase
+          .from('dim_laboratorios')
+          .select('id')
+          .ilike('nombre', 'OTRO')
+          .limit(1)
+          .maybeSingle();
+
+        if (otroLab?.id) {
+          labId = otroLab.id;
+        } else {
+          const { data: nuevoOtro } = await supabase
+            .from('dim_laboratorios')
+            .insert({ nombre: 'OTRO', es_propio: false })
+            .select('id')
+            .maybeSingle();
+          if (nuevoOtro?.id) labId = nuevoOtro.id;
+        }
       }
 
       // 2. Upsert en dim_productos
@@ -187,24 +233,106 @@ export async function dbUpsertProductosBulk(prodsList) {
   }
 }
 
+// Vacía una tabla completa reportando el resultado real.
+//
+// Dos trampas que hacían que estos borrados fallaran en silencio:
+//  1. `.neq('id', -999999)` / `.neq('id', '___none___')` revientan con error
+//     de tipo cuando la PK es uuid (scrape_runs) o texto. `.not('id','is',null)`
+//     funciona con cualquier tipo de PK.
+//  2. Un DELETE sin `.select()` responde 204 No Content, así que un borrado
+//     bloqueado por RLS es indistinguible de uno exitoso.
+async function vaciarTablaCompleta(tabla) {
+  const { data, error } = await supabase
+    .from(tabla)
+    .delete()
+    .not('id', 'is', null)
+    .select('id');
+
+  // Errores esperados tras fase5_archivo_deprecacion.sql, que NO son fallos:
+  //  42P01 = la tabla ya no existe (historico_precios, productos: renombradas
+  //          a legacy_* por la Fase 5).
+  //  55000 = es una vista de compatibilidad no actualizable
+  //          (productos_competencia pasó a ser una vista sobre
+  //          v_ultimo_precio_valido, que usa DISTINCT ON). No hay nada que
+  //          borrar en ella: se vacía sola al limpiar fact_precios y
+  //          publicaciones, que son sus tablas de origen.
+  if (error && (error.code === '42P01' || error.code === '55000')) {
+    return { data: [], error: null, omitida: true };
+  }
+
+  if (error) {
+    console.warn(`[Supabase] No se pudo vaciar ${tabla}:`, error.message);
+  }
+
+  return { data: data || [], error: error || null };
+}
+
 export async function dbDeleteProducto(id, linksCompetencia = []) {
   let anyError = null;
   if (isSupabaseActive()) {
     try {
-      // Eliminar dependencias primero en orden de integridad referencial
+      // `id` es el id_interno (texto, p.ej. "P001" o "142748"), pero
+      // publicaciones.producto_id, pvp_propio.producto_id y
+      // producto_equivalencias.* son BIGINT que apuntan a dim_productos.id.
+      // Pasarles el texto hacía que PostgREST devolviera 400 y no se borrara
+      // nada; el error se descartaba en silencio.
+      const { data: dimRow } = await supabase
+        .from('dim_productos')
+        .select('id')
+        .eq('id_interno', id)
+        .maybeSingle();
+
+      const dbId = dimRow?.id ?? null;
+
+      // Legacy: estas dos sí usan el id de texto.
       await supabase.from('historico_precios').delete().eq('id_producto_propio', id);
       await supabase.from('productos_competencia').delete().eq('id_producto_propio', id);
-      await supabase.from('publicaciones').delete().eq('producto_id', id);
-      
-      // Eliminar pvp propio si tiene db_id numérico o id_interno
-      await supabase.from('pvp_propio').delete().eq('producto_id', id);
 
-      const resDim = await supabase.from('dim_productos').delete().or(`id_interno.eq.${id},id.eq.${id}`);
-      const resProd = await supabase.from('productos').delete().eq('id', id);
+      if (dbId !== null) {
+        // Orden obligatorio: las FK del esquema son ON DELETE RESTRICT.
+        // fact_precios cuelga de publicaciones, así que va primero.
+        const { data: pubs } = await supabase
+          .from('publicaciones')
+          .select('id')
+          .eq('producto_id', dbId);
+
+        const pubIds = (pubs || []).map(r => r.id);
+        if (pubIds.length > 0) {
+          await supabase.from('fact_precios').delete().in('publicacion_id', pubIds);
+        }
+
+        await supabase.from('publicaciones').delete().eq('producto_id', dbId);
+        await supabase.from('pvp_propio').delete().eq('producto_id', dbId);
+
+        // Equivalencias en ambos sentidos (el producto puede figurar como
+        // propio en unas filas y como competidor en otras).
+        await supabase.from('producto_equivalencias').delete().eq('producto_propio_id', dbId);
+        await supabase.from('producto_equivalencias').delete().eq('producto_competidor_id', dbId);
+        await supabase.from('producto_principios').delete().eq('producto_id', dbId);
+      }
+
+      // `.select()` para saber si realmente se borró: sin él, un DELETE
+      // bloqueado por RLS responde 204 y parece exitoso.
+      const resDim = await supabase
+        .from('dim_productos')
+        .delete()
+        .eq('id_interno', id)
+        .select('id');
+
+      const resProd = await supabase.from('productos').delete().eq('id', id).select('id');
       await supabase.from('legacy_productos').delete().eq('id', id);
 
-      if (resDim.error && resProd.error) {
+      const borradoDim = Array.isArray(resDim.data) && resDim.data.length > 0;
+      const borradoProd = Array.isArray(resProd.data) && resProd.data.length > 0;
+
+      if (resDim.error) {
         anyError = resDim.error;
+      } else if (!borradoDim && !borradoProd) {
+        anyError = new Error(
+          dbId === null
+            ? `El producto "${id}" no existe en dim_productos.`
+            : `No se eliminó "${id}". Falta la política DELETE de RLS: ejecuta fase6_correcciones.sql en Supabase.`
+        );
       }
     } catch (e) {
       console.warn('[Supabase] Error en deleteProducto:', e?.message || String(e));
@@ -239,16 +367,24 @@ export async function dbDeleteAllProductos() {
   let anyError = null;
   if (isSupabaseActive()) {
     try {
-      await supabase.from('historico_precios').delete().neq('id', '___none___');
-      await supabase.from('fact_precios').delete().neq('id', -999999);
-      await supabase.from('scrape_runs').delete().neq('id', '___none___');
-      await supabase.from('productos_competencia').delete().neq('id', '___none___');
-      await supabase.from('publicaciones').delete().neq('id', -999999);
-      await supabase.from('pvp_propio').delete().neq('id', -999999);
-      await supabase.from('producto_equivalencias').delete().neq('id', -999999);
-      await supabase.from('dim_productos').delete().neq('id', -999999);
-      await supabase.from('productos').delete().neq('id', '___none___');
-      await supabase.from('legacy_productos').delete().neq('id', '___none___');
+      // Orden obligatorio: las FK del esquema son ON DELETE RESTRICT.
+      const tablas = [
+        'historico_precios',
+        'fact_precios',
+        'scrape_runs',
+        'productos_competencia',
+        'publicaciones',
+        'pvp_propio',
+        'producto_equivalencias',
+        'dim_productos',
+        'productos',
+        'legacy_productos'
+      ];
+
+      for (const tabla of tablas) {
+        const { error } = await vaciarTablaCompleta(tabla);
+        if (error && !anyError) anyError = error;
+      }
     } catch (e) {
       console.warn('[Supabase] Error en deleteAllProductos:', e?.message || String(e));
       anyError = e;
@@ -425,10 +561,13 @@ export async function dbDeleteAllProductosCompetencia() {
   let anyError = null;
   if (isSupabaseActive()) {
     try {
-      await supabase.from('historico_precios').delete().neq('id', '___none___');
-      await supabase.from('scrape_runs').delete().neq('id', '___none___');
-      const res = await supabase.from('productos_competencia').delete().neq('id', '___none___');
-      if (res.error) anyError = res.error;
+      for (const tabla of ['historico_precios', 'fact_precios', 'scrape_runs']) {
+        const { error } = await vaciarTablaCompleta(tabla);
+        if (error && !anyError) anyError = error;
+      }
+
+      const res = await vaciarTablaCompleta('productos_competencia');
+      if (res.error && !anyError) anyError = res.error;
     } catch (e) {
       console.warn('[Supabase] Error en deleteAllProductosCompetencia:', e?.message || String(e));
       anyError = e;

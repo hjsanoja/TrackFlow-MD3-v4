@@ -108,6 +108,13 @@ async function fetchAllSupabaseRows(tableName, pageSize = 1000) {
 }
 
 // Cargar catálogo de productos propios desde dim_productos con soporte relacional
+// El <h1> de Farmatodo trae un separador decorativo que el scraper guardaba
+// literal, de ahí nombres como "//Cefotas 250mg/5ml Suspensión Oral".
+export function limpiarNombreCapturado(nombre) {
+  if (!nombre) return '';
+  return String(nombre).replace(/^[\s/|·•\-]+/, '').trim();
+}
+
 async function fetchDimProductos() {
   if (!isSupabaseActive() || !supabase) return [];
   try {
@@ -130,7 +137,18 @@ async function fetchDimProductos() {
       `);
 
     if (!error && Array.isArray(data) && data.length > 0) {
-      return data.map(d => {
+      // Desde la Fase 2, dim_productos contiene TAMBIÉN los productos de la
+      // competencia, migrados con el prefijo 'COMP_' en id_interno
+      // (ver fase2_migracion_datos.sql, bloque 3). No son productos propios:
+      // su relación con el catálogo propio vive en producto_equivalencias y sus
+      // precios llegan por productos_competencia / v_ultimo_precio_valido.
+      // Si no se filtran aquí, el Dashboard, Productos y Mapa de Calor los
+      // pintan como filas propias (con el laboratorio del competidor y
+      // "Rank: 1°/1", porque solo tienen una publicación).
+      const esProductoCompetidor = (d) =>
+        String(d.id_interno || '').toUpperCase().startsWith('COMP_');
+
+      return data.filter(d => !esProductoCompetidor(d)).map(d => {
         // Encontrar PVP vigente actual
         let pvpUsd = 0;
         if (Array.isArray(d.pvp_propio) && d.pvp_propio.length > 0) {
@@ -140,13 +158,15 @@ async function fetchDimProductos() {
 
         const labNombre = d.dim_laboratorios?.nombre || 'La Sante';
         const unNombre = d.dim_unidades_negocio?.nombre || 'La Sante';
-        const isPropio = d.dim_laboratorios?.es_propio !== false;
+        // `!== false` daba true cuando el JOIN con dim_laboratorios venía vacío,
+        // marcando como propio cualquier producto sin laboratorio resuelto.
+        const isPropio = d.dim_laboratorios?.es_propio === true;
 
         return {
           id: d.id_interno || String(d.id),
           id_interno: d.id_interno || String(d.id),
           db_id: d.id,
-          nombre: d.nombre || '',
+          nombre: limpiarNombreCapturado(d.nombre),
           codigo_barra: d.codigo_barra || '',
           laboratorio: labNombre,
           es_propio: isPropio,
@@ -311,7 +331,7 @@ export function DataProvider({ children, user }) {
                 ultimo_precio_desc_usd: (vm.precio_desc_bs && vm.tasa_bcv)
                   ? Number((vm.precio_desc_bs / vm.tasa_bcv).toFixed(2))
                   : p.ultimo_precio_desc_usd,
-                ultimo_nombre: vm.producto_nombre || p.ultimo_nombre,
+                ultimo_nombre: limpiarNombreCapturado(vm.producto_nombre || p.ultimo_nombre),
                 ultimo_scrape: vm.fecha_captura || p.ultimo_scrape,
                 tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
                 tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,
@@ -591,7 +611,7 @@ export function DataProvider({ children, user }) {
                 ultimo_precio_desc_usd: (vm.precio_desc_bs && vm.tasa_bcv)
                   ? Number((vm.precio_desc_bs / vm.tasa_bcv).toFixed(2))
                   : p.ultimo_precio_desc_usd,
-                ultimo_nombre: vm.producto_nombre || p.ultimo_nombre,
+                ultimo_nombre: limpiarNombreCapturado(vm.producto_nombre || p.ultimo_nombre),
                 ultimo_scrape: vm.fecha_captura || p.ultimo_scrape,
                 tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
                 tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,

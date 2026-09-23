@@ -23,6 +23,20 @@ CSV_PATH = PROJECT_ROOT / "productos_competencia.csv"
 OUT_PATH = PROJECT_ROOT / "resultados.json"
 
 
+def limpiar_nombre(nombre):
+    """Normaliza el nombre capturado del sitio.
+
+    El <h1> de Farmatodo arrastra un separador decorativo que se guardaba
+    literal en la base de datos, produciendo nombres como
+    "//Cefotas 250mg/5ml 100ml Suspension Oral".
+    """
+    if not nombre:
+        return None
+    limpio = re.sub(r"^[\s/|·•\-]+", "", str(nombre))
+    limpio = re.sub(r"\s+", " ", limpio).strip()
+    return limpio or None
+
+
 def read_text_robust(path: Path) -> str:
     """Lee archivos de texto manejando codificaciones utf-8 y latin-1."""
     try:
@@ -663,7 +677,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             await asyncio.sleep(1.5)
             continue
 
-        result["nombre"] = data.get("nombre")
+        result["nombre"] = limpiar_nombre(data.get("nombre"))
 
         # 1. Selección entre API validada y DOM anclado
         final_precio_lista = None
