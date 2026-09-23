@@ -469,6 +469,12 @@ export default function Competencia({ user, userDoc }) {
         const compToUpsert = [];
         const prodsToAutoCreate = new Map();
         const seenDocIds = new Set();
+        // Clave real de un enlace: cadena + URL sin querystring. Es la misma
+        // que aplica publicaciones.uq_cadena_url_normalizada en la base.
+        // Antes, una URL repetida en el CSV generaba un id con sufijo "_1" y
+        // acababa como dos productos distintos en el panel.
+        const seenUrlKeys = new Set();
+        let duplicadosCount = 0;
         let skippedCount = 0;
 
         for (let idx = 0; idx < rows.length; idx++) {
@@ -543,6 +549,14 @@ export default function Competencia({ user, userDoc }) {
           }
 
           const cleanUrl = url.toLowerCase().trim();
+          const urlKey = `${cadena.toLowerCase()}|${cleanUrl.replace(/\?.*$/, '')}`;
+
+          if (seenUrlKeys.has(urlKey)) {
+            duplicadosCount++;
+            continue;
+          }
+          seenUrlKeys.add(urlKey);
+
           const existingComp = items.find(c =>
             (row.doc_id && c.id === String(row.doc_id).trim()) ||
             (row.id && c.id === String(row.id).trim()) ||
@@ -608,7 +622,8 @@ export default function Competencia({ user, userDoc }) {
           setCsvSummary({
             totalRows: rows.length,
             successCount: compToUpsert.length,
-            skippedCount
+            skippedCount,
+            duplicadosCount
           });
         } else {
           throw new Error('No se encontraron filas válidas con al menos una URL.');
@@ -625,10 +640,16 @@ export default function Competencia({ user, userDoc }) {
   };
 
   const downloadExampleCsv = () => {
-    const headers = 'id_producto_propio,cadena,tipo,marca,url,activo,laboratorio,concentracion,tamano\n';
-    const row1 = 'P001,Farmatodo,alternativa,Acetaminofén,https://www.farmatodo.com.ve/producto/atamel-500mg,true,Genven,500mg,10tab\n';
-    const row2 = 'P001,Locatel,alternativa,Acetaminofén,https://www.locatel.com.ve/calox-500mg,true,Calox,500mg,10tab\n';
-    const blob = new Blob([headers + row1 + row2], { type: 'text/csv;charset=utf-8;' });
+    // Orden de columnas y ejemplos alineados con el modelo dimensional:
+    //  id_producto_propio -> dim_productos.id_interno del producto TUYO
+    //  laboratorio        -> crea o reutiliza la fila en dim_laboratorios
+    //  cadena             -> id o nombre en dim_cadenas
+    //  tipo               -> 'propio' (tu producto en esa cadena) | 'alternativa'
+    const headers = 'id_producto_propio,cadena,tipo,marca,laboratorio,url,concentracion,tamano,activo\n';
+    const row1 = 'P001,Farmatodo,propio,Acetaminofén 650mg La Santé,La Sante,https://www.farmatodo.com.ve/producto/111243559-acetaminofen-650-la-sante,650mg,10tab,true\n';
+    const row2 = 'P001,Farmatodo,alternativa,Acetaminofén 650mg Calox,Calox,https://www.farmatodo.com.ve/producto/114592534-acetaminofen-650-calox,650mg,10tab,true\n';
+    const row3 = 'P001,Locatel,alternativa,Atamel 500mg,Genven,https://www.locatel.com.ve/producto/atamel-500mg,500mg,20tab,true\n';
+    const blob = new Blob([headers + row1 + row2 + row3], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
@@ -1248,9 +1269,13 @@ export default function Competencia({ user, userDoc }) {
               <span className="text-on-surface-variant text-xs">Enlaces Importados / Actualizados:</span>
               <span className="font-bold font-mono text-xs text-secondary">{csvSummary.successCount}</span>
             </div>
-            <div className="flex justify-between py-1">
+            <div className="flex justify-between py-1 border-b border-outline-variant/40">
               <span className="text-on-surface-variant text-xs">Filas Omitidas (Sin Enlace o ID):</span>
               <span className="font-bold font-mono text-xs text-outline">{csvSummary.skippedCount}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-on-surface-variant text-xs">Duplicadas (misma cadena y URL):</span>
+              <span className="font-bold font-mono text-xs text-outline">{csvSummary.duplicadosCount ?? 0}</span>
             </div>
           </div>
         </ModalWrapper>
