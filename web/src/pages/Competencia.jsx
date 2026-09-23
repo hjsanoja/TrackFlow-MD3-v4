@@ -232,7 +232,7 @@ export default function Competencia({ user, userDoc }) {
     const item = confirmDelete;
     setConfirmDelete(null);
     try {
-      await dbDeleteProductoCompetencia(item.id);
+      await dbDeleteProductoCompetencia(item);
       addToast('Enlace eliminado del scraper', 'success');
       await cargar(true);
     } catch (err) {
