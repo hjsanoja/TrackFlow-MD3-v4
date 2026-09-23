@@ -110,6 +110,7 @@ async function fetchAllSupabaseRows(tableName, pageSize = 1000) {
 export function DataProvider({ children, user }) {
   const [productos, setProductos] = useState([]);
   const [productosCompetencia, setProductosCompetencia] = useState([]);
+  const [ultimosPreciosValidos, setUltimosPreciosValidos] = useState([]);
   const [cadenas, setCadenas] = useState([]);
   const [historicoPrecios, setHistoricoPrecios] = useState([]);
   const [bcvRates, setBcvRates] = useState([]);
@@ -183,19 +184,22 @@ export function DataProvider({ children, user }) {
         const [
           pData,
           pcData,
+          validPricesData,
           cData,
           uData,
-          { data: hData, error: hErr },
-          { data: rData, error: rErr },
-          { data: bData, error: bErr }
+          { data: hData },
+          { data: rData },
+          { data: bData }
         ] = await Promise.all([
           fetchAllSupabaseRows('productos'),
           fetchAllSupabaseRows('productos_competencia'),
-          fetchAllSupabaseRows('cadenas'),
+          fetchAllSupabaseRows('v_ultimo_precio_valido'),
+          fetchAllSupabaseRows('dim_cadenas').then(res => (res && res.length > 0) ? res : fetchAllSupabaseRows('cadenas')),
           fetchAllSupabaseRows('usuarios'),
           supabase.from('historico_precios').select('*').order('scraped_at', { ascending: false }).limit(5000),
           supabase.from('scrape_runs').select('*').order('started_at', { ascending: false }).limit(1),
-          supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true })
+          supabase.from('dim_tasa_bcv').select('*').order('fecha', { ascending: true })
+            .then(res => (res.data && res.data.length > 0) ? res : supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true }))
         ]);
 
         if (Array.isArray(pData)) {
@@ -206,14 +210,65 @@ export function DataProvider({ children, user }) {
           })).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
           setProductos(prods);
 
-          const pc = (Array.isArray(pcData) ? pcData : []).map(p => ({
-            ...p,
-            id: p.id || '',
-            id_producto_propio: p.id_producto_propio || ''
-          }));
-          setProductosCompetencia(pc);
+          // Mapa rápido O(1) de precios vigentes validados desde la vista SQL analítica
+          const validMapByUrl = new Map();
+          const validMapById = new Map();
+          (Array.isArray(validPricesData) ? validPricesData : []).forEach(v => {
+            if (v.url) {
+              const norm = String(v.url).replace(/\?.*$/, '').trim().toLowerCase();
+              validMapByUrl.set(norm, v);
+            }
+            if (v.id_interno) {
+              validMapById.set(String(v.id_interno).trim(), v);
+            }
+          });
 
-          const cSorted = [...(Array.isArray(cData) ? cData : [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          const pc = (Array.isArray(pcData) ? pcData : []).map(p => {
+            const urlNorm = String(p.url || '').replace(/\?.*$/, '').trim().toLowerCase();
+            const vm = validMapByUrl.get(urlNorm) || validMapById.get(String(p.id).trim());
+
+            if (vm) {
+              return {
+                ...p,
+                id: p.id || '',
+                id_producto_propio: p.id_producto_propio || vm.id_interno || '',
+                cadena: p.cadena || vm.cadena_id,
+                ultimo_precio_full_bs: vm.precio_full_bs ?? p.ultimo_precio_full_bs,
+                ultimo_precio_desc_bs: vm.precio_desc_bs ?? p.ultimo_precio_desc_bs,
+                ultimo_precio_full_usd: (vm.precio_full_bs && vm.tasa_bcv)
+                  ? Number((vm.precio_full_bs / vm.tasa_bcv).toFixed(2))
+                  : p.ultimo_precio_full_usd,
+                ultimo_precio_desc_usd: (vm.precio_desc_bs && vm.tasa_bcv)
+                  ? Number((vm.precio_desc_bs / vm.tasa_bcv).toFixed(2))
+                  : p.ultimo_precio_desc_usd,
+                ultimo_nombre: vm.producto_nombre || p.ultimo_nombre,
+                ultimo_scrape: vm.fecha_captura || p.ultimo_scrape,
+                tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
+                tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,
+                precio_efectivo_unidad_usd: vm.precio_efectivo_unidad_usd,
+                laboratorio: vm.laboratorio_nombre || p.laboratorio,
+                es_propio: vm.es_propio,
+                publicacion_id: vm.publicacion_id
+              };
+            }
+
+            return {
+              ...p,
+              id: p.id || '',
+              id_producto_propio: p.id_producto_propio || ''
+            };
+          });
+          setProductosCompetencia(pc);
+          setUltimosPreciosValidos(Array.isArray(validPricesData) ? validPricesData : []);
+
+          const cSorted = [...(Array.isArray(cData) ? cData : [])].map(c => ({
+            id: c.id,
+            nombre: c.nombre || c.id,
+            website: c.website || '',
+            color_hex: c.color_hex || '#002855',
+            scraper_modulo: c.modulo_scraper || c.scraper_modulo || '',
+            activo: c.activo !== false
+          })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cSorted);
 
           if (hData && hData.length > 0) {
@@ -236,12 +291,14 @@ export function DataProvider({ children, user }) {
 
           if (bData && bData.length > 0) {
             const rawRates = bData.map(d => {
-              const dateObj = d.updated_at ? new Date(d.updated_at) : new Date();
+              const fechaStr = d.fecha || d.updated_at;
+              const dateObj = fechaStr ? new Date(fechaStr) : new Date();
+              const valor = Number(d.tasa ?? d.value ?? d.valor ?? 0);
               return {
                 dayKey: dateObj.toLocaleDateString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit' }),
                 fecha: dateObj.toLocaleDateString('es-VE', { month: 'short', day: 'numeric' }) || '—',
-                valor: Number(d.value || d.valor || 0),
-                source: d.source || 'oficial',
+                valor,
+                source: d.fuente || d.source || 'oficial',
                 rawDate: dateObj
               };
             });
@@ -280,7 +337,7 @@ export function DataProvider({ children, user }) {
           setIsRefreshing(false);
           return;
         } else {
-          console.warn('[Supabase] Error al leer tabla productos:', pErr?.message || pErr);
+          console.warn('[Supabase] Error al leer tabla productos');
           setProductos([]);
           setIsLoadedOnce(true);
           setLoadingInitial(false);
@@ -409,13 +466,55 @@ export function DataProvider({ children, user }) {
   const refreshCompetencia = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
-        const data = await fetchAllSupabaseRows('productos_competencia');
+        const [data, validData] = await Promise.all([
+          fetchAllSupabaseRows('productos_competencia'),
+          fetchAllSupabaseRows('v_ultimo_precio_valido')
+        ]);
         if (Array.isArray(data)) {
-          setProductosCompetencia(data.map(p => ({
-            ...p,
-            id: p.id || '',
-            id_producto_propio: p.id_producto_propio || ''
-          })));
+          const validMapByUrl = new Map();
+          const validMapById = new Map();
+          (Array.isArray(validData) ? validData : []).forEach(v => {
+            if (v.url) {
+              validMapByUrl.set(String(v.url).replace(/\?.*$/, '').trim().toLowerCase(), v);
+            }
+            if (v.id_interno) {
+              validMapById.set(String(v.id_interno).trim(), v);
+            }
+          });
+
+          setProductosCompetencia(data.map(p => {
+            const urlNorm = String(p.url || '').replace(/\?.*$/, '').trim().toLowerCase();
+            const vm = validMapByUrl.get(urlNorm) || validMapById.get(String(p.id).trim());
+            if (vm) {
+              return {
+                ...p,
+                id: p.id || '',
+                id_producto_propio: p.id_producto_propio || vm.id_interno || '',
+                cadena: p.cadena || vm.cadena_id,
+                ultimo_precio_full_bs: vm.precio_full_bs ?? p.ultimo_precio_full_bs,
+                ultimo_precio_desc_bs: vm.precio_desc_bs ?? p.ultimo_precio_desc_bs,
+                ultimo_precio_full_usd: (vm.precio_full_bs && vm.tasa_bcv)
+                  ? Number((vm.precio_full_bs / vm.tasa_bcv).toFixed(2))
+                  : p.ultimo_precio_full_usd,
+                ultimo_precio_desc_usd: (vm.precio_desc_bs && vm.tasa_bcv)
+                  ? Number((vm.precio_desc_bs / vm.tasa_bcv).toFixed(2))
+                  : p.ultimo_precio_desc_usd,
+                ultimo_nombre: vm.producto_nombre || p.ultimo_nombre,
+                ultimo_scrape: vm.fecha_captura || p.ultimo_scrape,
+                tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
+                tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,
+                precio_efectivo_unidad_usd: vm.precio_efectivo_unidad_usd,
+                laboratorio: vm.laboratorio_nombre || p.laboratorio,
+                es_propio: vm.es_propio,
+                publicacion_id: vm.publicacion_id
+              };
+            }
+            return {
+              ...p,
+              id: p.id || '',
+              id_producto_propio: p.id_producto_propio || ''
+            };
+          }));
           return;
         }
       }
@@ -432,9 +531,19 @@ export function DataProvider({ children, user }) {
   const refreshCadenas = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
-        const data = await fetchAllSupabaseRows('cadenas');
+        let data = await fetchAllSupabaseRows('dim_cadenas');
+        if (!data || !data.length) {
+          data = await fetchAllSupabaseRows('cadenas');
+        }
         if (Array.isArray(data)) {
-          const cDocs = [...data].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+          const cDocs = data.map(c => ({
+            id: c.id,
+            nombre: c.nombre || c.id,
+            website: c.website || '',
+            color_hex: c.color_hex || '#002855',
+            scraper_modulo: c.modulo_scraper || c.scraper_modulo || '',
+            activo: c.activo !== false
+          })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cDocs);
           return;
         }
@@ -490,6 +599,7 @@ export function DataProvider({ children, user }) {
   const value = useMemo(() => ({
     productos,
     productosCompetencia,
+    ultimosPreciosValidos,
     cadenas,
     historicoPrecios,
     bcvRates,
@@ -505,12 +615,14 @@ export function DataProvider({ children, user }) {
     refreshUsuarios,
     setProductos,
     setProductosCompetencia,
+    setUltimosPreciosValidos,
     setHistoricoPrecios,
     setUltimaCorrida,
     vaciarHistorico
   }), [
     productos,
     productosCompetencia,
+    ultimosPreciosValidos,
     cadenas,
     historicoPrecios,
     bcvRates,

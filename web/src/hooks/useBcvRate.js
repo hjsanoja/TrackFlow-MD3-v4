@@ -14,6 +14,24 @@ export function useBcvRate() {
   const loadFromSupabase = async () => {
     try {
       if (!isSupabaseActive()) return null;
+      // 1. Intentar desde dim_tasa_bcv (nuevo modelo dimensional)
+      const { data: dimData, error: dimErr } = await supabase
+        .from('dim_tasa_bcv')
+        .select('*')
+        .order('fecha', { ascending: false })
+        .limit(1);
+
+      if (!dimErr && dimData && dimData.length > 0) {
+        const val = Number(dimData[0].tasa);
+        if (!isNaN(val) && val > 0) {
+          setRate(val);
+          setSource(dimData[0].fuente || 'oficial');
+          setUpdatedAt(dimData[0].fecha ? new Date(dimData[0].fecha) : new Date());
+          return { value: val, updated_at: dimData[0].fecha, source: dimData[0].fuente };
+        }
+      }
+
+      // 2. Fallback a tabla legacy bcv_rates
       const { data, error } = await supabase
         .from('bcv_rates')
         .select('*')
@@ -110,10 +128,16 @@ export function useBcvRate() {
 
         // Guardar la nueva tasa
         if (isSupabaseActive()) {
+          const hoyFecha = new Date().toISOString().split('T')[0];
           supabaseInsertSafe('bcv_rates', {
             value: auto,
             updated_at: new Date().toISOString()
           }).catch(() => {});
+          supabase.from('dim_tasa_bcv').upsert({
+            fecha: hoyFecha,
+            tasa: auto,
+            fuente: 'BCV'
+          }, { onConflict: 'fecha' }).then(() => {}).catch(() => {});
         } else if (db) {
           addDoc(collection(db, 'bcv_rates'), {
             value: auto,
@@ -141,10 +165,18 @@ export function useBcvRate() {
 
     try {
       if (isSupabaseActive()) {
-        await supabaseInsertSafe('bcv_rates', {
-          value: num,
-          updated_at: new Date().toISOString()
-        });
+        const hoyFecha = new Date().toISOString().split('T')[0];
+        await Promise.allSettled([
+          supabaseInsertSafe('bcv_rates', {
+            value: num,
+            updated_at: new Date().toISOString()
+          }),
+          supabase.from('dim_tasa_bcv').upsert({
+            fecha: hoyFecha,
+            tasa: num,
+            fuente: 'manual'
+          }, { onConflict: 'fecha' })
+        ]);
       } else if (db) {
         await addDoc(collection(db, 'bcv_rates'), {
           value: num,
