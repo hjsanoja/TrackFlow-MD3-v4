@@ -70,7 +70,7 @@ $$ LANGUAGE plpgsql;
 -- ----------------------------------------------------------------------------
 
 -- 1.1 Cadenas de Farmacias
-INSERT INTO public.dim_cadenas (id, nombre, website, color_hex, modulo_scraper, activo)
+INSERT INTO public.dim_cadenas (id, nombre, website, color_hex, scraper_modulo, activo)
 VALUES 
     ('Farmatodo', 'Farmatodo', 'https://www.farmatodo.com.ve', '#002855', 'farmatodo', TRUE),
     ('Locatel', 'Locatel', 'https://www.locatel.com.ve', '#008752', 'locatel', TRUE),
@@ -82,7 +82,7 @@ VALUES
 ON CONFLICT (id) DO UPDATE SET 
     nombre = EXCLUDED.nombre,
     website = EXCLUDED.website,
-    modulo_scraper = EXCLUDED.modulo_scraper,
+    scraper_modulo = EXCLUDED.scraper_modulo,
     activo = EXCLUDED.activo;
 
 -- 1.2 Laboratorios (Identificando propios: LA SANTE, PHARMETIQUE)

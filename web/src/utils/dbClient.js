@@ -51,6 +51,189 @@ export async function supabaseInsertSafe(tableName, payload) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// ESCRITURA EN EL MODELO DIMENSIONAL
+// ---------------------------------------------------------------------------
+// Tras fase5_archivo_deprecacion.sql, `productos_competencia` dejó de ser una
+// tabla y pasó a ser una VISTA de solo lectura sobre v_ultimo_precio_valido.
+// Cualquier INSERT/UPDATE contra ella falla con el código 55000. El destino
+// real de un enlace de competencia son tres tablas:
+//   dim_productos          -> el producto del competidor (id_interno COMP_*)
+//   producto_equivalencias -> qué producto propio equivale a ese competidor
+//   publicaciones          -> la URL monitoreada en una cadena
+// Estos helpers concentran esa escritura.
+
+// Los únicos laboratorios de marca propia. Debe coincidir con el bloque 5 de
+// fase6_correcciones.sql.
+export const LABS_PROPIOS = [
+  'LA SANTE', 'LA SANTÉ', 'PHARMETIQUE', 'PHARMETIQUE LABS', 'PHARMETIQUELABS'
+];
+
+// Misma normalización que usa publicaciones.url_normalizada en el esquema:
+// minúsculas y sin querystring.
+export function normalizarUrl(url) {
+  return String(url || '').replace(/\?.*$/, '').trim().toLowerCase();
+}
+
+// Devuelve el id de un laboratorio, creándolo si no existe.
+async function resolverLaboratorioId(nombre) {
+  const labNombre = String(nombre || '').toUpperCase().trim() || 'OTRO';
+
+  const { data: existente } = await supabase
+    .from('dim_laboratorios')
+    .select('id')
+    .ilike('nombre', labNombre)
+    .limit(1)
+    .maybeSingle();
+
+  if (existente?.id) return existente.id;
+
+  const { data: nuevo, error } = await supabase
+    .from('dim_laboratorios')
+    .insert({ nombre: labNombre, es_propio: LABS_PROPIOS.includes(labNombre) })
+    .select('id')
+    .maybeSingle();
+
+  if (error) throw new Error(`No se pudo crear el laboratorio "${labNombre}": ${error.message}`);
+  return nuevo?.id ?? null;
+}
+
+// dim_cadenas.id es un VARCHAR elegido a mano (p.ej. 'farmatodo'), así que el
+// CSV puede traer tanto el id como el nombre comercial.
+async function resolverCadenaId(cadena) {
+  const valor = String(cadena || '').trim();
+  if (!valor) throw new Error('El enlace no indica a qué cadena pertenece.');
+
+  const { data: porId } = await supabase
+    .from('dim_cadenas')
+    .select('id')
+    .eq('id', valor)
+    .maybeSingle();
+  if (porId?.id) return porId.id;
+
+  const { data: porNombre } = await supabase
+    .from('dim_cadenas')
+    .select('id')
+    .ilike('nombre', valor)
+    .limit(1)
+    .maybeSingle();
+  if (porNombre?.id) return porNombre.id;
+
+  const nuevoId = valor.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 50);
+  const { data: creada, error } = await supabase
+    .from('dim_cadenas')
+    .insert({ id: nuevoId, nombre: valor })
+    .select('id')
+    .maybeSingle();
+
+  if (error) throw new Error(`No se pudo registrar la cadena "${valor}": ${error.message}`);
+  return creada?.id ?? nuevoId;
+}
+
+// Guarda un enlace de competencia en el modelo dimensional.
+// `item` viene con la forma antigua de productos_competencia:
+//   { id, id_producto_propio, cadena, tipo, marca, url, laboratorio, unidosis, activo }
+export async function guardarEnlaceCompetencia(item) {
+  const url = String(item.url || '').trim();
+  if (!url) throw new Error('El enlace no tiene URL.');
+
+  const cadenaId = await resolverCadenaId(item.cadena);
+  const esPropio = String(item.tipo || '').toLowerCase() === 'propio';
+
+  // 1. ¿De qué producto cuelga esta publicación?
+  let productoId = null;
+
+  if (esPropio) {
+    // Es una URL de nuestro propio producto en una cadena: no hay competidor
+    // que crear ni equivalencia que registrar.
+    const { data: propio } = await supabase
+      .from('dim_productos')
+      .select('id')
+      .eq('id_interno', String(item.id_producto_propio || '').trim())
+      .maybeSingle();
+
+    if (!propio?.id) {
+      throw new Error(`No existe el producto propio "${item.id_producto_propio}" en dim_productos. Cárgalo antes que sus enlaces.`);
+    }
+    productoId = propio.id;
+  } else {
+    // 2. Producto del competidor. Se conserva el prefijo COMP_ que usó la
+    //    Fase 2 para que los datos migrados y los nuevos convivan.
+    const idInterno = `COMP_${item.id}`.slice(0, 150);
+    const labId = await resolverLaboratorioId(item.laboratorio);
+
+    const { data: comp, error: errComp } = await supabase
+      .from('dim_productos')
+      .upsert({
+        id_interno: idInterno,
+        nombre: (item.marca || item.ultimo_nombre || 'Producto Competidor').trim().slice(0, 255),
+        laboratorio_id: labId,
+        // cantidad_contenido es NOT NULL con CHECK (> 0)
+        cantidad_contenido: Number(item.unidosis) > 0 ? Number(item.unidosis) : 1,
+        unidad_contenido: 'unidad',
+        activo: item.activo !== false
+      }, { onConflict: 'id_interno' })
+      .select('id')
+      .maybeSingle();
+
+    if (errComp) throw new Error(`No se pudo guardar el producto competidor: ${errComp.message}`);
+    productoId = comp?.id ?? null;
+
+    // 3. Equivalencia con el producto propio.
+    const idPropio = String(item.id_producto_propio || '').trim();
+    if (idPropio && productoId) {
+      const { data: propio } = await supabase
+        .from('dim_productos')
+        .select('id')
+        .eq('id_interno', idPropio)
+        .maybeSingle();
+
+      if (propio?.id && propio.id !== productoId) {
+        // El trigger fn_validar_equivalencia_comercial exige
+        // 'canibalizacion_interna' cuando ambos lados son marca propia.
+        const { data: lab } = await supabase
+          .from('dim_laboratorios')
+          .select('es_propio')
+          .eq('id', labId)
+          .maybeSingle();
+
+        const { error: errEq } = await supabase
+          .from('producto_equivalencias')
+          .upsert({
+            producto_propio_id: propio.id,
+            producto_competidor_id: productoId,
+            tipo_equivalencia: lab?.es_propio ? 'canibalizacion_interna' : 'bioequivalente',
+            activo: true
+          }, { onConflict: 'producto_propio_id,producto_competidor_id' });
+
+        if (errEq) {
+          throw new Error(`No se pudo registrar la equivalencia con "${idPropio}": ${errEq.message}`);
+        }
+      } else if (!propio?.id) {
+        throw new Error(`No existe el producto propio "${idPropio}" en dim_productos. Sin él, este competidor no se puede comparar con nada.`);
+      }
+    }
+  }
+
+  // 4. La publicación (la URL monitoreada).
+  const { data: pub, error: errPub } = await supabase
+    .from('publicaciones')
+    .upsert({
+      producto_id: productoId,
+      cadena_id: cadenaId,
+      url,
+      url_normalizada: normalizarUrl(url),
+      sku_cadena: (url.match(/\/producto\/([0-9]+)/) || [])[1] || null,
+      activo: item.activo !== false
+    }, { onConflict: 'cadena_id,url_normalizada' })
+    .select('id')
+    .maybeSingle();
+
+  if (errPub) throw new Error(`No se pudo guardar la publicación: ${errPub.message}`);
+
+  return { producto_id: productoId, publicacion_id: pub?.id ?? null, cadena_id: cadenaId };
+}
+
 // --- PRODUCTOS ---
 export async function dbUpsertProducto(data) {
   const targetId = (data.id_interno || data.id || '').trim();
@@ -58,6 +241,8 @@ export async function dbUpsertProducto(data) {
     id: targetId,
     id_interno: targetId,
     nombre: data.nombre || '',
+    // Canonico: codigo_barra (ver DICCIONARIO_CAMPOS.md). Se sigue aceptando
+    // 'codigo_barras' en la entrada por compatibilidad con CSV antiguos.
     codigo_barra: data.codigo_barra || data.codigo_barras || '',
     laboratorio: data.laboratorio || 'La Sante',
     principio_activo: data.principio_activo || '',
@@ -445,11 +630,23 @@ export async function dbUpsertProductoCompetencia(data) {
 
   if (isSupabaseActive()) {
     try {
-      await supabaseUpsertSafe('productos_competencia', cleanData);
+      // Destino real: dim_productos + producto_equivalencias + publicaciones.
+      await guardarEnlaceCompetencia(cleanData);
       ok = true;
     } catch (e) {
       console.warn('[Supabase] Error en upsertProductoCompetencia:', e?.message || String(e));
       lastErr = e;
+    }
+
+    // Compatibilidad: si productos_competencia sigue siendo una tabla real
+    // (proyectos sin la Fase 5 aplicada), se mantiene actualizada. Si ya es la
+    // vista de solo lectura, Postgres responde 55000 y se ignora.
+    try {
+      await supabaseUpsertSafe('productos_competencia', cleanData);
+    } catch (e) {
+      if (e?.code !== '55000' && e?.code !== '42P01') {
+        console.warn('[Supabase] Aviso escribiendo tabla legacy productos_competencia:', e?.message || String(e));
+      }
     }
   }
 
@@ -497,17 +694,39 @@ export async function dbUpsertCompetenciaBulk(compList) {
 
   if (isSupabaseActive()) {
     let supabaseErrors = [];
+
+    // Uno por uno y no en lotes: cada enlace resuelve laboratorio, cadena,
+    // producto competidor y equivalencia, y un fallo en una fila no debe
+    // tumbar la importación completa.
+    for (const item of cleanList) {
+      try {
+        await guardarEnlaceCompetencia(item);
+      } catch (e) {
+        const msg = e?.message || String(e);
+        console.warn(`[Supabase] Enlace "${item.id}" no se pudo guardar:`, msg);
+        supabaseErrors.push(`${item.marca || item.id}: ${msg}`);
+      }
+    }
+
+    // Compatibilidad con proyectos sin la Fase 5 aplicada (ver comentario en
+    // dbUpsertProductoCompetencia).
     for (let i = 0; i < cleanList.length; i += 50) {
       const chunk = cleanList.slice(i, i + 50);
       try {
         await supabaseUpsertSafe('productos_competencia', chunk);
       } catch (e) {
-        console.warn('[Supabase] Error en dbUpsertCompetenciaBulk chunk:', e?.message || String(e));
-        supabaseErrors.push(e?.message || String(e));
+        if (e?.code !== '55000' && e?.code !== '42P01') {
+          console.warn('[Supabase] Aviso escribiendo tabla legacy productos_competencia:', e?.message || String(e));
+        }
       }
     }
-    if (supabaseErrors.length > 0 && !db) {
-      throw new Error(`Error al guardar competencia en Supabase: ${supabaseErrors[0]}`);
+
+    if (supabaseErrors.length > 0) {
+      const detalle = supabaseErrors.slice(0, 3).join(' | ');
+      const resto = supabaseErrors.length > 3 ? ` (y ${supabaseErrors.length - 3} más)` : '';
+      throw new Error(
+        `${supabaseErrors.length} de ${cleanList.length} enlaces no se guardaron. ${detalle}${resto}`
+      );
     }
   }
 
@@ -527,20 +746,63 @@ export async function dbUpsertCompetenciaBulk(compList) {
   }
 }
 
-export async function dbDeleteProductoCompetencia(id) {
+// Acepta el enlace completo (recomendado) o solo su id, por compatibilidad.
+export async function dbDeleteProductoCompetencia(enlace) {
+  const link = (enlace && typeof enlace === 'object') ? enlace : { id: enlace };
+  const id = String(link.id || '');
   let anyError = null;
+
   if (isSupabaseActive()) {
     try {
+      // Lo que hay que borrar es la PUBLICACIÓN (la URL monitoreada) y sus
+      // capturas de precio. El producto competidor en dim_productos se
+      // conserva: puede estar publicado en otras cadenas.
+      let publicacionId = link.publicacion_id ?? null;
+
+      // Si el enlace no trae el id de publicación, se busca por cadena + URL,
+      // que es la clave única real de la tabla.
+      if (!publicacionId && link.url) {
+        const { data: pub } = await supabase
+          .from('publicaciones')
+          .select('id')
+          .eq('url_normalizada', normalizarUrl(link.url))
+          .limit(1)
+          .maybeSingle();
+        publicacionId = pub?.id ?? null;
+      }
+
+      if (publicacionId) {
+        await supabase.from('fact_precios').delete().eq('publicacion_id', publicacionId);
+
+        const { data, error } = await supabase
+          .from('publicaciones')
+          .delete()
+          .eq('id', publicacionId)
+          .select('id');
+
+        if (error) {
+          anyError = error;
+        } else if (!Array.isArray(data) || data.length === 0) {
+          anyError = new Error(
+            'No se eliminó la publicación. Falta la política DELETE de RLS: ejecuta fase6_correcciones.sql en Supabase.'
+          );
+        }
+      } else {
+        anyError = new Error(
+          `No se encontró la publicación de "${link.marca || id}". Recarga la página e inténtalo de nuevo.`
+        );
+      }
+
+      // Tablas legacy: no existen tras la Fase 5, los errores se ignoran.
       await supabase.from('historico_precios').delete().eq('id_producto_competencia', id);
-      const res = await supabase.from('productos_competencia').delete().eq('id', id);
-      if (res.error) anyError = res.error;
+      await supabase.from('productos_competencia').delete().eq('id', id);
     } catch (e) {
       console.warn('[Supabase] Error en deleteProductoCompetencia:', e?.message || String(e));
       anyError = e;
     }
   }
 
-  if (db) {
+  if (db && id) {
     try {
       await deleteDoc(doc(db, 'productos_competencia', id));
     } catch (e) {

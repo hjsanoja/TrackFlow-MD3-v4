@@ -73,7 +73,7 @@ const DEFAULT_USUARIOS = [
   { id: 'analista_at_trackflow_com', email: 'analista@trackflow.com', nombre: 'Analista de Precios', rol: 'analista', activo: true }
 ];
 
-async function fetchAllSupabaseRows(tableName, pageSize = 1000) {
+async function fetchAllSupabaseRows(tableName, pageSize = 1000, aplicarFiltros = null) {
   if (!isSupabaseActive() || !supabase) return [];
   let allRows = [];
   let page = 0;
@@ -82,10 +82,13 @@ async function fetchAllSupabaseRows(tableName, pageSize = 1000) {
   while (hasMore) {
     const from = page * pageSize;
     const to = from + pageSize - 1;
-    const { data, error } = await supabase
-      .from(tableName)
-      .select('*')
-      .range(from, to);
+    let consulta = supabase.from(tableName).select('*');
+    // `aplicarFiltros` permite acotar por fecha u ordenar sin perder la
+    // paginación, que es lo que evita el tope de filas de PostgREST.
+    if (typeof aplicarFiltros === 'function') {
+      consulta = aplicarFiltros(consulta);
+    }
+    const { data, error } = await consulta.range(from, to);
 
     if (error) {
       console.warn(`[Supabase fetchAll] Error consultando ${tableName} (página ${page}):`, error.message || error);
@@ -108,6 +111,31 @@ async function fetchAllSupabaseRows(tableName, pageSize = 1000) {
 }
 
 // Cargar catálogo de productos propios desde dim_productos con soporte relacional
+// Días de histórico que se traen al navegador. Con 506 publicaciones, el tope
+// plano de 5.000 filas que había antes cubría apenas ~10 días, así que las
+// comparaciones mes contra mes no tenían con qué comparar.
+export const DIAS_HISTORICO = 180;
+
+async function fetchHistorico() {
+  if (!isSupabaseActive() || !supabase) return [];
+
+  const desde = new Date();
+  desde.setDate(desde.getDate() - DIAS_HISTORICO);
+  const desdeIso = desde.toISOString();
+
+  const filas = await fetchAllSupabaseRows('historico_precios', 1000, (q) =>
+    q.gte('scraped_at', desdeIso).order('scraped_at', { ascending: false })
+  );
+
+  if (filas.length > 0) return filas;
+
+  // Respaldo: proyectos donde la Fase 5 no se aplicó y la tabla legacy sigue
+  // siendo la fuente. Si tampoco existe, se devuelve vacío sin romper nada.
+  return fetchAllSupabaseRows('legacy_historico_precios', 1000, (q) =>
+    q.gte('scraped_at', desdeIso).order('scraped_at', { ascending: false })
+  );
+}
+
 // El <h1> de Farmatodo trae un separador decorativo que el scraper guardaba
 // literal, de ahí nombres como "//Cefotas 250mg/5ml Suspensión Oral".
 export function limpiarNombreCapturado(nombre) {
@@ -286,7 +314,7 @@ export function DataProvider({ children, user }) {
           fetchAllSupabaseRows('v_ultimo_precio_valido'),
           fetchAllSupabaseRows('dim_cadenas').then(res => (res && res.length > 0) ? res : fetchAllSupabaseRows('cadenas')),
           fetchAllSupabaseRows('usuarios'),
-          supabase.from('historico_precios').select('*').order('scraped_at', { ascending: false }).limit(5000),
+          fetchHistorico().then(data => ({ data })),
           supabase.from('scrape_runs').select('*').order('started_at', { ascending: false }).limit(1),
           supabase.from('dim_tasa_bcv').select('*').order('fecha', { ascending: true })
             .then(res => (res.data && res.data.length > 0) ? res : supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true }))
@@ -356,7 +384,7 @@ export function DataProvider({ children, user }) {
             nombre: c.nombre || c.id,
             website: c.website || '',
             color_hex: c.color_hex || '#002855',
-            scraper_modulo: c.modulo_scraper || c.scraper_modulo || '',
+            scraper_modulo: c.scraper_modulo || c.modulo_scraper || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cSorted);
@@ -654,7 +682,7 @@ export function DataProvider({ children, user }) {
             nombre: c.nombre || c.id,
             website: c.website || '',
             color_hex: c.color_hex || '#002855',
-            scraper_modulo: c.modulo_scraper || c.scraper_modulo || '',
+            scraper_modulo: c.scraper_modulo || c.modulo_scraper || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cDocs);
