@@ -156,15 +156,27 @@ Auditoría de `fase1_esquema.sql` contra las reglas de arriba.
 - Regla 3 (las llaves foráneas terminan en `_id`): sin excepciones.
 - Regla 5 (los montos llevan su moneda): `precio_full_bs`, `pvp_usd`, etc.
 
-**Pendientes, por orden de importancia:**
+**Pendientes:** solo uno, y es deliberado.
 
-| Columna | Problema | Coste de arreglarlo |
+| Columna | Situación |
+|---|---|
+| `fact_precios.fecha_captura` | Viola la regla 6 en sentido estricto (es un evento y no termina en `_at`). **Se conserva a propósito**: aparece en las 4 vistas analíticas, el scraper y buena parte del frontend, y renombrarla solo compraría coherencia cosmética a cambio de un riesgo alto. |
+
+**Cerrados en la Fase 10:**
+
+| Columna | Antes | Ahora |
 |---|---|---|
-| `dim_cadenas.scraper_modulo` | Viola la regla 4: debería ser `modulo_scraper` (módulo *del* scraper), igual que `unidad_contenido` o `tipo_equivalencia` | 22 referencias en frontend, scraper y CSV |
-| `scrape_runs.trigger_tipo` | Viola la regla 4: debería ser `tipo_trigger` | Bajo: pocas referencias |
-| `audit_log.fecha` | Viola la regla 6: es la marca de tiempo de un evento, debería terminar en `_at` | Bajo: tabla interna de auditoría |
-| `fact_precios.fecha_captura` | Viola la regla 6 en sentido estricto | Muy alto: aparece en las 4 vistas analíticas, el scraper y el frontend |
+| `dim_cadenas` | `scraper_modulo` | **`modulo_scraper`** (regla 4: es el módulo *del* scraper) |
+| `scrape_runs` | `trigger_tipo` | **`tipo_trigger`** (regla 4) |
+| `audit_log` | `fecha` | **`created_at`** (regla 6) |
 
-`scraper_modulo` quedó así en la Fase 8 por una decisión de coste: se eligió el
-nombre que ya usaban la mayoría de los consumidores para cambiar lo menos
-posible. Es una excepción consciente a la regla 4, no un descuido.
+La Fase 8 había dejado `scraper_modulo` por una decisión de coste, eligiendo el
+nombre que ya usaban la mayoría de los consumidores. Contradecía la regla 4, así
+que la Fase 10 le da la vuelta y alinea los 29 puntos de uso: esquema, migración
+de la Fase 2, vista de compatibilidad, los dos scripts del scraper, el frontend
+y `cadenas.csv`.
+
+Un detalle que costó encontrar: al renombrar una columna, Postgres actualiza la
+referencia interna de las vistas que dependen de ella, pero **no** cambia el
+nombre de la columna que la vista expone. Por eso la vista `cadenas` hay que
+recrearla a mano, y la Fase 10 lo hace en los dos escenarios posibles.

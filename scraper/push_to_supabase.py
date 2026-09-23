@@ -300,7 +300,7 @@ def main():
                         "exitosos": c_ok,
                         "fallidos": c_err,
                         "estado": c_estado,
-                        "trigger_tipo": trigger
+                        "tipo_trigger": trigger
                     }
                     try:
                         run_res = insert("scrape_runs", [run_rec], return_representation=True)

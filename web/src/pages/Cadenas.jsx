@@ -54,7 +54,7 @@ export default function Cadenas() {
         id: docId,
         nombre: data.nombre.trim(),
         website: data.website.trim(),
-        scraper_modulo: data.scraper_modulo,
+        modulo_scraper: data.modulo_scraper,
         activo: data.activo,
       });
 
@@ -186,7 +186,7 @@ export default function Cadenas() {
               </thead>
               <tbody className="divide-y divide-surface-variant">
                 {cadenas.map(c => {
-                  const implementado = SCRAPERS_IMPLEMENTADOS.has(c.scraper_modulo);
+                  const implementado = SCRAPERS_IMPLEMENTADOS.has(c.modulo_scraper);
                   const count = urlsPorCadena.get(c.nombre) || 0;
                   return (
                     <tr key={c.id} className="hover:bg-surface-low transition-colors">
@@ -203,7 +203,7 @@ export default function Cadenas() {
                         )}
                       </td>
                       <td className="font-mono text-xs text-on-surface">
-                        <code className="bg-surface-low border border-outline-variant px-2.5 py-1 rounded-md font-bold">{c.scraper_modulo}</code>
+                        <code className="bg-surface-low border border-outline-variant px-2.5 py-1 rounded-md font-bold">{c.modulo_scraper}</code>
                         {!implementado && (
                           <span className="ml-2 font-bold uppercase tracking-wider text-[10px] text-error bg-error-container border border-error/20 px-2 py-0.5 rounded-full">Pendiente</span>
                         )}
@@ -280,7 +280,7 @@ function CadenaModal({ cadena, onSave, onClose }) {
   const [form, setForm] = useState({
     nombre: cadena?.nombre || '',
     website: cadena?.website || '',
-    scraper_modulo: cadena?.scraper_modulo || 'farmatodo',
+    modulo_scraper: cadena?.modulo_scraper || 'farmatodo',
     activo: cadena?.activo ?? true,
   });
   const [saving, setSaving] = useState(false);
@@ -319,8 +319,8 @@ function CadenaModal({ cadena, onSave, onClose }) {
         </Field>
 
         <Field label="Módulo de Scraping" hint="Módulo Python de scraping asociado en backend">
-          <select required value={form.scraper_modulo}
-            onChange={e => handleChange('scraper_modulo', e.target.value)}
+          <select required value={form.modulo_scraper}
+            onChange={e => handleChange('modulo_scraper', e.target.value)}
             className="m3-select w-full bg-surface-container-lowest text-on-surface">
             {SCRAPERS_DISPONIBLES.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>

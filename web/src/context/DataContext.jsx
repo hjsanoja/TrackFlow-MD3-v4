@@ -32,12 +32,12 @@ const DEFAULT_COMPETENCIA = [
 ];
 
 const DEFAULT_CADENAS = [
-  { id: 'C001', nombre: 'Farmatodo', website: 'https://www.farmatodo.com.ve', scraper_modulo: 'farmatodo', activo: true },
-  { id: 'C002', nombre: 'Locatel', website: 'https://www.locatel.com.ve', scraper_modulo: 'locatel', activo: true },
-  { id: 'C003', nombre: 'FarmaDON', website: 'https://www.farmadon.com', scraper_modulo: 'farmadon', activo: true },
-  { id: 'C004', nombre: 'Grupo San Ignacio', website: 'https://www.gruposanignacio.com', scraper_modulo: 'grupo_san_ignacio', activo: true },
-  { id: 'C005', nombre: 'Farmacias Xana', website: 'https://www.farmaciasxana.com', scraper_modulo: 'xana', activo: true },
-  { id: 'C006', nombre: 'FarmaGo', website: 'https://www.farmago.com', scraper_modulo: 'farmago', activo: true }
+  { id: 'C001', nombre: 'Farmatodo', website: 'https://www.farmatodo.com.ve', modulo_scraper: 'farmatodo', activo: true },
+  { id: 'C002', nombre: 'Locatel', website: 'https://www.locatel.com.ve', modulo_scraper: 'locatel', activo: true },
+  { id: 'C003', nombre: 'FarmaDON', website: 'https://www.farmadon.com', modulo_scraper: 'farmadon', activo: true },
+  { id: 'C004', nombre: 'Grupo San Ignacio', website: 'https://www.gruposanignacio.com', modulo_scraper: 'grupo_san_ignacio', activo: true },
+  { id: 'C005', nombre: 'Farmacias Xana', website: 'https://www.farmaciasxana.com', modulo_scraper: 'xana', activo: true },
+  { id: 'C006', nombre: 'FarmaGo', website: 'https://www.farmago.com', modulo_scraper: 'farmago', activo: true }
 ];
 
 const DEFAULT_HISTORICO = [
@@ -384,7 +384,7 @@ export function DataProvider({ children, user }) {
             nombre: c.nombre || c.id,
             website: c.website || '',
             color_hex: c.color_hex || '#002855',
-            scraper_modulo: c.scraper_modulo || c.modulo_scraper || '',
+            modulo_scraper: c.modulo_scraper || c.scraper_modulo || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cSorted);
@@ -682,7 +682,7 @@ export function DataProvider({ children, user }) {
             nombre: c.nombre || c.id,
             website: c.website || '',
             color_hex: c.color_hex || '#002855',
-            scraper_modulo: c.scraper_modulo || c.modulo_scraper || '',
+            modulo_scraper: c.modulo_scraper || c.scraper_modulo || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cDocs);

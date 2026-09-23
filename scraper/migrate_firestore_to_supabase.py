@@ -77,7 +77,7 @@ def migrar_desde_csv():
                 "_doc_id": doc_id,
                 "nombre": row.get("nombre", "").strip(),
                 "website": row.get("website", "").strip(),
-                "scraper_modulo": row.get("scraper_modulo", "").strip(),
+                "modulo_scraper": row.get("modulo_scraper", "").strip(),
                 "activo": es_si(row.get("activo", "")),
             })
         upsert("cadenas", records)
