@@ -73,19 +73,32 @@ Una fila por producto propio.
 
 ## productos_competencia.csv
 
-Una fila por URL monitoreada.
+Una fila por URL monitoreada. Es el mismo formato que baja el botón
+**Exportar** de Competencia y la plantilla del modal de **Carga masiva**, así
+que un reporte se puede corregir y volver a subir tal cual:
+
+```
+id_producto_propio, producto, cadena, tipo, competidor, laboratorio, url,
+activo, precio_bs, precio_oferta_bs, precio_usd, ultima_captura
+```
 
 - **`id_producto_propio` debe coincidir con un `id_interno` ya cargado.** Es lo
   que construye la equivalencia entre tu producto y el del competidor. Si no
   coincide, la fila se rechaza con un mensaje que nombra el producto.
 - **`tipo`**: `propio` si la URL es de **tu** producto en esa cadena;
-  `alternativa` si es de un competidor.
-- **`laboratorio`** es obligatorio en las filas `alternativa`: con él se crea el
-  producto del competidor y se decide si cuenta como marca propia.
-- `cadena` acepta el id (`farmatodo`) o el nombre comercial (`Farmatodo`). Si no
-  existe, se registra.
-- La clave real de un enlace es **cadena + URL**. Si repites esa combinación, la
-  fila se descarta como duplicada y el resumen de importación te lo dice.
+  `competidor` (o `alternativa`, el nombre viejo) si es de un competidor.
+- **`competidor`**: el nombre del producto de la competencia (antes `marca`,
+  que se sigue aceptando).
+- **`laboratorio`** del competidor: con él se crea su producto. Vacío en uno
+  nuevo, queda como "OTRO"; vacío en uno que ya existe, se conserva.
+- `cadena` acepta el id (`Saas`) o el nombre comercial (`Farmacias SAAS`).
+- **`activo`**: `si` / `no`. Vacío o sin columna, se conserva lo guardado.
+- `producto`, `precio_*` y `ultima_captura` son informativas: al importar se
+  ignoran (los precios los pone el robot o el botón "Precio manual").
+- La clave real de un enlace es **cadena + URL**. Si ya existe, se actualiza
+  (no se duplica); la revisión previa dice cuántos son nuevos y cuántos ya
+  estaban. Si repites esa combinación dentro del archivo, la fila se descarta.
+- Igual que en productos, los archivos guardados con Excel se leen bien.
 
 ## cadenas.csv
 

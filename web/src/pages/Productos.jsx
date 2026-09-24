@@ -25,6 +25,9 @@ import {
   dbCambiarActivoProductos
 } from '../utils/dbClient';
 import Select from '../components/Select';
+import FiltroChip from '../components/FiltroChip';
+import { FormSection, Field, ChoiceChips, ComboField, normalizar } from '../components/formulario';
+import { DIAS_ENLACE_CAIDO, enlaceCaido, describirPresentacion } from '../utils/presentacion';
 
 // Un solo formato de CSV de productos para exportar, para la plantilla y para
 // importar: mismos encabezados, mismo orden, en minusculas y sin acentos, que
@@ -58,14 +61,6 @@ const filaCsvProducto = p => ({
   pvp_propio_usd: Number(p.pvp_propio_usd) > 0 ? Number(p.pvp_propio_usd).toFixed(2) : '',
 });
 
-// Un enlace esta "caido" si no trae precio desde hace mas de 7 dias (o nunca
-// lo trajo): suele ser una URL que la tienda cambio o retiro.
-const DIAS_ENLACE_CAIDO = 7;
-function enlaceCaido(e) {
-  if (!e.ultimo_scrape) return true;
-  return (Date.now() - new Date(e.ultimo_scrape).getTime()) / 86400000 > DIAS_ENLACE_CAIDO;
-}
-
 // Lo que le falta a la ficha para que el seguimiento de precios funcione.
 function faltantesFicha(p, enlaces) {
   const faltan = [];
@@ -85,45 +80,6 @@ const ORDENES = {
   enlaces: (p, ctx) => (ctx.urlsPorProducto.get(p.id_interno) || []).length,
   estado: p => (p.activo ? 0 : 1),
 };
-
-// Filtro como chip con menu: ocupa el ancho de su texto y no cuatro grupos de
-// botones. Con un valor distinto de 'todos' se marca como activo (check).
-function FiltroChip({ etiqueta, icono, valor, onChange, opciones }) {
-  const activo = valor !== 'todos';
-  return (
-    <Select value={valor} onChange={e => onChange(e.target.value)} aria-label={etiqueta}
-      className={`m3-filter-chip ${activo ? 'is-active' : ''}`} leadingIcon={activo ? 'check' : icono}>
-      {opciones.map(([v, texto]) => <option key={v} value={v}>{texto}</option>)}
-    </Select>
-  );
-}
-
-// "20 tabletas", "120 ml · Jarabe", "30 g · Crema". Antes salia "20 unidad"
-// mas una etiqueta "20u", y en los jarabes "120u", que se leia como 120
-// unidades. El volumen y el peso se dicen en ml y g; las unidades se nombran
-// con la forma farmaceutica cuando la hay.
-const NOMBRES_POR_FORMA = [
-  [/tableta/i, 'tableta', 'tabletas'],
-  [/c[aá]psula/i, 'cápsula', 'cápsulas'],
-  [/comprimido/i, 'comprimido', 'comprimidos'],
-  [/sobre/i, 'sobre', 'sobres'],
-  [/ampolla/i, 'ampolla', 'ampollas'],
-  [/[oó]vulo/i, 'óvulo', 'óvulos'],
-];
-
-function describirPresentacion(p) {
-  const forma = p.forma_farmaceutica || '';
-  const m = String(p.tamano || '').match(/^\s*([\d.,]+)\s*(ml|g|unidad(?:es)?)?/i);
-  if (!m) return forma || '—';
-  const n = Number(m[1].replace(',', '.'));
-  const cantidad = Number.isFinite(n) ? n.toLocaleString('es-VE') : m[1];
-  const unidad = (m[2] || 'unidad').toLowerCase();
-  if (unidad === 'ml' || unidad === 'g') return forma ? `${cantidad} ${unidad} · ${forma}` : `${cantidad} ${unidad}`;
-  const nombres = NOMBRES_POR_FORMA.find(([re]) => re.test(forma));
-  if (nombres) return `${cantidad} ${n === 1 ? nombres[1] : nombres[2]}`;
-  const texto = `${cantidad} ${n === 1 ? 'unidad' : 'unidades'}`;
-  return forma ? `${texto} · ${forma}` : texto;
-}
 
 export default function Productos() {
   const {
@@ -1332,9 +1288,6 @@ export default function Productos() {
   );
 }
 
-// Normaliza para comparar sin mayusculas ni tildes.
-const normalizar = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-
 // Una dosis metida en el nombre ("ACETAMINOFEN 500 MG") rompe la comparacion
 // con los titulos de las tiendas (ver ESTADO_DEL_PROYECTO.md).
 const RE_DOSIS_EN_NOMBRE = /\d+([.,]\d+)?\s*(mg|mcg|g|gr|ml|%|ui)\b/i;
@@ -1567,126 +1520,5 @@ function ProductoModal({ producto, plantilla = null, productos = [], sugerirId, 
 
       </form>
     </ModalWrapper>
-  );
-}
-
-function FormSection({ titulo, icono, children }) {
-  return (
-    <fieldset className="m3-form-section">
-      <legend className="m3-form-section-title">
-        <span className="material-symbols-outlined" aria-hidden="true">{icono}</span>
-        {titulo}
-      </legend>
-      <div className="space-y-4">{children}</div>
-    </fieldset>
-  );
-}
-
-function Field({ label, hint, error, aviso, requerido, children }) {
-  return (
-    <div className={`m3-field ${error ? 'has-error' : ''}`}>
-      <label className="m3-field-label">
-        {label}{requerido && <span className="text-error" aria-hidden="true"> *</span>}
-      </label>
-      {children}
-      {error ? (
-        <p className="m3-field-support text-error" role="alert">{error}</p>
-      ) : aviso ? (
-        <p className="m3-field-support m3-field-warning">{aviso}</p>
-      ) : hint ? (
-        <p className="m3-field-support">{hint}</p>
-      ) : null}
-    </div>
-  );
-}
-
-// Opciones cerradas y pocas (unidad de negocio, tipo): todas a la vista, un
-// clic. Sin nada elegido por defecto.
-function ChoiceChips({ valor, onChange, opciones, nombre }) {
-  return (
-    <div className="flex flex-wrap gap-2" role="radiogroup">
-      {opciones.map(([v, texto]) => {
-        const activo = normalizar(valor) === normalizar(v);
-        return (
-          <label key={v} className={`m3-choice-chip ${activo ? 'is-selected' : ''}`}>
-            <input type="radio" name={nombre} value={v} checked={activo} onChange={() => onChange(v)} className="sr-only" />
-            {activo && <span className="material-symbols-outlined" aria-hidden="true">check</span>}
-            {texto}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-// Campo con lista desplegable propia. El <datalist> del navegador filtra por
-// lo ya escrito: con "La Sante" puesto solo ofrecia "La Sante" y parecia que
-// no se podia elegir otra cosa. Aqui, al abrir, se ven todas las opciones; se
-// filtra solo cuando el usuario escribe algo distinto.
-function ComboField({ value, onChange, opciones = [], cargando = false, permitirNuevo = false, placeholder = '' }) {
-  const [abierto, setAbierto] = useState(false);
-  const [escrito, setEscrito] = useState(false);
-  const [activo, setActivo] = useState(-1);
-  const listaId = useMemo(() => `combo-${Math.random().toString(36).slice(2, 9)}`, []);
-
-  const filtradas = useMemo(() => {
-    const q = normalizar(value);
-    const lista = escrito && q ? opciones.filter(o => normalizar(o).includes(q)) : opciones;
-    return lista.slice(0, 80);
-  }, [opciones, value, escrito]);
-
-  const existe = opciones.some(o => normalizar(o) === normalizar(value));
-
-  const elegir = (v) => {
-    onChange(v);
-    setAbierto(false);
-    setEscrito(false);
-    setActivo(-1);
-  };
-
-  const alPulsar = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setAbierto(true); setActivo(i => Math.min(i + 1, filtradas.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActivo(i => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter' && abierto && activo >= 0 && filtradas[activo]) { e.preventDefault(); elegir(filtradas[activo]); }
-    else if (e.key === 'Escape' && abierto) { e.stopPropagation(); setAbierto(false); }
-  };
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        role="combobox"
-        aria-expanded={abierto}
-        aria-controls={listaId}
-        aria-autocomplete="list"
-        onChange={e => { onChange(e.target.value); setEscrito(true); setAbierto(true); setActivo(-1); }}
-        onFocus={() => { setAbierto(true); setEscrito(false); }}
-        onClick={() => setAbierto(true)}
-        onBlur={() => setTimeout(() => setAbierto(false), 120)}
-        onKeyDown={alPulsar}
-        className="m3-input pr-10"
-        autoComplete="off"
-      />
-      <span className="material-symbols-outlined m3-combo-arrow" aria-hidden="true">arrow_drop_down</span>
-      {abierto && (
-        <ul id={listaId} role="listbox" className="m3-combo-list">
-          {cargando && opciones.length === 0 && <li className="m3-combo-empty">Cargando opciones…</li>}
-          {filtradas.map((o, i) => (
-            <li key={o} role="option" aria-selected={normalizar(o) === normalizar(value)}
-              onMouseDown={e => { e.preventDefault(); elegir(o); }}
-              className={`m3-combo-option ${i === activo ? 'is-active' : ''} ${normalizar(o) === normalizar(value) ? 'is-selected' : ''}`}>
-              {o}
-              {normalizar(o) === normalizar(value) && <span className="material-symbols-outlined" aria-hidden="true">check</span>}
-            </li>
-          ))}
-          {!cargando && filtradas.length === 0 && !permitirNuevo && <li className="m3-combo-empty">Sin coincidencias</li>}
-          {permitirNuevo && value.trim() && !existe && (
-            <li className="m3-combo-empty">Se creará «{value.trim()}» al guardar</li>
-          )}
-        </ul>
-      )}
-    </div>
   );
 }
