@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { validarCsv } from '../utils/validarCsv';
+import ImportPreview from '../components/ImportPreview';
 import StatCard from '../components/StatCard';
 import { useDimensiones } from '../hooks/useDimensiones';
 import { useSearchParams } from 'react-router-dom';
@@ -59,6 +61,8 @@ export default function Competencia({ user, userDoc }) {
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
   const [csvSummary, setCsvSummary] = useState(null);
+  // Informe de validación pendiente de confirmación
+  const [previewCsv, setPreviewCsv] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -447,18 +451,45 @@ export default function Competencia({ user, userDoc }) {
   };
 
   // CSV Parsing for Bulk Competitor upload
+  // Paso 1: leer y validar. NO se escribe nada todavía.
   const handleCsvUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const rows = parseCSV(evt.target.result);
+        if (rows.length === 0) {
+          addToast('El archivo CSV está vacío o no se pudieron reconocer sus columnas.', 'error');
+          return;
+        }
+
+        // El producto propio tiene que existir: es lo que construye la
+        // equivalencia. Validarlo antes evita importar enlaces huérfanos.
+        const idsExistentes = new Set(
+          productos.map(p => String(p.id_interno || p.id || '').trim()).filter(Boolean)
+        );
+
+        const informe = validarCsv(rows, 'competencia', { idsExistentes });
+        setPreviewCsv({ informe, nombre: file.name, filas: rows });
+      } catch (err) {
+        addToast('No se pudo leer el archivo: ' + (err.message || String(err)), 'error');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  };
+
+  // Paso 2: el usuario vio el informe y confirmó. Ahora sí se escribe.
+  const confirmarImportacion = async () => {
+    if (!previewCsv) return;
     setIsUploadingCsv(true);
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
+    const procesar = async () => {
       try {
-        const text = evt.target.result;
-        const rows = parseCSV(text);
-        if (rows.length === 0) throw new Error('El archivo CSV está vacío o no se pudieron reconocer sus columnas.');
+        const rows = previewCsv.informe.filasValidas;
 
         const compToUpsert = [];
         const prodsToAutoCreate = new Map();
@@ -625,12 +656,13 @@ export default function Competencia({ user, userDoc }) {
       } catch (err) {
         addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
       } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
         setIsUploadingCsv(false);
         setShowCsvModal(false);
+        setPreviewCsv(null);
       }
     };
-    reader.readAsText(file, 'UTF-8');
+
+    await procesar();
   };
 
   const downloadExampleCsv = () => {
@@ -1144,6 +1176,16 @@ export default function Competencia({ user, userDoc }) {
         onConfirm={handleConfirmDeleteAll}
         onCancel={() => setConfirmDeleteAll(false)}
       />
+
+      {previewCsv && (
+        <ImportPreview
+          informe={previewCsv.informe}
+          nombreArchivo={previewCsv.nombre}
+          importando={isUploadingCsv}
+          onConfirmar={confirmarImportacion}
+          onCancelar={() => setPreviewCsv(null)}
+        />
+      )}
 
       {/* CSV Mass Upload Competitors Modal */}
       {showCsvModal && (

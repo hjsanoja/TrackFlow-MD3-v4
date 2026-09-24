@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { validarCsv } from '../utils/validarCsv';
+import ImportPreview from '../components/ImportPreview';
 import { useDimensiones } from '../hooks/useDimensiones';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
@@ -50,6 +52,8 @@ export default function Productos() {
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
   const [csvSummary, setCsvSummary] = useState(null);
+  // Informe de validación pendiente de confirmación
+  const [previewCsv, setPreviewCsv] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -196,20 +200,37 @@ export default function Productos() {
     }
   };
 
+  // Paso 1: leer y validar. NO se escribe nada todavía.
   const handleCsvUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const rows = parseCSV(evt.target.result);
+        if (rows.length === 0) {
+          addToast('El archivo CSV está vacío o no se pudieron reconocer sus columnas.', 'error');
+          return;
+        }
+        setPreviewCsv({ informe: validarCsv(rows, 'productos'), nombre: file.name });
+      } catch (err) {
+        addToast('No se pudo leer el archivo: ' + (err.message || String(err)), 'error');
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  };
+
+  // Paso 2: el usuario vio el informe y confirmó. Ahora sí se escribe.
+  const confirmarImportacion = async () => {
+    if (!previewCsv) return;
     setIsUploadingCsv(true);
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
+    const procesar = async () => {
       try {
-        const text = evt.target.result;
-        const rows = parseCSV(text);
-        if (rows.length === 0) {
-          throw new Error('El archivo CSV está vacío o no se pudieron reconocer sus columnas.');
-        }
+        const rows = previewCsv.informe.filasValidas;
 
         const prodsToUpsert = [];
         const compToUpsert = [];
@@ -381,12 +402,12 @@ export default function Productos() {
       } catch (err) {
         addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
       } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
         setIsUploadingCsv(false);
-        setShowCsvModal(false);
+        setPreviewCsv(null);
       }
     };
-    reader.readAsText(file, 'UTF-8');
+
+    await procesar();
   };
 
   const sugerirId = () => {
@@ -920,6 +941,16 @@ export default function Productos() {
       )}
 
       {/* CSV Result Summary Modal */}
+      {previewCsv && (
+        <ImportPreview
+          informe={previewCsv.informe}
+          nombreArchivo={previewCsv.nombre}
+          importando={isUploadingCsv}
+          onConfirmar={confirmarImportacion}
+          onCancelar={() => setPreviewCsv(null)}
+        />
+      )}
+
       {csvSummary && (
         <ModalWrapper
           isOpen={Boolean(csvSummary)}
