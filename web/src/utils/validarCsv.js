@@ -25,6 +25,8 @@ export const ESQUEMAS = {
         alias: ['fabricante'] },
       { campo: 'categoria', etiqueta: 'Categoría', obligatorio: false, alias: ['categoría'] },
       { campo: 'unidad_negocio', etiqueta: 'Unidad de Negocio', obligatorio: false, alias: ['un'] },
+      { campo: 'tipo_mercado', etiqueta: 'Tipo de mercado', obligatorio: false,
+        alias: ['market_type'], tipo: 'lista', valores: ['marca', 'generico', 'genérico'] },
       { campo: 'pvp_propio_usd', etiqueta: 'PVP Propio (USD)', obligatorio: false,
         alias: ['pvp', 'pvp_usd', 'precio_usd'], tipo: 'numero' },
       // exacto: getRowValue acepta subcadenas y 'activo' encajaria con

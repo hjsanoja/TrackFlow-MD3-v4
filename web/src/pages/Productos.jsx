@@ -37,13 +37,12 @@ const CATEGORIAS = [
 // son los nombres que lee el importador. Asi cualquier archivo que sale del
 // panel se puede editar y volver a subir tal cual.
 //
-// No lleva market_type: se calcula a partir de la unidad de negocio y del
-// laboratorio (Pharmetique = MARCA), asi que editarlo en el CSV no cambiaba
-// nada. Si lleva `activo`, para que reimportar no reactive productos dados
-// de baja.
+// tipo_mercado es MARCA o GENERICO (dim_productos.tipo_mercado, fase 18).
+// Lleva `activo` para que reimportar no reactive productos dados de baja.
+// En los dos, una columna ausente conserva lo guardado.
 const COLUMNAS_CSV_PRODUCTOS = [
   'id_interno', 'nombre', 'codigo_barra', 'principio_activo', 'concentracion',
-  'tamano', 'forma_farmaceutica', 'laboratorio', 'categoria', 'unidad_negocio', 'activo',
+  'tamano', 'forma_farmaceutica', 'laboratorio', 'categoria', 'unidad_negocio', 'tipo_mercado', 'activo',
 ].map(key => ({ label: key, key }));
 
 const filaCsvProducto = p => ({
@@ -57,6 +56,7 @@ const filaCsvProducto = p => ({
   laboratorio: p.laboratorio || '',
   categoria: p.categoria || '',
   unidad_negocio: p.unidad_negocio || '',
+  tipo_mercado: (p.market_type || 'GENERICO').toUpperCase(),
   activo: p.activo === false ? 'no' : 'si',
 });
 
@@ -398,12 +398,10 @@ export default function Productos() {
           // 'Analgesicos'), y una recarga mandaba casi todo a 'Otros'.
           const categoria = catRaw.trim() || 'Otros';
 
-          let market_type = getRowValue(row, 'market_type', 'Market Type', 'tipo_mercado', 'tipo', 'Tipo').toUpperCase();
-          if (market_type.includes('MARCA')) {
-            market_type = 'MARCA';
-          } else {
-            market_type = 'GENERICO';
-          }
+          // Sin la columna (o vacia) no se toca lo guardado; antes todo lo que
+          // no decia MARCA se guardaba como GENERICO.
+          const tipoRaw = getRowValue(row, 'tipo_mercado', 'market_type', 'Market Type', 'Tipo').toUpperCase();
+          const market_type = tipoRaw ? (tipoRaw.includes('MARCA') ? 'MARCA' : 'GENERICO') : undefined;
 
           const unOriginal = getRowValue(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN', 'linea_negocio').trim();
           // Cualquier otra unidad ('Genéricos', 'Prescripción'...) se conserva
@@ -505,7 +503,11 @@ export default function Productos() {
 
           setProductos(prev => {
             const map = new Map(prev.map(p => [p.id, p]));
-            prodsToUpsert.forEach(p => map.set(p.id, { ...p, activo: p.activo ?? map.get(p.id)?.activo ?? true }));
+            prodsToUpsert.forEach(p => map.set(p.id, {
+              ...p,
+              activo: p.activo ?? map.get(p.id)?.activo ?? true,
+              market_type: p.market_type ?? map.get(p.id)?.market_type ?? 'GENERICO',
+            }));
             return Array.from(map.values()).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
           });
 
@@ -770,30 +772,50 @@ export default function Productos() {
         ) : (
           <>
           {seleccion.size > 0 && (
-            <div className="px-4 py-3 bg-secondary-container text-on-secondary-container border-b border-outline-variant flex flex-wrap items-center gap-3">
-              <span className="text-label-lg font-bold">
-                {procesandoSel
-                  ? `Procesando ${procesandoSel.hechos} de ${procesandoSel.total}…`
-                  : `${seleccion.size} ${seleccion.size === 1 ? 'producto seleccionado' : 'productos seleccionados'}`}
-              </span>
-              <div className="flex flex-wrap gap-2 ml-auto">
-                <button type="button" disabled={!!procesandoSel} onClick={() => cambiarActivoSeleccion(false)}
-                  className="m3-btn-outline h-9 px-4 text-label-lg disabled:opacity-38">
-                  Dar de baja
-                </button>
-                <button type="button" disabled={!!procesandoSel} onClick={() => cambiarActivoSeleccion(true)}
-                  className="m3-btn-outline h-9 px-4 text-label-lg disabled:opacity-38">
-                  Reactivar
-                </button>
-                <button type="button" disabled={!!procesandoSel} onClick={() => setConfirmBorrarSel(true)}
-                  className="h-9 px-4 rounded-full text-label-lg font-bold bg-error text-on-error disabled:opacity-38">
-                  Eliminar
-                </button>
-                <button type="button" disabled={!!procesandoSel} onClick={() => setSeleccion(new Set())}
-                  className="h-9 px-3 text-label-lg font-bold hover:underline disabled:opacity-38">
-                  Quitar selección
-                </button>
-              </div>
+            <div role="toolbar" aria-label="Acciones sobre los productos seleccionados" className="m3-floating-toolbar">
+              {procesandoSel ? (
+                <div className="flex items-center gap-3 h-12 px-4 m3-label-large" aria-live="polite">
+                  <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
+                  Procesando {procesandoSel.hechos} de {procesandoSel.total}…
+                  <div className="m3-toolbar-progress"
+                    style={{ width: `${procesandoSel.total ? (procesandoSel.hechos / procesandoSel.total) * 100 : 0}%` }} />
+                </div>
+              ) : (
+                <>
+                  <button type="button" onClick={() => setSeleccion(new Set())}
+                    className="m3-toolbar-btn px-0 text-on-surface-variant"
+                    title="Quitar selección" aria-label="Quitar selección">
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                  <div className="flex flex-col justify-center pr-2 min-w-0">
+                    <span className="m3-title-small whitespace-nowrap">
+                      {seleccion.size} {seleccion.size === 1 ? 'seleccionado' : 'seleccionados'}
+                    </span>
+                    {!todosFiltradosSeleccionados && (
+                      <button type="button" onClick={alternarTodosFiltrados}
+                        className="text-left text-primary m3-label-medium hover:underline whitespace-nowrap">
+                        Seleccionar los {filtrados.length}
+                      </button>
+                    )}
+                  </div>
+                  <span className="w-px h-8 bg-outline-variant mx-1 shrink-0" aria-hidden="true" />
+                  <button type="button" onClick={() => cambiarActivoSeleccion(false)}
+                    className="m3-toolbar-btn m3-toolbar-btn-tonal" title="Dar de baja: conserva el historial">
+                    <span className="material-symbols-outlined">archive</span>
+                    <span className="hidden sm:inline">Dar de baja</span>
+                  </button>
+                  <button type="button" onClick={() => cambiarActivoSeleccion(true)}
+                    className="m3-toolbar-btn text-primary" title="Reactivar">
+                    <span className="material-symbols-outlined">unarchive</span>
+                    <span className="hidden sm:inline">Reactivar</span>
+                  </button>
+                  <button type="button" onClick={() => setConfirmBorrarSel(true)}
+                    className="m3-toolbar-btn m3-toolbar-btn-danger" title="Eliminar con su historial">
+                    <span className="material-symbols-outlined">delete</span>
+                    <span className="hidden sm:inline">Eliminar</span>
+                  </button>
+                </>
+              )}
             </div>
           )}
           <div className="overflow-x-auto max-h-[750px] relative">
@@ -823,7 +845,7 @@ export default function Productos() {
                   const links = urlsPorProducto.get(p.id_interno) || [];
                   const count = links.length;
                   return (
-                    <tr key={p.id} className={`hover:bg-surface-low transition-colors ${seleccion.has(p.id) ? 'bg-secondary-container' : ''}`}>
+                    <tr key={p.id} className={`hover:bg-surface-low transition-colors ${seleccion.has(p.id) ? 'm3-row-selected' : ''}`}>
                       <td>
                         <input type="checkbox" checked={seleccion.has(p.id)} onChange={() => alternarSeleccion(p.id)}
                           disabled={!!procesandoSel}
@@ -953,6 +975,9 @@ export default function Productos() {
         )}
       </div>
 
+      {/* Hueco para que la barra flotante no tape la paginacion. */}
+      {seleccion.size > 0 && <div className="h-24" aria-hidden="true" />}
+
       {/* Create/Edit Product Modal */}
       {editing && (
         <ProductoModal
@@ -1043,7 +1068,8 @@ export default function Productos() {
               <div>codigo_barra <span className="text-on-surface-variant font-sans font-medium">(Opcional / EAN / GTIN)</span></div>
               <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
               <div>concentracion, tamano, forma_farmaceutica, laboratorio, categoria</div>
-              <div>unidad_negocio, activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
+              <div>unidad_negocio, tipo_mercado <span className="text-on-surface-variant font-sans font-medium">(MARCA / GENERICO)</span></div>
+              <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
             </div>
             <div className="flex justify-between items-center pt-1">
               <button type="button" onClick={downloadCsvPlantilla}
