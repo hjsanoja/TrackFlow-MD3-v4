@@ -282,7 +282,11 @@ export default function Productos() {
           const forma_farmaceutica = getRowValue(row, 'forma_farmaceutica', 'Forma Farmacéutica', 'Forma Farmaceutica', 'forma', 'Forma');
           const laboratorio = getRowValue(row, 'laboratorio', 'Laboratorio', 'lab', 'Lab', 'fabricante');
           const catRaw = getRowValue(row, 'categoria', 'Categoría', 'Categoria', 'linea', 'grupo');
-          const categoria = CATEGORIAS.includes(catRaw) ? catRaw : 'Otros';
+          // Se respeta el nombre tal cual y lo resuelve dim_categorias. Antes se
+          // filtraba contra CATEGORIAS, que no coincide con la base
+          // ('Cardiovasculares' vs 'Cardiovascular', 'Analgésicos' vs
+          // 'Analgesicos'), y una recarga mandaba casi todo a 'Otros'.
+          const categoria = catRaw.trim() || 'Otros';
 
           let market_type = getRowValue(row, 'market_type', 'Market Type', 'tipo_mercado', 'tipo', 'Tipo').toUpperCase();
           if (market_type.includes('MARCA')) {
@@ -291,8 +295,11 @@ export default function Productos() {
             market_type = 'GENERICO';
           }
 
-          let unRaw = getRowValue(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN', 'linea_negocio').toUpperCase();
-          let unidad_negocio = 'La Sante';
+          const unOriginal = getRowValue(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN', 'linea_negocio').trim();
+          const unRaw = unOriginal.toUpperCase();
+          // Cualquier otra unidad ('Genéricos', 'Prescripción'...) se conserva
+          // tal cual; antes caía en 'La Sante' sin avisar.
+          let unidad_negocio = unOriginal || 'La Sante';
           if (unRaw.includes('PHARMETIQUE') || unRaw === 'PH') {
             unidad_negocio = 'Pharmetique';
           } else if (unRaw.includes('OTC')) {
@@ -300,6 +307,14 @@ export default function Productos() {
           } else if (unRaw.includes('SANTE') || unRaw.includes('SANTÉ')) {
             unidad_negocio = 'La Sante';
           }
+
+          // Sin columna `activo` no se toca el estado guardado: la recarga del
+          // catalogo reactivaba los productos dados de baja.
+          // Busqueda exacta: getRowValue tambien acepta subcadenas y con
+          // 'activo' se quedaria con la columna principio_activo.
+          const claveActivo = Object.keys(row).find(k => k.trim().toLowerCase() === 'activo');
+          const activoRaw = claveActivo ? String(row[claveActivo] ?? '').trim().toLowerCase() : '';
+          const activo = activoRaw ? !['no', 'false', '0'].includes(activoRaw) : undefined;
 
           const pvpRaw = getRowValue(row, 'pvp_propio_usd', 'PVP Propio USD', 'pvp', 'precio', 'pvp usd', 'precio usd', 'mi precio lista (usd)', 'costo');
           const pvp_propio_usd = parseFloat(pvpRaw.replace(',', '.')) || 0;
@@ -322,7 +337,7 @@ export default function Productos() {
             unidosis,
             market_type,
             unidad_negocio,
-            activo: true,
+            activo,
           };
 
           prodsToUpsert.push(cleanProd);
@@ -384,7 +399,7 @@ export default function Productos() {
 
           setProductos(prev => {
             const map = new Map(prev.map(p => [p.id, p]));
-            prodsToUpsert.forEach(p => map.set(p.id, p));
+            prodsToUpsert.forEach(p => map.set(p.id, { ...p, activo: p.activo ?? map.get(p.id)?.activo ?? true }));
             return Array.from(map.values()).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
           });
 

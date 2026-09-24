@@ -142,6 +142,13 @@ ya está hecha y este documento necesita actualizarse.
 
 ### La recarga, paso a paso
 
+0. **Antes de subir el CSV, fusionar la PR de `claude/modest-darwin-wq5eql`.**
+   Sin ella el importador pisaba datos buenos: filtraba la categoría contra
+   una lista fija que no coincide con `dim_categorias` (`Cardiovasculares` vs
+   `Cardiovascular`, `Analgésicos` vs `Analgesicos`) y casi todo acababa en
+   `Otros`; mandaba `null` en categoría y unidad de negocio cuando el nombre
+   no se resolvía; y reactivaba los productos dados de baja. Además avisa de
+   las filas con concentración y sin principio activo, cuya dosis se perdería.
 1. `SELECT id_interno, zz_nombre_original, nombre, concentracion,
    forma_farmaceutica, tamano, zz_empaque_guardado, zz_revisar
    FROM v_csv_productos WHERE zz_revisar IS NOT NULL;`

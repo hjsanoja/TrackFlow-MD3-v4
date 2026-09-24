@@ -414,13 +414,13 @@ export async function dbUpsertProducto(data) {
 
         const catNombre = cleanData.categoria.trim();
         if (catNombre) {
-          const { data: catData } = await supabase.from('dim_categorias').select('id').ilike('nombre', catNombre).maybeSingle();
+          const { data: catData } = await supabase.from('dim_categorias').select('id').ilike('nombre', catNombre).limit(1).maybeSingle();
           if (catData?.id) catId = catData.id;
         }
 
         const unNombre = cleanData.unidad_negocio.trim();
         if (unNombre) {
-          const { data: unData } = await supabase.from('dim_unidades_negocio').select('id').ilike('nombre', unNombre).maybeSingle();
+          const { data: unData } = await supabase.from('dim_unidades_negocio').select('id').ilike('nombre', unNombre).limit(1).maybeSingle();
           if (unData?.id) unId = unData.id;
         }
 
@@ -485,18 +485,27 @@ export async function dbUpsertProducto(data) {
         nombre: cleanData.nombre,
         codigo_barra: cleanData.codigo_barra || null,
         laboratorio_id: labId,
-        categoria_id: catId,
-        unidad_negocio_id: unId,
         cantidad_contenido: contenido.cantidad,
-        unidad_contenido: contenido.unidad,
-        activo: cleanData.activo
+        unidad_contenido: contenido.unidad
       };
 
-      // Solo se manda la forma cuando se conoce. PostgREST arma el UPDATE del
-      // upsert con las claves que recibe, asi que mandar null la borraria en
-      // cada alta que no traiga la columna.
+      // Solo se manda lo que se conoce. PostgREST arma el UPDATE del upsert
+      // con las claves que recibe, asi que mandar null borraria la forma, la
+      // categoria o la unidad de negocio cada vez que el nombre no se
+      // resolviera (una tilde de diferencia basta: 'Analgésicos' no es
+      // 'Analgesicos'). Lo mismo con `activo`: si no viene, se conserva, y en
+      // un alta nueva lo pone la base (DEFAULT TRUE).
       if (formaId !== null) {
         dimPayload.forma_farmaceutica_id = formaId;
+      }
+      if (catId !== null) {
+        dimPayload.categoria_id = catId;
+      }
+      if (unId !== null) {
+        dimPayload.unidad_negocio_id = unId;
+      }
+      if (data.activo !== undefined && data.activo !== null) {
+        dimPayload.activo = cleanData.activo;
       }
 
       const { data: dimProd, error: dimErr } = await supabase
