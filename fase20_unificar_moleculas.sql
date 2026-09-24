@@ -9,13 +9,20 @@
 --
 -- Esta fase agrupa las moleculas cuyo nombre es igual sin mayusculas, tildes
 -- ni signos, y deja una por grupo:
---   - se queda la que tiene tildes (la ortografia correcta) y, a igualdad,
---     la mas usada; si esta toda en mayusculas pasa a "Acetaminofén",
+--   - se queda la mas usada (a igualdad, la mas antigua); con las variantes de
+--     la tabla de abajo, la ortografia a la que apuntan,
 --   - los productos que usaban las otras pasan a la que se queda,
 --   - los otros nombres quedan guardados como sinonimos,
 --   - las duplicadas se borran.
 --
+-- Y despues, TODAS las moleculas quedan escritas igual: sin tildes y con la
+-- primera letra en mayuscula ("Acetaminofen", "Losartan potasico"). Es la
+-- misma regla que "La Sante": evita diferencias y que Excel rompa las tildes
+-- al editar un CSV. El nombre anterior queda como sinonimo, asi que escrito
+-- con tildes se sigue reconociendo.
+--
 -- Tambien une variantes que no son solo de tildes (tabla de abajo, ampliable).
+-- Solo cambia nombres de moleculas: productos, dosis e historial no se tocan.
 -- Idempotente: se puede correr mas de una vez.
 -- ============================================================================
 
@@ -40,6 +47,26 @@ AS $$
         '[^a-z0-9]+', ' ', 'g'));
 $$;
 
+-- Como se escribe una molecula: sin tildes (la n tambien pierde la tilde),
+-- espacios simples y la primera letra en mayuscula. Si estaba TODA en
+-- mayusculas pasa a minusculas; si no, se respeta el resto
+-- ("Extracto de Hedera helix" conserva la H del nombre cientifico).
+CREATE OR REPLACE FUNCTION public.fn_nombre_molecula(p_nombre TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+    WITH limpio AS (
+        SELECT REGEXP_REPLACE(TRIM(TRANSLATE(COALESCE(p_nombre, ''),
+                   'ÁÉÍÓÚÜÑáéíóúüñ', 'AEIOUUNaeiouun')), '\s+', ' ', 'g') AS t
+    )
+    SELECT UPPER(LEFT(t, 1)) || CASE WHEN t = UPPER(t) THEN LOWER(SUBSTRING(t FROM 2)) ELSE SUBSTRING(t FROM 2) END
+    FROM limpio;
+$$;
+
+COMMENT ON FUNCTION public.fn_nombre_molecula(TEXT) IS
+'Forma canonica del nombre de una molecula: sin tildes y con la primera letra en mayuscula.';
+
 COMMENT ON FUNCTION public.fn_clave_molecula(TEXT) IS
 'Nombre de molecula sin mayusculas, tildes ni signos. Dos moleculas con la misma clave son la misma.';
 
@@ -47,6 +74,7 @@ DO $$
 DECLARE
     v_grupos    INT := 0;
     v_movidas   INT := 0;
+    v_renombradas INT := 0;
     v_borradas  INT := 0;
     n           INT;
     r           RECORD;
@@ -68,17 +96,15 @@ BEGIN
         SELECT m.id,
                m.nombre,
                COALESCE(e.hacia, public.fn_clave_molecula(m.nombre)) AS clave,
-               (SELECT count(*) FROM public.producto_principios pp WHERE pp.principio_activo_id = m.id) AS usos,
-               -- tildes o enes: ortografia cuidada
-               (m.nombre ~ '[ÁÉÍÓÚÜÑáéíóúüñ]')::INT AS con_tildes,
-               (m.nombre <> UPPER(m.nombre))::INT AS no_todo_mayusculas
+               (SELECT count(*) FROM public.producto_principios pp WHERE pp.principio_activo_id = m.id) AS usos
         FROM public.dim_principios_activos m
         LEFT JOIN tmp_equivalencias e ON e.desde = public.fn_clave_molecula(m.nombre)
     )
     SELECT b.*,
            FIRST_VALUE(b.id) OVER (
                PARTITION BY b.clave
-               ORDER BY b.con_tildes DESC, b.no_todo_mayusculas DESC, b.usos DESC, b.id
+               -- con variantes de la tabla, gana la ortografia a la que apunta
+               ORDER BY (public.fn_clave_molecula(b.nombre) = b.clave) DESC, b.usos DESC, b.id
            ) AS id_final,
            count(*) OVER (PARTITION BY b.clave) AS en_grupo
     FROM base b;
@@ -131,19 +157,24 @@ BEGIN
         v_borradas := v_borradas + 1;
     END LOOP;
 
-    -- La que se queda, si esta toda en mayusculas, a "Primera letra" y resto
-    -- en minusculas (como se escriben las moleculas).
+    -- Todas las moleculas: sin tildes y con la primera letra en mayuscula.
+    -- El nombre anterior, si cambia, se guarda como sinonimo.
     UPDATE public.dim_principios_activos m
-    SET nombre = UPPER(LEFT(m.nombre, 1)) || LOWER(SUBSTRING(m.nombre FROM 2))
-    WHERE m.nombre = UPPER(m.nombre)
-      AND m.nombre ~ '[A-Z]'
-      AND NOT EXISTS (
-          SELECT 1 FROM public.dim_principios_activos o
-          WHERE o.id <> m.id
-            AND o.nombre = UPPER(LEFT(m.nombre, 1)) || LOWER(SUBSTRING(m.nombre FROM 2)));
+    SET sinonimos = (
+            SELECT ARRAY(SELECT DISTINCT x FROM unnest(COALESCE(m.sinonimos, '{}') || m.nombre) x
+                         WHERE x IS NOT NULL AND x <> public.fn_nombre_molecula(m.nombre) ORDER BY x)),
+        nombre = public.fn_nombre_molecula(m.nombre)
+    WHERE m.nombre <> public.fn_nombre_molecula(m.nombre);
+    GET DIAGNOSTICS n = ROW_COUNT;
+    v_renombradas := n;
 
-    RAISE NOTICE 'Grupos unificados: %. Moléculas borradas: %. Filas de productos reasignadas: %.',
-        v_grupos, v_borradas, v_movidas;
+    -- Un sinonimo igual al nombre no aporta nada.
+    UPDATE public.dim_principios_activos m
+    SET sinonimos = ARRAY(SELECT x FROM unnest(m.sinonimos) x WHERE x <> m.nombre ORDER BY x)
+    WHERE m.nombre = ANY(m.sinonimos);
+
+    RAISE NOTICE 'Grupos unificados: %. Moleculas borradas: %. Filas de productos reasignadas: %. Nombres escritos sin tildes: %.',
+        v_grupos, v_borradas, v_movidas, v_renombradas;
 END $$;
 
 -- ----------------------------------------------------------------------------
@@ -155,3 +186,9 @@ GROUP BY 1
 HAVING count(*) > 1;
 
 GRANT EXECUTE ON FUNCTION public.fn_clave_molecula(TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_nombre_molecula(TEXT) TO anon, authenticated;
+
+-- Como quedaron (opcional):
+/*
+SELECT nombre, sinonimos FROM dim_principios_activos ORDER BY nombre;
+*/

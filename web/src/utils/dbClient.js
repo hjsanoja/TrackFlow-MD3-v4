@@ -253,6 +253,20 @@ export function claveNombre(texto) {
     .trim();
 }
 
+// Como se escribe una molecula nueva (igual que fn_nombre_molecula, fase 20):
+// sin tildes, espacios simples y la primera letra en mayuscula; si viene toda
+// en mayusculas pasa a minusculas. "LOSARTÁN POTÁSICO" -> "Losartan potasico".
+export function formatearMolecula(texto) {
+  const t = String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!t) return t;
+  const resto = t === t.toUpperCase() ? t.slice(1).toLowerCase() : t.slice(1);
+  return t.charAt(0).toUpperCase() + resto;
+}
+
 // Las tablas de dimensiones son pequenas (decenas o cientos de filas): se
 // leen enteras una vez por importacion y se compara en el navegador.
 function listarDimension(cache, tabla) {
@@ -293,7 +307,7 @@ function resolverDimension(cache, tabla, nombre, crear = null) {
 
     const { data: nuevo, error } = await supabase
       .from(tabla)
-      .insert({ nombre, ...crear })
+      .insert({ nombre: tabla === 'dim_principios_activos' ? formatearMolecula(nombre) : nombre, ...crear })
       .select('id, nombre')
       .maybeSingle();
     if (error) throw error;

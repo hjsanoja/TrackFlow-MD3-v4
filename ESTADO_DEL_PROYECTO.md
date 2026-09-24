@@ -101,7 +101,7 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 17 | Forma farmacéutica + abreviaturas de envase (`CJAX30`, `FCOX15ML`) |
 | 18 | `dim_productos.tipo_mercado` (MARCA/GENERICO), rellenado con la regla vieja |
 | 19 | Un solo laboratorio propio `LA SANTE`; borra PHARMETIQUE*, BIOQU* y duplicados |
-| 20 | Une moléculas duplicadas (`Acetaminofen` / `Acetaminofén`…); los nombres descartados quedan como `sinonimos`. `fn_clave_molecula` |
+| 20 | Une moléculas duplicadas (`Acetaminofen` / `Acetaminofén`…) y deja **todas sin tildes** ("Losartan potasico"); los nombres anteriores quedan como `sinonimos`. `fn_clave_molecula`, `fn_nombre_molecula` |
 
 **Corridas en Supabase de la 1 a la 19. La 20 está pendiente de correr** (PR #35).
 
@@ -297,6 +297,9 @@ No volver a tropezar con estas:
   `resolverDimension` (dbClient) ya no usa `ilike`: lee la tabla entera y
   compara con `claveNombre` (sin mayúsculas, tildes ni signos, y también contra
   `sinonimos`). Así se crearon las moléculas duplicadas que une la fase 20.
+- **Regla de escritura: moléculas sin tildes**, como "La Sante" (decisión de
+  Hernando: evita diferencias y que Excel rompa las tildes). Las nuevas se
+  guardan así (`formatearMolecula` en dbClient = `fn_nombre_molecula`).
 - En Tailwind, `bg-x/40` **no funciona** con colores definidos como
   `var(--...)`: no genera nada. Usar `color-mix()` en CSS.
 
