@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import StatCard from './StatCard';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 
@@ -338,56 +339,41 @@ export default function CanibalizacionInterna({ user, userDoc }) {
           </button>
         </div>
 
-        {/* Tarjetas de Resumen KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-6">
-          <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-on-surface-variant">Pares Analizados</span>
-              <span className="material-symbols-outlined text-outline text-lg">alt_route</span>
-            </div>
-            <div className="text-2xl font-display font-black text-on-surface mt-1">
-              {paresCanibalizacion.length}
-            </div>
-            <span className="text-label-md text-on-surface-variant">Moléculas con oferta dual</span>
-          </div>
-
-          <div className="bg-red-500/10 p-4 rounded-2xl border border-red-500/30">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-red-700 dark:text-red-300">Margen Invertido (Crítico)</span>
-              <span className="material-symbols-outlined text-red-600 text-lg">warning</span>
-            </div>
-            <div className="text-2xl font-display font-black text-red-700 dark:text-red-300 mt-1">
-              {conteoCriticos}
-            </div>
-            <span className="text-label-md text-red-600/80">Marca &le; Genérico o dosis invertida</span>
-          </div>
-
-          <div className="bg-amber-500/10 p-4 rounded-2xl border border-amber-500/30">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">Brecha Estrecha</span>
-              <span className="material-symbols-outlined text-amber-600 text-lg">sync_problem</span>
-            </div>
-            <div className="text-2xl font-display font-black text-amber-800 dark:text-amber-300 mt-1">
-              {conteoModerados}
-            </div>
-            <span className="text-label-md text-amber-700/80">Diferencial menor al 12%</span>
-          </div>
-
-          <div className="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/30">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">Brecha Armónica</span>
-              <span className="material-symbols-outlined text-emerald-600 text-lg">check_circle</span>
-            </div>
-            <div className="text-2xl font-display font-black text-emerald-800 dark:text-emerald-300 mt-1">
-              {conteoSaludables}
-            </div>
-            <span className="text-label-md text-emerald-700/80">Prima de marca óptima (15-40%)</span>
-          </div>
+        {/* Tarjetas de Resumen KPI — todas con el mismo componente, para que
+            compartan forma, elevación y espaciado. El tono solo cambia color. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
+          <StatCard
+            label="Pares Analizados"
+            value={paresCanibalizacion.length}
+            hint="Moléculas con oferta dual"
+            icon="alt_route"
+          />
+          <StatCard
+            label="Margen Invertido"
+            value={conteoCriticos}
+            hint="Marca ≤ Genérico o dosis invertida"
+            icon="warning"
+            tono="negative"
+          />
+          <StatCard
+            label="Brecha Estrecha"
+            value={conteoModerados}
+            hint="Diferencial menor al 12%"
+            icon="sync_problem"
+            tono="warning"
+          />
+          <StatCard
+            label="Brecha Armónica"
+            value={conteoSaludables}
+            hint="Prima de marca óptima (15-40%)"
+            icon="check_circle"
+            tono="positive"
+          />
         </div>
       </div>
 
       {/* Barra de Filtros */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60">
+      <div className="flex flex-wrap items-center justify-between gap-3 m3-card-outlined p-4">
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           {/* Búsqueda */}
           <div className="relative min-w-[240px] flex-1 md:flex-none">

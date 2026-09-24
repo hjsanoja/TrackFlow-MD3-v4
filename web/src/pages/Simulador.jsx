@@ -993,7 +993,7 @@ export default function Simulador({ user, userDoc }) {
         {/* Price mode toggle and export button */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Mode Switcher: Empaque vs Unidosis */}
-          <div className="flex bg-surface-container-lowest p-1 rounded-2xl border border-outline-variant shadow-sm text-xs font-mono font-bold">
+          <div className="flex m3-card-outlined p-1 text-xs font-mono font-bold">
             <button onClick={() => setAnalisisMode('empaque')}
               className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${analisisMode === 'empaque' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>
               <span className="material-symbols-outlined text-body-md">inventory_2</span>
@@ -1012,11 +1012,11 @@ export default function Simulador({ user, userDoc }) {
             className="px-4 py-2 bg-surface-container-lowest border border-outline-variant hover:bg-surface-low rounded-2xl text-xs font-bold text-primary transition-all flex items-center gap-1.5 shadow-sm"
             title="Exportar productos y sus precios simulados a CSV"
           >
-            <span className="material-symbols-outlined text-[16px]">download</span>
+            <span className="material-symbols-outlined text-body-lg">download</span>
             Exportar Simulación CSV
           </button>
 
-          <div className="flex items-center gap-1.5 bg-surface-container-lowest p-1.5 rounded-2xl border border-outline-variant shadow-sm">
+          <div className="flex items-center gap-1.5 m3-card-outlined p-1.5">
             <button
               onClick={() => setDashboardPriceMode('descuento')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -1044,7 +1044,7 @@ export default function Simulador({ user, userDoc }) {
       </div>
 
       {/* Strategic Business Unit Analytics & Recommendations */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+      <div className="m3-card-outlined p-6 shadow-sm space-y-4">
         <div>
           <h2 className="text-sm font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5 mb-1">
             <span className="material-symbols-outlined text-lg">corporate_fare</span>
@@ -1073,7 +1073,7 @@ export default function Simulador({ user, userDoc }) {
                       <span className={`w-3 h-3 rounded-full ${
                         item.un === 'OTC' ? 'bg-amber-500' : item.un === 'Pharmetique' ? 'bg-blue-500' : 'bg-teal-500'
                       }`}></span>
-                      <h3 className="font-display font-extrabold text-[#040d53] text-base">
+                      <h3 className="font-display font-extrabold text-primary text-base">
                         {item.un === 'La Sante' ? 'La Santé' : item.un}
                       </h3>
                     </div>
@@ -1155,7 +1155,7 @@ export default function Simulador({ user, userDoc }) {
       </div>
 
       {/* Simulator Control and KPIs Row */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-6">
+      <div className="m3-card-outlined p-6 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-outline-variant pb-4 gap-4">
           <div>
             <h2 className="text-lg font-display font-extrabold text-primary flex items-center gap-1.5">
@@ -1257,7 +1257,7 @@ export default function Simulador({ user, userDoc }) {
                                 {o.recomendacion}
                               </p>
                             </div>
-                            <div className="text-right font-mono shrink-0 bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/40 shadow-sm min-w-[150px]">
+                            <div className="text-right font-mono shrink-0 m3-card-outlined p-3 min-w-[150px]">
                               <div className="text-on-surface-variant text-label-sm">Precio actual:</div>
                               <div className="text-on-surface font-bold font-sans text-xs">{fmt(o.precioPropio)}</div>
                               
@@ -1294,7 +1294,7 @@ export default function Simulador({ user, userDoc }) {
                                 {o.recomendacion}
                               </p>
                             </div>
-                            <div className="text-right font-mono shrink-0 bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/40 shadow-sm min-w-[150px]">
+                            <div className="text-right font-mono shrink-0 m3-card-outlined p-3 min-w-[150px]">
                               <div className="text-on-surface-variant text-label-sm">Precio actual:</div>
                               <div className="text-on-surface font-bold font-sans text-xs">{fmt(o.precioPropio)}</div>
                               
@@ -1485,7 +1485,7 @@ export default function Simulador({ user, userDoc }) {
       </div>
 
       {/* Pricing Positioning (Price Gap vs Competitors) */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm flex flex-col justify-between">
+      <div className="m3-card-outlined p-6 shadow-sm flex flex-col justify-between">
         <div>
           <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider mb-1 flex items-center gap-1.5">
             <span className="material-symbols-outlined text-base">bar_chart</span>
@@ -1497,7 +1497,7 @@ export default function Simulador({ user, userDoc }) {
         </div>
         <div className="h-80 mt-2">
           {priceGapData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-xs text-[#464650] italic">No hay suficientes datos comparativos.</div>
+            <div className="h-full flex items-center justify-center text-xs text-on-surface-variant italic">No hay suficientes datos comparativos.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
@@ -1516,7 +1516,7 @@ export default function Simulador({ user, userDoc }) {
                   tickFormatter={(v) => `${v}%`}
                 />
                 <Tooltip content={<PriceGapTooltip />} />
-                <ReferenceLine y={0} stroke="#464650" strokeWidth={1} />
+                <ReferenceLine y={0} stroke="var(--md-sys-color-on-surface-variant)" strokeWidth={1} />
                 <Bar 
                   dataKey="gap"
                   isAnimationActive={true}
@@ -1542,7 +1542,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Positioning Matrix (Scatter Chart: Mi Precio vs. Promedio Mercado) */}
       {scatterPlotData.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
             <div>
               <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
@@ -1612,7 +1612,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Indicador: Cadena en que los productos son más costosos en promedio */}
       {cadenaComparacionCostos && (
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
             <div>
               <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
@@ -1660,7 +1660,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Indicador: Share of Voice (SoV) de Precios por Cadena */}
       {shareOfVoiceData.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
           <div>
             <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
               <span className="material-symbols-outlined text-xl text-primary">pie_chart</span>
@@ -1709,7 +1709,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Indicador: Elasticidad Histórica por Molécula */}
       {elasticidadPorMolecula.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
             <div>
               <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">

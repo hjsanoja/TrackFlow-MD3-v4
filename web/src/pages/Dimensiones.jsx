@@ -452,7 +452,7 @@ export default function Dimensiones() {
       </div>
 
       {/* Tarjeta Informativa de la Dimensión Activa */}
-      <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="m3-card-outlined p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-2xl">{config.icono}</span>
@@ -477,7 +477,7 @@ export default function Dimensiones() {
       </div>
 
       {/* Tabla de Datos */}
-      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant overflow-hidden shadow-xs">
+      <div className="m3-card-outlined overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>

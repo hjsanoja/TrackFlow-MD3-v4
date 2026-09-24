@@ -392,7 +392,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <label className="text-xs font-semibold text-on-surface block">
               Ventana Temporal:
             </label>
-            <div className="flex items-center gap-1 bg-surface-container-lowest p-1 rounded-xl border border-outline-variant">
+            <div className="flex items-center gap-1 m3-card-outlined p-1">
               {[
                 { label: '30D', val: 30 },
                 { label: '60D', val: 60 },
@@ -419,7 +419,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
       {/* Tarjetas de Métricas de la Serie */}
       {datosSerieHistorica.metricas && (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60">
+          <div className="m3-card-outlined p-4">
             <span className="text-xs text-on-surface-variant block">Brecha Promedio USD</span>
             <div className="text-2xl font-display font-black text-on-surface mt-1">
               {datosSerieHistorica.metricas.brechaPromedio > 0 ? '+' : ''}
@@ -428,7 +428,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <span className="text-label-md text-on-surface-variant">Frente a competidores</span>
           </div>
 
-          <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60">
+          <div className="m3-card-outlined p-4">
             <span className="text-xs text-on-surface-variant block">Tasa BCV Período</span>
             <div className="text-2xl font-display font-black text-on-surface mt-1">
               Bs {datosSerieHistorica.metricas.tasaFinal.toFixed(2)}
@@ -438,7 +438,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             </span>
           </div>
 
-          <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60">
+          <div className="m3-card-outlined p-4">
             <span className="text-xs text-on-surface-variant block">Variación Cambiaria</span>
             <div className="text-2xl font-display font-black text-primary mt-1">
               +{datosSerieHistorica.metricas.devaluacionPct.toFixed(1)}%
@@ -446,7 +446,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <span className="text-label-md text-on-surface-variant">Devaluación oficial acumulada</span>
           </div>
 
-          <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60">
+          <div className="m3-card-outlined p-4">
             <span className="text-xs text-on-surface-variant block">Días con Registro</span>
             <div className="text-2xl font-display font-black text-on-surface mt-1">
               {datosSerieHistorica.metricas.totalMediciones}
@@ -457,7 +457,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
       )}
 
       {/* Gráfico Principal ComposedChart Recharts */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/60 p-6 shadow-xs space-y-4">
+      <div className="m3-card-outlined p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-bold text-on-surface">
@@ -556,7 +556,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
       </div>
 
       {/* Tabla de Auditoría Diaria con Tasa BCV */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/60 p-6 shadow-xs space-y-4">
+      <div className="m3-card-outlined p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-on-surface">
             Bitácora de Precios Diarios y Tasa BCV Oficial

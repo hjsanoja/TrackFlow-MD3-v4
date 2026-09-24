@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import StatCard from '../components/StatCard';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
@@ -381,55 +382,36 @@ export default function MapaCalor({ user, userDoc }) {
         </div>
       </div>
 
-      {/* KPI Stats Grid */}
+      {/* KPI Stats Grid — mismo componente para las cuatro, para que compartan
+          forma, elevación y espaciado. El tono solo cambia el color. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total con precio */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Vigentes</span>
-            <div className="text-2xl font-display font-extrabold text-primary">{statsSummary.total}</div>
-            <p className="text-label-md text-on-surface-variant font-sans">Con precio o competencia activa</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">medication</span>
-          </div>
-        </div>
-
-        {/* Bajo Promedio (Más competitivos) */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-sky-700 uppercase tracking-wider block">Bajo el Promedio</span>
-            <div className="text-2xl font-display font-extrabold text-sky-800">{statsSummary.bajoPromedio}</div>
-            <p className="text-label-md text-sky-600 font-sans">Precios altamente competitivos</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">trending_down</span>
-          </div>
-        </div>
-
-        {/* En Paridad */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-emerald-700 uppercase tracking-wider block">En Paridad</span>
-            <div className="text-2xl font-display font-extrabold text-emerald-800">{statsSummary.enParidad}</div>
-            <p className="text-label-md text-emerald-600 font-sans">Dentro del ±5% del promedio</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">drag_handle</span>
-          </div>
-        </div>
-
-        {/* Sobre Promedio */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-amber-700 uppercase tracking-wider block">Sobre el Promedio</span>
-            <div className="text-2xl font-display font-extrabold text-amber-800">{statsSummary.sobrePromedio}</div>
-            <p className="text-label-md text-amber-600 font-sans">Posibles márgenes premium</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">trending_up</span>
-          </div>
-        </div>
+        <StatCard
+          label="Productos Vigentes"
+          value={statsSummary.total}
+          hint="Con precio o competencia activa"
+          icon="medication"
+          tono="primary"
+        />
+        <StatCard
+          label="Bajo el Promedio"
+          value={statsSummary.bajoPromedio}
+          hint="Precios altamente competitivos"
+          icon="trending_down"
+          tono="positive"
+        />
+        <StatCard
+          label="En Paridad"
+          value={statsSummary.enParidad}
+          hint="Dentro del ±5% del promedio"
+          icon="drag_handle"
+        />
+        <StatCard
+          label="Sobre el Promedio"
+          value={statsSummary.sobrePromedio}
+          hint="Posibles márgenes premium"
+          icon="trending_up"
+          tono="warning"
+        />
       </div>
 
       {/* Filter and Search controls */}
