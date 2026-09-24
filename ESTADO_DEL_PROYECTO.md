@@ -104,7 +104,11 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 20 | Une moléculas duplicadas (`Acetaminofen` / `Acetaminofén`…) y deja **todas sin tildes** ("Losartan potasico"); los nombres anteriores quedan como `sinonimos`. `fn_clave_molecula`, `fn_nombre_molecula` |
 | 21 | Competencia: borra competidores `COMP_` sin URL (huérfanos) y crea `fn_registrar_precio_manual` (SECURITY DEFINER: el panel no puede insertar en `fact_precios`) |
 
-**Corridas en Supabase de la 1 a la 20. La 21 está pendiente de correr** (PR #36).
+**Corridas en Supabase de la 1 a la 21.** Tras la 21 la comprobación dio
+**20** competidores `COMP_` sin URL (no 0): la fase solo borra los que nadie
+más usa, y esos 20 están enganchados a `pvp_propio` o a
+`producto_equivalencias` como producto propio. Pendiente de diagnosticar con
+la consulta de la sección de Competencia.
 
 ---
 
@@ -112,9 +116,10 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
 | | |
 |---|---|
-| Código en `main` | PR #31, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 19** |
-| Módulo Productos | **Terminado en esta sesión** (ver abajo) |
+| Código en `main` | PR #36, desplegado (GitHub Pages sale solo de `main`); etapa B de Competencia en el PR #37 |
+| SQL corrido en Supabase | **Hasta la fase 21** |
+| Módulo Productos | **Terminado** (ver abajo) |
+| Módulo Competencia | **Etapa A (#36) y B (#37) hechas**; quedan los 20 huérfanos |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
 Lo siguiente lo decide Hernando. Candidatos, en el orden en que salieron:
@@ -140,6 +145,7 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #33 | Formulario rediseñado: secciones, unidad y tipo como chips obligatorios sin valor por defecto, LA SANTE por defecto, listas que muestran todas las opciones (`ComboField`), PVP, validación en línea |
 | #36 | Competencia, etapa A: editar/activar un enlace ya no crea competidores nuevos, un 2.º competidor en la misma cadena no pisa al primero, precio manual que sí se guarda (fase 21), filtro de cadena por id, KPI "Enlaces con precio" |
 | #35 | Fase 20 (moléculas duplicadas) y comparación de nombres sin tildes al guardar |
+| #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
 | #34 | Menús desplegables M3 en toda la app (`components/Select.jsx`, 31 `<select>`), deshacer al eliminar (borrado diferido 8 s), ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
 
 ### Cómo queda la pantalla
@@ -190,12 +196,73 @@ activo, pvp_propio_usd
 - Laboratorio, forma farmacéutica y molécula **se crean solos** si no existen.
   Categoría y unidad de negocio **no**: la revisión previa avisa.
 
+### Piezas compartidas entre Productos y Competencia
+
+Para que las dos pantallas sean iguales salieron de `Productos.jsx`:
+`components/FiltroChip.jsx` (chip de filtro con menú M3),
+`components/formulario.jsx` (`FormSection`, `Field`, `ChoiceChips`,
+`ComboField`, `normalizar`) y `utils/presentacion.js`
+(`describirPresentacion`, `enlaceCaido`, `DIAS_ENLACE_CAIDO`). Una pantalla
+nueva con tabla debería partir de estas piezas y de las clases `m3-*` de
+`index.css`.
+
 ### Datos que Hernando tiene pendientes (no son bugs)
 
 - **Código de barras:** hoy tiene el mismo valor que el ID, de relleno. Lo
   cargará más adelante; es opcional.
 - **Categorías:** casi todo está en "Otros". No tiene lista todavía; las irá
   creando en Dimensiones.
+
+---
+
+## El módulo Competencia
+
+**Etapa A (#36)**: bugs de datos (editar creaba competidores, precio manual que
+no se guardaba, filtro de cadena) y fase 21.
+
+**Etapa B (#37)**: la pantalla copia la estructura de Productos, con los mismos
+nombres de campo donde son el mismo dato.
+
+- **Cabecera:** Exportar · Carga masiva · **Vincular enlace** · menú ⋮
+  (Ejecutar robot en todos, Vaciar enlaces). Los KPI de antes se cambiaron por
+  avisos (`m3-banner`): productos activos sin ningún enlace y enlaces activos
+  sin precio hace más de 7 días, cada uno con "Ver cuáles".
+- **Barra:** buscador con `/` y contador; chips de Producto, Cadena, Tipo
+  (Competidores / Mis productos), Precio (con precio / sin captura / sin
+  precio +7 días) y Estado.
+- **Tabla** (`m3-table-productos m3-table-enlaces`, mín. 960 px para no tener
+  scroll con el menú lateral abierto): Producto (nombre / ID · dosis ·
+  empaque) · Competidor (nombre + abrir URL / laboratorio; "Mi producto" si es
+  propio) · Cadena (nombre / Propio o Competidor) · Captura (Hoy, Ayer, N días
+  / fecha; naranja si pasa de 7 días) · Precio (USD / Bs) · Dif. (PVP propio
+  frente a ese precio) · Estado · acciones fijas (editar, baja, eliminar).
+  Ordenable por columna; sin orden, por producto con tu enlace primero. 10
+  filas por página, ajustable (`competencia.filasPorPagina`). Tarjetas en
+  celular.
+- **Selección múltiple:** dar de baja / reactivar (con deshacer) y eliminar
+  (diferido 8 s, con deshacer).
+- **Ficha lateral** (`components/FichaEnlace.jsx`) al pulsar el producto:
+  precio en tienda, tu PVP y diferencia; datos; las últimas 15 capturas de
+  `fact_precios`; botones Dar de baja, Robot, Precio manual y Editar.
+- **Formulario "Vincular enlace"** con las secciones de Productos: producto y
+  cadena (chips), enlace (con aviso si el dominio no es el de la cadena) y
+  competidor. Rechaza la misma URL dos veces en la misma cadena.
+- **CSV:** ver `CARGA_CSV.md`. Mismo archivo para exportar, plantilla e
+  importar; un enlace existente (cadena + URL) se actualiza.
+
+**Los 20 competidores `COMP_` sin URL que dejó la fase 21.** Para ver por qué
+siguen, en el SQL Editor:
+
+```sql
+SELECT p.id, p.id_interno, p.nombre,
+  EXISTS(SELECT 1 FROM pvp_propio pv WHERE pv.producto_id = p.id) AS tiene_pvp,
+  EXISTS(SELECT 1 FROM producto_equivalencias e WHERE e.producto_propio_id = p.id) AS es_propio_en_equiv,
+  EXISTS(SELECT 1 FROM producto_equivalencias e WHERE e.producto_competidor_id = p.id) AS es_competidor_en_equiv
+FROM dim_productos p
+WHERE p.id_interno LIKE 'COMP\_%'
+  AND NOT EXISTS (SELECT 1 FROM publicaciones pub WHERE pub.producto_id = p.id)
+ORDER BY p.id_interno;
+```
 
 ---
 
@@ -328,7 +395,8 @@ No volver a tropezar con estas:
 **Probar sin Supabase**
 - Para ver una pantalla: un harness temporal con Vite que sustituye
   `../context/DataContext` y `../context/ToastContext` por mocks (alias en un
-  `vite.preview.config.mjs` dentro de `web/`) y Playwright para capturas.
+  `vite.preview.config.mjs` dentro de `web/`; para Competencia también
+  `../hooks/useDimensiones`) y Playwright para capturas.
   Borrarlo antes de hacer commit.
 - Para el SQL: Postgres 16 local (`/usr/lib/postgresql/16/bin`), con
   `--locale=C.UTF-8`.
@@ -350,16 +418,19 @@ capturas y devaluación vs subida real. Faltan:
 - Alertas por correo
 - Reporte semanal
 
-**Limpieza del repo**: mover los `fase*.sql` (ya son 19) a `sql/`, borrar
+**Competencia**: diagnosticar y limpiar los 20 `COMP_` sin URL; opcional, una
+vista agrupada por producto.
+
+**Limpieza del repo**: mover los `fase*.sql` (ya son 21) a `sql/`, borrar
 `debug/`, y borrar `recarga/` cuando termine la recarga.
 
-**Diseño (Material Design 3 Expressive)**: Productos ya está al día. En el
+**Diseño (Material Design 3 Expressive)**: Productos y Competencia ya están al día. En el
 resto quedaban 71 colores hex sueltos (sobre todo gradientes y Recharts en
 `ProductDetailModal.jsx`), 33 tamaños de texto arbitrarios y 2 `bg-white`
 (cifras de antes de esta sesión, sin recontar). Las clases nuevas de
 `index.css` (`m3-data-table`, `m3-filter-chip`, `m3-icon-btn`,
-`m3-side-sheet`, `m3-banner`…) sirven para llevar el mismo diseño a
-Competencia, Cadenas y Dimensiones.
+`m3-side-sheet`, `m3-banner`…) y las piezas compartidas sirven para llevar el
+mismo diseño a Cadenas y Dimensiones.
 
 **Ideas que quedaron sobre la mesa**
 - Productos: filtro "más caro que la competencia", historial del PVP en la

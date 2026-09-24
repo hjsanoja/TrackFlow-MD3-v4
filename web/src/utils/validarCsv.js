@@ -45,9 +45,10 @@ export const ESQUEMAS = {
       { campo: 'url', etiqueta: 'URL del Producto', obligatorio: true, tipo: 'url' },
       { campo: 'tipo', etiqueta: 'Tipo de Enlace', obligatorio: false,
         tipo: 'lista', valores: ['propio', 'alternativa', 'competidor'] },
-      { campo: 'marca', etiqueta: 'Nombre del Producto', obligatorio: false },
+      { campo: 'marca', etiqueta: 'Competidor', obligatorio: false,
+        alias: ['competidor', 'marca_competencia'] },
       { campo: 'laboratorio', etiqueta: 'Laboratorio', obligatorio: false, alias: ['fabricante'] },
-      { campo: 'activo', etiqueta: 'Activo', obligatorio: false, tipo: 'booleano' },
+      { campo: 'activo', etiqueta: 'Activo', obligatorio: false, tipo: 'booleano', exacto: true },
     ],
   },
 };

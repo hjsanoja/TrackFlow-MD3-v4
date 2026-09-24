@@ -1,18 +1,21 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { validarCsv } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
-import StatCard from '../components/StatCard';
 import { useDimensiones } from '../hooks/useDimensiones';
 import { useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
 import GitHubConfigModal from '../components/GitHubConfigModal';
+import FichaEnlace from '../components/FichaEnlace';
+import FiltroChip from '../components/FiltroChip';
+import Select from '../components/Select';
+import { FormSection, Field, ChoiceChips, ComboField, normalizar } from '../components/formulario';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
-import { executeLiveBatchScrape, scrapeSingleUrl } from '../utils/liveScraper';
-import { parseCSV, getRowValue } from '../utils/csvParser';
+import { parseCSV, getRowValue, leerArchivoCsv } from '../utils/csvParser';
+import { DIAS_ENLACE_CAIDO, enlaceCaido, describirPresentacion } from '../utils/presentacion';
 import {
   dbUpsertProductoCompetencia,
   dbDeleteProductoCompetencia,
@@ -22,18 +25,20 @@ import {
   dbRegistrarPrecioManual,
   publicacionIdDe,
   normalizarUrl,
-  dbUpsertProductosBulk
 } from '../utils/dbClient';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
-import Select from '../components/Select';
 
-const TIPOS = [
-  { value: 'propio', label: 'Mi Marca' },
-  { value: 'alternativa', label: 'Alternativa (competencia)' },
-];
+// Un solo formato de CSV de enlaces para exportar, para la plantilla y para
+// importar (igual que en Productos). Las columnas de precio y captura son
+// informativas: al importar se ignoran.
+const COLUMNAS_CSV_ENLACES = [
+  'id_producto_propio', 'producto', 'cadena', 'tipo', 'competidor', 'laboratorio', 'url', 'activo',
+  'precio_bs', 'precio_oferta_bs', 'precio_usd', 'ultima_captura',
+].map(key => ({ label: key, key }));
 
-export default function Competencia({ user, userDoc }) {
-  const isAdmin = userDoc ? userDoc.rol === 'administrador' : true;
+const esPropio = (it) => String(it.tipo || '').toLowerCase() === 'propio';
+
+export default function Competencia() {
   const {
     productosCompetencia: items,
     productos,
@@ -42,54 +47,92 @@ export default function Competencia({ user, userDoc }) {
     loadingInitial: loading,
     refreshData: cargar,
     refreshCompetencia,
-    refreshProductos,
-    setProductosCompetencia
+    setProductosCompetencia,
   } = useData();
+  const { addToast } = useToast();
+  useDimensiones(); // precarga de laboratorios para el formulario
 
-  const currentBcvRate = useMemo(() => {
+  const tasaBcv = useMemo(() => {
     if (!bcvRates || bcvRates.length === 0) return 0;
-    const sorted = [...bcvRates].sort((a, b) => {
-      const dA = a.rawDate ? new Date(a.rawDate) : new Date(0);
-      const dB = b.rawDate ? new Date(b.rawDate) : new Date(0);
-      return dA - dB;
-    });
-    return sorted[sorted.length - 1]?.valor || 0;
+    const ord = [...bcvRates].sort((a, b) => new Date(a.rawDate || 0) - new Date(b.rawDate || 0));
+    return Number(ord[ord.length - 1]?.valor) || 0;
   }, [bcvRates]);
 
-  const [editing, setEditing] = useState(null);
+  // ------------------------------------------------------------------ estado
+  const [editing, setEditing] = useState(null); // 'new' | id del enlace
+  const [fichaId, setFichaId] = useState(null);
+  const [manualPriceItem, setManualPriceItem] = useState(null);
   const [search, setSearch] = useState('');
-  const [filtroCadena, setFiltroCadena] = useState('todas');
   const [filtroProducto, setFiltroProducto] = useState('todos');
+  const [filtroCadena, setFiltroCadena] = useState('todas');
   const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroPrecio, setFiltroPrecio] = useState('todos');
+  const [filtroActivo, setFiltroActivo] = useState('todos');
+  const [orden, setOrden] = useState({ campo: null, dir: 'asc' });
   const [searchParams, setSearchParams] = useSearchParams();
+
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
-  const [csvSummary, setCsvSummary] = useState(null);
-  // Informe de validación pendiente de confirmación
   const [previewCsv, setPreviewCsv] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [scrapingItems, setScrapingItems] = useState({});
-  const [manualPriceItem, setManualPriceItem] = useState(null);
   const [isGlobalScraping, setIsGlobalScraping] = useState(false);
   const [showGithubModal, setShowGithubModal] = useState(false);
 
-  const { addToast } = useToast();
+  const [seleccion, setSeleccion] = useState(() => new Set());
+  const [confirmBorrarSel, setConfirmBorrarSel] = useState(false);
+  const [procesandoSel, setProcesandoSel] = useState(null);
+  const [ocultos, setOcultos] = useState(() => new Set());
+  const borradosPendientes = useRef(new Map());
 
   const fileInputRef = useRef(null);
+  const buscadorRef = useRef(null);
+  const menuMasRef = useRef(null);
 
-  // Si llegamos con ?producto=P001, aplicamos ese filtro al cargar
+  // Si llegamos con ?producto=140216 (desde Productos), se filtra por el.
   useEffect(() => {
     const productoParam = searchParams.get('producto');
-    if (productoParam) {
-      setFiltroProducto(productoParam);
-    }
+    if (productoParam) setFiltroProducto(productoParam);
   }, [searchParams]);
 
-  // Los enlaces traen el id de la cadena (p. ej. 'Saas') y la pantalla muestra
-  // su nombre ('Farmacias SAAS'). Antes el filtro comparaba el id con el
-  // nombre y, en las cadenas donde no coinciden, no mostraba nada.
+  const claveFiltros = [search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo].join('|');
+  useEffect(() => { setSeleccion(new Set()); }, [claveFiltros]);
+
+  // "/" lleva al buscador.
+  useEffect(() => {
+    const alPulsar = (e) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return;
+      e.preventDefault();
+      buscadorRef.current?.focus();
+    };
+    window.addEventListener('keydown', alPulsar);
+    return () => window.removeEventListener('keydown', alPulsar);
+  }, []);
+
+  // Borrados pendientes de deshacer: avisar antes de cerrar la pestana.
+  useEffect(() => {
+    const avisar = (e) => {
+      if (borradosPendientes.current.size === 0) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, []);
+
+  // --------------------------------------------------------------- derivados
+  const productoPorId = useMemo(() => {
+    const m = new Map();
+    (productos || []).forEach(p => m.set(String(p.id_interno || p.id).trim(), p));
+    return m;
+  }, [productos]);
+
+  // Los enlaces traen el id de la cadena ('Saas'); la pantalla muestra su
+  // nombre ('Farmacias SAAS').
   const cadenaPorClave = useMemo(() => {
     const m = new Map();
     (cadenas || []).forEach(c => {
@@ -98,119 +141,215 @@ export default function Competencia({ user, userDoc }) {
     });
     return m;
   }, [cadenas]);
-  const nombreCadena = (valor) => cadenaPorClave.get(String(valor || '').toLowerCase())?.nombre || valor || '—';
-  const nombreCadenaId = (valor) => cadenaPorClave.get(String(valor || '').toLowerCase())?.id || valor;
+  const nombreCadena = (v) => cadenaPorClave.get(String(v || '').toLowerCase())?.nombre || v || '—';
+  const idCadena = (v) => cadenaPorClave.get(String(v || '').toLowerCase())?.id || v;
 
-  const prodMap = useMemo(() => {
-    const map = new Map();
-    (productos || []).forEach(p => {
-      const key = String(p.id_interno || p.id || '').trim();
-      if (key) map.set(key, p.nombre || key);
-    });
-    return map;
-  }, [productos]);
+  // Precio de hoy en USD: el de la vista o, si solo hay Bs, con la tasa BCV.
+  const precioUsd = (it) => {
+    const directo = Number(it.ultimo_precio_desc_usd) || Number(it.ultimo_precio_full_usd) || 0;
+    if (directo) return directo;
+    const enBs = Number(it.ultimo_precio_desc_bs) || Number(it.ultimo_precio_full_bs) || 0;
+    return enBs && tasaBcv ? enBs / tasaBcv : 0;
+  };
+  const diferencia = (it) => {
+    const pvp = Number(productoPorId.get(String(it.id_producto_propio).trim())?.pvp_propio_usd) || 0;
+    const precio = precioUsd(it);
+    return pvp > 0 && precio > 0 ? ((pvp - precio) / precio) * 100 : null;
+  };
+
+  const ORDENES = {
+    producto: it => (productoPorId.get(String(it.id_producto_propio).trim())?.nombre || it.id_producto_propio || '').toLowerCase(),
+    competidor: it => (esPropio(it) ? '' : (it.marca || '')).toLowerCase(),
+    cadena: it => nombreCadena(it.cadena).toLowerCase(),
+    captura: it => (it.ultimo_scrape ? new Date(it.ultimo_scrape).getTime() : 0),
+    precio: it => precioUsd(it),
+    dif: it => diferencia(it) ?? -Infinity,
+    estado: it => (it.activo ? 0 : 1),
+  };
 
   const filtrados = useMemo(() => {
-    const term = search.toLowerCase().trim();
-    return items.filter(it => {
-      if (filtroCadena !== 'todas' && nombreCadenaId(it.cadena) !== filtroCadena) return false;
+    const term = normalizar(search);
+    const lista = items.filter(it => {
+      if (ocultos.has(it.id)) return false;
       if (filtroProducto !== 'todos' && String(it.id_producto_propio).trim() !== String(filtroProducto).trim()) return false;
-      if (filtroTipo !== 'todos' && it.tipo !== filtroTipo) return false;
+      if (filtroCadena !== 'todas' && idCadena(it.cadena) !== filtroCadena) return false;
+      if (filtroTipo === 'competidor' && esPropio(it)) return false;
+      if (filtroTipo === 'propio' && !esPropio(it)) return false;
+      if (filtroActivo === 'activos' && !it.activo) return false;
+      if (filtroActivo === 'inactivos' && it.activo) return false;
+      if (filtroPrecio === 'con_precio' && !(precioUsd(it) > 0)) return false;
+      if (filtroPrecio === 'sin_captura' && it.ultimo_scrape) return false;
+      if (filtroPrecio === 'viejo' && !enlaceCaido(it)) return false;
       if (!term) return true;
-      const pNombre = (prodMap.get(String(it.id_producto_propio).trim()) || '').toLowerCase();
-      const pId = String(it.id_producto_propio || '').toLowerCase();
-      return (
-        (it.marca || '').toLowerCase().includes(term) ||
-        (it.url || '').toLowerCase().includes(term) ||
-        (it.laboratorio || '').toLowerCase().includes(term) ||
-        pNombre.includes(term) ||
-        pId.includes(term)
-      );
+      const p = productoPorId.get(String(it.id_producto_propio).trim());
+      return [p?.nombre, it.id_producto_propio, it.marca, it.laboratorio, it.url, nombreCadena(it.cadena), it.ultimo_nombre]
+        .some(v => normalizar(v).includes(term));
     });
-  }, [items, search, filtroCadena, filtroProducto, filtroTipo, prodMap]);
-
-  const ordenados = useMemo(() => {
-    return [...filtrados].sort((a, b) => {
-      return (a.id_producto_propio || '').localeCompare(b.id_producto_propio || '') ||
-        (a.cadena || '').localeCompare(b.cadena || '') ||
-        (a.marca || '').localeCompare(b.marca || '');
+    if (!orden.campo) {
+      return [...lista].sort((a, b) =>
+        String(a.id_producto_propio || '').localeCompare(String(b.id_producto_propio || '')) ||
+        (esPropio(b) ? 1 : 0) - (esPropio(a) ? 1 : 0) ||
+        nombreCadena(a.cadena).localeCompare(nombreCadena(b.cadena)));
+    }
+    const valor = ORDENES[orden.campo];
+    const signo = orden.dir === 'asc' ? 1 : -1;
+    return [...lista].sort((a, b) => {
+      const va = valor(a); const vb = valor(b);
+      if (va < vb) return -signo;
+      if (va > vb) return signo;
+      return 0;
     });
-  }, [filtrados]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
 
+  const hayFiltros = filtroProducto !== 'todos' || filtroCadena !== 'todas' || filtroTipo !== 'todos' || filtroPrecio !== 'todos' || filtroActivo !== 'todos';
+  const limpiarFiltros = () => {
+    setFiltroProducto('todos'); setFiltroCadena('todas'); setFiltroTipo('todos');
+    setFiltroPrecio('todos'); setFiltroActivo('todos');
+    if (searchParams.get('producto')) setSearchParams({});
+  };
+
+  const caidosActivos = useMemo(() => items.filter(it => it.activo && enlaceCaido(it)).length, [items]);
+  const productoFiltradoSinEnlaces = filtroProducto !== 'todos' && !items.some(it => String(it.id_producto_propio).trim() === filtroProducto)
+    ? productoPorId.get(filtroProducto) || null
+    : null;
+
+  // Paginacion (10 por defecto, se recuerda en el navegador).
   const [paginaActual, setPaginaActual] = useState(1);
-  const itemsPorPagina = 20;
-
-  useEffect(() => {
-    setPaginaActual(1);
-  }, [search, filtroCadena, filtroProducto, filtroTipo]);
-
-  const totalPaginas = Math.max(1, Math.ceil(ordenados.length / itemsPorPagina));
-  const itemsPaginados = useMemo(() => {
+  const [itemsPorPagina, setItemsPorPagina] = useState(() => {
+    try {
+      const g = Number(localStorage.getItem('competencia.filasPorPagina'));
+      return [10, 25, 50, 100].includes(g) ? g : 10;
+    } catch { return 10; }
+  });
+  const cambiarFilasPorPagina = (n) => {
+    setItemsPorPagina(n); setPaginaActual(1);
+    try { localStorage.setItem('competencia.filasPorPagina', String(n)); } catch { /* sin almacenamiento */ }
+  };
+  useEffect(() => { setPaginaActual(1); }, [claveFiltros, orden]);
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / itemsPorPagina));
+  const paginados = useMemo(() => {
     const inicio = (paginaActual - 1) * itemsPorPagina;
-    return ordenados.slice(inicio, inicio + itemsPorPagina);
-  }, [ordenados, paginaActual]);
+    return filtrados.slice(inicio, inicio + itemsPorPagina);
+  }, [filtrados, paginaActual, itemsPorPagina]);
 
-  // Si estamos viendo solo un producto y no tiene URLs, mostramos hint
-  const productoFiltradoSinUrls = useMemo(() => {
-    if (filtroProducto === 'todos') return null;
-    if (ordenados.length > 0) return null;
-    return productos.find(p => p.id_interno === filtroProducto) || null;
-  }, [filtroProducto, ordenados, productos]);
+  // Orden por columna: asc, desc, sin orden.
+  const alternarOrden = (campo) => setOrden(o => o.campo !== campo ? { campo, dir: 'asc' } : o.dir === 'asc' ? { campo, dir: 'desc' } : { campo: null, dir: 'asc' });
+  const encabezado = (campo, children, className = '') => (
+    <th aria-sort={orden.campo === campo ? (orden.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={className}>
+      <button type="button" onClick={() => alternarOrden(campo)} className={`m3-sort-btn ${orden.campo === campo ? 'is-active' : ''}`}>
+        {children}
+        <span className="material-symbols-outlined" aria-hidden="true">
+          {orden.campo !== campo ? 'unfold_more' : orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+        </span>
+      </button>
+    </th>
+  );
 
+  // -------------------------------------------------------------- seleccion
+  const alternarSeleccion = (id) => setSeleccion(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const seleccionados = useMemo(() => items.filter(it => seleccion.has(it.id)), [items, seleccion]);
+  const todosFiltradosSeleccionados = filtrados.length > 0 && filtrados.every(it => seleccion.has(it.id));
+  const alternarTodosFiltrados = () => setSeleccion(todosFiltradosSeleccionados ? new Set() : new Set(filtrados.map(it => it.id)));
+
+  // Alta o baja con "Deshacer" en el aviso.
+  const cambiarActivo = async (lista, activo, { deshacer = true } = {}) => {
+    const cambiados = await dbCambiarActivoEnlaces(lista, activo);
+    if (cambiados < lista.length) {
+      addToast(`Solo se actualizaron ${cambiados} de ${lista.length} enlaces. Revisa los permisos (RLS) de publicaciones.`, 'error');
+    } else {
+      const texto = lista.length === 1 ? `Enlace ${activo ? 'reactivado' : 'dado de baja'}.` : `${cambiados} enlaces ${activo ? 'reactivados' : 'dados de baja'}.`;
+      addToast(texto, 'success', !activo && deshacer ? {
+        accion: {
+          texto: 'Deshacer',
+          onClick: async () => {
+            try { await cambiarActivo(lista, true, { deshacer: false }); } catch (err) { addToast('No se pudo deshacer: ' + err.message, 'error'); }
+          },
+        },
+      } : {});
+    }
+    await cargar(true);
+  };
+  const handleToggleActivo = async (it) => {
+    try { await cambiarActivo([it], !it.activo); } catch (err) { addToast(err.message, 'error'); }
+  };
+  const cambiarActivoSeleccion = async (activo) => {
+    const lista = seleccionados;
+    setProcesandoSel({ hechos: 0, total: lista.length });
+    try { await cambiarActivo(lista, activo); setSeleccion(new Set()); } catch (err) { addToast('Error al actualizar: ' + err.message, 'error'); }
+    setProcesandoSel(null);
+  };
+
+  // Borrado con 8 s para deshacer (se lleva el historial de precios del enlace).
+  const programarBorrado = (lista) => {
+    const ids = lista.map(it => it.id);
+    const clave = ids.join('|');
+    setOcultos(prev => new Set([...prev, ...ids]));
+    const ejecutar = async () => {
+      borradosPendientes.current.delete(clave);
+      const errores = [];
+      for (const it of lista) {
+        try { await dbDeleteProductoCompetencia(it); } catch (err) { errores.push(`${it.marca || it.id}: ${err.message}`); }
+      }
+      if (errores.length) addToast(`${errores.length} enlaces no se eliminaron. ${errores.slice(0, 3).join(' · ')}`, 'error');
+      await cargar(true);
+      setOcultos(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+    };
+    borradosPendientes.current.set(clave, setTimeout(ejecutar, 8000));
+    addToast(lista.length === 1 ? 'Enlace eliminado.' : `${lista.length} enlaces eliminados.`, 'success', {
+      duracion: 8000,
+      accion: {
+        texto: 'Deshacer',
+        onClick: () => {
+          clearTimeout(borradosPendientes.current.get(clave));
+          borradosPendientes.current.delete(clave);
+          setOcultos(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+          addToast(lista.length === 1 ? 'Enlace restaurado.' : `${lista.length} enlaces restaurados.`, 'info');
+        },
+      },
+    });
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    setDeletingAll(true);
+    try {
+      await dbDeleteAllProductosCompetencia();
+      addToast('Se eliminaron todos los enlaces de competencia y su historial de precios.', 'success');
+      await cargar(true);
+    } catch (err) {
+      addToast('Error al vaciar enlaces: ' + err.message, 'error');
+    }
+    setDeletingAll(false);
+    setConfirmDeleteAll(false);
+  };
+
+  // ---------------------------------------------------------------- guardar
   const handleSave = async (data, isNew) => {
     try {
       let cleanUrl = (data.url || '').trim();
-      if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-        cleanUrl = 'https://' + cleanUrl;
-      }
+      if (cleanUrl && !/^https?:\/\//.test(cleanUrl)) cleanUrl = 'https://' + cleanUrl;
+      if (!cleanUrl) throw new Error('La URL es obligatoria');
+      try { new URL(cleanUrl); } catch { throw new Error('La URL no es válida. Formato esperado: https://www.ejemplo.com/...'); }
 
-      if (!cleanUrl) {
-        throw new Error('La dirección URL es obligatoria');
-      }
+      const currentItem = !isNew ? items.find(i => i.id === editing) : null;
 
-      const editingId = typeof editing === 'string' ? editing : editing?.id;
-      const currentItem = (!isNew && editingId) ? items.find(i => i.id === editingId) : null;
-
-      // Un enlace nuevo con una URL que ya esta registrada en esa cadena es un
-      // duplicado. Antes, al vincular un segundo competidor en la misma cadena
-      // se reutilizaba el id del primero (bastaba con coincidir producto y
-      // cadena) y podia pisarlo.
-      if (isNew) {
-        const repetido = items.find(it =>
-          nombreCadenaId(it.cadena) === nombreCadenaId(data.cadena) &&
-          normalizarUrl(it.url || '') === normalizarUrl(cleanUrl));
-        if (repetido) {
-          throw new Error(`Esa URL ya está vinculada en ${nombreCadena(repetido.cadena)} (producto ${repetido.id_producto_propio}). Edita ese enlace en vez de crear otro.`);
-        }
+      // La misma URL en la misma cadena ya es un enlace: se edita ese.
+      const repetido = items.find(it =>
+        it.id !== currentItem?.id &&
+        idCadena(it.cadena) === idCadena(data.cadena) &&
+        normalizarUrl(it.url || '') === normalizarUrl(cleanUrl));
+      if (repetido) {
+        throw new Error(`Esa URL ya está vinculada en ${nombreCadena(repetido.cadena)} (producto ${repetido.id_producto_propio}). Edita ese enlace en vez de crear otro.`);
       }
 
       const labPart = data.laboratorio?.trim() ? `_${data.laboratorio.trim()}` : '';
-      const docId = !isNew
-        ? (data.id || editingId || currentItem?.id)
+      const docId = currentItem
+        ? currentItem.id
         : `${data.id_producto_propio}_${data.cadena}_${data.marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
-
-      if (!docId) {
-        throw new Error('No se pudo determinar el identificador único del enlace');
-      }
-
-      const cadenaObj = cadenas.find(c => c.id === data.cadena || c.nombre.toLowerCase().trim() === String(data.cadena).toLowerCase().trim());
-      if (cadenaObj && cadenaObj.website && cleanUrl) {
-        try {
-          const urlHost = new URL(cleanUrl).hostname.replace(/^www\./, '');
-          const websiteWithProto = cadenaObj.website.startsWith('http') ? cadenaObj.website : `https://${cadenaObj.website}`;
-          const cadenaHost = new URL(websiteWithProto).hostname.replace(/^www\./, '');
-          if (!urlHost.endsWith(cadenaHost) && !cadenaHost.endsWith(urlHost)) {
-            addToast(`Ojo: la URL es de "${urlHost}" pero ${cadenaObj.nombre} usa "${cadenaHost}". Revisa que sea la cadena correcta.`, 'warning');
-          }
-        } catch {
-          // Do not fail if cadena website has strange format, just ensure cleanUrl is valid
-          try {
-            new URL(cleanUrl);
-          } catch {
-            throw new Error('La dirección URL ingresada no es válida. Formato esperado: https://www.ejemplo.com/...');
-          }
-        }
-      }
 
       await dbUpsertProductoCompetencia({
         id: docId,
@@ -224,17 +363,6 @@ export default function Competencia({ user, userDoc }) {
         url: cleanUrl,
         activo: data.activo,
         laboratorio: data.laboratorio?.trim() || '',
-        concentracion: data.concentracion?.trim() || '',
-        tamano: data.tamano?.trim() || '',
-        // Conservar estado previo si estamos editando
-        ...(currentItem ? {
-          ultimo_precio_full_bs: currentItem.ultimo_precio_full_bs ?? null,
-          ultimo_precio_desc_bs: currentItem.ultimo_precio_desc_bs ?? null,
-          ultimo_nombre: currentItem.ultimo_nombre ?? null,
-          ultimo_scrape: currentItem.ultimo_scrape ?? null,
-          estado: currentItem.estado ?? 'ok',
-          ultimo_error: currentItem.ultimo_error ?? null
-        } : {})
       });
 
       addToast(isNew ? 'Enlace vinculado' : 'Cambios guardados', 'success');
@@ -242,74 +370,29 @@ export default function Competencia({ user, userDoc }) {
       await cargar(true);
       return { success: true };
     } catch (err) {
-      const errMsg = err?.message || 'Error al guardar cambios en el enlace';
+      const errMsg = err?.message || 'Error al guardar el enlace';
       addToast(errMsg, 'error');
       return { success: false, error: errMsg };
     }
   };
 
-  const handleDelete = (item) => {
-    setConfirmDelete(item);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!confirmDelete) return;
-    const item = confirmDelete;
-    setConfirmDelete(null);
-    try {
-      await dbDeleteProductoCompetencia(item);
-      addToast('Enlace eliminado del scraper', 'success');
-      await cargar(true);
-    } catch (err) {
-      addToast('Error al eliminar: ' + err.message, 'error');
-    }
-  };
-
-  const handleConfirmDeleteAll = async () => {
-    setDeletingAll(true);
-    try {
-      await dbDeleteAllProductosCompetencia();
-      addToast('Se han eliminado todos los enlaces de competencia e historial de precios.', 'success');
-      await cargar(true);
-    } catch (err) {
-      addToast('Error al vaciar enlaces: ' + err.message, 'error');
-    }
-    setDeletingAll(false);
-    setConfirmDeleteAll(false);
-  };
-
+  // ------------------------------------------------------------------ robot
   const handleDispararScraperGlobal = async () => {
     setIsGlobalScraping(true);
     try {
       const config = await getGitHubConfig();
-
       if (!config || !config.token || !config.repo_owner || !config.repo_name) {
-        addToast('No se encontraron credenciales de GitHub Actions. Ingresa tus datos de conexión.', 'info');
+        addToast('Faltan las credenciales de GitHub Actions. Ingrésalas para continuar.', 'info');
         setShowGithubModal(true);
-        setIsGlobalScraping(false);
         return;
       }
-
       await triggerGitHubScraper({ config });
-      addToast('¡Robot scraper global disparado con éxito vía GitHub Actions!', 'success');
+      addToast('Robot lanzado para todos los enlaces activos (GitHub Actions).', 'success');
     } catch (err) {
-      if (err.message === 'CONFIG_MISSING') {
-        setShowGithubModal(true);
-      } else {
-        addToast('Error al disparar GitHub Actions: ' + err.message, 'error');
-      }
+      if (err.message === 'CONFIG_MISSING') setShowGithubModal(true);
+      else addToast('Error al lanzar el robot: ' + err.message, 'error');
     } finally {
       setIsGlobalScraping(false);
-    }
-  };
-
-  const handleToggleActivo = async (item) => {
-    try {
-      const cambiados = await dbCambiarActivoEnlaces([item], !item.activo);
-      if (cambiados === 0) throw new Error('No se actualizó el enlace. Revisa los permisos (RLS) de publicaciones.');
-      await cargar(true);
-    } catch (err) {
-      addToast(err.message, 'error');
     }
   };
 
@@ -317,448 +400,225 @@ export default function Competencia({ user, userDoc }) {
     setScrapingItems(prev => ({ ...prev, [item.id]: 'disparando' }));
     try {
       const config = await getGitHubConfig();
-
       if (!config || !config.token || !config.repo_owner || !config.repo_name) {
         addToast('Ingresa tus credenciales de GitHub Actions para continuar.', 'info');
         setShowGithubModal(true);
         setScrapingItems(prev => ({ ...prev, [item.id]: null }));
         return;
       }
-
-      await triggerGitHubScraper({
-        config,
-        payload: {
-          product_id: item.id_producto_propio,
-          doc_id: item.id
-        }
-      });
-
+      await triggerGitHubScraper({ config, payload: { product_id: item.id_producto_propio, doc_id: item.id } });
       setScrapingItems(prev => ({ ...prev, [item.id]: 'esperando' }));
-      addToast(`Robot extractor lanzado para "${item.marca}". Monitoreando resultado...`, 'info');
+      addToast(`Robot lanzado para "${item.marca}". Esperando el resultado…`, 'info');
 
-      // Sondeo reactivo en segundo plano para reflejar el nuevo precio en cuanto GitHub Actions termine de escribir en la DB
-      const startTime = Date.now();
-      const pollInterval = setInterval(async () => {
+      // Se consulta la vista hasta que aparezca una captura nueva (max. 65 s).
+      const inicio = Date.now();
+      const sondeo = setInterval(async () => {
         try {
-          let updatedItem = null;
+          let actualizado = null;
           if (isSupabaseActive()) {
-            const { data, error } = await supabase
-              .from('productos_competencia')
-              .select('*')
-              .eq('id', item.id)
-              .maybeSingle();
-            if (!error && data) {
-              updatedItem = data;
-            }
+            const { data } = await supabase.from('productos_competencia').select('*').eq('id', item.id).maybeSingle();
+            actualizado = data || null;
           }
-
-          const scrapeTime = updatedItem?.ultimo_scrape
-            ? (updatedItem.ultimo_scrape.toDate?.()?.getTime() || new Date(updatedItem.ultimo_scrape).getTime())
-            : 0;
-
-          // Si el registro se actualizó después del inicio de la ejecución del robot
-          if (updatedItem && (scrapeTime >= startTime - 4000 || (updatedItem.ultimo_precio_full_bs && updatedItem.ultimo_precio_full_bs !== item.ultimo_precio_full_bs))) {
-            clearInterval(pollInterval);
+          const t = actualizado?.ultimo_scrape ? new Date(actualizado.ultimo_scrape).getTime() : 0;
+          if (actualizado && t >= inicio - 4000) {
+            clearInterval(sondeo);
             setScrapingItems(prev => ({ ...prev, [item.id]: null }));
-            // Actualizar tabla en tiempo real
-            setProductosCompetencia(prev => prev.map(p => p.id === item.id ? { ...p, ...updatedItem } : p));
+            setProductosCompetencia(prev => prev.map(p => p.id === item.id ? { ...p, ...actualizado } : p));
             await cargar(true);
-            const precioFormatted = updatedItem.ultimo_precio_full_bs
-              ? `Bs ${Number(updatedItem.ultimo_precio_full_bs).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`
-              : 'Actualizado';
-            addToast(`✅ ¡Precio actualizado con éxito! ${item.marca}: ${precioFormatted}`, 'success');
+            addToast(`Precio actualizado: ${item.marca}`, 'success');
             return;
           }
-
-          // Si transcurren más de 65 segundos sin respuesta, finalizar sondeo
-          if (Date.now() - startTime > 65000) {
-            clearInterval(pollInterval);
+          if (Date.now() - inicio > 65000) {
+            clearInterval(sondeo);
             setScrapingItems(prev => ({ ...prev, [item.id]: null }));
+            addToast('El robot no devolvió un precio nuevo todavía. Revisa la ficha en unos minutos.', 'info');
             await cargar(true);
           }
         } catch (e) {
           console.warn('Error en sondeo del scraper:', e);
         }
       }, 3500);
-
-      return;
     } catch (err) {
       setScrapingItems(prev => ({ ...prev, [item.id]: null }));
-      if (err.message === 'CONFIG_MISSING') {
-        setShowGithubModal(true);
-      } else {
-        addToast('Error al disparar scraper: ' + err.message, 'error');
-      }
+      if (err.message === 'CONFIG_MISSING') setShowGithubModal(true);
+      else addToast('Error al lanzar el robot: ' + err.message, 'error');
     }
   };
 
-  // Cálculos para KPIs de Competencia
-  const kpis = useMemo(() => {
-    const activos = items.filter(it => it.activo);
-    // La vista solo distingue 'ok' (tiene precio) y 'pendiente' (el robot
-    // todavia no le saco precio). No hay estado 'error'.
-    const exitosos = activos.filter(it => it.estado === 'ok');
-    const conError = activos.filter(it => it.estado !== 'ok');
-    
-    // 1. Tasa de Salud Técnica
-    const tasaSalud = activos.length > 0 ? Math.round((exitosos.length / activos.length) * 100) : 100;
-    
-    // 2. Enlaces Desactualizados (> 24 horas)
-    const desactualizados = activos.filter(it => {
-      if (!it.ultimo_scrape) return true;
-      const scrapeTime = it.ultimo_scrape.toDate?.()?.getTime() || new Date(it.ultimo_scrape).getTime();
-      const diffHrs = (Date.now() - scrapeTime) / (1000 * 60 * 60);
-      return diffHrs > 24;
-    }).length;
-
-    // 3. Comparativa de precios vs competencia
-    const prodGrupos = {};
-    activos.forEach(it => {
-      const pId = it.id_producto_propio;
-      if (!prodGrupos[pId]) prodGrupos[pId] = [];
-      prodGrupos[pId].push(it);
-    });
-
-    let propiosMasBaratos = 0;
-    let totalComparables = 0;
-
-    Object.keys(prodGrupos).forEach(pId => {
-      const g = prodGrupos[pId];
-      const propio = g.find(it => it.tipo === 'propio');
-      const alternativas = g.filter(it => it.tipo === 'alternativa');
-      
-      if (propio && alternativas.length > 0) {
-        const precioPropio = propio.ultimo_precio_desc_bs || propio.ultimo_precio_full_bs;
-        if (precioPropio) {
-          totalComparables++;
-          const preciosAlt = alternativas
-            .map(a => a.ultimo_precio_desc_bs || a.ultimo_precio_full_bs)
-            .filter(Boolean);
-          
-          if (preciosAlt.length > 0) {
-            const minAlt = Math.min(...preciosAlt);
-            if (precioPropio < minAlt) {
-              propiosMasBaratos++;
-            }
-          }
-        }
-      }
-    });
-
+  // -------------------------------------------------------------------- CSV
+  const filaCsvEnlace = (it) => {
+    const p = productoPorId.get(String(it.id_producto_propio).trim());
+    const full = Number(it.ultimo_precio_full_bs) || 0;
+    const desc = Number(it.ultimo_precio_desc_bs) || 0;
+    const usd = precioUsd(it);
     return {
-      totalEnlaces: items.length,
-      activosCount: activos.length,
-      exitososCount: exitosos.length,
-      erroresCount: conError.length,
-      tasaSalud,
-      desactualizados,
-      propiosMasBaratos,
-      totalComparables
+      id_producto_propio: it.id_producto_propio || '',
+      producto: p?.nombre || '',
+      cadena: nombreCadena(it.cadena),
+      tipo: esPropio(it) ? 'propio' : 'competidor',
+      competidor: esPropio(it) ? '' : (it.marca || ''),
+      laboratorio: it.laboratorio || '',
+      url: it.url || '',
+      activo: it.activo === false ? 'no' : 'si',
+      precio_bs: full ? full.toFixed(2) : '',
+      precio_oferta_bs: desc && desc !== full ? desc.toFixed(2) : '',
+      precio_usd: usd ? usd.toFixed(2) : '',
+      ultima_captura: it.ultimo_scrape ? String(it.ultimo_scrape).slice(0, 10) : '',
     };
-  }, [items]);
-
-  const limpiarFiltros = () => {
-    setSearch('');
-    setFiltroCadena('todas');
-    setFiltroProducto('todos');
-    setFiltroTipo('todos');
-    setSearchParams({});
   };
 
-  const productoNombre = (id) => productos.find(p => p.id_interno === id)?.nombre || id;
-  const formatPrice = (priceBs) => {
-    if (priceBs == null) return '—';
-    return 'Bs ' + priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const handleExportar = () => {
+    exportToCSV('enlaces_reporte', COLUMNAS_CSV_ENLACES, filtrados.map(filaCsvEnlace));
+    addToast(`Exportados ${filtrados.length} enlaces a CSV.`, 'success');
   };
 
-  // CSV Parsing for Bulk Competitor upload
-  // Paso 1: leer y validar. NO se escribe nada todavía.
+  const descargarPlantilla = () => {
+    const filas = items.length > 0
+      ? items.map(filaCsvEnlace)
+      : [
+          { id_producto_propio: '140216', producto: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', laboratorio: 'LA SANTE', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
+          { id_producto_propio: '140216', producto: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel 500 mg x 20', laboratorio: 'CALOX', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
+        ];
+    exportToCSV(items.length > 0 ? 'enlaces_plantilla_carga' : 'enlaces_plantilla_carga_ejemplo', COLUMNAS_CSV_ENLACES, filas);
+  };
+
+  // Paso 1: leer y validar. No se escribe nada todavia.
   const handleCsvUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const rows = parseCSV(evt.target.result);
-        if (rows.length === 0) {
-          addToast('El archivo CSV está vacío o no se pudieron reconocer sus columnas.', 'error');
-          return;
-        }
-
-        // El producto propio tiene que existir: es lo que construye la
-        // equivalencia. Validarlo antes evita importar enlaces huérfanos.
-        const idsExistentes = new Set(
-          productos.map(p => String(p.id_interno || p.id || '').trim()).filter(Boolean)
-        );
-
-        const informe = validarCsv(rows, 'competencia', { idsExistentes });
-        setPreviewCsv({ informe, nombre: file.name, filas: rows });
-      } catch (err) {
-        addToast('No se pudo leer el archivo: ' + (err.message || String(err)), 'error');
-      } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
+    try {
+      const { texto, codificacion, acentosReparados } = await leerArchivoCsv(file);
+      const rows = parseCSV(texto);
+      if (rows.length === 0) {
+        addToast('El archivo CSV está vacío o no se pudieron reconocer sus columnas.', 'error');
+        return;
       }
-    };
-    reader.readAsText(file, 'UTF-8');
+      const idsExistentes = new Set(productos.map(p => String(p.id_interno || p.id || '').trim()).filter(Boolean));
+      const informe = validarCsv(rows, 'competencia', { idsExistentes });
+
+      // Cuantos son nuevos y cuantos ya existen (se actualizan).
+      const existentes = new Set(items.map(it => `${String(idCadena(it.cadena)).toLowerCase()}|${normalizarUrl(it.url || '')}`));
+      let nuevos = 0;
+      let yaEstan = 0;
+      informe.filasValidas.forEach(row => {
+        const url = getRowValue(row, 'url', 'enlace', 'link').trim();
+        const cad = String(idCadena(getRowValue(row, 'cadena', 'farmacia').trim())).toLowerCase();
+        if (existentes.has(`${cad}|${normalizarUrl(url)}`)) yaEstan++; else nuevos++;
+      });
+      const notas = [`${nuevos} ${nuevos === 1 ? 'enlace nuevo' : 'enlaces nuevos'} y ${yaEstan} que ya existían (se actualizan). Una celda vacía no cambia nada.`];
+      if (acentosReparados || codificacion !== 'UTF-8') notas.push('El archivo venía de Excel: se corrigieron los acentos al leerlo.');
+      setPreviewCsv({ informe, nombre: file.name, nota: notas.join(' ') });
+    } catch (err) {
+      addToast('No se pudo leer el archivo: ' + (err.message || String(err)), 'error');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
-  // Paso 2: el usuario vio el informe y confirmó. Ahora sí se escribe.
+  // Paso 2: confirmado. Ahora si se escribe.
   const confirmarImportacion = async () => {
     if (!previewCsv) return;
     setIsUploadingCsv(true);
+    try {
+      const rows = previewCsv.informe.filasValidas;
+      const lista = [];
+      const vistas = new Set();
+      let duplicados = 0;
+      rows.forEach((row) => {
+        const id_producto = getRowValue(row, 'id_producto_propio', 'id_producto', 'id_interno', 'sku').trim();
+        const url = getRowValue(row, 'url', 'enlace', 'link', 'url_competencia').trim();
+        if (!url || !id_producto) return;
+        const cadena = idCadena(getRowValue(row, 'cadena', 'cadena_farmacia', 'farmacia').trim());
+        const clave = `${String(cadena).toLowerCase()}|${normalizarUrl(url)}`;
+        if (vistas.has(clave)) { duplicados++; return; }
+        vistas.add(clave);
 
-    const procesar = async () => {
-      try {
-        const rows = previewCsv.informe.filasValidas;
+        const tipoRaw = getRowValue(row, 'tipo', 'tipo_enlace').trim().toLowerCase();
+        const propio = ['propio', 'propia', 'mi producto', 'mi marca'].includes(tipoRaw);
+        const claveActivo = Object.keys(row).find(k => k.trim().toLowerCase() === 'activo');
+        const activoRaw = claveActivo ? String(row[claveActivo] ?? '').trim().toLowerCase() : '';
+        const existente = items.find(it => `${String(idCadena(it.cadena)).toLowerCase()}|${normalizarUrl(it.url || '')}` === clave);
+        const marca = getRowValue(row, 'competidor', 'marca', 'marca_competencia').trim();
+        const laboratorio = getRowValue(row, 'laboratorio', 'fabricante', 'lab').trim();
+        const urlSlug = normalizarUrl(url).replace(/[^a-z0-9]/gi, '_');
 
-        const compToUpsert = [];
-        const prodsToAutoCreate = new Map();
-        const seenDocIds = new Set();
-        // Clave real de un enlace: cadena + URL sin querystring. Es la misma
-        // que aplica publicaciones.uq_cadena_url_normalizada en la base.
-        // Antes, una URL repetida en el CSV generaba un id con sufijo "_1" y
-        // acababa como dos productos distintos en el panel.
-        const seenUrlKeys = new Set();
-        let duplicadosCount = 0;
-        let skippedCount = 0;
-
-        for (let idx = 0; idx < rows.length; idx++) {
-          const row = rows[idx];
-          let id_producto = getRowValue(
-            row,
-            'id_producto_propio', 'ID_Producto', 'id_producto', 'id_interno',
-            'id', 'id producto', 'producto_id', 'sku', 'codigo', 'código', 'id_producto'
-          );
-          let cadena = getRowValue(row, 'cadena', 'Cadena', 'cadena_farmacia', 'farmacia');
-          let marca = getRowValue(row, 'marca', 'Marca', 'nombre', 'producto', 'item');
-          let url = getRowValue(row, 'url', 'URL', 'enlace', 'Enlace', 'link', 'Link', 'url_scraper', 'link_farmatodo', 'link_locatel', 'url_competencia');
-          let tipo = getRowValue(row, 'tipo', 'Tipo', 'tipo_enlace').toLowerCase();
-          let laboratorio = getRowValue(row, 'laboratorio', 'Laboratorio', 'lab', 'fabricante');
-          let concentracion = getRowValue(row, 'concentracion', 'Concentración', 'Concentracion', 'dosis');
-          let tamano = getRowValue(row, 'tamano', 'Tamaño', 'Tamano', 'presentacion', 'Presentación');
-
-          if (!url) {
-            skippedCount++;
-            continue;
-          }
-
-          if (cadena) {
-            const matchCadena = cadenas?.find(c => c.nombre.toLowerCase().trim() === cadena.toLowerCase().trim());
-            if (matchCadena) {
-              cadena = matchCadena.nombre;
-            } else {
-              cadena = cadena.charAt(0).toUpperCase() + cadena.slice(1).toLowerCase();
-            }
-          } else {
-            const urlLower = url.toLowerCase();
-            if (urlLower.includes('farmatodo')) cadena = 'Farmatodo';
-            else if (urlLower.includes('locatel')) cadena = 'Locatel';
-            else if (urlLower.includes('farmadon')) cadena = 'FarmaDON';
-            else if (urlLower.includes('sanignacio') || urlLower.includes('san_ignacio')) cadena = 'Grupo San Ignacio';
-            else if (urlLower.includes('redvital')) cadena = 'Redvital';
-            else if (urlLower.includes('meditotal')) cadena = 'Meditotal';
-            else if (urlLower.includes('saas')) cadena = 'SAAS';
-            else if (urlLower.includes('farmago')) cadena = 'FarmaGo';
-            else if (urlLower.includes('xana')) cadena = 'Farmacias Xana';
-            else cadena = 'Competencia';
-          }
-
-          if (!id_producto && marca) {
-            const matchedProd = productos.find(p => p.nombre?.toLowerCase().trim() === marca.toLowerCase().trim());
-            if (matchedProd) {
-              id_producto = matchedProd.id_interno || matchedProd.id;
-            }
-          }
-
-          if (!id_producto) {
-            id_producto = `P_${String(idx + 1).padStart(4, '0')}`;
-          }
-
-          const id_str = String(id_producto).trim();
-
-          // Registrar auto-creación de producto si no existe en el catálogo
-          const prodExists = productos.some(p => String(p.id_interno || p.id).trim() === id_str);
-          if (!prodExists && !prodsToAutoCreate.has(id_str)) {
-            prodsToAutoCreate.set(id_str, {
-              id: id_str,
-              id_interno: id_str,
-              nombre: marca || `Producto ${id_str}`,
-              laboratorio: laboratorio || 'La Sante',
-              concentracion: concentracion || '',
-              tamano: tamano || '',
-              categoria: 'Otros',
-              activo: true,
-              market_type: (laboratorio && laboratorio.toLowerCase().includes('sante')) ? 'GENERICO' : 'MARCA',
-              unidad_negocio: 'La Sante'
-            });
-          }
-
-          const cleanUrl = url.toLowerCase().trim();
-          const urlKey = `${cadena.toLowerCase()}|${cleanUrl.replace(/\?.*$/, '')}`;
-
-          if (seenUrlKeys.has(urlKey)) {
-            duplicadosCount++;
-            continue;
-          }
-          seenUrlKeys.add(urlKey);
-
-          const existingComp = items.find(c =>
-            (row.doc_id && c.id === String(row.doc_id).trim()) ||
-            (row.id && c.id === String(row.id).trim()) ||
-            (c.url && c.url.toLowerCase().trim() === cleanUrl)
-          );
-
-          const rawDocId = (row.doc_id || row.id) ? String(row.doc_id || row.id).trim() : null;
-          let docId = rawDocId;
-
-          if (!docId || seenDocIds.has(docId)) {
-            if (existingComp && !seenDocIds.has(existingComp.id)) {
-              docId = existingComp.id;
-            } else {
-              const urlSlug = cleanUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/[^a-z0-9]/g, '_');
-              const baseId = `${id_str}_${cadena.toLowerCase().replace(/[^a-z0-9]/g, '')}_${urlSlug}`.replace(/_+/g, '_').slice(0, 100);
-              docId = baseId;
-              let counter = 1;
-              while (seenDocIds.has(docId)) {
-                docId = `${baseId}_${counter}`;
-                counter++;
-              }
-            }
-          }
-
-          seenDocIds.add(docId);
-
-          const activoVal = getRowValue(row, 'activo', 'Activo');
-          const isPropio = tipo === 'propio' || tipo === 'propia' || tipo === 'la sante' || tipo === 'lasante' || tipo === 'pharmetique';
-
-          compToUpsert.push({
-            id: docId,
-            id_producto_propio: id_str,
-            cadena,
-            tipo: isPropio ? 'propio' : 'alternativa',
-            marca: marca || existingComp?.marca || 'Competencia',
-            url,
-            activo: activoVal ? (activoVal.toLowerCase() === 'true' || activoVal === '1') : true,
-            laboratorio: laboratorio || existingComp?.laboratorio || '',
-            concentracion: concentracion || existingComp?.concentracion || '',
-            tamano: tamano || existingComp?.tamano || '',
-          });
-        }
-
-        if (prodsToAutoCreate.size > 0) {
-          await dbUpsertProductosBulk(Array.from(prodsToAutoCreate.values()));
-          if (refreshProductos) refreshProductos();
-        }
-
-        if (compToUpsert.length > 0) {
-          await dbUpsertCompetenciaBulk(compToUpsert);
-
-          setProductosCompetencia(prev => {
-            const map = new Map(prev.map(c => [c.id, c]));
-            compToUpsert.forEach(c => map.set(c.id, c));
-            return Array.from(map.values());
-          });
-
-          if (refreshCompetencia) refreshCompetencia();
-          if (cargar) cargar(true);
-
-          addToast(`Importación exitosa: ${compToUpsert.length} enlaces cargados.`, 'success');
-
-          setCsvSummary({
-            totalRows: rows.length,
-            successCount: compToUpsert.length,
-            skippedCount,
-            duplicadosCount
-          });
-        } else {
-          throw new Error('No se encontraron filas válidas con al menos una URL.');
-        }
-      } catch (err) {
-        addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
-      } finally {
-        setIsUploadingCsv(false);
-        setShowCsvModal(false);
-        setPreviewCsv(null);
-      }
-    };
-
-    await procesar();
+        lista.push({
+          id: existente?.id || `${id_producto}_${String(cadena).replace(/[^a-z0-9]/gi, '')}_${urlSlug}`.replace(/_+/g, '_').slice(0, 100),
+          publicacion_id: existente ? publicacionIdDe(existente) : null,
+          id_producto_propio: id_producto,
+          cadena,
+          tipo: propio ? 'propio' : 'alternativa',
+          marca: marca || existente?.marca || (propio ? productoPorId.get(id_producto)?.nombre || '' : 'Competidor'),
+          url,
+          // Sin la columna o vacia se conserva lo guardado (activo por defecto en uno nuevo).
+          activo: activoRaw ? !['no', 'false', '0'].includes(activoRaw) : (existente ? existente.activo !== false : true),
+          laboratorio: laboratorio || (existente && !esPropio(existente) ? existente.laboratorio || '' : ''),
+        });
+      });
+      if (lista.length === 0) throw new Error('No hay filas con producto y URL.');
+      await dbUpsertCompetenciaBulk(lista);
+      if (refreshCompetencia) refreshCompetencia();
+      await cargar(true);
+      addToast(`Importación terminada: ${lista.length} enlaces${duplicados ? ` (${duplicados} repetidos en el archivo, omitidos)` : ''}.`, 'success');
+      setShowCsvModal(false);
+    } catch (err) {
+      addToast('Error importando: ' + (err.message || String(err)), 'error');
+    } finally {
+      setIsUploadingCsv(false);
+      setPreviewCsv(null);
+    }
   };
 
-  const downloadExampleCsv = () => {
-    // Orden de columnas y ejemplos alineados con el modelo dimensional:
-    //  id_producto_propio -> dim_productos.id_interno del producto TUYO
-    //  laboratorio        -> crea o reutiliza la fila en dim_laboratorios
-    //  cadena             -> id o nombre en dim_cadenas
-    //  tipo               -> 'propio' (tu producto en esa cadena) | 'alternativa'
-    const headers = 'id_producto_propio,cadena,tipo,marca,laboratorio,url,concentracion,tamano,activo\n';
-    const row1 = 'P001,Farmatodo,propio,Acetaminofén 650mg La Santé,La Sante,https://www.farmatodo.com.ve/producto/111243559-acetaminofen-650-la-sante,650mg,10tab,true\n';
-    const row2 = 'P001,Farmatodo,alternativa,Acetaminofén 650mg Calox,Calox,https://www.farmatodo.com.ve/producto/114592534-acetaminofen-650-calox,650mg,10tab,true\n';
-    const row3 = 'P001,Locatel,alternativa,Atamel 500mg,Genven,https://www.locatel.com.ve/producto/atamel-500mg,500mg,20tab,true\n';
-    const blob = new Blob([headers + row1 + row2 + row3], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'plantilla_competencia.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // ------------------------------------------------------------------ vista
+  const fichaItem = fichaId ? items.find(it => it.id === fichaId) : null;
+  const opcionesProducto = useMemo(() => [
+    ['todos', 'Producto: todos'],
+    ...[...(productos || [])]
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '') || String(a.id_interno).localeCompare(String(b.id_interno)))
+      .map(p => [String(p.id_interno), `${p.nombre}${p.concentracion ? ` ${p.concentracion}` : ''} · ${p.id_interno}`]),
+  ], [productos]);
+
+  const celdaPrecio = (it) => {
+    const usd = precioUsd(it);
+    const enBs = Number(it.ultimo_precio_desc_bs) || Number(it.ultimo_precio_full_bs) || 0;
+    return (
+      <>
+        <div className="m3-cell-primary tabular-nums">{usd > 0 ? `$${usd.toFixed(2)}` : '—'}</div>
+        <div className="m3-cell-secondary tabular-nums">
+          {enBs ? `Bs ${enBs.toLocaleString('es-VE', { maximumFractionDigits: 2 })}` : 'sin precio'}
+          {it.tiene_descuento ? ' · oferta' : ''}
+        </div>
+      </>
+    );
   };
-
-  const handleExportarEnlaces = () => {
-    const headers = [
-      { label: 'ID Producto Propio', key: 'id_producto_propio' },
-      { label: 'Producto Propio', key: 'producto_propio' },
-      { label: 'Cadena/Competidor', key: 'cadena' },
-      { label: 'Marca/Línea', key: 'marca' },
-      { label: 'Tipo', key: 'tipo_str' },
-      { label: 'Precio Full (Bs)', key: 'ultimo_precio_full_bs' },
-      { label: 'Precio Desc (Bs)', key: 'ultimo_precio_desc_bs' },
-      { label: 'Precio Full (USD)', key: 'ultimo_precio_full_usd' },
-      { label: 'Precio Desc (USD)', key: 'ultimo_precio_desc_usd' },
-      { label: 'URL Monitoreada', key: 'url' }
-    ];
-
-    const dataRows = ordenados.map(it => {
-      const fullBs = (it.ultimo_precio_full_bs !== null && it.ultimo_precio_full_bs !== undefined && it.ultimo_precio_full_bs !== '')
-        ? Number(it.ultimo_precio_full_bs)
-        : null;
-      const descBs = (it.ultimo_precio_desc_bs !== null && it.ultimo_precio_desc_bs !== undefined && it.ultimo_precio_desc_bs !== '')
-        ? Number(it.ultimo_precio_desc_bs)
-        : null;
-
-      const fullUsd = (fullBs && currentBcvRate > 0)
-        ? (fullBs / currentBcvRate).toFixed(2)
-        : (it.ultimo_precio_full_usd !== null && it.ultimo_precio_full_usd !== undefined && it.ultimo_precio_full_usd !== '' ? Number(it.ultimo_precio_full_usd).toFixed(2) : '');
-
-      const descUsd = (descBs && currentBcvRate > 0)
-        ? (descBs / currentBcvRate).toFixed(2)
-        : (it.ultimo_precio_desc_usd !== null && it.ultimo_precio_desc_usd !== undefined && it.ultimo_precio_desc_usd !== '' ? Number(it.ultimo_precio_desc_usd).toFixed(2) : '');
-
-      return {
-        ...it,
-        id_producto_propio: it.id_producto_propio || '',
-        producto_propio: productoNombre(it.id_producto_propio),
-        cadena: it.cadena || '',
-        marca: it.marca || '',
-        tipo_str: it.tipo === 'propio' ? 'MI MARCA' : 'COMPETIDOR',
-        ultimo_precio_full_bs: fullBs !== null ? fullBs : '',
-        ultimo_precio_desc_bs: descBs !== null ? descBs : '',
-        ultimo_precio_full_usd: fullUsd,
-        ultimo_precio_desc_usd: descUsd,
-        url: it.url || ''
-      };
-    });
-
-    exportToCSV('Enlaces_Competencia_Monitoreados', headers, dataRows);
-    addToast(`Exportados ${dataRows.length} enlaces a CSV.`, 'success');
+  const celdaCaptura = (it) => {
+    const caido = enlaceCaido(it);
+    const fecha = it.ultimo_scrape ? new Date(it.ultimo_scrape) : null;
+    const dias = fecha ? Math.floor((Date.now() - fecha.getTime()) / 86400000) : null;
+    const texto = !fecha ? 'Sin leer' : dias <= 0 ? 'Hoy' : dias === 1 ? 'Ayer' : `${dias} días`;
+    return (
+      <>
+        <div className={`m3-cell-primary ${caido && it.activo ? 'm3-count-stale' : ''}`}
+          title={caido ? `Sin precio hace más de ${DIAS_ENLACE_CAIDO} días` : undefined}>{texto}</div>
+        <div className="m3-cell-secondary">
+          {fecha ? fecha.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' }) : 'pendiente'}
+        </div>
+      </>
+    );
+  };
+  const celdaDif = (it) => {
+    const d = diferencia(it);
+    if (d === null) return <span className="m3-cell-secondary">—</span>;
+    return (
+      <span className={`m3-count ${d > 0 ? 'text-error' : ''}`} title={d > 0 ? 'Tu PVP es más caro que este precio' : 'Tu PVP es más barato que este precio'}>
+        {d > 0 ? '+' : ''}{d.toFixed(0)}%
+      </span>
+    );
   };
 
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
-      {/* Title Header Block */}
+      {/* Cabecera: misma estructura que Productos. */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -768,401 +628,316 @@ export default function Competencia({ user, userDoc }) {
             </h1>
           </div>
           <p className="text-xs text-on-surface-variant font-sans">
-            Vincula productos locales con URLs externas para el monitoreo automático de precios.
+            Las URL de las farmacias que vigila el robot, tuyas y de la competencia, con su último precio.
           </p>
         </div>
-        <div className="flex gap-2.5 flex-wrap items-center">
-          <button
-            onClick={() => setConfirmDeleteAll(true)}
-            disabled={deletingAll || items.length === 0}
-            className="m3-btn-danger-outline"
-            title="Eliminar todos los enlaces de competencia e historial"
-          >
-            <span className="material-symbols-outlined text-base">delete_sweep</span>
-            <span>{deletingAll ? 'Vaciando...' : 'Vaciar Enlaces'}</span>
-          </button>
-          <button
-            onClick={handleExportarEnlaces}
-            className="m3-btn-outline"
-            title="Exportar enlaces filtrados a archivo CSV"
-          >
+        <div className="flex gap-2 flex-wrap lg:flex-nowrap items-center shrink-0">
+          <button onClick={handleExportar} className="m3-btn-outline" title="Descargar en CSV lo que se ve en la tabla">
             <span className="material-symbols-outlined text-base">download</span>
-            <span>Exportar CSV</span>
+            <span>Exportar</span>
           </button>
-          <button
-            onClick={() => setShowCsvModal(true)}
-            className="m3-btn-outline"
-          >
+          <button onClick={() => setShowCsvModal(true)} className="m3-btn-outline" title="Crear o actualizar muchos enlaces con un CSV">
             <span className="material-symbols-outlined text-base">upload_file</span>
-            <span>Importar CSV</span>
+            <span>Carga masiva</span>
           </button>
-          <button
-            onClick={handleDispararScraperGlobal}
-            disabled={isGlobalScraping}
-            className="m3-btn-primary"
-            title="Lanzar el robot extractor de precios para todos los enlaces activos"
-          >
-            <span className={`material-symbols-outlined text-base ${isGlobalScraping ? 'animate-spin' : ''}`}>
-              {isGlobalScraping ? 'sync' : 'smart_toy'}
-            </span>
-            <span>{isGlobalScraping ? 'Ejecutando...' : 'Ejecutar Scraper Robot'}</span>
+          <button onClick={() => setEditing('new')} className="m3-btn-primary">
+            <span className="material-symbols-outlined text-base">add_link</span>
+            <span>Vincular enlace</span>
           </button>
-          <button
-            onClick={() => setEditing('new')}
-            className="m3-btn-outline bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-          >
-            <span className="material-symbols-outlined text-base">add</span>
-            <span>Vincular Enlace</span>
-          </button>
+          <details ref={menuMasRef} className="m3-menu">
+            <summary className="m3-icon-btn" title="Más acciones" aria-label="Más acciones">
+              <span className="material-symbols-outlined">more_vert</span>
+            </summary>
+            <div className="m3-menu-panel" role="menu">
+              <button type="button" role="menuitem" className="m3-menu-item" disabled={isGlobalScraping}
+                onClick={() => { menuMasRef.current?.removeAttribute('open'); handleDispararScraperGlobal(); }}>
+                <span className={`material-symbols-outlined ${isGlobalScraping ? 'animate-spin' : ''}`}>{isGlobalScraping ? 'sync' : 'smart_toy'}</span>
+                {isGlobalScraping ? 'Lanzando robot…' : 'Ejecutar robot (todos)'}
+              </button>
+              <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
+                disabled={deletingAll || items.length === 0}
+                onClick={() => { menuMasRef.current?.removeAttribute('open'); setConfirmDeleteAll(true); }}>
+                <span className="material-symbols-outlined">delete_sweep</span>
+                {deletingAll ? 'Vaciando…' : 'Vaciar enlaces'}
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
-      {productoFiltradoSinUrls && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-5 py-3.5 rounded-2xl flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-xl text-amber-700">warning</span>
-            <span className="text-xs font-medium">
-              El producto <strong>"{productoFiltradoSinUrls.nombre}"</strong> todavía no tiene ningún enlace competidor asignado.
-            </span>
-          </div>
-          <button
-            onClick={() => setEditing('new')}
-            className="text-xs px-3.5 py-1.5 bg-surface-container-lowest border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
-          >
-            Vincular Enlace Ahora
-          </button>
+      {productoFiltradoSinEnlaces ? (
+        <div className="m3-banner" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">link_off</span>
+          <span className="m3-body-medium flex-1">
+            <strong>{productoFiltradoSinEnlaces.nombre}</strong> todavía no tiene enlaces: el robot no lo vigila.
+          </span>
+          <button type="button" onClick={() => setEditing('new')} className="m3-btn-text">Vincular enlace</button>
+        </div>
+      ) : caidosActivos > 0 && filtroPrecio !== 'viejo' && (
+        <div className="m3-banner" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">schedule</span>
+          <span className="m3-body-medium flex-1">
+            <strong>{caidosActivos} {caidosActivos === 1 ? 'enlace activo no tiene' : 'enlaces activos no tienen'} precio</strong> hace más de {DIAS_ENLACE_CAIDO} días: puede que la tienda haya cambiado la URL.
+          </span>
+          <button type="button" onClick={() => setFiltroPrecio('viejo')} className="m3-btn-text">Ver cuáles</button>
         </div>
       )}
 
-      {/* KPIs de Competencia Bento Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* KPI 1: Tasa de Salud Técnica */}
-        <StatCard
-          label="Enlaces con precio"
-          value={<>{kpis.tasaSalud}% <span className="text-label-sm font-semibold text-on-surface-variant">de los activos</span></>}
-          hint={`${kpis.exitososCount} de ${kpis.activosCount} activos ya tienen precio${kpis.erroresCount ? `; ${kpis.erroresCount} esperan su primera captura` : ''}.`}
-          icon={kpis.tasaSalud > 90 ? 'health_and_safety' : 'sync_problem'}
-          tono={kpis.tasaSalud > 90 ? 'positive' : 'negative'}
-        />
-
-        <StatCard
-          label="Frescura de Precios"
-          value={<>{kpis.desactualizados} <span className="text-label-sm font-semibold text-on-surface-variant">Vencidos</span></>}
-          hint="Enlaces que requieren actualización (más de 24 h)."
-          icon={kpis.desactualizados === 0 ? 'schedule' : 'history_toggle_off'}
-          tono={kpis.desactualizados === 0 ? 'positive' : 'warning'}
-        />
-
-        <StatCard
-          label="Liderazgo en Precios"
-          value={<>{kpis.totalComparables > 0 ? `${Math.round((kpis.propiosMasBaratos / kpis.totalComparables) * 100)}%` : '—'} <span className="text-label-sm font-semibold text-on-surface-variant">Líder</span></>}
-          hint={`${kpis.propiosMasBaratos} de ${kpis.totalComparables} comparables más económicos.`}
-          icon="leaderboard"
-          tono="primary"
-        />
-      </div>
-
-      {/* Filter and Query Section */}
-      <div className="neural-card p-4 flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-[240px] relative">
-          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
-          <input
-            type="text"
-            placeholder="Buscar por variante, marca o dirección URL..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="m3-input m3-input-search pr-8"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>
-          )}
-        </div>
-        
-        <Select
-          value={filtroProducto}
-          onChange={(e) => setFiltroProducto(e.target.value)}
-          className="m3-select max-w-[220px]"
-        >
-          <option value="todos">Todos los productos</option>
-          {productos.map(p => <option key={p.id} value={p.id_interno}>{p.nombre}</option>)}
-        </Select>
-
-        <Select
-          value={filtroCadena}
-          onChange={(e) => setFiltroCadena(e.target.value)}
-          className="m3-select max-w-[180px]"
-        >
-          <option value="todas">Todas las cadenas</option>
-          {cadenas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-        </Select>
-
-        <Select
-          value={filtroTipo}
-          onChange={(e) => setFiltroTipo(e.target.value)}
-          className="m3-select max-w-[160px]"
-        >
-          <option value="todos">Todos los tipos</option>
-          {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </Select>
-
-        {(search || filtroCadena !== 'todas' || filtroProducto !== 'todos' || filtroTipo !== 'todos') && (
-          <button onClick={limpiarFiltros} className="text-xs font-bold text-rose-600 hover:underline uppercase font-mono px-2">
-            Limpiar Filtros
-          </button>
-        )}
-      </div>
-
-      {/* Main Grid View */}
-      <div className="neural-card overflow-hidden">
-        {loading ? (
-          <div className="overflow-x-auto animate-pulse">
-            <table className="m3-table">
-              <thead>
-                <tr>
-                  <th>Mi Producto Local</th>
-                  <th>Cadena</th>
-                  <th>Variante Competidor</th>
-                  <th>Tipo Asociación</th>
-                  <th className="text-right">Último Precio Detectado</th>
-                  <th className="text-center">Status Scrape</th>
-                  <th className="text-center">Scraper Activo</th>
-                  <th className="text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <tr key={n}>
-                    <td>
-                      <div className="h-4 bg-gray-200 rounded w-48 mb-1.5"></div>
-                      <div className="h-3 bg-gray-100 rounded w-24"></div>
-                    </td>
-                    <td><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                    <td>
-                      <div className="h-4 bg-gray-200 rounded w-40 mb-1"></div>
-                      <div className="h-3 bg-gray-100 rounded w-60"></div>
-                    </td>
-                    <td><div className="h-6 bg-gray-200 rounded-full w-20"></div></td>
-                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                    <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-24 mx-auto"></div></td>
-                    <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-12 mx-auto"></div></td>
-                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : ordenados.length === 0 ? (
-          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
-              <span className="material-symbols-outlined text-2xl">link_off</span>
+      <section className="m3-data-table" aria-label="Enlaces de competencia">
+        <div className="m3-data-table-toolbar">
+          {seleccion.size > 0 ? (
+            <div className="m3-selection-bar" role="toolbar" aria-label="Acciones sobre los enlaces seleccionados">
+              <button type="button" onClick={() => setSeleccion(new Set())} disabled={!!procesandoSel}
+                className="m3-icon-btn" title="Quitar selección" aria-label="Quitar selección">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+              <div className="flex flex-col min-w-0 mr-auto">
+                <span className="m3-title-medium">
+                  {procesandoSel ? `Procesando ${procesandoSel.hechos} de ${procesandoSel.total}…` : `${seleccion.size} ${seleccion.size === 1 ? 'seleccionado' : 'seleccionados'}`}
+                </span>
+                {!procesandoSel && !todosFiltradosSeleccionados && (
+                  <button type="button" onClick={alternarTodosFiltrados} className="self-start text-primary m3-label-medium hover:underline">
+                    Seleccionar los {filtrados.length} de esta lista
+                  </button>
+                )}
+              </div>
+              {!procesandoSel && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => cambiarActivoSeleccion(false)} className="m3-btn-primary h-10" title="El robot deja de leerlos. Conserva el historial.">
+                    <span className="material-symbols-outlined">archive</span>
+                    Dar de baja
+                  </button>
+                  <button type="button" onClick={() => cambiarActivoSeleccion(true)} className="m3-btn-text">
+                    <span className="material-symbols-outlined">unarchive</span>
+                    Reactivar
+                  </button>
+                  <button type="button" onClick={() => setConfirmBorrarSel(true)} className="m3-btn-text m3-btn-text-danger">
+                    <span className="material-symbols-outlined">delete</span>
+                    Eliminar
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <div className="font-bold text-on-surface font-display text-base">No se encontraron enlaces de competencia</div>
-              <div className="text-xs text-on-surface-variant mt-0.5">
-                {search || filtroCadena !== 'todas' || filtroProducto !== 'todos' || filtroTipo !== 'todos'
-                  ? 'Prueba ajustando los filtros de producto, cadena o búsqueda.'
-                  : 'Aún no hay enlaces vinculados en el catálogo de competencia.'}
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                <label className="m3-search-field">
+                  <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                  <input ref={buscadorRef} type="search" value={search} onChange={e => setSearch(e.target.value)}
+                    placeholder="Buscar por producto, competidor, laboratorio, cadena o URL" aria-label="Buscar enlaces" />
+                  {search ? (
+                    <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  ) : (
+                    <kbd className="m3-kbd hidden md:inline-flex" title="Pulsa / para buscar">/</kbd>
+                  )}
+                </label>
+                <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
+                  {filtrados.length === items.length ? `${items.length} enlaces` : `${filtrados.length} de ${items.length} enlaces`}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <FiltroChip etiqueta="Producto" icono="medication" valor={filtroProducto}
+                  onChange={v => { setFiltroProducto(v); if (searchParams.get('producto')) setSearchParams({}); }}
+                  opciones={opcionesProducto} />
+                <FiltroChip etiqueta="Cadena" icono="storefront" valor={filtroCadena === 'todas' ? 'todos' : filtroCadena}
+                  onChange={v => setFiltroCadena(v === 'todos' ? 'todas' : v)}
+                  opciones={[['todos', 'Cadena: todas'], ...(cadenas || []).map(c => [c.id, c.nombre])]} />
+                <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
+                  opciones={[['todos', 'Tipo: todos'], ['competidor', 'Competidores'], ['propio', 'Mis productos']]} />
+                <FiltroChip etiqueta="Precio" icono="payments" valor={filtroPrecio} onChange={setFiltroPrecio}
+                  opciones={[['todos', 'Precio: todos'], ['con_precio', 'Con precio'], ['sin_captura', 'Sin captura'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`]]} />
+                <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
+                  opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
+                {hayFiltros && <button type="button" onClick={limpiarFiltros} className="m3-btn-text">Limpiar filtros</button>}
               </div>
             </div>
-            {(search || filtroCadena !== 'todas' || filtroProducto !== 'todos' || filtroTipo !== 'todos') && (
-              <button
-                onClick={limpiarFiltros}
-                className="m3-btn-outline h-8 px-4 text-xs mt-1"
-              >
-                Limpiar todos los filtros
-              </button>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="p-4 space-y-3" aria-busy="true">
+            {[1, 2, 3, 4, 5, 6].map(n => <div key={n} className="h-14 rounded-xl m3-skeleton" />)}
+          </div>
+        ) : filtrados.length === 0 ? (
+          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center">
+              <span className="material-symbols-outlined text-2xl">{hayFiltros || search ? 'search_off' : 'link'}</span>
+            </div>
+            <div className="m3-title-medium text-on-surface">No se encontraron enlaces</div>
+            <div className="m3-body-medium">
+              {hayFiltros || search ? 'Prueba con otra búsqueda o quita algún filtro.' : 'Aún no hay enlaces. Súbelos con Carga masiva o crea uno con Vincular enlace.'}
+            </div>
+            {(hayFiltros || search) && (
+              <button type="button" onClick={() => { setSearch(''); limpiarFiltros(); }} className="m3-btn-tonal mt-1">Quitar búsqueda y filtros</button>
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-[750px] relative">
-            <table className="m3-table">
-              <thead className="m3-sticky-header">
-                <tr>
-                  <th>Mi Producto Local</th>
-                  <th>Cadena</th>
-                  <th>Variante Competidor</th>
-                  <th>Tipo Asociación</th>
-                  <th className="text-right">Último Precio Detectado</th>
-                  <th className="text-center">Status Scrape</th>
-                  <th className="text-center">Scraper Activo</th>
-                  <th className="text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant">
-                {itemsPaginados.map(it => (
-                  <tr key={it.id} className="hover:bg-surface-low transition-colors">
-                    <td>
-                      <div className="font-bold text-on-surface font-display text-sm truncate max-w-xs" title={productoNombre(it.id_producto_propio)}>
-                        {productoNombre(it.id_producto_propio)}
+          <>
+            {/* Celular: tarjetas. */}
+            <ul className="md:hidden divide-y divide-outline-variant" aria-label="Enlaces">
+              {paginados.map(it => {
+                const p = productoPorId.get(String(it.id_producto_propio).trim());
+                const sel = seleccion.has(it.id);
+                return (
+                  <li key={it.id} className={`m3-product-card ${sel ? 'is-selected' : ''}`}>
+                    <input type="checkbox" checked={sel} onChange={() => alternarSeleccion(it.id)} disabled={!!procesandoSel}
+                      aria-label={`Seleccionar ${it.marca}`} className="m3-checkbox mt-1" />
+                    <button type="button" onClick={() => setFichaId(it.id)} className="flex-1 min-w-0 text-left">
+                      <span className="m3-cell-primary">{p?.nombre || it.id_producto_propio}</span>
+                      <div className="m3-cell-secondary">{esPropio(it) ? 'Mi producto' : it.marca} · {nombreCadena(it.cadena)}</div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                        <span className="m3-cell-primary tabular-nums">{precioUsd(it) > 0 ? `$${precioUsd(it).toFixed(2)}` : 'Sin precio'}</span>
+                        {celdaDif(it)}
+                        <span className={`m3-status ${it.activo ? 'is-on' : ''}`}>{it.activo ? 'Activo' : 'De baja'}</span>
                       </div>
-                      <div className="text-xs text-on-surface-variant font-mono mt-0.5">{it.id_producto_propio}</div>
-                    </td>
-                    <td className="font-bold text-primary font-display text-sm">{nombreCadena(it.cadena)}</td>
-                    <td>
-                      <div className="font-bold text-on-surface text-sm">
-                        {it.marca} {it.concentracion || ''} {it.tamano || ''}
-                      </div>
-                      {it.laboratorio && (
-                        <div className="text-xs text-on-surface-variant font-mono mt-0.5">Lab: {it.laboratorio}</div>
-                      )}
-                      <a href={it.url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline truncate max-w-xs font-mono mt-0.5 flex items-center gap-0.5" title={it.url}>
-                        <span>Ver Enlace Destino</span>
-                        <span className="material-symbols-outlined text-label-md leading-none">open_in_new</span>
-                      </a>
-                      {it.estado === 'pendiente' && (
-                        <span className="inline-flex items-center gap-1 text-label-sm font-bold text-amber-600">
-                          <span className="material-symbols-outlined text-body-sm">schedule</span>
-                          Pendiente de primera captura
-                        </span>
-                      )}
-                      {it.estado === 'error' && it.ultimo_error && (
-                        <div className="text-label-sm text-error bg-error/5 border border-error/15 px-2 py-1 rounded-xl mt-1.5 font-medium max-w-xs leading-normal flex items-start gap-1 shadow-xs">
-                          <span className="material-symbols-outlined text-body-sm mt-0.5 flex-shrink-0 text-error leading-none">warning</span>
-                          <span><strong>Error lectura:</strong> {it.ultimo_error}</span>
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`text-label-sm uppercase font-mono font-bold px-2.5 py-1 rounded-full border ${
-                        it.tipo === 'propio' ? 'bg-secondary/10 text-secondary border-secondary/20' : 'bg-surface-low text-on-surface-variant border-outline-variant'
-                      }`}>
-                        {it.tipo === 'propio' ? 'Mi Marca' : 'Competencia'}
-                      </span>
-                    </td>
-                    <td className="text-right font-mono font-bold text-primary">
-                      {it.ultimo_precio_desc_bs ? (
-                        <div>
-                          <div className="text-on-surface font-extrabold flex items-center justify-end gap-1">
-                            {it.actualizado_manualmente && (
-                              <span className="material-symbols-outlined text-xs text-amber-500 font-sans" title="Precio actualizado manualmente por el usuario">edit_note</span>
-                            )}
-                            {formatPrice(it.ultimo_precio_desc_bs)}
-                          </div>
-                          {it.ultimo_precio_full_bs && it.ultimo_precio_full_bs !== it.ultimo_precio_desc_bs && (
-                            <div className="text-label-sm text-on-surface-variant line-through font-normal">{formatPrice(it.ultimo_precio_full_bs)}</div>
-                          )}
-                        </div>
-                      ) : it.ultimo_precio_full_bs ? (
-                        <div className="flex items-center justify-end gap-1">
-                          {it.actualizado_manualmente && (
-                            <span className="material-symbols-outlined text-xs text-amber-500 font-sans" title="Precio actualizado manualmente por el usuario">edit_note</span>
-                          )}
-                          <span className="font-extrabold">{formatPrice(it.ultimo_precio_full_bs)}</span>
-                        </div>
-                      ) : (
-                        <span className="text-on-surface-variant/40 font-mono select-none">—</span>
-                      )}
-                    </td>
-                    <td className="text-center">
-                      {scrapingItems[it.id] ? (
-                        <span className="inline-flex items-center gap-1 text-label-sm font-bold font-mono px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 animate-pulse">
-                          <span className="material-symbols-outlined animate-spin text-label-md leading-none">autorenew</span>
-                          {scrapingItems[it.id] === 'disparando' ? 'Gatillando...' : 'En cola...'}
-                        </span>
-                      ) : (
-                        <>
-                          {it.estado === 'ok' && (
-                            <span className="inline-flex items-center gap-0.5 text-label-sm font-bold font-mono px-2.5 py-1 rounded-full bg-secondary/10 text-secondary border border-secondary/30">
-                              <span className="material-symbols-outlined text-label-sm leading-none">check_circle</span>
-                              OK
-                            </span>
-                          )}
-                          {it.estado === 'error' && (
-                            <span className="inline-flex items-center gap-0.5 text-label-sm font-bold font-mono px-2.5 py-1 rounded-full bg-error-container text-error border border-error/20" title={it.ultimo_error}>
-                              <span className="material-symbols-outlined text-label-sm leading-none">error</span>
-                              Error
-                            </span>
-                          )}
-                          {!it.estado && <span className="text-label-sm font-bold font-mono px-2.5 py-1 bg-surface-low text-on-surface-variant border border-outline-variant rounded-full">Sin Datos</span>}
-                        </>
-                      )}
-                    </td>
-                    <td className="text-center">
-                      <button onClick={() => handleToggleActivo(it)}
-                        className={`text-label-sm uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
-                          it.activo ? 'bg-secondary/15 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
-                        }`}>
-                        {it.activo ? 'Monitorear' : 'Pausado'}
-                      </button>
-                    </td>
-                    <td className="text-right whitespace-nowrap space-x-2.5">
-                      <button onClick={() => handleScrapeIndividual(it)}
-                        disabled={!!scrapingItems[it.id] || !it.activo}
-                        className={`text-xs font-bold inline-flex items-center gap-0.5 ${
-                          scrapingItems[it.id] || !it.activo ? 'text-gray-300 cursor-not-allowed' : 'text-secondary hover:text-secondary/80'
-                        }`}
-                        title={!it.activo ? "Activa la monitorización para poder usar el robot" : "Lanzar robot extractor para esta variante en tiempo real"}>
-                        <span className="material-symbols-outlined text-xs">bolt</span>
-                        Robot
-                      </button>
-                      <button onClick={() => setManualPriceItem(it)}
-                        className="text-xs text-amber-600 hover:text-amber-700 font-bold inline-flex items-center gap-0.5"
-                        title="Corregir precio manualmente si el robot falló">
-                        <span className="material-symbols-outlined text-xs">edit_note</span>
-                        Precio
-                      </button>
-                      <button onClick={() => setEditing(it.id)}
-                        className="text-xs text-primary hover:text-primary/80 font-bold inline-flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-xs">edit</span>
-                        Editar
-                      </button>
-                      <button onClick={() => handleDelete(it)}
-                        className="text-xs text-error hover:text-error/80 font-bold inline-flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-xs">delete</span>
-                        Eliminar
-                      </button>
-                    </td>
+                    </button>
+                    <button type="button" onClick={() => setEditing(it.id)} className="m3-icon-btn" aria-label={`Editar ${it.marca}`}>
+                      <span className="material-symbols-outlined">edit</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Misma geometria de columnas que la tabla de Productos. */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="m3-table m3-table-productos m3-table-enlaces">
+                <colgroup>
+                  <col className="w-12" />
+                  <col />
+                  <col className="w-[16%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[96px]" />
+                  <col className="w-[112px]" />
+                  <col className="w-[88px]" />
+                  <col className="w-[104px]" />
+                  <col className="w-[136px]" />
+                </colgroup>
+                <thead className="m3-sticky-header">
+                  <tr>
+                    <th>
+                      <input type="checkbox" checked={todosFiltradosSeleccionados} onChange={alternarTodosFiltrados}
+                        disabled={!!procesandoSel} title={`Seleccionar los ${filtrados.length} enlaces de esta lista`}
+                        aria-label="Seleccionar todos los enlaces de esta lista" className="m3-checkbox" />
+                    </th>
+                    {encabezado('producto', 'Producto')}
+                    {encabezado('competidor', 'Competidor')}
+                    {encabezado('cadena', 'Cadena')}
+                    {encabezado('captura', 'Captura')}
+                    {encabezado('precio', 'Precio', 'text-right')}
+                    {encabezado('dif', 'Dif.', 'text-center')}
+                    {encabezado('estado', 'Estado')}
+                    <th className="m3-sticky-actions"><span className="sr-only">Acciones</span></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {paginados.map(it => {
+                    const p = productoPorId.get(String(it.id_producto_propio).trim());
+                    const sel = seleccion.has(it.id);
+                    const propio = esPropio(it);
+                    return (
+                      <tr key={it.id} className={sel ? 'm3-row-selected' : ''}>
+                        <td>
+                          <input type="checkbox" checked={sel} onChange={() => alternarSeleccion(it.id)} disabled={!!procesandoSel}
+                            aria-label={`Seleccionar ${it.marca}`} className="m3-checkbox" />
+                        </td>
+                        <td>
+                          <button type="button" onClick={() => setFichaId(it.id)} className="m3-cell-link min-w-0" title="Abrir la ficha del enlace">
+                            <span className="m3-cell-primary">{p?.nombre || it.id_producto_propio}</span>
+                          </button>
+                          <div className="m3-cell-secondary" title={p ? `${p.id_interno} · ${p.concentracion || ''} · ${describirPresentacion(p)}` : ''}>
+                            <span className="font-mono">{it.id_producto_propio}</span>
+                            {p ? ` · ${[p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ')}` : ''}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="m3-cell-primary" title={propio ? 'Tu producto en esta cadena' : it.marca}>{propio ? 'Mi producto' : (it.marca || '—')}</span>
+                            <a href={it.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-on-surface-variant hover:text-primary"
+                              title="Abrir en la tienda" aria-label={`Abrir ${it.marca} en la tienda`}>
+                              <span className="material-symbols-outlined text-[16px] align-middle">open_in_new</span>
+                            </a>
+                          </div>
+                          <div className="m3-cell-secondary">{it.laboratorio || '—'}</div>
+                        </td>
+                        <td>
+                          <div className="m3-cell-primary">{nombreCadena(it.cadena)}</div>
+                          <div className="m3-cell-secondary">{propio ? 'Propio' : 'Competidor'}</div>
+                        </td>
+                        <td>{celdaCaptura(it)}</td>
+                        <td className="text-right">{celdaPrecio(it)}</td>
+                        <td className="text-center">{celdaDif(it)}</td>
+                        <td><span className={`m3-status ${it.activo ? 'is-on' : ''}`}>{it.activo ? 'Activo' : 'De baja'}</span></td>
+                        <td className="m3-sticky-actions">
+                          <div className="flex justify-end gap-1">
+                            <button type="button" onClick={() => setEditing(it.id)} className="m3-icon-btn" title="Editar" aria-label={`Editar ${it.marca}`}>
+                              <span className="material-symbols-outlined">edit</span>
+                            </button>
+                            <button type="button" onClick={() => handleToggleActivo(it)} className="m3-icon-btn"
+                              title={it.activo ? 'Dar de baja' : 'Reactivar'} aria-label={`${it.activo ? 'Dar de baja' : 'Reactivar'} ${it.marca}`}>
+                              <span className="material-symbols-outlined">{it.activo ? 'archive' : 'unarchive'}</span>
+                            </button>
+                            <button type="button" onClick={() => setConfirmDelete(it)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label={`Eliminar ${it.marca}`}>
+                              <span className="material-symbols-outlined">delete</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
-        {/* Pagination Footer */}
-        {ordenados.length > 0 && (
-          <div className="px-6 py-4 bg-surface-low border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-on-surface-variant font-mono">
-              Mostrando <span className="font-bold text-primary">{Math.min(ordenados.length, (paginaActual - 1) * itemsPorPagina + 1)}</span> - <span className="font-bold text-primary">{Math.min(ordenados.length, paginaActual * itemsPorPagina)}</span> de <span className="font-bold text-primary">{ordenados.length}</span> enlaces
-            </div>
+        {filtrados.length > 0 && (
+          <footer className="m3-data-table-footer">
+            <label className="flex items-center gap-2 m3-body-medium text-on-surface-variant">
+              Filas por página
+              <Select value={itemsPorPagina} onChange={e => cambiarFilasPorPagina(Number(e.target.value))} className="m3-rows-select">
+                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </Select>
+            </label>
+            <span className="m3-body-medium text-on-surface-variant sm:ml-auto">
+              {Math.min(filtrados.length, (paginaActual - 1) * itemsPorPagina + 1)}–{Math.min(filtrados.length, paginaActual * itemsPorPagina)} de {filtrados.length}
+            </span>
             {totalPaginas > 1 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                  disabled={paginaActual === 1}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-sm">chevron_left</span>
-                  Anterior
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setPaginaActual(p => Math.max(1, p - 1))} disabled={paginaActual === 1} className="m3-icon-btn" aria-label="Página anterior">
+                  <span className="material-symbols-outlined">chevron_left</span>
                 </button>
-                <span className="text-xs font-mono font-bold px-3 py-1 bg-surface-container-lowest border border-outline-variant rounded-lg text-primary">
-                  {paginaActual} / {totalPaginas}
-                </span>
-                <button
-                  onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
-                  disabled={paginaActual === totalPaginas}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
-                >
-                  Siguiente
-                  <span className="material-symbols-outlined text-sm">chevron_right</span>
+                <span className="m3-label-large px-2">Página {paginaActual} de {totalPaginas}</span>
+                <button type="button" onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} disabled={paginaActual === totalPaginas} className="m3-icon-btn" aria-label="Página siguiente">
+                  <span className="material-symbols-outlined">chevron_right</span>
                 </button>
               </div>
             )}
-          </div>
+          </footer>
         )}
-      </div>
+      </section>
 
-      {!loading && ordenados.length > 0 && (
-        <p className="text-xs text-on-surface-variant font-mono text-center">
-          Mostrando {ordenados.length} de {items.length} Enlaces Registrados.
-        </p>
+      {fichaItem && (
+        <FichaEnlace
+          enlace={fichaItem}
+          producto={productoPorId.get(String(fichaItem.id_producto_propio).trim())}
+          nombreCadena={nombreCadena}
+          precioUsd={precioUsd}
+          robotOcupado={Boolean(scrapingItems[fichaItem.id])}
+          onClose={() => setFichaId(null)}
+          onEditar={() => { setFichaId(null); setEditing(fichaItem.id); }}
+          onPrecioManual={() => setManualPriceItem(fichaItem)}
+          onRobot={() => handleScrapeIndividual(fichaItem)}
+          onAlternarActivo={() => handleToggleActivo(fichaItem)}
+        />
       )}
 
       {editing && (
-        <CompetenciaModal
+        <EnlaceModal
           item={editing === 'new' ? null : items.find(i => i.id === editing)}
-          productoIdPreseleccionado={editing === 'new' && filtroProducto !== 'todos' ? filtroProducto : null}
+          productoIdPreseleccionado={filtroProducto !== 'todos' ? filtroProducto : ''}
           productos={productos}
           cadenas={cadenas}
           onSave={handleSave}
@@ -1170,471 +945,325 @@ export default function Competencia({ user, userDoc }) {
         />
       )}
 
-      {/* Custom Confirmation Dialog */}
-      <ConfirmModal
-        isOpen={!!confirmDelete}
-        title="¿Eliminar Enlace de Competencia?"
-        message={
-          confirmDelete 
-            ? `¿Estás seguro de que deseas eliminar "${confirmDelete.marca}" en la cadena "${confirmDelete.cadena}"?\n\nProducto Asociado: ${productos.find(p => p.id_interno === confirmDelete.id_producto_propio)?.nombre || confirmDelete.id_producto_propio}\nURL: ${confirmDelete.url}\n\nLos registros históricos de precios se conservarán.`
-            : ''
-        }
-        confirmText="Eliminar"
-        cancelText="Cancelar"
-        isDanger={true}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setConfirmDelete(null)}
-      />
-
-      {/* Confirm Modal to Delete All Competitor Links and History */}
-      <ConfirmModal
-        isOpen={confirmDeleteAll}
-        title="¿Vaciar Todos los Enlaces de Competencia?"
-        message="¿Estás seguro de que deseas eliminar TODOS los enlaces de competencia vinculados, así como todo el historial de precios acumulado?\n\nEsta acción NO se puede deshacer."
-        confirmText={deletingAll ? "Eliminando..." : "Sí, Vaciar Enlaces"}
-        cancelText="Cancelar"
-        isDanger={true}
-        onConfirm={handleConfirmDeleteAll}
-        onCancel={() => setConfirmDeleteAll(false)}
-      />
-
-      {previewCsv && (
-        <ImportPreview
-          informe={previewCsv.informe}
-          nombreArchivo={previewCsv.nombre}
-          importando={isUploadingCsv}
-          onConfirmar={confirmarImportacion}
-          onCancelar={() => setPreviewCsv(null)}
+      {manualPriceItem && (
+        <PrecioManualModal
+          item={manualPriceItem}
+          nombreCadena={nombreCadena}
+          onClose={() => setManualPriceItem(null)}
+          onGuardar={async (precio, oferta) => {
+            await dbRegistrarPrecioManual(manualPriceItem, precio, oferta);
+            addToast(`Precio de ${manualPriceItem.marca} registrado: Bs ${(oferta || precio).toFixed(2)}.`, 'success');
+            setManualPriceItem(null);
+            await cargar(true);
+          }}
         />
       )}
 
-      {/* CSV Mass Upload Competitors Modal */}
       {showCsvModal && (
         <ModalWrapper
           isOpen={showCsvModal}
           onClose={() => !isUploadingCsv && setShowCsvModal(false)}
-          title="Importar Enlaces CSV"
-          subtitle="Asocia enlaces de forma masiva a tus productos registrados."
+          title="Carga masiva de enlaces"
+          subtitle="Crea o actualiza muchos enlaces con un CSV."
           icon="upload_file"
           maxWidth="max-w-lg"
-          footer={
-            <button
-              onClick={() => setShowCsvModal(false)}
-              disabled={isUploadingCsv}
-              className="m3-btn-outline h-9 px-4 text-xs disabled:opacity-50"
-            >
-              Cerrar
-            </button>
-          }
+          footer={<button onClick={() => setShowCsvModal(false)} disabled={isUploadingCsv} className="m3-btn-text">Cerrar</button>}
         >
           <div className="space-y-4 text-sm text-on-surface">
-            <div className="m3-card-outlined p-4 space-y-1.5 font-mono text-xs">
-              <div className="font-bold text-primary border-b border-outline-variant/60 pb-1 mb-1 flex items-center gap-1.5">
+            <div className="m3-card-outlined p-4 space-y-1 font-mono text-xs">
+              <div className="font-bold text-primary pb-1 flex items-center gap-1.5 font-sans">
                 <span className="material-symbols-outlined text-sm">lists</span>
-                Columnas Obligatorias del CSV:
+                Columnas del CSV
               </div>
-              <div>id_producto_propio <span className="text-on-surface-variant font-sans font-medium">(ID del Producto, ej. P001)</span></div>
-              <div>cadena <span className="text-on-surface-variant font-sans font-medium">(Nombre de la Cadena, ej. Farmatodo)</span></div>
-              <div>marca <span className="text-on-surface-variant font-sans font-medium">(Variante/Nombre en competidor)</span></div>
-              <div>url <span className="text-on-surface-variant font-sans font-medium">(Enlace completo)</span></div>
-              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(Opcional: propio / alternativa)</span></div>
-              <div>activo <span className="text-on-surface-variant font-sans font-medium">(Opcional: true / false)</span></div>
-              <div>laboratorio <span className="text-on-surface-variant font-sans font-medium">(Opcional: Laboratorio fabricante)</span></div>
-              <div>concentracion <span className="text-on-surface-variant font-sans font-medium">(Opcional: Concentración, ej. 500mg)</span></div>
-              <div>tamano <span className="text-on-surface-variant font-sans font-medium">(Opcional: Presentación, ej. 10tab)</span></div>
+              <div>id_producto_propio, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
+              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio</div>
+              <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
+              <div className="font-sans font-medium text-on-surface-variant pt-1">
+                producto y las columnas de precio y captura son informativas: al importar se ignoran. Una celda vacía no cambia nada.
+              </div>
             </div>
-            <div className="flex justify-between items-center pt-1">
-              <button type="button" onClick={downloadExampleCsv}
-                className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">download</span>
-                Descargar Plantilla Ejemplo CSV
-              </button>
-            </div>
-
-            {/* File drop area */}
+            <button type="button" onClick={descargarPlantilla} className="m3-btn-text px-0">
+              <span className="material-symbols-outlined">download</span>
+              Descargar plantilla de carga (enlaces actuales)
+            </button>
             <div
               className={`border-2 border-dashed border-outline-variant hover:border-primary transition-colors rounded-2xl p-8 text-center cursor-pointer bg-surface-container-low ${isUploadingCsv ? 'opacity-50 pointer-events-none' : ''}`}
-              onClick={() => !isUploadingCsv && fileInputRef.current.click()}
+              onClick={() => !isUploadingCsv && fileInputRef.current?.click()}
             >
-              {isUploadingCsv ? (
-                <div className="flex flex-col items-center justify-center py-2">
-                  <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  <p className="mt-3 text-sm font-bold text-primary">Procesando e importando enlaces...</p>
-                  <p className="text-xs text-on-surface-variant mt-1">Por favor espera un momento</p>
-                </div>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
-                  <p className="mt-2 text-sm font-bold text-primary">Haz click o arrastra tu archivo CSV aquí</p>
-                  <p className="text-xs text-on-surface-variant mt-1">Soporta cualquier formato CSV (comas, punto y coma, tabulaciones)</p>
-                </>
-              )}
+              <span className="material-symbols-outlined text-4xl text-primary">upload_file</span>
+              <p className="mt-2 text-sm font-bold text-primary">Haz clic para elegir el archivo CSV</p>
+              <p className="text-xs text-on-surface-variant mt-1">Comas, punto y coma o tabulaciones. Vale el que guarda Excel.</p>
               <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" disabled={isUploadingCsv} />
             </div>
           </div>
         </ModalWrapper>
       )}
 
-      {/* CSV Result Summary Modal */}
-      {csvSummary && (
-        <ModalWrapper
-          isOpen={Boolean(csvSummary)}
-          onClose={() => setCsvSummary(null)}
-          title="¡Carga Masiva Finalizada!"
-          subtitle="Los enlaces de competencia se han actualizado inmediatamente en pantalla."
-          icon="check_circle"
-          maxWidth="max-w-md"
-          footer={
-            <button
-              onClick={() => setCsvSummary(null)}
-              className="m3-btn-primary h-9 w-full text-xs"
-            >
-              Aceptar
-            </button>
-          }
-        >
-          <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/60 space-y-2 text-sm text-on-surface">
-            <div className="flex justify-between py-1 border-b border-outline-variant/40">
-              <span className="text-on-surface-variant text-xs">Total de Filas Procesadas:</span>
-              <span className="font-bold font-mono text-xs">{csvSummary.totalRows}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-outline-variant/40">
-              <span className="text-on-surface-variant text-xs">Enlaces Importados / Actualizados:</span>
-              <span className="font-bold font-mono text-xs text-secondary">{csvSummary.successCount}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-outline-variant/40">
-              <span className="text-on-surface-variant text-xs">Filas Omitidas (Sin Enlace o ID):</span>
-              <span className="font-bold font-mono text-xs text-outline">{csvSummary.skippedCount}</span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-on-surface-variant text-xs">Duplicadas (misma cadena y URL):</span>
-              <span className="font-bold font-mono text-xs text-outline">{csvSummary.duplicadosCount ?? 0}</span>
-            </div>
-          </div>
-        </ModalWrapper>
+      {previewCsv && (
+        <ImportPreview
+          informe={previewCsv.informe}
+          nombreArchivo={previewCsv.nombre}
+          importando={isUploadingCsv}
+          nota={previewCsv.nota}
+          onConfirmar={confirmarImportacion}
+          onCancelar={() => setPreviewCsv(null)}
+        />
       )}
 
-      {/* Manual Price Override Dialog */}
-      {manualPriceItem && (
-        <ModalWrapper
-          isOpen={Boolean(manualPriceItem)}
-          onClose={() => setManualPriceItem(null)}
-          title="Ingresar Precio Manual"
-          subtitle={`${manualPriceItem.marca} en ${nombreCadena(manualPriceItem.cadena)}`}
-          icon="edit_note"
-          maxWidth="max-w-md"
-          footer={
-            <div className="flex justify-end gap-2 w-full">
-              <button onClick={() => setManualPriceItem(null)} className="m3-btn-outline h-9 px-4 text-xs">
-                Cancelar
-              </button>
-              <button
-                onClick={async () => {
-                  const inputVal = document.getElementById('manualPriceInput').value;
-                  const price = parseFloat(inputVal);
-                  if (isNaN(price) || price <= 0) {
-                    addToast('Por favor ingresa un precio válido mayor a 0', 'error');
-                    return;
-                  }
-                  const ofertaVal = document.getElementById('manualOfferInput').value;
-                  const oferta = ofertaVal ? parseFloat(ofertaVal) : null;
-                  if (oferta !== null && (isNaN(oferta) || oferta <= 0 || oferta > price)) {
-                    addToast('El precio de oferta tiene que ser mayor que 0 y no mayor que el precio normal', 'error');
-                    return;
-                  }
-                  try {
-                    await dbRegistrarPrecioManual(manualPriceItem, price, oferta);
-
-                    addToast(`Precio de ${manualPriceItem.marca} actualizado manualmente a Bs ${price.toFixed(2)}.`, 'success');
-                    setManualPriceItem(null);
-                    await cargar(true);
-                  } catch (err) {
-                    addToast('Error: ' + err.message, 'error');
-                  }
-                }}
-                className="m3-btn-primary h-9 px-5 text-xs"
-              >
-                Guardar Precio
-              </button>
-            </div>
-          }
-        >
-          <div className="space-y-4 text-sm text-on-surface">
-            <div className="space-y-1.5">
-              <label className="m3-field-label" htmlFor="manualPriceInput">Precio normal (Bs) *</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Ej: 450.50"
-                id="manualPriceInput"
-                defaultValue={manualPriceItem.ultimo_precio_full_bs || ''}
-                className="m3-input tabular-nums"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="m3-field-label" htmlFor="manualOfferInput">Precio de oferta (Bs), si lo hay</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Vacío si no hay oferta"
-                id="manualOfferInput"
-                defaultValue={manualPriceItem.ultimo_precio_desc_bs && manualPriceItem.ultimo_precio_desc_bs !== manualPriceItem.ultimo_precio_full_bs ? manualPriceItem.ultimo_precio_desc_bs : ''}
-                className="m3-input tabular-nums"
-              />
-            </div>
-            <p className="m3-body-small text-on-surface-variant">
-              Se guarda como una captura manual de hoy, con la última tasa BCV, y pasa a ser el precio vigente de este enlace.
-            </p>
-          </div>
-        </ModalWrapper>
-      )}
-
-      <GitHubConfigModal
-        isOpen={showGithubModal}
-        onClose={() => setShowGithubModal(false)}
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        title="¿Eliminar enlace?"
+        message={confirmDelete
+          ? `Se eliminará el enlace de "${confirmDelete.marca}" en ${nombreCadena(confirmDelete.cadena)} junto con su historial de precios.\n\nTendrás 8 segundos para deshacerlo. Si solo quieres que el robot deje de leerlo, usa "Dar de baja".`
+          : ''}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        isDanger
+        onConfirm={() => { const it = confirmDelete; setConfirmDelete(null); programarBorrado([it]); }}
+        onCancel={() => setConfirmDelete(null)}
       />
+
+      <ConfirmModal
+        isOpen={confirmBorrarSel}
+        title={`¿Eliminar ${seleccionados.length} enlaces?`}
+        message={`Se eliminarán ${seleccionados.length} enlaces junto con su historial de precios.\n\nTendrás 8 segundos para deshacerlo; después no hay vuelta atrás. Si solo quieres que el robot deje de leerlos, usa "Dar de baja".`}
+        confirmText={`Eliminar ${seleccionados.length}`}
+        cancelText="Cancelar"
+        isDanger
+        onConfirm={() => { const lista = seleccionados; setConfirmBorrarSel(false); setSeleccion(new Set()); programarBorrado(lista); }}
+        onCancel={() => setConfirmBorrarSel(false)}
+      />
+
+      <ConfirmModal
+        isOpen={confirmDeleteAll}
+        title="¿Vaciar todos los enlaces?"
+        message="Se eliminarán TODOS los enlaces de competencia y su historial de precios. Esta acción no se puede deshacer."
+        confirmText={deletingAll ? 'Vaciando…' : 'Vaciar enlaces'}
+        cancelText="Cancelar"
+        isDanger
+        onConfirm={handleConfirmDeleteAll}
+        onCancel={() => setConfirmDeleteAll(false)}
+      />
+
+      <GitHubConfigModal isOpen={showGithubModal} onClose={() => setShowGithubModal(false)} />
     </div>
   );
 }
 
-function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas, onSave, onClose }) {
+// ---------------------------------------------------------------------------
+// Formulario de enlace: misma estructura que el de producto.
+// ---------------------------------------------------------------------------
+function EnlaceModal({ item, productoIdPreseleccionado, productos, cadenas, onSave, onClose }) {
   const dimensiones = useDimensiones();
   const isNew = !item;
-  const productosActivos = productos.filter(p => p.activo);
-  const cadenasActivas = cadenas.filter(c => c.activo);
+  const cadenasActivas = (cadenas || []).filter(c => c.activo !== false);
 
-  const initialProdId = item?.id_producto_propio || productoIdPreseleccionado || '';
-  const initialProd = productos.find(p => p.id_interno === initialProdId);
+  // El producto se elige escribiendo: "140216 · ACETAMINOFEN 500 mg · 20 tabletas".
+  const etiquetaProducto = (p) => `${p.id_interno} · ${p.nombre}${p.concentracion ? ` ${p.concentracion}` : ''} · ${describirPresentacion(p)}`;
+  const opcionesProducto = useMemo(() => (productos || []).filter(p => p.activo !== false).map(etiquetaProducto), [productos]);
+  const productoDesdeTexto = (texto) => {
+    const id = String(texto || '').split(' · ')[0].trim();
+    return (productos || []).find(p => String(p.id_interno) === id) || null;
+  };
 
+  const idInicial = item?.id_producto_propio || productoIdPreseleccionado || '';
+  const productoInicial = (productos || []).find(p => String(p.id_interno) === String(idInicial));
+  const cadenaInicial = (() => {
+    if (!item?.cadena) return '';
+    const c = (cadenas || []).find(x => String(x.id).toLowerCase() === String(item.cadena).toLowerCase() || String(x.nombre).toLowerCase() === String(item.cadena).toLowerCase());
+    return c?.id || item.cadena;
+  })();
+
+  const [productoTexto, setProductoTexto] = useState(productoInicial ? etiquetaProducto(productoInicial) : '');
   const [form, setForm] = useState({
-    id: item?.id || '',
-    id_producto_propio: initialProdId,
-    cadena: item?.cadena || '',
-    tipo: item?.tipo || 'alternativa',
-    marca: item?.marca || (initialProd ? initialProd.nombre : ''),
+    cadena: cadenaInicial,
+    tipo: item ? (String(item.tipo) === 'propio' ? 'propio' : 'alternativa') : 'alternativa',
+    marca: item && String(item.tipo) !== 'propio' ? item.marca || '' : '',
+    laboratorio: item && String(item.tipo) !== 'propio' ? item.laboratorio || '' : '',
     url: item?.url || '',
     activo: item?.activo ?? true,
-    laboratorio: item?.laboratorio || (initialProd ? initialProd.laboratorio || '' : ''),
-    concentracion: item?.concentracion || (initialProd ? initialProd.concentracion || '' : ''),
-    tamano: item?.tamano || (initialProd ? initialProd.tamano || '' : ''),
   });
+  const [errores, setErrores] = useState({});
   const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
+  const [errorGeneral, setErrorGeneral] = useState(null);
 
-  const selectedProduct = useMemo(() => {
-    return productos.find(p => p.id_interno === form.id_producto_propio);
-  }, [productos, form.id_producto_propio]);
+  const cambiar = (k, v) => { setErrorGeneral(null); setErrores(e => ({ ...e, [k]: undefined })); setForm(f => ({ ...f, [k]: v })); };
+  const producto = productoDesdeTexto(productoTexto);
 
-  const handleProductSelect = (prodId) => {
-    setErrorMessage(null);
-    const p = productos.find(x => x.id_interno === prodId);
-    setForm(f => ({
-      ...f,
-      id_producto_propio: prodId,
-      marca: f.tipo === 'propio' || !f.marca ? (p?.nombre || '') : f.marca,
-      laboratorio: f.tipo === 'propio' || !f.laboratorio ? (p?.laboratorio || '') : f.laboratorio,
-      concentracion: f.tipo === 'propio' || !f.concentracion ? (p?.concentracion || '') : f.concentracion,
-      tamano: f.tipo === 'propio' || !f.tamano ? (p?.tamano || '') : f.tamano,
-    }));
-  };
+  // Aviso si la URL es de otra web que la de la cadena elegida.
+  const avisoUrl = useMemo(() => {
+    const c = cadenasActivas.find(x => x.id === form.cadena);
+    if (!c?.website || !form.url.trim()) return null;
+    try {
+      const url = new URL(/^https?:\/\//.test(form.url) ? form.url : `https://${form.url}`);
+      const web = new URL(/^https?:\/\//.test(c.website) ? c.website : `https://${c.website}`);
+      const a = url.hostname.replace(/^www\./, '');
+      const b = web.hostname.replace(/^www\./, '');
+      return a.endsWith(b) || b.endsWith(a) ? null : `Esta URL es de ${a}, pero ${c.nombre} usa ${b}.`;
+    } catch {
+      return null;
+    }
+  }, [form.url, form.cadena, cadenasActivas]);
 
-  const handleTipoSelect = (tipoVal) => {
-    setErrorMessage(null);
-    setForm(f => {
-      const p = productos.find(x => x.id_interno === f.id_producto_propio);
-      return {
-        ...f,
-        tipo: tipoVal,
-        marca: tipoVal === 'propio' && p ? p.nombre : f.marca,
-        laboratorio: tipoVal === 'propio' && p ? (p.laboratorio || '') : f.laboratorio,
-        concentracion: tipoVal === 'propio' && p ? (p.concentracion || '') : f.concentracion,
-        tamano: tipoVal === 'propio' && p ? (p.tamano || '') : f.tamano,
-      };
-    });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    if (!form.id_producto_propio || !form.cadena || !form.marca || !form.url) {
-      setErrorMessage('Por favor completa todos los campos requeridos (*).');
+  const handleSubmit = async (ev) => {
+    ev.preventDefault();
+    const e = {};
+    if (!producto) e.producto = 'Elige un producto de la lista';
+    if (!form.cadena) e.cadena = 'Elige la cadena';
+    if (!form.url.trim()) e.url = 'Obligatoria';
+    if (form.tipo !== 'propio' && !form.marca.trim()) e.marca = 'Escribe el nombre del competidor';
+    setErrores(e);
+    if (Object.keys(e).length > 0) {
+      setTimeout(() => {
+        const campo = document.querySelector('#enlace-form .m3-field.has-error');
+        campo?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        campo?.querySelector('input')?.focus({ preventScroll: true });
+      }, 0);
       return;
     }
     setSaving(true);
-    const res = await onSave(form, isNew);
+    const res = await onSave({
+      id_producto_propio: producto.id_interno,
+      cadena: form.cadena,
+      tipo: form.tipo,
+      marca: form.tipo === 'propio' ? producto.nombre : form.marca.trim(),
+      laboratorio: form.tipo === 'propio' ? producto.laboratorio || '' : form.laboratorio.trim(),
+      url: form.url.trim(),
+      activo: form.activo,
+    }, isNew);
     setSaving(false);
-    if (res && !res.success) {
-      setErrorMessage(res.error || 'Ocurrió un error al intentar guardar los cambios.');
-    }
-  };
-
-  const handleChange = (key, value) => {
-    setErrorMessage(null);
-    setForm(f => ({ ...f, [key]: value }));
-  };
-
-  const probarUrl = () => {
-    if (!form.url) return;
-    let u = form.url.trim();
-    if (!u.startsWith('http://') && !u.startsWith('https://')) {
-      u = 'https://' + u;
-    }
-    window.open(u, '_blank', 'noopener,noreferrer');
+    if (res && !res.success) setErrorGeneral(res.error || 'No se pudo guardar el enlace.');
   };
 
   return (
     <ModalWrapper
-      isOpen={true}
+      isOpen
       onClose={onClose}
-      title={isNew ? 'Vincular Enlace Competidor' : 'Propiedades de Enlace'}
-      subtitle={isNew ? 'Asocia una URL de farmacia externa a tu catálogo' : `Editando ${form.marca} (${form.cadena})`}
-      icon="link"
-      maxWidth="max-w-lg"
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {errorMessage && (
-          <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl flex items-start gap-3 text-red-900 dark:text-red-200 text-xs font-semibold animate-fade-in shadow-xs">
-            <span className="material-symbols-outlined text-red-600 text-xl shrink-0 select-none">error</span>
-            <div className="flex-1 min-w-0">
-              <div className="font-bold">No se pudieron guardar los cambios</div>
-              <div className="text-[11.5px] font-normal text-red-700 dark:text-red-300 mt-0.5 leading-relaxed break-words">{errorMessage}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setErrorMessage(null)}
-              className="text-red-500 hover:text-red-800 transition-colors p-0.5"
-            >
-              <span className="material-symbols-outlined text-base">close</span>
+      title={isNew ? 'Vincular enlace' : 'Editar enlace'}
+      subtitle={isNew ? 'Los campos con * son obligatorios.' : `${item.marca || ''}`}
+      icon={isNew ? 'add_link' : 'edit'}
+      maxWidth="max-w-3xl"
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+          <label className="m3-switch-label">
+            <input type="checkbox" role="switch" checked={form.activo} onChange={e => cambiar('activo', e.target.checked)} className="m3-switch" />
+            <span>{form.activo ? 'Activo: el robot lo lee' : 'De baja'}</span>
+          </label>
+          <div className="flex gap-2 ml-auto">
+            <button type="button" onClick={onClose} className="m3-btn-text">Cancelar</button>
+            <button type="submit" form="enlace-form" disabled={saving} className="m3-btn-primary h-10 px-6">
+              {saving ? 'Guardando…' : isNew ? 'Vincular enlace' : 'Guardar cambios'}
             </button>
           </div>
+        </div>
+      }
+    >
+      <form id="enlace-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        {errorGeneral && (
+          <div className="m3-form-alert" role="alert">
+            <span className="material-symbols-outlined" aria-hidden="true">error</span>
+            <span className="flex-1">{errorGeneral}</span>
+          </div>
         )}
 
-        <Field label="Producto en Catálogo Interno *">
-          <Select required value={form.id_producto_propio}
-            onChange={e => handleProductSelect(e.target.value)}
-            disabled={!isNew}
-            className="m3-input bg-surface-container-lowest text-on-surface">
-            <option value="">— Seleccionar —</option>
-            {productosActivos.map(p => (
-              <option key={p.id} value={p.id_interno}>{p.id_interno} · {p.nombre}</option>
-            ))}
-          </Select>
-        </Field>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Cadena *">
-            <Select required value={form.cadena}
-              onChange={e => handleChange('cadena', e.target.value)}
-              disabled={!isNew}
-              className="m3-input bg-surface-container-lowest text-on-surface">
-              <option value="">— Seleccionar —</option>
-              {cadenasActivas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </Select>
+        <FormSection titulo="Producto y cadena" icono="storefront">
+          <Field label="Producto" requerido error={errores.producto} hint="Escribe el ID o el nombre y elige de la lista">
+            <ComboField value={productoTexto} onChange={v => { setProductoTexto(v); setErrores(e => ({ ...e, producto: undefined })); }}
+              opciones={opcionesProducto} placeholder="140216 · ACETAMINOFEN 500 mg" />
           </Field>
-          
-          <Field label="Tipo de Relación *">
-            <Select required value={form.tipo} onChange={e => handleTipoSelect(e.target.value)}
-              className="m3-input bg-surface-container-lowest text-on-surface">
-              {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </Select>
+          <Field label="Cadena" requerido error={errores.cadena}>
+            <ChoiceChips valor={form.cadena} onChange={v => cambiar('cadena', v)}
+              opciones={cadenasActivas.map(c => [c.id, c.nombre])} nombre="cadena" />
           </Field>
-        </div>
+          <Field label="Tipo de enlace" requerido>
+            <ChoiceChips valor={form.tipo} onChange={v => cambiar('tipo', v)}
+              opciones={[['alternativa', 'Competidor'], ['propio', 'Mi producto en esta cadena']]} nombre="tipo" />
+          </Field>
+        </FormSection>
 
-        {form.tipo === 'propio' && selectedProduct && (
-          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-2xl p-3 text-xs space-y-1">
-            <div className="font-bold flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200">
-              <span className="material-symbols-outlined text-base">check_circle</span>
-              <span>Datos autocompletados desde tu catálogo</span>
+        <FormSection titulo="Enlace" icono="link">
+          <Field label="URL del producto en la tienda" requerido error={errores.url} aviso={avisoUrl}
+            hint="Copia la dirección de la página del producto">
+            <div className="relative">
+              <input type="url" inputMode="url" value={form.url} onChange={e => cambiar('url', e.target.value)}
+                placeholder="https://www.farmatodo.com.ve/producto/…" className="m3-input pr-12" />
+              {form.url.trim() && (
+                <a href={/^https?:\/\//.test(form.url) ? form.url : `https://${form.url}`} target="_blank" rel="noopener noreferrer"
+                  className="m3-icon-btn m3-icon-btn-sm absolute right-2 top-1/2 -translate-y-1/2" title="Abrir para comprobar" aria-label="Abrir la URL">
+                  <span className="material-symbols-outlined">open_in_new</span>
+                </a>
+              )}
             </div>
-            <p className="text-label-md text-emerald-700 dark:text-emerald-400 font-sans">
-              Se usará el nombre <strong>"{selectedProduct.nombre}"</strong> y especificaciones registradas. Solo selecciona la cadena e ingresa la URL.
-            </p>
-          </div>
+          </Field>
+        </FormSection>
+
+        {form.tipo !== 'propio' && (
+          <FormSection titulo="Competidor" icono="groups">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Nombre del competidor" requerido error={errores.marca} hint="Como lo vende la tienda. Ej: Atamel 500 mg x 20">
+                <input type="text" value={form.marca} onChange={e => cambiar('marca', e.target.value)} className="m3-input" />
+              </Field>
+              <Field label="Laboratorio" hint="Fabricante del competidor">
+                <ComboField value={form.laboratorio} onChange={v => cambiar('laboratorio', v)}
+                  opciones={dimensiones.laboratorios} cargando={!dimensiones.cargado} permitirNuevo />
+              </Field>
+            </div>
+          </FormSection>
         )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Nombre del Producto *" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Acetaminofén, Atamel'}>
-            <input type="text" required value={form.marca}
-              onChange={e => handleChange('marca', e.target.value)}
-              disabled={!isNew}
-              placeholder="Ej. Atamel"
-              className="m3-input text-on-surface" />
-          </Field>
-
-          <Field label="Laboratorio" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. Genven, La Santé'}>
-            <input type="text" value={form.laboratorio}
-              onChange={e => handleChange('laboratorio', e.target.value)}
-              placeholder="Ej. Genven"
-              className="m3-input text-on-surface" />
-            <datalist id="dim-laboratorios-comp">
-              {dimensiones.laboratorios.map(n => <option key={n} value={n} />)}
-            </datalist>
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Concentración" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 650mg, 500mg'}>
-            <input type="text" value={form.concentracion}
-              onChange={e => handleChange('concentracion', e.target.value)}
-              placeholder="Ej. 650mg"
-              className="m3-input text-on-surface" />
-          </Field>
-
-          <Field label="Presentación" hint={form.tipo === 'propio' ? 'Heredado de catálogo' : 'Ej. 10tab, 20tab, 120ml'}>
-            <input type="text" value={form.tamano}
-              onChange={e => handleChange('tamano', e.target.value)}
-              placeholder="Ej. 10tab"
-              className="m3-input text-on-surface" />
-          </Field>
-        </div>
-
-        <Field label="Dirección URL del Producto *" hint="Dirección exacta para el robot de extracción">
-          <div className="flex gap-2">
-            <input type="url" required value={form.url}
-              onChange={e => handleChange('url', e.target.value)}
-              placeholder="https://www.farmatodo.com.ve/producto/..."
-              className="flex-1 m3-input text-xs text-on-surface font-mono" />
-            <button type="button" onClick={probarUrl} disabled={!form.url}
-              className="m3-btn-outline h-9 px-3 text-xs disabled:opacity-50 text-primary whitespace-nowrap">Probar URL ↗</button>
-          </div>
-        </Field>
-
-        <Field label="Monitoreo Continuo">
-          <label className="flex items-center gap-2 px-4 py-3 border border-outline-variant/60 rounded-xl cursor-pointer font-bold text-xs text-primary bg-surface-container-low select-none">
-            <input type="checkbox" checked={form.activo}
-              onChange={e => handleChange('activo', e.target.checked)}
-              className="rounded text-primary focus:ring-primary h-4 w-4" />
-            <span>ACTIVAR EXTRACCIÓN DIARIA PARA ESTE ENLACE</span>
-          </label>
-        </Field>
-
-        {!isNew && (
-          <div className="bg-surface-container-low rounded-2xl p-3 text-xs text-on-surface-variant font-mono border border-outline-variant/60">
-            Nota: El producto, la cadena y la marca variante no se pueden reasignar para mantener la coherencia histórica.
-          </div>
-        )}
-
-        <div className="flex justify-end gap-2 pt-4 border-t border-outline-variant/60">
-          <button type="button" onClick={onClose}
-            className="m3-btn-outline h-9 px-4 text-xs">Cancelar</button>
-          <button type="submit" disabled={saving}
-            className="m3-btn-primary h-9 px-5 text-xs">
-            {saving ? 'Guardando...' : isNew ? 'Vincular' : 'Guardar Cambios'}
-          </button>
-        </div>
       </form>
     </ModalWrapper>
   );
 }
 
-function Field({ label, hint, children }) {
+// Precio cargado a mano cuando el robot falla.
+function PrecioManualModal({ item, nombreCadena, onClose, onGuardar }) {
+  const [precio, setPrecio] = useState(item.ultimo_precio_full_bs ? String(item.ultimo_precio_full_bs) : '');
+  const [oferta, setOferta] = useState(
+    item.ultimo_precio_desc_bs && item.ultimo_precio_desc_bs !== item.ultimo_precio_full_bs ? String(item.ultimo_precio_desc_bs) : '');
+  const [error, setError] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    const p = parseFloat(String(precio).replace(',', '.'));
+    const o = oferta ? parseFloat(String(oferta).replace(',', '.')) : null;
+    if (!(p > 0)) { setError('Escribe un precio mayor que 0'); return; }
+    if (o !== null && (!(o > 0) || o > p)) { setError('La oferta tiene que ser mayor que 0 y no mayor que el precio normal'); return; }
+    setGuardando(true);
+    try { await onGuardar(p, o); } catch (err) { setError(err.message || String(err)); setGuardando(false); }
+  };
+
   return (
-    <div className="space-y-1">
-      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
-      {children}
-      {hint && <p className="text-label-sm text-on-surface-variant font-mono">{hint}</p>}
-    </div>
+    <ModalWrapper
+      isOpen
+      onClose={onClose}
+      title="Precio manual"
+      subtitle={`${item.marca} en ${nombreCadena(item.cadena)}`}
+      icon="edit_note"
+      maxWidth="max-w-md"
+      footer={
+        <div className="flex justify-end gap-2 w-full">
+          <button type="button" onClick={onClose} className="m3-btn-text">Cancelar</button>
+          <button type="button" onClick={guardar} disabled={guardando} className="m3-btn-primary h-10 px-6">{guardando ? 'Guardando…' : 'Guardar precio'}</button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        {error && (
+          <div className="m3-form-alert" role="alert">
+            <span className="material-symbols-outlined" aria-hidden="true">error</span>
+            <span className="flex-1">{error}</span>
+          </div>
+        )}
+        <Field label="Precio normal (Bs)" requerido>
+          <input type="text" inputMode="decimal" value={precio} onChange={e => { setPrecio(e.target.value); setError(null); }} placeholder="450.50" className="m3-input tabular-nums" autoFocus />
+        </Field>
+        <Field label="Precio de oferta (Bs)" hint="Vacío si no hay oferta">
+          <input type="text" inputMode="decimal" value={oferta} onChange={e => { setOferta(e.target.value); setError(null); }} className="m3-input tabular-nums" />
+        </Field>
+        <p className="m3-body-small text-on-surface-variant">
+          Se guarda como una captura de hoy, con la última tasa BCV, y pasa a ser el precio vigente de este enlace.
+        </p>
+      </div>
+    </ModalWrapper>
   );
 }
