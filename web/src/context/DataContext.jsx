@@ -228,6 +228,8 @@ export function DataProvider({ children, user }) {
   const [productos, setProductos] = useState([]);
   const [productosCompetencia, setProductosCompetencia] = useState([]);
   const [ultimosPreciosValidos, setUltimosPreciosValidos] = useState([]);
+  // Precio actual y de referencia a 1, 7 y 15 días, calculado por Postgres.
+  const [variaciones, setVariaciones] = useState([]);
   const [cadenas, setCadenas] = useState([]);
   const [historicoPrecios, setHistoricoPrecios] = useState([]);
   const [bcvRates, setBcvRates] = useState([]);
@@ -305,7 +307,7 @@ export function DataProvider({ children, user }) {
           validPricesData,
           cData,
           uData,
-          { data: hData },
+          variacionData,
           { data: rData },
           { data: bData }
         ] = await Promise.all([
@@ -314,7 +316,11 @@ export function DataProvider({ children, user }) {
           fetchAllSupabaseRows('v_ultimo_precio_valido'),
           fetchAllSupabaseRows('dim_cadenas').then(res => (res && res.length > 0) ? res : fetchAllSupabaseRows('cadenas')),
           fetchAllSupabaseRows('usuarios'),
-          fetchHistorico().then(data => ({ data })),
+          // ~506 filas con el precio actual y los de hace 1, 7 y 15 días ya
+          // resueltos por Postgres. Sustituye la descarga del histórico
+          // completo, que eran ~18.000 filas en ~18 peticiones encadenadas
+          // antes de poder pintar nada.
+          fetchAllSupabaseRows('v_variacion'),
           supabase.from('scrape_runs').select('*').order('started_at', { ascending: false }).limit(1),
           supabase.from('dim_tasa_bcv').select('*').order('fecha', { ascending: true })
             .then(res => (res.data && res.data.length > 0) ? res : supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true }))
@@ -378,6 +384,20 @@ export function DataProvider({ children, user }) {
           });
           setProductosCompetencia(pc);
           setUltimosPreciosValidos(Array.isArray(validPricesData) ? validPricesData : []);
+          setVariaciones(Array.isArray(variacionData) ? variacionData : []);
+
+          // El histórico completo solo lo necesitan los gráficos de evolución,
+          // así que se carga DESPUÉS del primer pintado y sin bloquearlo.
+          fetchHistorico()
+            .then(filas => {
+              setHistoricoPrecios(
+                (filas || []).map(d => ({
+                  ...d,
+                  scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
+                }))
+              );
+            })
+            .catch(e => console.warn('Aviso cargando histórico en segundo plano:', e?.message || String(e)));
 
           const cSorted = [...(Array.isArray(cData) ? cData : [])].map(c => ({
             id: c.id,
@@ -388,15 +408,6 @@ export function DataProvider({ children, user }) {
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
           setCadenas(cSorted);
-
-          if (hData && hData.length > 0) {
-            setHistoricoPrecios(hData.map(d => ({
-              ...d,
-              scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
-            })));
-          } else {
-            setHistoricoPrecios([]);
-          }
 
           if (rData && rData.length > 0) {
             setUltimaCorrida({
@@ -444,7 +455,9 @@ export function DataProvider({ children, user }) {
             productos: prods,
             productosCompetencia: pc,
             cadenas: cSorted,
-            historicoPrecios: hData || [],
+            // El histórico no entra al caché: pesa mucho y se recarga en
+            // segundo plano en cada arranque.
+            historicoPrecios: [],
             bcvRates: bData || [],
             ultimaCorrida: rData?.[0] || null,
             usuarios: uSorted
@@ -741,6 +754,7 @@ export function DataProvider({ children, user }) {
     productos,
     productosCompetencia,
     ultimosPreciosValidos,
+    variaciones,
     cadenas,
     historicoPrecios,
     bcvRates,
@@ -764,6 +778,7 @@ export function DataProvider({ children, user }) {
     productos,
     productosCompetencia,
     ultimosPreciosValidos,
+    variaciones,
     cadenas,
     historicoPrecios,
     bcvRates,

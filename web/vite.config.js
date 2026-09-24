@@ -180,6 +180,22 @@ function liveScraperPlugin() {
 export default defineConfig({
   plugins: [react(), liveScraperPlugin()],
   base: '/',
+  build: {
+    rollupOptions: {
+      output: {
+        // Las librerias pesadas van en archivos aparte para que el navegador
+        // las cachee entre despliegues: cambiar el codigo del panel ya no
+        // obliga a volver a bajar recharts ni firebase.
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          supabase: ['@supabase/supabase-js']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 700
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,
