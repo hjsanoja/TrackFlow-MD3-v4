@@ -311,20 +311,20 @@ export default function Reporteria({ user, userDoc }) {
     }
 
     const headers = [
-      { key: 'id_producto_propio', label: 'ID Producto Propio' },
+      { key: 'id_producto_propio', label: 'ID Interno' },
       { key: 'producto_propio', label: 'Producto Propio' },
       { key: 'laboratorio_fabricante', label: 'Laboratorio' },
       { key: 'cadena', label: 'Cadena/Competidor' },
       { key: 'marca_linea', label: 'Marca/Línea' },
       { key: 'tipo', label: 'Tipo' },
-      { key: 'precio_full_bs_fmt', label: 'Precio Full (Bs)' },
-      { key: 'precio_desc_bs_fmt', label: 'Precio Desc (Bs)' },
+      { key: 'precio_full_bs_fmt', label: 'Precio de Lista (Bs)' },
+      { key: 'precio_desc_bs_fmt', label: 'Precio con Descuento (Bs)' },
       { key: 'precio_full_usd_fmt', label: 'Precio Full (USD)' },
       { key: 'precio_desc_usd_fmt', label: 'Precio Desc (USD)' },
       { key: 'ref_mi_marca_full_usd_fmt', label: 'Mi Marca Full Ref (USD)' },
       { key: 'ref_mi_marca_desc_usd_fmt', label: 'Mi Marca Desc Ref (USD)' },
-      { key: 'brecha_full_pct_fmt', label: 'Brecha Full vs Mi Marca (%)' },
-      { key: 'brecha_desc_pct_fmt', label: 'Brecha Desc vs Mi Marca (%)' },
+      { key: 'brecha_full_pct_fmt', label: 'Brecha de Lista vs Mi Marca (%)' },
+      { key: 'brecha_desc_pct_fmt', label: 'Brecha con Descuento vs Mi Marca (%)' },
       { key: 'estado_brecha', label: 'Estado Brecha' },
       { key: 'tasa_bcv_aplicada', label: 'Tasa BCV (Bs/USD)' }
     ];
@@ -360,18 +360,18 @@ export default function Reporteria({ user, userDoc }) {
     }
 
     const headers = [
-      'ID Producto Propio',
+      'ID Interno',
       'Producto Propio',
       'Laboratorio',
       'Cadena/Competidor',
       'Marca/Línea',
       'Tipo',
-      'Precio Full (Bs)',
-      'Precio Desc (Bs)',
+      'Precio de Lista (Bs)',
+      'Precio con Descuento (Bs)',
       'Precio Full (USD)',
       'Precio Desc (USD)',
-      'Brecha Full vs Mi Marca (%)',
-      'Brecha Desc vs Mi Marca (%)',
+      'Brecha de Lista vs Mi Marca (%)',
+      'Brecha con Descuento vs Mi Marca (%)',
       'Estado Brecha'
     ];
 
@@ -452,7 +452,7 @@ export default function Reporteria({ user, userDoc }) {
         <div className="m3-card-outlined p-3.5">
           <div className="text-label-md font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Registros</div>
           <div className="text-xl font-bold font-display text-on-surface mt-1">{metricas.totalRegistros}</div>
-          <div className="text-label-sm text-on-surface-variant mt-0.5">Mapeos activos por SKU</div>
+          <div className="text-label-sm text-on-surface-variant mt-0.5">Enlaces activos por producto</div>
         </div>
 
         <div className="m3-card-outlined p-3.5">
@@ -663,26 +663,26 @@ export default function Reporteria({ user, userDoc }) {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-surface-container-low/80 border-b border-outline-variant/60 text-on-surface-variant font-mono text-label-md uppercase tracking-wider">
-                <th className="py-3 px-3.5 font-bold whitespace-nowrap">ID Producto Propio</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">ID Interno</th>
                 <th className="py-3 px-3.5 font-bold min-w-[190px]">Producto Propio</th>
-                <th className="py-3 px-3.5 font-bold whitespace-nowrap text-primary">Laboratorio (SKU)</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap text-primary">Laboratorio</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">Cadena</th>
                 <th className="py-3 px-3.5 font-bold min-w-[130px]">Marca</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">Tipo</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio Full (Bs)</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio Desc (Bs)</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-amber-500/10 text-amber-900 dark:text-amber-300">Precio Full ($)</th>
-                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-emerald-500/10 text-emerald-900 dark:text-emerald-300">Precio Desc ($)</th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio de Lista (Bs)</th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-surface-container/30">Precio con Descuento (Bs)</th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-amber-500/10 text-amber-900 dark:text-amber-300">Precio de Lista (USD)</th>
+                <th className="py-3 px-3 font-bold text-right whitespace-nowrap bg-emerald-500/10 text-emerald-900 dark:text-emerald-300">Precio con Descuento (USD)</th>
                 
                 {(vistaBrecha === 'ambas' || vistaBrecha === 'full') && (
                   <th className="py-3 px-3.5 font-bold text-center whitespace-nowrap bg-amber-500/15 text-amber-950 dark:text-amber-200">
-                    Brecha Full vs Mi Marca (%)
+                    Brecha de Lista vs Mi Marca (%)
                   </th>
                 )}
 
                 {(vistaBrecha === 'ambas' || vistaBrecha === 'desc') && (
                   <th className="py-3 px-3.5 font-bold text-center whitespace-nowrap bg-emerald-500/15 text-emerald-950 dark:text-emerald-200">
-                    Brecha Desc vs Mi Marca (%)
+                    Brecha con Descuento vs Mi Marca (%)
                   </th>
                 )}
               </tr>
@@ -708,7 +708,7 @@ export default function Reporteria({ user, userDoc }) {
                         row.is_mi_marca ? 'bg-primary/5 font-medium' : ''
                       }`}
                     >
-                      {/* ID Producto Propio */}
+                      {/* ID Interno */}
                       <td className="py-3 px-3.5 font-mono font-bold text-primary whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded border ${
                           row.is_mi_marca 
@@ -727,7 +727,7 @@ export default function Reporteria({ user, userDoc }) {
                         </div>
                       </td>
 
-                      {/* Laboratorio (del SKU / Competencia) */}
+                      {/* Laboratorio */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
                         <span 
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-label-md font-bold border shadow-xs"
@@ -783,12 +783,12 @@ export default function Reporteria({ user, userDoc }) {
                         </span>
                       </td>
 
-                      {/* Precio Full (Bs) */}
+                      {/* Precio de Lista (Bs) */}
                       <td className="py-3 px-3 text-right font-mono whitespace-nowrap bg-surface-container/20">
                         {row.precio_full_bs != null ? `${row.precio_full_bs.toFixed(2)} Bs.` : '—'}
                       </td>
 
-                      {/* Precio Desc (Bs) */}
+                      {/* Precio con Descuento (Bs) */}
                       <td className="py-3 px-3 text-right font-mono whitespace-nowrap bg-surface-container/20">
                         {row.precio_desc_bs != null ? (
                           <span className="font-bold text-emerald-700 dark:text-emerald-400">
@@ -811,7 +811,7 @@ export default function Reporteria({ user, userDoc }) {
                         ) : '—'}
                       </td>
 
-                      {/* Brecha Full vs Mi Marca (%) */}
+                      {/* Brecha de Lista vs Mi Marca (%) */}
                       {(vistaBrecha === 'ambas' || vistaBrecha === 'full') && (
                         <td className="py-3 px-3.5 text-center whitespace-nowrap bg-amber-500/10">
                           {row.is_mi_marca ? (
@@ -840,7 +840,7 @@ export default function Reporteria({ user, userDoc }) {
                         </td>
                       )}
 
-                      {/* Brecha Desc vs Mi Marca (%) */}
+                      {/* Brecha con Descuento vs Mi Marca (%) */}
                       {(vistaBrecha === 'ambas' || vistaBrecha === 'desc') && (
                         <td className="py-3 px-3.5 text-center whitespace-nowrap bg-emerald-500/10">
                           {row.is_mi_marca ? (
