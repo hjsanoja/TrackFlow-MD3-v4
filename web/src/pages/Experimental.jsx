@@ -83,7 +83,7 @@ export default function Experimental({ user, userDoc }) {
               <h1 className="text-xl md:text-2xl font-display font-extrabold text-on-background tracking-tight">
                 Módulo Experimental
               </h1>
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 text-label-sm font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                 En Pulido & Testing
               </span>
@@ -103,7 +103,7 @@ export default function Experimental({ user, userDoc }) {
                   onClick={() => handleTabChange(tab.id)}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold font-display transition-all whitespace-nowrap select-none ${
                     isActive
-                      ? 'bg-white dark:bg-surface-container-lowest text-primary shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                      ? 'bg-surface-container-lowest dark:bg-surface-container-lowest text-primary shadow-sm ring-1 ring-black/5 dark:ring-white/10'
                       : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
                   }`}
                 >

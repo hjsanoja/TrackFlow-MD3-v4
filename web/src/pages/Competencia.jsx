@@ -773,7 +773,7 @@ export default function Competencia({ user, userDoc }) {
           </div>
           <button
             onClick={() => setEditing('new')}
-            className="text-xs px-3.5 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
+            className="text-xs px-3.5 py-1.5 bg-surface-container-lowest border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
           >
             Vincular Enlace Ahora
           </button>
@@ -785,12 +785,12 @@ export default function Competencia({ user, userDoc }) {
         {/* KPI 1: Tasa de Salud Técnica */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Salud del Catálogo</span>
+            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Salud del Catálogo</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-display font-extrabold text-primary">{kpis.tasaSalud}%</span>
-              <span className="text-[10px] font-semibold text-on-surface-variant">Enlaces OK</span>
+              <span className="text-label-sm font-semibold text-on-surface-variant">Enlaces OK</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               {kpis.exitososCount} de {kpis.activosCount} activos sin fallos de lectura.
             </p>
           </div>
@@ -802,14 +802,14 @@ export default function Competencia({ user, userDoc }) {
         {/* KPI 2: Frescura de Datos */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Frescura de Precios</span>
+            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Frescura de Precios</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-display font-extrabold text-primary">
                 {kpis.desactualizados}
               </span>
-              <span className="text-[10px] font-semibold text-on-surface-variant">Vencidos</span>
+              <span className="text-label-sm font-semibold text-on-surface-variant">Vencidos</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               Enlaces que requieren actualización (&gt; 24h).
             </p>
           </div>
@@ -821,14 +821,14 @@ export default function Competencia({ user, userDoc }) {
         {/* KPI 3: Liderazgo de Mercado */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Liderazgo en Precios</span>
+            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Liderazgo en Precios</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-display font-extrabold text-primary">
                 {kpis.totalComparables > 0 ? `${Math.round((kpis.propiosMasBaratos / kpis.totalComparables) * 100)}%` : '—'}
               </span>
-              <span className="text-[10px] font-semibold text-on-surface-variant">Líder</span>
+              <span className="text-label-sm font-semibold text-on-surface-variant">Líder</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               {kpis.propiosMasBaratos} de {kpis.totalComparables} comparables más económicos.
             </p>
           </div>
@@ -984,23 +984,23 @@ export default function Competencia({ user, userDoc }) {
                       <a href={it.url} target="_blank" rel="noopener noreferrer"
                         className="text-xs text-primary hover:underline truncate max-w-xs font-mono mt-0.5 flex items-center gap-0.5" title={it.url}>
                         <span>Ver Enlace Destino</span>
-                        <span className="material-symbols-outlined text-[11px] leading-none">open_in_new</span>
+                        <span className="material-symbols-outlined text-label-md leading-none">open_in_new</span>
                       </a>
                       {it.estado === 'pendiente' && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600">
-                          <span className="material-symbols-outlined text-[12px]">schedule</span>
+                        <span className="inline-flex items-center gap-1 text-label-sm font-bold text-amber-600">
+                          <span className="material-symbols-outlined text-body-sm">schedule</span>
                           Pendiente de primera captura
                         </span>
                       )}
                       {it.estado === 'error' && it.ultimo_error && (
-                        <div className="text-[10px] text-error bg-error/5 border border-error/15 px-2 py-1 rounded-xl mt-1.5 font-medium max-w-xs leading-normal flex items-start gap-1 shadow-xs">
-                          <span className="material-symbols-outlined text-[12px] mt-0.5 flex-shrink-0 text-error leading-none">warning</span>
+                        <div className="text-label-sm text-error bg-error/5 border border-error/15 px-2 py-1 rounded-xl mt-1.5 font-medium max-w-xs leading-normal flex items-start gap-1 shadow-xs">
+                          <span className="material-symbols-outlined text-body-sm mt-0.5 flex-shrink-0 text-error leading-none">warning</span>
                           <span><strong>Error lectura:</strong> {it.ultimo_error}</span>
                         </div>
                       )}
                     </td>
                     <td>
-                      <span className={`text-[10px] uppercase font-mono font-bold px-2.5 py-1 rounded-full border ${
+                      <span className={`text-label-sm uppercase font-mono font-bold px-2.5 py-1 rounded-full border ${
                         it.tipo === 'propio' ? 'bg-secondary/10 text-secondary border-secondary/20' : 'bg-surface-low text-on-surface-variant border-outline-variant'
                       }`}>
                         {it.tipo === 'propio' ? 'Mi Marca' : 'Competencia'}
@@ -1016,7 +1016,7 @@ export default function Competencia({ user, userDoc }) {
                             {formatPrice(it.ultimo_precio_desc_bs)}
                           </div>
                           {it.ultimo_precio_full_bs && it.ultimo_precio_full_bs !== it.ultimo_precio_desc_bs && (
-                            <div className="text-[10px] text-on-surface-variant line-through font-normal">{formatPrice(it.ultimo_precio_full_bs)}</div>
+                            <div className="text-label-sm text-on-surface-variant line-through font-normal">{formatPrice(it.ultimo_precio_full_bs)}</div>
                           )}
                         </div>
                       ) : it.ultimo_precio_full_bs ? (
@@ -1032,31 +1032,31 @@ export default function Competencia({ user, userDoc }) {
                     </td>
                     <td className="text-center">
                       {scrapingItems[it.id] ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 animate-pulse">
-                          <span className="material-symbols-outlined animate-spin text-[11px] leading-none">autorenew</span>
+                        <span className="inline-flex items-center gap-1 text-label-sm font-bold font-mono px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 animate-pulse">
+                          <span className="material-symbols-outlined animate-spin text-label-md leading-none">autorenew</span>
                           {scrapingItems[it.id] === 'disparando' ? 'Gatillando...' : 'En cola...'}
                         </span>
                       ) : (
                         <>
                           {it.estado === 'ok' && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-secondary/10 text-secondary border border-secondary/30">
-                              <span className="material-symbols-outlined text-[10px] leading-none">check_circle</span>
+                            <span className="inline-flex items-center gap-0.5 text-label-sm font-bold font-mono px-2.5 py-1 rounded-full bg-secondary/10 text-secondary border border-secondary/30">
+                              <span className="material-symbols-outlined text-label-sm leading-none">check_circle</span>
                               OK
                             </span>
                           )}
                           {it.estado === 'error' && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold font-mono px-2.5 py-1 rounded-full bg-error-container text-error border border-error/20" title={it.ultimo_error}>
-                              <span className="material-symbols-outlined text-[10px] leading-none">error</span>
+                            <span className="inline-flex items-center gap-0.5 text-label-sm font-bold font-mono px-2.5 py-1 rounded-full bg-error-container text-error border border-error/20" title={it.ultimo_error}>
+                              <span className="material-symbols-outlined text-label-sm leading-none">error</span>
                               Error
                             </span>
                           )}
-                          {!it.estado && <span className="text-[10px] font-bold font-mono px-2.5 py-1 bg-surface-low text-on-surface-variant border border-outline-variant rounded-full">Sin Datos</span>}
+                          {!it.estado && <span className="text-label-sm font-bold font-mono px-2.5 py-1 bg-surface-low text-on-surface-variant border border-outline-variant rounded-full">Sin Datos</span>}
                         </>
                       )}
                     </td>
                     <td className="text-center">
                       <button onClick={() => handleToggleActivo(it)}
-                        className={`text-[10px] uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
+                        className={`text-label-sm uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
                           it.activo ? 'bg-secondary/15 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
                         }`}>
                         {it.activo ? 'Monitorear' : 'Pausado'}
@@ -1107,18 +1107,18 @@ export default function Competencia({ user, userDoc }) {
                 <button
                   onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
                   disabled={paginaActual === 1}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-sm">chevron_left</span>
                   Anterior
                 </button>
-                <span className="text-xs font-mono font-bold px-3 py-1 bg-white border border-outline-variant rounded-lg text-primary">
+                <span className="text-xs font-mono font-bold px-3 py-1 bg-surface-container-lowest border border-outline-variant rounded-lg text-primary">
                   {paginaActual} / {totalPaginas}
                 </span>
                 <button
                   onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
                   disabled={paginaActual === totalPaginas}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
                 >
                   Siguiente
                   <span className="material-symbols-outlined text-sm">chevron_right</span>
@@ -1355,7 +1355,7 @@ export default function Competencia({ user, userDoc }) {
                 className="m3-input font-mono"
               />
             </div>
-            <p className="text-[11px] text-on-surface-variant italic">
+            <p className="text-label-md text-on-surface-variant italic">
               * Esto establecerá el estado de la URL como "OK" y registrará el precio ingresado en el historial de precios y en el panel.
             </p>
           </div>
@@ -1519,7 +1519,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
               <span className="material-symbols-outlined text-base">check_circle</span>
               <span>Datos autocompletados desde tu catálogo</span>
             </div>
-            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-sans">
+            <p className="text-label-md text-emerald-700 dark:text-emerald-400 font-sans">
               Se usará el nombre <strong>"{selectedProduct.nombre}"</strong> y especificaciones registradas. Solo selecciona la cadena e ingresa la URL.
             </p>
           </div>
@@ -1605,7 +1605,7 @@ function Field({ label, hint, children }) {
     <div className="space-y-1">
       <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-on-surface-variant font-mono">{hint}</p>}
+      {hint && <p className="text-label-sm text-on-surface-variant font-mono">{hint}</p>}
     </div>
   );
 }

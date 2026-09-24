@@ -481,7 +481,7 @@ export default function Dimensiones() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-mono uppercase text-[10px] tracking-wider">
+              <tr className="bg-surface-container border-b border-outline-variant text-on-surface-variant font-mono uppercase text-label-sm tracking-wider">
                 {config.columnas.map(col => (
                   <th key={col.key} className="px-4 py-3 font-bold">
                     {col.label}
@@ -506,7 +506,7 @@ export default function Dimensiones() {
                     <div className="flex flex-col items-center justify-center gap-1">
                       <span className="material-symbols-outlined text-4xl text-outline">inbox</span>
                       <p className="font-bold mt-2">No se encontraron registros</p>
-                      <p className="text-[11px]">Usa el botón "Nuevo en {config.nombre}" para agregar la primera fila.</p>
+                      <p className="text-label-md">Usa el botón "Nuevo en {config.nombre}" para agregar la primera fila.</p>
                     </div>
                   </td>
                 </tr>
@@ -520,10 +520,10 @@ export default function Dimensiones() {
                         return (
                           <td key={col.key} className="px-4 py-3 align-middle font-sans">
                             {col.type === 'boolean' ? (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-bold font-mono ${
                                 val ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-gray-100 text-gray-600 border border-gray-200'
                               }`}>
-                                <span className="material-symbols-outlined text-[12px]">{val ? 'check' : 'close'}</span>
+                                <span className="material-symbols-outlined text-body-sm">{val ? 'check' : 'close'}</span>
                                 {val ? 'Sí / Propio' : 'No / Tercero'}
                               </span>
                             ) : col.type === 'color' ? (
@@ -706,7 +706,7 @@ export default function Dimensiones() {
                   />
                   <div>
                     <div className="font-bold text-on-surface">Reiniciar Todo (Catálogo de Productos + Scraping + PVP)</div>
-                    <div className="text-on-surface-variant text-[11px] mt-0.5">
+                    <div className="text-on-surface-variant text-label-md mt-0.5">
                       Borra <code className="bg-surface-container-low px-1 rounded">dim_productos</code>, <code className="bg-surface-container-low px-1 rounded">pvp_propio</code>, <code className="bg-surface-container-low px-1 rounded">productos_competencia</code> e <code className="bg-surface-container-low px-1 rounded">historico_precios</code>. Conserva las dimensiones maestras (laboratorios, categorías, etc.).
                     </div>
                   </div>
@@ -723,7 +723,7 @@ export default function Dimensiones() {
                   />
                   <div>
                     <div className="font-bold text-on-surface">Limpiar solo Scraping e Histórico de Precios</div>
-                    <div className="text-on-surface-variant text-[11px] mt-0.5">
+                    <div className="text-on-surface-variant text-label-md mt-0.5">
                       Borra solo <code className="bg-surface-container-low px-1 rounded">historico_precios</code> y <code className="bg-surface-container-low px-1 rounded">scrape_runs</code>. Mantiene intactos tus productos y mapeos de URLs.
                     </div>
                   </div>
@@ -740,7 +740,7 @@ export default function Dimensiones() {
                   />
                   <div>
                     <div className="font-bold text-on-surface">Limpiar solo Catálogo de Productos Propios y Competencia</div>
-                    <div className="text-on-surface-variant text-[11px] mt-0.5">
+                    <div className="text-on-surface-variant text-label-md mt-0.5">
                       Borra <code className="bg-surface-container-low px-1 rounded">dim_productos</code>, <code className="bg-surface-container-low px-1 rounded">pvp_propio</code> y enlaces de competencia.
                     </div>
                   </div>

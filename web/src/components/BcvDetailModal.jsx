@@ -171,11 +171,11 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
           {/* Tasa Actual */}
           <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Tasa Actual</span>
+              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Tasa Actual</span>
               <div className="text-2xl font-extrabold font-mono text-primary">
                 Bs {latestRate ? latestRate.toFixed(4) : '—'}
               </div>
-              <p className="text-[11px] text-on-surface-variant font-sans">
+              <p className="text-label-md text-on-surface-variant font-sans">
                 Tasa oficial BCV
               </p>
             </div>
@@ -187,16 +187,16 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
           {/* Variación Día (%) */}
           <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Día</span>
+              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Día</span>
               <div className="flex items-center gap-1.5">
                 <span className={`text-xl font-extrabold font-mono ${dailyVar.pct > 0 ? 'text-amber-700' : dailyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
                   {dailyVar.pct >= 0 ? `+${dailyVar.pct.toFixed(2)}%` : `${dailyVar.pct.toFixed(2)}%`}
                 </span>
-                <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full ${dailyVar.pct > 0 ? 'bg-amber-100 text-amber-900' : dailyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                <span className={`text-label-sm font-bold font-mono px-1.5 py-0.5 rounded-full ${dailyVar.pct > 0 ? 'bg-amber-100 text-amber-900' : dailyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
                   {dailyVar.diff >= 0 ? `+Bs ${dailyVar.diff.toFixed(2)}` : `Bs ${dailyVar.diff.toFixed(2)}`}
                 </span>
               </div>
-              <p className="text-[11px] text-on-surface-variant font-sans">
+              <p className="text-label-md text-on-surface-variant font-sans">
                 vs. anterior: Bs {dailyVar.prevVal ? dailyVar.prevVal.toFixed(2) : '—'}
               </p>
             </div>
@@ -210,16 +210,16 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
           {/* Variación Mes (%) */}
           <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Mes</span>
+              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Mes</span>
               <div className="flex items-center gap-1.5">
                 <span className={`text-xl font-extrabold font-mono ${monthlyVar.pct > 0 ? 'text-primary' : monthlyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
                   {monthlyVar.pct >= 0 ? `+${monthlyVar.pct.toFixed(2)}%` : `${monthlyVar.pct.toFixed(2)}%`}
                 </span>
-                <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded-full ${monthlyVar.pct > 0 ? 'bg-primary-container text-on-primary-container' : monthlyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+                <span className={`text-label-sm font-bold font-mono px-1.5 py-0.5 rounded-full ${monthlyVar.pct > 0 ? 'bg-primary-container text-on-primary-container' : monthlyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
                   {monthlyVar.diff >= 0 ? `+Bs ${monthlyVar.diff.toFixed(2)}` : `Bs ${monthlyVar.diff.toFixed(2)}`}
                 </span>
               </div>
-              <p className="text-[11px] text-on-surface-variant font-sans">
+              <p className="text-label-md text-on-surface-variant font-sans">
                 vs. 30 días: Bs {monthlyVar.monthVal ? monthlyVar.monthVal.toFixed(2) : '—'}
               </p>
             </div>
@@ -233,13 +233,13 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
           {/* Rango (Mín / Max) */}
           <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Rango en Período</span>
+              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Rango en Período</span>
               <div className="text-sm font-extrabold font-mono text-on-surface flex items-center gap-1.5">
                 <span>Bs {rangeStats.min ? rangeStats.min.toFixed(2) : '—'}</span>
                 <span className="text-xs text-on-surface-variant font-normal">→</span>
                 <span>Bs {rangeStats.max ? rangeStats.max.toFixed(2) : '—'}</span>
               </div>
-              <p className="text-[11px] text-on-surface-variant font-sans">
+              <p className="text-label-md text-on-surface-variant font-sans">
                 Promedio: Bs {rangeStats.avg ? rangeStats.avg.toFixed(2) : '—'}
               </p>
             </div>
@@ -319,10 +319,10 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                             <p className="font-mono text-sm font-extrabold text-on-surface">
                               Bs {Number(data.valor).toFixed(4)} / USD
                             </p>
-                            <p className={`font-mono text-[11px] font-bold ${varStartPct >= 0 ? 'text-amber-700' : 'text-secondary'}`}>
+                            <p className={`font-mono text-label-md font-bold ${varStartPct >= 0 ? 'text-amber-700' : 'text-secondary'}`}>
                               Var. en período: {varStartPct >= 0 ? `+${varStartPct.toFixed(2)}%` : `${varStartPct.toFixed(2)}%`}
                             </p>
-                            <p className="text-[10px] text-on-surface-variant capitalize">
+                            <p className="text-label-sm text-on-surface-variant capitalize">
                               Fuente: {data.source || 'oficial'}
                             </p>
                           </div>
@@ -416,7 +416,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                       <td className="p-3 font-semibold text-on-surface">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-primary font-bold">{row.fecha}</span>
-                          <span className="text-[10px] text-on-surface-variant">({row.dayKey})</span>
+                          <span className="text-label-sm text-on-surface-variant">({row.dayKey})</span>
                         </div>
                       </td>
                       <td className="p-3 font-mono font-extrabold text-primary text-sm">
@@ -424,7 +424,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                       </td>
                       <td className="p-3">
                         {row.prevVal ? (
-                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold font-mono ${
+                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-label-md font-bold font-mono ${
                             row.pct > 0 
                               ? 'bg-amber-50 text-amber-900 border border-amber-200' 
                               : row.pct < 0 
@@ -437,7 +437,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                             {row.pct >= 0 ? `+${row.pct.toFixed(2)}%` : `${row.pct.toFixed(2)}%`}
                           </span>
                         ) : (
-                          <span className="text-on-surface-variant font-mono text-[11px]">—</span>
+                          <span className="text-on-surface-variant font-mono text-label-md">—</span>
                         )}
                       </td>
                       <td className="p-3 text-right font-mono font-semibold">
@@ -448,7 +448,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                         ) : '—'}
                       </td>
                       <td className="p-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono capitalize ${
+                        <span className={`px-2 py-0.5 rounded-full text-label-sm font-bold font-mono capitalize ${
                           row.source === 'auto' ? 'bg-primary-container text-on-primary-container' : row.source === 'manual' ? 'bg-amber-100 text-amber-900' : 'bg-surface-container-high text-on-surface'
                         }`}>
                           {row.source || 'oficial'}
@@ -469,7 +469,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
               <span className="material-symbols-outlined text-primary">edit_note</span>
               <div>
                 <div className="text-xs font-bold text-primary">Registrar Tasa Manualmente</div>
-                <div className="text-[11px] text-on-surface-variant">Ingresa la nueva tasa del día en Bolívares</div>
+                <div className="text-label-md text-on-surface-variant">Ingresa la nueva tasa del día en Bolívares</div>
               </div>
             </div>
             <div className="flex items-center gap-2">

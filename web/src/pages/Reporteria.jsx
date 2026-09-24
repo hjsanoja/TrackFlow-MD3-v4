@@ -414,7 +414,7 @@ export default function Reporteria({ user, userDoc }) {
               <h1 className="text-xl md:text-2xl font-display font-extrabold text-on-background tracking-tight">
                 Módulo de Reportería
               </h1>
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 text-label-sm font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                 Submódulo Experimental
               </span>
@@ -450,33 +450,33 @@ export default function Reporteria({ user, userDoc }) {
       {/* KPI Cards del Reporte */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Registros</div>
+          <div className="text-label-md font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Registros</div>
           <div className="text-xl font-bold font-display text-on-surface mt-1">{metricas.totalRegistros}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">Mapeos activos por SKU</div>
+          <div className="text-label-sm text-on-surface-variant mt-0.5">Mapeos activos por SKU</div>
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Tasa BCV</div>
+          <div className="text-label-md font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Tasa BCV</div>
           <div className="text-xl font-bold font-display text-primary mt-1">{currentBcvRate.toFixed(2)}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">Bs / USD Oficial</div>
+          <div className="text-label-sm text-on-surface-variant mt-0.5">Bs / USD Oficial</div>
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">Competidor Más Caro</div>
+          <div className="text-label-md font-mono font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">Competidor Más Caro</div>
           <div className="text-xl font-bold font-display text-rose-700 dark:text-rose-400 mt-1">{metricas.masCaros}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">Tu marca tiene ventaja de precio</div>
+          <div className="text-label-sm text-on-surface-variant mt-0.5">Tu marca tiene ventaja de precio</div>
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Competidor Más Barato</div>
+          <div className="text-label-md font-mono font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Competidor Más Barato</div>
           <div className="text-xl font-bold font-display text-emerald-700 dark:text-emerald-400 mt-1">{metricas.masBaratos}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">El competidor tiene ventaja</div>
+          <div className="text-label-sm text-on-surface-variant mt-0.5">El competidor tiene ventaja</div>
         </div>
 
         <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
-          <div className="text-[11px] font-mono font-semibold text-sky-700 dark:text-sky-400 uppercase tracking-wider">En Paridad</div>
+          <div className="text-label-md font-mono font-semibold text-sky-700 dark:text-sky-400 uppercase tracking-wider">En Paridad</div>
           <div className="text-xl font-bold font-display text-sky-700 dark:text-sky-400 mt-1">{metricas.enParidad}</div>
-          <div className="text-[10px] text-on-surface-variant mt-0.5">Diferencia dentro de ±3%</div>
+          <div className="text-label-sm text-on-surface-variant mt-0.5">Diferencia dentro de ±3%</div>
         </div>
       </div>
 
@@ -616,13 +616,13 @@ export default function Reporteria({ user, userDoc }) {
             </label>
 
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px]">Tipo:</span>
+              <span className="font-mono text-label-md">Tipo:</span>
               <div className="flex gap-1">
                 {['todos', 'propio', 'alternativa'].map(t => (
                   <button
                     key={t}
                     onClick={() => { setFiltroTipo(t); setCurrentPage(1); }}
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
+                    className={`px-2.5 py-0.5 rounded-full text-label-md font-semibold border transition-all ${
                       filtroTipo === t
                         ? 'bg-primary border-primary text-on-primary'
                         : 'bg-surface-container-low border-outline-variant/60 text-on-surface-variant hover:bg-surface-container'
@@ -635,7 +635,7 @@ export default function Reporteria({ user, userDoc }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-[11px]">
+          <div className="flex items-center gap-2 font-mono text-label-md">
             <span>Mostrando <strong>{rowsFiltradas.length}</strong> de {datasetReporte.length} registros</span>
             {(searchTerm || filtroCadena !== 'todas' || filtroTipo !== 'todos' || filtroCategoria !== 'todas' || filtroLaboratorio !== 'todos' || filtroBrecha !== 'todos') && (
               <button
@@ -662,7 +662,7 @@ export default function Reporteria({ user, userDoc }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-surface-container-low/80 border-b border-outline-variant/60 text-on-surface-variant font-mono text-[11px] uppercase tracking-wider">
+              <tr className="bg-surface-container-low/80 border-b border-outline-variant/60 text-on-surface-variant font-mono text-label-md uppercase tracking-wider">
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">ID Producto Propio</th>
                 <th className="py-3 px-3.5 font-bold min-w-[190px]">Producto Propio</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap text-primary">Laboratorio (SKU)</th>
@@ -721,8 +721,8 @@ export default function Reporteria({ user, userDoc }) {
 
                       {/* Producto Propio */}
                       <td className="py-3 px-3.5 font-medium text-on-surface">
-                        <div className="font-bold text-[13px]">{row.producto_propio}</div>
-                        <div className="text-[10px] text-on-surface-variant font-mono">
+                        <div className="font-bold text-body-sm">{row.producto_propio}</div>
+                        <div className="text-label-sm text-on-surface-variant font-mono">
                           {row.categoria} · {row.principio_activo}
                         </div>
                       </td>
@@ -730,7 +730,7 @@ export default function Reporteria({ user, userDoc }) {
                       {/* Laboratorio (del SKU / Competencia) */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
                         <span 
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border shadow-xs"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-label-md font-bold border shadow-xs"
                           style={{
                             backgroundColor: getBrandBgTint(labColor),
                             borderColor: `${labColor}40`,
@@ -764,17 +764,17 @@ export default function Reporteria({ user, userDoc }) {
                             href={row.url} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            className="text-[10px] text-primary hover:underline inline-flex items-center gap-0.5 mt-0.5"
+                            className="text-label-sm text-primary hover:underline inline-flex items-center gap-0.5 mt-0.5"
                           >
                             <span>Ver enlace</span>
-                            <span className="material-symbols-outlined text-[11px]">open_in_new</span>
+                            <span className="material-symbols-outlined text-label-md">open_in_new</span>
                           </a>
                         )}
                       </td>
 
                       {/* Tipo */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-label-sm font-bold uppercase tracking-wider ${
                           row.is_mi_marca
                             ? 'bg-emerald-600 text-white shadow-xs'
                             : 'bg-surface-container-high text-on-surface-variant border border-outline-variant/60'
@@ -815,7 +815,7 @@ export default function Reporteria({ user, userDoc }) {
                       {(vistaBrecha === 'ambas' || vistaBrecha === 'full') && (
                         <td className="py-3 px-3.5 text-center whitespace-nowrap bg-amber-500/10">
                           {row.is_mi_marca ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                            <span className="inline-flex items-center gap-1 text-label-md font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                               <span className="material-symbols-outlined text-xs">verified</span>
                               100% (Mi marca)
                             </span>
@@ -830,12 +830,12 @@ export default function Reporteria({ user, userDoc }) {
                               }`}>
                                 {row.brecha_full_pct >= 0 ? '+' : ''}{row.brecha_full_pct.toFixed(0)}%
                               </span>
-                              <span className="text-[9px] text-on-surface-variant font-mono mt-0.5">
+                              <span className="text-label-sm text-on-surface-variant font-mono mt-0.5">
                                 {row.brecha_full_pct > 3 ? 'Más caro' : row.brecha_full_pct < -3 ? 'Más barato' : 'Paridad'}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-on-surface-variant/60 font-mono text-[11px]">—</span>
+                            <span className="text-on-surface-variant/60 font-mono text-label-md">—</span>
                           )}
                         </td>
                       )}
@@ -844,7 +844,7 @@ export default function Reporteria({ user, userDoc }) {
                       {(vistaBrecha === 'ambas' || vistaBrecha === 'desc') && (
                         <td className="py-3 px-3.5 text-center whitespace-nowrap bg-emerald-500/10">
                           {row.is_mi_marca ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                            <span className="inline-flex items-center gap-1 text-label-md font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                               <span className="material-symbols-outlined text-xs">verified</span>
                               100% (Mi marca)
                             </span>
@@ -859,12 +859,12 @@ export default function Reporteria({ user, userDoc }) {
                               }`}>
                                 {row.brecha_desc_pct >= 0 ? '+' : ''}{row.brecha_desc_pct.toFixed(0)}%
                               </span>
-                              <span className="text-[9px] text-on-surface-variant font-mono mt-0.5">
+                              <span className="text-label-sm text-on-surface-variant font-mono mt-0.5">
                                 {row.brecha_desc_pct > 3 ? 'Más caro' : row.brecha_desc_pct < -3 ? 'Más barato' : 'Paridad'}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-on-surface-variant/60 font-mono text-[11px]">—</span>
+                            <span className="text-on-surface-variant/60 font-mono text-label-md">—</span>
                           )}
                         </td>
                       )}

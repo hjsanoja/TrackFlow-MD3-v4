@@ -49,7 +49,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 text-on-background">
-      <div className="w-full max-w-md bg-white rounded-[32px] border border-outline-variant p-10 shadow-sm space-y-8">
+      <div className="w-full max-w-md bg-surface-container-lowest rounded-[32px] border border-outline-variant p-10 shadow-sm space-y-8">
         <div className="text-center space-y-2">
           {/* Logo TrackFlow */}
           <div className="mx-auto w-16 h-16 rounded-[20px] bg-primary flex items-center justify-center shadow-inner">
@@ -124,10 +124,10 @@ export default function Login() {
         </form>
 
         <div className="pt-5 border-t border-outline-variant text-center flex flex-col items-center gap-1.5">
-          <span className="text-[11px] text-on-surface-variant font-mono tracking-wide">
+          <span className="text-label-md text-on-surface-variant font-mono tracking-wide">
             TrackFlow · Acceso Restringido a Personal Autorizado
           </span>
-          <span className="text-[10px] text-on-surface-variant/70 font-mono">
+          <span className="text-label-sm text-on-surface-variant/70 font-mono">
             Autenticación Administrada por Supabase Auth
           </span>
         </div>

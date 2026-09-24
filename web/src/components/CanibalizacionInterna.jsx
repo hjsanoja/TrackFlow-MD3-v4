@@ -320,7 +320,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
               <h2 className="text-xl font-display font-extrabold text-on-surface">
                 Detección de Canibalización Interna de Marcas
               </h2>
-              <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full uppercase">
+              <span className="text-label-sm font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full uppercase">
                 La Santé vs Pharmetique
               </span>
             </div>
@@ -348,7 +348,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             <div className="text-2xl font-display font-black text-on-surface mt-1">
               {paresCanibalizacion.length}
             </div>
-            <span className="text-[11px] text-on-surface-variant">Moléculas con oferta dual</span>
+            <span className="text-label-md text-on-surface-variant">Moléculas con oferta dual</span>
           </div>
 
           <div className="bg-red-500/10 p-4 rounded-2xl border border-red-500/30">
@@ -359,7 +359,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             <div className="text-2xl font-display font-black text-red-700 dark:text-red-300 mt-1">
               {conteoCriticos}
             </div>
-            <span className="text-[11px] text-red-600/80">Marca &le; Genérico o dosis invertida</span>
+            <span className="text-label-md text-red-600/80">Marca &le; Genérico o dosis invertida</span>
           </div>
 
           <div className="bg-amber-500/10 p-4 rounded-2xl border border-amber-500/30">
@@ -370,7 +370,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             <div className="text-2xl font-display font-black text-amber-800 dark:text-amber-300 mt-1">
               {conteoModerados}
             </div>
-            <span className="text-[11px] text-amber-700/80">Diferencial menor al 12%</span>
+            <span className="text-label-md text-amber-700/80">Diferencial menor al 12%</span>
           </div>
 
           <div className="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/30">
@@ -381,7 +381,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             <div className="text-2xl font-display font-black text-emerald-800 dark:text-emerald-300 mt-1">
               {conteoSaludables}
             </div>
-            <span className="text-[11px] text-emerald-700/80">Prima de marca óptima (15-40%)</span>
+            <span className="text-label-md text-emerald-700/80">Prima de marca óptima (15-40%)</span>
           </div>
         </div>
       </div>
@@ -479,14 +479,14 @@ export default function CanibalizacionInterna({ user, userDoc }) {
                     <span className="text-xs font-mono font-bold uppercase px-2.5 py-0.5 rounded-md bg-surface-container text-on-surface">
                       {par.molecula}
                     </span>
-                    <span className="text-[11px] text-on-surface-variant">
+                    <span className="text-label-md text-on-surface-variant">
                       • {par.categoria}
                     </span>
-                    <span className="text-[11px] font-mono text-primary font-semibold">
+                    <span className="text-label-md font-mono text-primary font-semibold">
                       • Cadena: {par.cadena}
                     </span>
                     {par.esDatoAnaquel && (
-                      <span className="text-[10px] font-mono bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 px-1.5 py-0.2 rounded">
+                      <span className="text-label-sm font-mono bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 px-1.5 py-0.2 rounded">
                         Anaquel Digital Validado
                       </span>
                     )}
@@ -503,7 +503,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
                           : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[14px]">
+                      <span className="material-symbols-outlined text-body-md">
                         {esCritico ? 'dangerous' : esModerado ? 'warning' : 'verified'}
                       </span>
                       {par.tipoConflicto}
@@ -516,29 +516,29 @@ export default function CanibalizacionInterna({ user, userDoc }) {
                   {/* Producto 1: Genérico (La Santé) */}
                   <div className="md:col-span-5 bg-surface-container-low/60 p-3.5 rounded-xl border border-outline-variant/40">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
                         Línea Genérica
                       </span>
-                      <span className="text-[10px] font-mono text-on-surface-variant">
+                      <span className="text-label-sm font-mono text-on-surface-variant">
                         {par.generico.laboratorio || 'La Santé'}
                       </span>
                     </div>
                     <h4 className="text-xs font-bold text-on-surface line-clamp-1">
                       {par.generico.nombre}
                     </h4>
-                    <div className="text-[11px] text-on-surface-variant mt-0.5">
+                    <div className="text-label-md text-on-surface-variant mt-0.5">
                       {par.generico.concentracion} • {par.generico.tamano || `${par.generico.unidosis} tabletas`}
                     </div>
 
                     <div className="mt-3 flex items-baseline justify-between pt-2 border-t border-outline-variant/30">
                       <div>
-                        <span className="text-[10px] text-on-surface-variant block">Precio Anaquel USD</span>
+                        <span className="text-label-sm text-on-surface-variant block">Precio Anaquel USD</span>
                         <span className="text-base font-display font-black text-on-surface">
                           ${par.generico.precio_usd.toFixed(2)}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-on-surface-variant block">Costo por Unidad</span>
+                        <span className="text-label-sm text-on-surface-variant block">Costo por Unidad</span>
                         <span className="text-xs font-mono font-semibold text-on-surface-variant">
                           ${par.generico.costo_unidosis.toFixed(3)}
                         </span>
@@ -548,7 +548,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
 
                   {/* Indicador de Brecha Central */}
                   <div className="md:col-span-2 flex flex-col items-center justify-center p-2 text-center">
-                    <span className="text-[10px] font-mono uppercase text-on-surface-variant">
+                    <span className="text-label-sm font-mono uppercase text-on-surface-variant">
                       Brecha Prima
                     </span>
                     <span
@@ -562,7 +562,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
                     >
                       {par.brechaPct > 0 ? `+${par.brechaPct.toFixed(1)}%` : `${par.brechaPct.toFixed(1)}%`}
                     </span>
-                    <span className="text-[10px] font-mono text-on-surface-variant">
+                    <span className="text-label-sm font-mono text-on-surface-variant">
                       ({par.brechaAbsUsd >= 0 ? `+$${par.brechaAbsUsd.toFixed(2)}` : `-$${Math.abs(par.brechaAbsUsd).toFixed(2)}`})
                     </span>
                   </div>
@@ -570,29 +570,29 @@ export default function CanibalizacionInterna({ user, userDoc }) {
                   {/* Producto 2: Marca (Pharmetique) */}
                   <div className="md:col-span-5 bg-surface-container-low/60 p-3.5 rounded-xl border border-outline-variant/40">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-purple-700 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
                         Línea de Marca / Premium
                       </span>
-                      <span className="text-[10px] font-mono text-on-surface-variant">
+                      <span className="text-label-sm font-mono text-on-surface-variant">
                         {par.marca.laboratorio || 'Pharmetique'}
                       </span>
                     </div>
                     <h4 className="text-xs font-bold text-on-surface line-clamp-1">
                       {par.marca.nombre}
                     </h4>
-                    <div className="text-[11px] text-on-surface-variant mt-0.5">
+                    <div className="text-label-md text-on-surface-variant mt-0.5">
                       {par.marca.concentracion} • {par.marca.tamano || `${par.marca.unidosis} tabletas`}
                     </div>
 
                     <div className="mt-3 flex items-baseline justify-between pt-2 border-t border-outline-variant/30">
                       <div>
-                        <span className="text-[10px] text-on-surface-variant block">Precio Anaquel USD</span>
+                        <span className="text-label-sm text-on-surface-variant block">Precio Anaquel USD</span>
                         <span className="text-base font-display font-black text-on-surface">
                           ${par.marca.precio_usd.toFixed(2)}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-on-surface-variant block">Costo por Unidad</span>
+                        <span className="text-label-sm text-on-surface-variant block">Costo por Unidad</span>
                         <span className="text-xs font-mono font-semibold text-on-surface-variant">
                           ${par.marca.costo_unidosis.toFixed(3)}
                         </span>

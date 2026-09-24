@@ -33,12 +33,12 @@ function InfoTooltip({ text, align = 'center' }) {
         className="p-0 bg-transparent border-0 inline-flex items-center justify-center cursor-pointer focus:outline-none"
         aria-label="Información"
       >
-        <span className="material-symbols-outlined text-[15px] text-[#464650] hover:text-[#040d53] transition-colors select-none">
+        <span className="material-symbols-outlined text-body-md text-[#464650] hover:text-[#040d53] transition-colors select-none">
           info
         </span>
       </button>
       <div 
-        className={`absolute bottom-full mb-2 w-64 p-3 bg-[#1c1b1f] text-white text-[10.5px] leading-relaxed rounded-xl shadow-xl z-50 font-normal normal-case tracking-normal transition-all duration-150 pointer-events-none ${
+        className={`absolute bottom-full mb-2 w-64 p-3 bg-[#1c1b1f] text-white text-[10.5px] leading-relaxed rounded-xl shadow-xl z-50 font-normal normal-case tracking-normal transition-all duration-effects-fast ease-effects-fast pointer-events-none ${
           open ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible'
         } ${alignClass}`}
       >
@@ -58,7 +58,7 @@ function CustomTooltip({ active, payload, label, propios, labMap, currency, anal
         <p className="font-bold text-primary font-mono border-b border-outline-variant pb-1 flex justify-between items-center">
           <span>Fecha: {label ? label.split('-').reverse().join('/') : ''}</span>
           {analisisMode === 'unidosis' && (
-            <span className="text-[10px] text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
+            <span className="text-label-sm text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
           )}
         </p>
         <div className="space-y-1.5 max-h-48 overflow-y-auto">
@@ -75,7 +75,7 @@ function CustomTooltip({ active, payload, label, propios, labMap, currency, anal
                     {isPropio && (pld.name.includes('(') ? ' (Mi Marca)' : ' (Mi Cadena)')}
                   </span>
                   {lab && (
-                    <span className="text-[10px] text-on-surface-variant font-sans leading-none mt-0.5">
+                    <span className="text-label-sm text-on-surface-variant font-sans leading-none mt-0.5">
                       Lab: {lab}
                     </span>
                   )}
@@ -102,12 +102,12 @@ function BarChartTooltip({ active, payload, label, currency, analisisMode }) {
         <p className="font-bold text-primary font-mono border-b border-outline-variant pb-1 flex justify-between items-center gap-2">
           <span>{label}</span>
           {analisisMode === 'unidosis' && (
-            <span className="text-[10px] text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
+            <span className="text-label-sm text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
           )}
         </p>
         <div className="space-y-1 max-h-48 overflow-y-auto">
           {payload.map((entry) => (
-            <div key={entry.name} className="flex items-center justify-between gap-3 text-[11px]">
+            <div key={entry.name} className="flex items-center justify-between gap-3 text-label-md">
               <span className="flex items-center gap-1.5 font-medium" style={{ color: entry.color }}>
                 <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color }}></span>
                 {entry.name}:
@@ -634,12 +634,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   return createPortal(
     <div className="fixed inset-0 bg-[#f8f9fa] z-50 flex flex-col overflow-hidden animate-fade-in text-[#1c1b1f]">
       {/* Header Navigation Bar */}
-      <div className="bg-white border-b border-[#e1e2ec] px-4 md:px-8 py-3 flex items-center justify-between gap-4 shrink-0 shadow-sm z-30">
+      <div className="bg-surface-container-lowest border-b border-[#e1e2ec] px-4 md:px-8 py-3 flex items-center justify-between gap-4 shrink-0 shadow-sm z-30">
         {/* Left: Regresar / Volver button */}
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
-            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-[#e1e2ec] hover:bg-[#f3f4f9] text-[#040d53] text-xs font-bold rounded-xl transition-all shadow-xs group"
+            className="flex items-center gap-2 px-3.5 py-2 bg-surface-container-lowest border border-[#e1e2ec] hover:bg-[#f3f4f9] text-[#040d53] text-xs font-bold rounded-xl transition-all shadow-xs group"
             title="Regresar a la pantalla principal"
           >
             <span className="material-symbols-outlined text-base group-hover:-translate-x-0.5 transition-transform">
@@ -664,18 +664,18 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-sm text-[#040d53] truncate">{activeProduct.nombre}</span>
                   {activeProduct.categoria && (
-                    <span className="hidden sm:inline-block px-2 py-0.5 bg-[#e1e2ec] text-[#040d53] text-[10px] font-bold rounded-md font-mono shrink-0">
+                    <span className="hidden sm:inline-block px-2 py-0.5 bg-[#e1e2ec] text-[#040d53] text-label-sm font-bold rounded-md font-mono shrink-0">
                       {activeProduct.categoria}
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-[#464650] truncate leading-tight">
+                <p className="text-label-md text-[#464650] truncate leading-tight">
                   {activeProduct.principio_activo || 'Sin principio activo'} · {activeProduct.concentracion || ''} {activeProduct.presentacion || ''}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1.5 text-[#040d53] font-bold text-xs shrink-0 pl-2">
-              <span className="hidden md:inline text-[11px] font-mono text-[#464650]">Cambiar producto</span>
+              <span className="hidden md:inline text-label-md font-mono text-[#464650]">Cambiar producto</span>
               <span className="material-symbols-outlined text-lg group-hover:translate-y-0.5 transition-transform">
                 {dropdownOpen ? 'expand_less' : 'unfold_more'}
               </span>
@@ -686,7 +686,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           {dropdownOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setDropdownOpen(false)}></div>
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-[#e1e2ec] shadow-2xl z-40 p-3 space-y-2.5 animate-fade-in max-w-2xl w-full">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container-lowest rounded-2xl border border-[#e1e2ec] shadow-2xl z-40 p-3 space-y-2.5 animate-fade-in max-w-2xl w-full">
                 {/* Search Bar */}
                 <div className="relative flex items-center">
                   <span className="material-symbols-outlined absolute left-3 text-[18px] text-[#464650] pointer-events-none select-none">search</span>
@@ -695,7 +695,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar por nombre, id, principio activo o categoría..."
-                    className="w-full pl-10 pr-8 py-2 bg-[#f3f4f9] border border-[#e1e2ec] focus:border-[#040d53] focus:bg-white rounded-xl text-xs font-medium text-[#1c1b1f] placeholder-[#464650]/60 outline-none transition-all"
+                    className="w-full pl-10 pr-8 py-2 bg-[#f3f4f9] border border-[#e1e2ec] focus:border-[#040d53] focus:bg-surface-container-lowest rounded-xl text-xs font-medium text-[#1c1b1f] placeholder-[#464650]/60 outline-none transition-all"
                     autoFocus
                   />
                   {searchTerm && (
@@ -710,7 +710,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
                 {/* Categories Horizontal Scroll */}
                 {categoriesList.length > 2 && (
-                  <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar text-[11px]">
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar text-label-md">
                     {categoriesList.map(cat => (
                       <button
                         key={cat}
@@ -728,7 +728,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 )}
 
                 {/* Counter */}
-                <div className="flex items-center justify-between text-[11px] font-mono text-[#464650] px-1 border-b border-[#f3f4f9] pb-1.5">
+                <div className="flex items-center justify-between text-label-md font-mono text-[#464650] px-1 border-b border-[#f3f4f9] pb-1.5">
                   <span>{filteredProducts.length} productos coincidentes</span>
                   <span>{productos.length} total</span>
                 </div>
@@ -765,12 +765,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                 {p.id_interno}
                               </span>
                             </div>
-                            <p className="text-[11px] text-[#464650] truncate mt-0.5">
+                            <p className="text-label-md text-[#464650] truncate mt-0.5">
                               {p.principio_activo || '—'} {p.concentracion || ''} · {p.presentacion || ''}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] font-mono font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">
+                            <span className="text-label-sm font-mono font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">
                               {compCount} comp.
                             </span>
                             {isSelected && (
@@ -817,25 +817,25 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-1.5 text-[#464650]">
                   <span className="material-symbols-outlined text-[16px]">medication</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Modo:</span>
+                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Modo:</span>
                 </div>
                 <div className="bg-[#e1e2ec] p-1 rounded-xl flex gap-1 h-[34px] items-center">
                   <button
                     onClick={() => setAnalisisMode('empaque')}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       analisisMode === 'empaque' 
                         ? 'bg-[#040d53] text-white shadow-sm' 
-                        : 'text-[#464650] hover:bg-white/50'
+                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Empaque
                   </button>
                   <button
                     onClick={() => setAnalisisMode('unidosis')}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       analisisMode === 'unidosis' 
                         ? 'bg-[#040d53] text-white shadow-sm' 
-                        : 'text-[#464650] hover:bg-white/50'
+                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
                     }`}
                     title="Analizar precios normalizados por 1 unidad/tableta/dosis"
                   >
@@ -848,25 +848,25 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-1.5 text-[#464650]">
                   <span className="material-symbols-outlined text-[16px]">receipt_long</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Comparación:</span>
+                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Comparación:</span>
                 </div>
                 <div className="bg-[#e1e2ec] p-1 rounded-xl flex gap-1 h-[34px] items-center">
                   <button
                     onClick={() => setPriceMode('descuento')}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       priceMode === 'descuento' 
-                        ? 'bg-white text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-white/50'
+                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
+                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Oferta
                   </button>
                   <button
                     onClick={() => setPriceMode('lista')}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
+                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       priceMode === 'lista' 
-                        ? 'bg-white text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-white/50'
+                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
+                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Lista
@@ -878,25 +878,25 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-1.5 text-[#464650]">
                   <span className="material-symbols-outlined text-[16px]">monetization_on</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Moneda:</span>
+                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Moneda:</span>
                 </div>
                 <div className="bg-[#e1e2ec] p-1 rounded-xl flex gap-1 h-[34px] items-center">
                   <button
                     onClick={() => setModalCurrency('usd')}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all ${
                       modalCurrency === 'usd' 
-                        ? 'bg-white text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-white/50'
+                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
+                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     USD ($)
                   </button>
                   <button
                     onClick={() => setModalCurrency('bs')}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all ${
                       modalCurrency === 'bs' 
-                        ? 'bg-white text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-white/50'
+                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
+                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Bs
@@ -908,12 +908,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-1.5 text-[#464650]">
                   <span className="material-symbols-outlined text-[16px]">groups</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Relación Marca:</span>
+                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Relación Marca:</span>
                 </div>
                 <select
                   value={filterRelacion}
                   onChange={(e) => setFilterRelacion(e.target.value)}
-                  className="bg-white border border-[#e1e2ec] rounded-xl px-2.5 py-1 text-[11px] font-bold focus:outline-none focus:border-[#040d53] text-[#464650] h-[34px] w-full"
+                  className="bg-surface-container-lowest border border-[#e1e2ec] rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-[#040d53] text-[#464650] h-[34px] w-full"
                 >
                   <option value="todos">Todos</option>
                   <option value="propio">Mi Marca</option>
@@ -925,12 +925,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-1.5 text-[#464650]">
                   <span className="material-symbols-outlined text-[16px]">storefront</span>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Cadena:</span>
+                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Cadena:</span>
                 </div>
                 <select
                   value={filterCadena}
                   onChange={(e) => setFilterCadena(e.target.value)}
-                  className="bg-white border border-[#e1e2ec] rounded-xl px-2.5 py-1 text-[11px] font-bold focus:outline-none focus:border-[#040d53] text-[#464650] h-[34px] w-full"
+                  className="bg-surface-container-lowest border border-[#e1e2ec] rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-[#040d53] text-[#464650] h-[34px] w-full"
                 >
                   <option value="todas">Todas</option>
                   {cadenasDisponibles.map(c => (
@@ -942,8 +942,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
             {/* BCV Rate Badge */}
             {bcvRate && (
-              <div className="flex items-center gap-2 bg-white/60 border border-[#e1e2ec] px-3 py-2 rounded-xl text-[11px] font-mono text-[#464650] self-start xl:self-auto min-w-[110px] justify-center h-[34px] mt-auto">
-                <span className="text-[9px] uppercase font-bold text-[#464650]/70">Tasa BCV:</span>
+              <div className="flex items-center gap-2 bg-surface-container-lowest/60 border border-[#e1e2ec] px-3 py-2 rounded-xl text-label-md font-mono text-[#464650] self-start xl:self-auto min-w-[110px] justify-center h-[34px] mt-auto">
+                <span className="text-label-sm uppercase font-bold text-[#464650]/70">Tasa BCV:</span>
                 <span className="font-extrabold text-[#040d53]">Bs {bcvRate.toFixed(2)}</span>
               </div>
             )}
@@ -953,10 +953,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           {validPrices.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
               {/* Mas Barato Card */}
-              <div className="bg-white border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+              <div className="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
                 <div className="space-y-0.5 flex-1 min-w-0 pr-2">
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
+                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
                       Más Barato {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
                     </span>
                     <InfoTooltip text="El precio mínimo detectado entre todos tus competidores en el mercado para el modo seleccionado (con descuento o de lista)." align="left" />
@@ -964,7 +964,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <div className="text-xl font-display font-extrabold text-emerald-700">
                     {formatHeaderPrice(minPriceItem?.priceBs)}
                   </div>
-                  <p className="text-[11px] text-on-surface-variant truncate font-sans">
+                  <p className="text-label-md text-on-surface-variant truncate font-sans">
                     En: {minPriceItem?.cadena} ({minPriceItem?.marca})
                   </p>
                 </div>
@@ -974,10 +974,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               </div>
 
               {/* Mi Precio Card */}
-              <div className="bg-white border border-emerald-500/30 p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+              <div className="bg-surface-container-lowest border border-emerald-500/30 p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
                 <div className="space-y-0.5 flex-1 min-w-0 pr-2">
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-emerald-800 truncate">
+                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-emerald-800 truncate">
                       Mi Precio {analisisMode === 'unidosis' ? '(Unidosis)' : '(Marca Propia)'}
                     </span>
                     <InfoTooltip text="El precio actual de tu producto marca propia. Se muestra en verde para resaltar que es la referencia de tu marca." align="left" />
@@ -985,7 +985,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <div className="text-xl font-display font-extrabold text-emerald-800">
                     {propioPriceBs ? formatHeaderPrice(propioPriceBs) : '—'}
                   </div>
-                  <p className="text-[11px] text-emerald-700 font-sans truncate">
+                  <p className="text-label-md text-emerald-700 font-sans truncate">
                     {propioItem?.marca ? `Marca: ${propioItem.marca}` : activeProduct?.laboratorio ? `Lab: ${activeProduct.laboratorio}` : 'Catálogo Propio'}
                   </p>
                 </div>
@@ -995,10 +995,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               </div>
 
               {/* vs Minimo Card */}
-              <div className="bg-white border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+              <div className="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
                 <div className="space-y-0.5 flex-1 min-w-0 pr-2">
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">Diferencia vs Mínimo</span>
+                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">Diferencia vs Mínimo</span>
                     <InfoTooltip text="Calculado como: ((Mi Precio - Precio Mínimo) / Precio Mínimo) * 100. Te indica qué tan por encima del precio más económico del mercado te encuentras. El valor ideal es <= 0%." align="right" />
                   </div>
                   {propioPriceBs && minPriceItem ? (
@@ -1006,14 +1006,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                       <div className={`text-xl font-display font-extrabold ${pctMin && pctMin > 0.005 ? 'text-error' : 'text-emerald-700'}`}>
                         {pctMin && pctMin > 0.005 ? `+${pctMin.toFixed(2)}%` : '¡Precio Mínimo!'}
                       </div>
-                      <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                      <p className="text-label-md text-on-surface-variant font-sans truncate">
                         {pctMin && pctMin > 0.005 ? `+${formatHeaderPrice(diffMinBs)} vs mín.` : 'Líder en este producto'}
                       </p>
                     </>
                   ) : (
                     <>
                       <div className="text-xl font-display font-bold text-gray-300">—</div>
-                      <p className="text-[11px] text-on-surface-variant font-sans">—</p>
+                      <p className="text-label-md text-on-surface-variant font-sans">—</p>
                     </>
                   )}
                 </div>
@@ -1023,10 +1023,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               </div>
 
               {/* Precio Promedio Card */}
-              <div className="bg-white border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
+              <div className="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
                 <div className="space-y-0.5 flex-1 min-w-0 pr-2">
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
+                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
                       Promedio {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
                     </span>
                     <InfoTooltip text="El precio promedio aritmético calculado entre todos los competidores vigentes en el mercado." align="right" />
@@ -1035,14 +1035,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     {avgPriceBs ? formatHeaderPrice(avgPriceBs) : '—'}
                   </div>
                   {propioPriceBs && avgPriceBs ? (
-                    <p className="text-[11px] font-sans truncate">
+                    <p className="text-label-md font-sans truncate">
                       Mi precio:{' '}
                       <span className={pctAvg && pctAvg > 0 ? 'text-error font-bold' : 'text-emerald-700 font-bold'}>
                         {pctAvg && pctAvg > 0 ? `+${pctAvg.toFixed(1)}%` : `${pctAvg?.toFixed(1)}%`}
                       </span>
                     </p>
                   ) : (
-                    <p className="text-[11px] text-on-surface-variant font-sans">
+                    <p className="text-label-md text-on-surface-variant font-sans">
                       Referencia del mercado
                     </p>
                   )}
@@ -1063,7 +1063,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               </h3>
             </div>
 
-            <div className="border border-outline-variant rounded-2xl overflow-hidden bg-white shadow-xs">
+            <div className="border border-outline-variant rounded-2xl overflow-hidden bg-surface-container-lowest shadow-xs">
               <div className="overflow-x-auto">
                 <table className="m3-table">
                   <thead className="m3-sticky-header">
@@ -1082,7 +1082,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <tbody className="divide-y divide-surface-variant">
                     {competenciaFiltrada.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-on-surface-variant italic bg-white">
+                        <td colSpan="5" className="px-6 py-8 text-center text-on-surface-variant italic bg-surface-container-lowest">
                           Sin productos que coincidan con los filtros seleccionados.
                         </td>
                       </tr>
@@ -1107,11 +1107,11 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                 >
                                   <span className="font-semibold">{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
                                   {pc.unidosisCount > 0 && (
-                                    <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold ml-1">
+                                    <span className="px-1.5 py-0.2 text-label-sm bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold ml-1">
                                       {pc.unidosisCount}u
                                     </span>
                                   )}
-                                  <span className="material-symbols-outlined text-[13px] text-primary/70 group-hover:text-primary transition-colors leading-none">
+                                  <span className="material-symbols-outlined text-body-sm text-primary/70 group-hover:text-primary transition-colors leading-none">
                                     open_in_new
                                   </span>
                                 </a>
@@ -1119,7 +1119,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                 <div className="flex items-center gap-1">
                                   <span>{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
                                   {pc.unidosisCount > 0 && (
-                                    <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold">
+                                    <span className="px-1.5 py-0.2 text-label-sm bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold">
                                       {pc.unidosisCount}u
                                     </span>
                                   )}
@@ -1130,7 +1130,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                               )}
                             </td>
                             <td>
-                              <span className={`text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-full ${
+                              <span className={`text-label-sm uppercase font-mono font-bold px-2 py-0.5 rounded-full ${
                                 pc.tipo === 'propio' ? 'bg-secondary/10 text-secondary border border-secondary/20' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
                               }`}>
                                 {pc.tipo === 'propio' ? 'Mi Marca' : 'Competencia'}
@@ -1145,12 +1145,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                   {formatHeaderPrice(pc.adjustedFullBs)}
                                 </span>
                                 {isCheapestFull && (
-                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                  <span className="text-label-sm bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
                                     Más bajo
                                   </span>
                                 )}
                                 {isMostExpensiveFull && (
-                                  <span className="text-[9px] bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                  <span className="text-label-sm bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
                                     Más alto
                                   </span>
                                 )}
@@ -1165,12 +1165,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                   {formatHeaderPrice(pc.adjustedDescBs)}
                                 </span>
                                 {isCheapestDesc && (
-                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                  <span className="text-label-sm bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
                                     Más bajo
                                   </span>
                                 )}
                                 {isMostExpensiveDesc && (
-                                  <span className="text-[9px] bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                                  <span className="text-label-sm bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
                                     Más alto
                                   </span>
                                 )}
@@ -1184,7 +1184,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   {competenciaFiltrada.length > 0 && (
                     <tfoot className="bg-surface-low border-t-2 border-outline-variant font-mono text-xs font-bold">
                       <tr className="border-b border-outline-variant/60">
-                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-[10px]">
+                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-label-sm">
                           Mínimo de la Lista
                         </td>
                         <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
@@ -1195,7 +1195,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                         </td>
                       </tr>
                       <tr className="border-b border-outline-variant/60">
-                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-[10px]">
+                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-label-sm">
                           Máximo de la Lista
                         </td>
                         <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
@@ -1206,7 +1206,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                         </td>
                       </tr>
                       <tr className="bg-surface-container-high/60">
-                        <td colSpan="3" className="px-5 py-3 text-right font-sans text-primary uppercase tracking-wider text-[10px] font-extrabold">
+                        <td colSpan="3" className="px-5 py-3 text-right font-sans text-primary uppercase tracking-wider text-label-sm font-extrabold">
                           Promedio General ({competenciaFiltrada.length} items)
                         </td>
                         <td className="px-5 py-3 text-right text-on-surface font-black text-xs">
@@ -1225,7 +1225,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
           {/* Chart Section Header with Tab Switch */}
           <div className="space-y-4 pt-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#e1e2ec] shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container-lowest p-3 rounded-2xl border border-[#e1e2ec] shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-lg text-[#040d53]">analytics</span>
                 <span className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider">Análisis Gráfico</span>
@@ -1236,10 +1236,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeGraphTab === 'tendencia'
                       ? 'bg-[#040d53] text-white shadow-sm'
-                      : 'text-[#464650] hover:bg-white/60'
+                      : 'text-[#464650] hover:bg-surface-container-lowest/60'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[15px]">show_chart</span>
+                  <span className="material-symbols-outlined text-body-md">show_chart</span>
                   Historial de Tendencia
                 </button>
                 <button
@@ -1247,10 +1247,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeGraphTab === 'barras'
                       ? 'bg-[#040d53] text-white shadow-sm'
-                      : 'text-[#464650] hover:bg-white/60'
+                      : 'text-[#464650] hover:bg-surface-container-lowest/60'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[15px]">bar_chart</span>
+                  <span className="material-symbols-outlined text-body-md">bar_chart</span>
                   Precios por Laboratorio
                 </button>
                 <button
@@ -1258,10 +1258,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeGraphTab === 'ambos'
                       ? 'bg-[#040d53] text-white shadow-sm'
-                      : 'text-[#464650] hover:bg-white/60'
+                      : 'text-[#464650] hover:bg-surface-container-lowest/60'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[15px]">grid_view</span>
+                  <span className="material-symbols-outlined text-body-md">grid_view</span>
                   Ver Ambos
                 </button>
               </div>
@@ -1278,42 +1278,42 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   {historico.length > 0 && (
                     <button
                       onClick={() => setShowClearConfirm(true)}
-                      className="text-[10px] font-bold text-[#ba1a1a] hover:bg-red-50 px-3 py-1 rounded-full border border-red-200 transition-all flex items-center gap-1"
+                      className="text-label-sm font-bold text-[#ba1a1a] hover:bg-red-50 px-3 py-1 rounded-full border border-red-200 transition-all flex items-center gap-1"
                     >
-                      <span className="material-symbols-outlined text-[12px]">delete</span>
+                      <span className="material-symbols-outlined text-body-sm">delete</span>
                       Borrar histórico
                     </button>
                   )}
                 </div>
-                <div className="bg-white rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
+                <div className="bg-surface-container-lowest rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
                   {/* Selector de tipo de gráfico */}
                   {historico.length > 0 && !loading && !error && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#e1e2ec] animate-fade-in">
                       <div className="flex items-center gap-1.5 text-[#464650]">
                         <span className="material-symbols-outlined text-[16px]">insights</span>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Modo del Gráfico:</span>
+                        <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Modo del Gráfico:</span>
                       </div>
                       <div className="bg-[#f3f4f9] p-0.5 rounded-xl flex gap-1 self-start sm:self-auto border border-[#e1e2ec]">
                         <button
                           onClick={() => setChartViewType('individual')}
-                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             chartViewType === 'individual'
-                              ? 'bg-white text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-white/50'
+                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
                           }`}
                         >
-                          <span className="material-symbols-outlined text-[14px]">medication</span>
+                          <span className="material-symbols-outlined text-body-md">medication</span>
                           Detalle por Variante
                         </button>
                         <button
                           onClick={() => setChartViewType('chainAverage')}
-                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             chartViewType === 'chainAverage'
-                              ? 'bg-white text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-white/50'
+                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
                           }`}
                         >
-                          <span className="material-symbols-outlined text-[14px]">corporate_fare</span>
+                          <span className="material-symbols-outlined text-body-md">corporate_fare</span>
                           Promedio por Cadena
                         </button>
                       </div>
@@ -1443,42 +1443,42 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     Precios por Laboratorio por Cadena ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
                   </h3>
                 </div>
-                <div className="bg-white rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
+                <div className="bg-surface-container-lowest rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#e1e2ec]">
                     <div className="flex items-center gap-3 flex-wrap">
                       <div className="flex items-center gap-1.5 text-[#464650]">
                         <span className="material-symbols-outlined text-[16px]">tune</span>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">Agrupar Eje X Por:</span>
+                        <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Agrupar Eje X Por:</span>
                       </div>
                       <div className="bg-[#f3f4f9] p-0.5 rounded-xl flex gap-1 border border-[#e1e2ec]">
                         <button
                           onClick={() => setBarGroupMode('laboratorio')}
-                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             barGroupMode === 'laboratorio'
-                              ? 'bg-white text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-white/50'
+                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
                           }`}
                         >
-                          <span className="material-symbols-outlined text-[14px]">science</span>
+                          <span className="material-symbols-outlined text-body-md">science</span>
                           Por Laboratorio
                         </button>
                         <button
                           onClick={() => setBarGroupMode('cadena')}
-                          className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${
+                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             barGroupMode === 'cadena'
-                              ? 'bg-white text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-white/50'
+                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
+                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
                           }`}
                         >
-                          <span className="material-symbols-outlined text-[14px]">storefront</span>
+                          <span className="material-symbols-outlined text-body-md">storefront</span>
                           Por Cadena
                         </button>
                       </div>
                     </div>
 
                     {overallBarAverage !== null && (
-                      <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-[#ea580c] px-3 py-1 rounded-xl text-[11px] font-bold font-mono self-start sm:self-auto shadow-xs">
-                        <span className="material-symbols-outlined text-[15px]">show_chart</span>
+                      <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-[#ea580c] px-3 py-1 rounded-xl text-label-md font-bold font-mono self-start sm:self-auto shadow-xs">
+                        <span className="material-symbols-outlined text-body-md">show_chart</span>
                         <span>Promedio General: {modalCurrency === 'usd' ? '$' : 'Bs '}{overallBarAverage.toLocaleString(modalCurrency === 'usd' ? 'en-US' : 'es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     )}

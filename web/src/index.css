@@ -403,11 +403,70 @@ body {
   color: var(--md-sys-color-on-surface);
   border-bottom: 1px solid var(--md-sys-color-surface-container-high);
   transition: background-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
+  /* Altura de fila uniforme.
+     Sin esto, un nombre largo se reparte en dos o tres líneas y esa fila queda
+     más alta que las de al lado: la tabla deja de leerse como una cuadrícula y
+     cuesta seguir una fila con la vista. MD3 fija la altura de la fila y deja
+     que el contenido se recorte, no al revés. */
+  height: var(--md-comp-table-row-height, 3.5rem);
+  vertical-align: middle;
 }
 
 .m3-table tr:hover td {
   background-color: var(--md-sys-color-surface-container-high);
 }
+
+/* Celda de una sola línea con puntos suspensivos.
+   Se aplica sobre un <div> interno y no sobre el <td>, porque text-overflow
+   no funciona en celdas de tabla con ancho automático. Acompáñalo siempre de
+   un title= con el texto completo para que se pueda consultar. */
+.m3-cell-clamp {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dos líneas como máximo, para nombres de producto donde una sola se queda
+   corta. La altura sigue siendo la misma en todas las filas. */
+.m3-cell-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Filas más altas cuando la tabla muestra nombre + código en dos renglones. */
+.m3-table-comfortable {
+  --md-comp-table-row-height: 4.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   ESCALA TIPOGRÁFICA: PUENTE HACIA TAILWIND
+   ---------------------------------------------------------------------------
+   Los 27 estilos de m3-tokens.css estaban definidos pero sin usar: las
+   pantallas escribían text-xs, text-sm y 336 tamaños arbitrarios como
+   text-[9px] o text-[11px]. De ahí que dos etiquetas contiguas tuvieran
+   tamaños distintos sin motivo.
+
+   Estos alias permiten usar la escala con la misma sintaxis que el resto de
+   clases de Tailwind, para poder migrar pantalla por pantalla.
+   -------------------------------------------------------------------------*/
+.text-display-lg  { @apply m3-display-large; }
+.text-display-md  { @apply m3-display-medium; }
+.text-display-sm  { @apply m3-display-small; }
+.text-headline-lg { @apply m3-headline-large; }
+.text-headline-md { @apply m3-headline-medium; }
+.text-headline-sm { @apply m3-headline-small; }
+.text-title-lg    { @apply m3-title-large; }
+.text-title-md    { @apply m3-title-medium; }
+.text-title-sm    { @apply m3-title-small; }
+.text-body-lg     { @apply m3-body-large; }
+.text-body-md     { @apply m3-body-medium; }
+.text-body-sm     { @apply m3-body-small; }
+.text-label-lg    { @apply m3-label-large; }
+.text-label-md    { @apply m3-label-medium; }
+.text-label-sm    { @apply m3-label-small; }
 
 /* Unified Spring-Based Page & Modal Keyframes */
 @keyframes expressiveFadeInSlide {

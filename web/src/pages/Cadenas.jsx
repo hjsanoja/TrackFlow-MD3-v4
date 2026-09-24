@@ -196,7 +196,7 @@ export default function Cadenas() {
                           <a href={c.website} target="_blank" rel="noopener noreferrer"
                             className="text-xs font-mono text-primary hover:underline flex items-center gap-0.5">
                             <span>{c.website.replace(/^https?:\/\/(www\.)?/, '')}</span>
-                            <span className="material-symbols-outlined text-[11px] leading-none">open_in_new</span>
+                            <span className="material-symbols-outlined text-label-md leading-none">open_in_new</span>
                           </a>
                         ) : (
                           <span className="text-on-surface-variant/40 font-mono select-none">—</span>
@@ -205,7 +205,7 @@ export default function Cadenas() {
                       <td className="font-mono text-xs text-on-surface">
                         <code className="bg-surface-low border border-outline-variant px-2.5 py-1 rounded-md font-bold">{c.modulo_scraper}</code>
                         {!implementado && (
-                          <span className="ml-2 font-bold uppercase tracking-wider text-[10px] text-error bg-error-container border border-error/20 px-2 py-0.5 rounded-full">Pendiente</span>
+                          <span className="ml-2 font-bold uppercase tracking-wider text-label-sm text-error bg-error-container border border-error/20 px-2 py-0.5 rounded-full">Pendiente</span>
                         )}
                       </td>
                       <td className="text-center font-mono">
@@ -217,7 +217,7 @@ export default function Cadenas() {
                       </td>
                       <td className="text-center">
                         <button onClick={() => handleToggleActivo(c)}
-                          className={`text-[10px] uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
+                          className={`text-label-sm uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
                             c.activo ? 'bg-secondary/15 text-secondary border border-secondary/30 shadow-xs' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
                           }`}>
                           {c.activo ? 'Activo' : 'Inactivo'}
@@ -355,7 +355,7 @@ function Field({ label, hint, children }) {
     <div className="space-y-1">
       <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-on-surface-variant font-mono">{hint}</p>}
+      {hint && <p className="text-label-sm text-on-surface-variant font-mono">{hint}</p>}
     </div>
   );
 }

@@ -533,7 +533,7 @@ export default function Productos() {
           </div>
           <button
             onClick={() => setFiltroUrls('sin_urls')}
-            className="text-xs px-3.5 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
+            className="text-xs px-3.5 py-1.5 bg-surface-container-lowest border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
           >
             Ver Cuáles
           </button>
@@ -693,7 +693,7 @@ export default function Productos() {
                         <div className="font-bold text-on-surface text-sm font-display flex items-center gap-2 flex-wrap">
                           <span>{p.nombre}</span>
                           {p.codigo_barra && (
-                            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-surface-low border border-outline-variant text-on-surface-variant font-medium shrink-0" title="Código de barras / EAN">
+                            <span className="text-label-md font-mono px-1.5 py-0.5 rounded bg-surface-low border border-outline-variant text-on-surface-variant font-medium shrink-0" title="Código de barras / EAN">
                               EAN: {p.codigo_barra}
                             </span>
                           )}
@@ -705,14 +705,14 @@ export default function Productos() {
                         <div className="text-xs text-on-surface-variant font-mono mt-0.5 flex items-center gap-1.5">
                           <span>{p.tamano || '—'}</span>
                           {parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis) > 1 && (
-                            <span className="px-1.5 py-0.2 text-[10px] bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold" title="Unidades/Tabletas por empaque para cálculo unidosis">
+                            <span className="px-1.5 py-0.2 text-label-sm bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold" title="Unidades/Tabletas por empaque para cálculo unidosis">
                               {parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis)}u
                             </span>
                           )}
                         </div>
                       </td>
                       <td>
-                        <span className={`px-2.5 py-0.5 text-[10px] rounded font-mono font-bold tracking-wider ${
+                        <span className={`px-2.5 py-0.5 text-label-sm rounded font-mono font-bold tracking-wider ${
                           (p.market_type || 'GENERICO').toUpperCase() === 'MARCA'
                             ? 'bg-purple-100 text-purple-800 border border-purple-200'
                             : 'bg-green-100 text-green-800 border border-green-200'
@@ -786,18 +786,18 @@ export default function Productos() {
                 <button
                   onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
                   disabled={paginaActual === 1}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-sm">chevron_left</span>
                   Anterior
                 </button>
-                <span className="text-xs font-mono font-bold px-3 py-1 bg-white border border-outline-variant rounded-lg text-primary">
+                <span className="text-xs font-mono font-bold px-3 py-1 bg-surface-container-lowest border border-outline-variant rounded-lg text-primary">
                   {paginaActual} / {totalPaginas}
                 </span>
                 <button
                   onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
                   disabled={paginaActual === totalPaginas}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
                 >
                   Siguiente
                   <span className="material-symbols-outlined text-sm">chevron_right</span>
@@ -1156,7 +1156,7 @@ function Field({ label, hint, children }) {
     <div className="space-y-1">
       <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-on-surface-variant font-mono">{hint}</p>}
+      {hint && <p className="text-label-sm text-on-surface-variant font-mono">{hint}</p>}
     </div>
   );
 }
