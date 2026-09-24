@@ -291,6 +291,60 @@ async function guardarPrincipiosActivos(productoDbId, principioActivo, concentra
   if (error) throw error;
 }
 
+// Registra un PVP nuevo cerrando el anterior, en vez de insertar a ciegas.
+//
+// pvp_propio tiene una restriccion de exclusion (excl_pvp_sin_solape) que
+// prohibe dos rangos de vigencia solapados para el mismo producto. La fila
+// vigente tiene vigente_hasta NULL, o sea que cubre "desde X hasta siempre":
+// cualquier insercion posterior choca con ella y Postgres responde 23P01.
+//
+// El codigo anterior insertaba sin mirar y sin comprobar el error, asi que al
+// reimportar el CSV el precio nuevo se perdia en silencio y el panel seguia
+// mostrando el viejo.
+async function guardarPvpPropio(productoDbId, pvpUsd) {
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  const { data: vigente, error: errLectura } = await supabase
+    .from('pvp_propio')
+    .select('id, pvp_usd, vigente_desde')
+    .eq('producto_id', productoDbId)
+    .is('vigente_hasta', null)
+    .maybeSingle();
+
+  if (errLectura) throw errLectura;
+
+  if (vigente) {
+    // Mismo precio: no hay nada que historiar.
+    if (Number(vigente.pvp_usd) === Number(pvpUsd)) return;
+
+    // Correccion del mismo dia: se edita la fila en vez de cerrarla, porque
+    // chk_pvp_rango_valido exige vigente_hasta > vigente_desde y un rango de
+    // duracion cero no es valido.
+    if (vigente.vigente_desde === hoy) {
+      const { error } = await supabase
+        .from('pvp_propio')
+        .update({ pvp_usd: pvpUsd })
+        .eq('id', vigente.id);
+      if (error) throw error;
+      return;
+    }
+
+    // Cambio real: se cierra el tramo anterior hoy y empieza el nuevo.
+    const { error: errCierre } = await supabase
+      .from('pvp_propio')
+      .update({ vigente_hasta: hoy })
+      .eq('id', vigente.id);
+    if (errCierre) throw errCierre;
+  }
+
+  const { error } = await supabase.from('pvp_propio').insert({
+    producto_id: productoDbId,
+    pvp_usd: pvpUsd,
+    vigente_desde: hoy
+  });
+  if (error) throw error;
+}
+
 export async function dbUpsertProducto(data) {
   const targetId = (data.id_interno || data.id || '').trim();
   const cleanData = {
@@ -430,12 +484,11 @@ export async function dbUpsertProducto(data) {
       }
 
       if (!dimErr && dimProd?.id && cleanData.pvp_propio_usd > 0) {
-        // Upsert en pvp_propio
-        await supabase.from('pvp_propio').insert({
-          producto_id: dimProd.id,
-          pvp_usd: cleanData.pvp_propio_usd,
-          vigente_desde: new Date().toISOString().slice(0, 10)
-        });
+        try {
+          await guardarPvpPropio(dimProd.id, cleanData.pvp_propio_usd);
+        } catch (ePvp) {
+          console.warn('[Supabase] No se pudo guardar el PVP propio:', ePvp?.message || String(ePvp));
+        }
       }
 
       // También mantener tabla productos / legacy_productos para retrocompatibilidad
