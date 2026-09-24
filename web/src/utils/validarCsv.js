@@ -48,6 +48,17 @@ export const ESQUEMAS = {
   },
 };
 
+// Como el importador interpreta la unidad de negocio: 'PH' o cualquier texto
+// con 'Pharmetique' es Pharmetique, etc. Lo demas se busca tal cual.
+export function resolverUnidadNegocio(texto) {
+  const original = String(texto || '').trim();
+  const mayus = original.toUpperCase();
+  if (mayus.includes('PHARMETIQUE') || mayus === 'PH') return 'Pharmetique';
+  if (mayus.includes('OTC')) return 'OTC';
+  if (mayus.includes('SANTE') || mayus.includes('SANTÉ')) return 'La Sante';
+  return original || 'La Sante';
+}
+
 function esNumero(v) {
   return v === '' || !isNaN(parseFloat(String(v).replace(',', '.')));
 }
@@ -196,6 +207,30 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
       // Sin molecula la dosis no tiene donde guardarse (producto_principios
       // la necesita), y el nombre limpio de v_csv_productos ya no la lleva:
       // se perderia del todo.
+      // Categoria y unidad de negocio no se crean al importar (son catalogos
+      // cerrados): si el nombre no existe, el producto conserva la que tenia
+      // o, si es nuevo, queda sin ella. Antes pasaba sin avisar.
+      const existe = (lista, valor) => lista.some(n => n.trim().toLowerCase() === valor.toLowerCase());
+      if (contexto.categorias) {
+        const cat = getRowValue(fila, 'categoria', 'categoría', 'linea', 'grupo').trim();
+        if (cat && !existe(contexto.categorias, cat)) {
+          avisos.push({
+            fila: numero, campo: 'Categoría',
+            mensaje: `"${cat}" no existe en Dimensiones. Se conservará la categoría que tenía (o quedará sin categoría si es nuevo). Créala antes en Dimensiones → Categorías.`,
+          });
+        }
+      }
+      if (contexto.unidadesNegocio) {
+        const unRaw = getRowValue(fila, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'un', 'linea_negocio').trim();
+        const un = resolverUnidadNegocio(unRaw);
+        if (unRaw && !existe(contexto.unidadesNegocio, un)) {
+          avisos.push({
+            fila: numero, campo: 'Unidad de Negocio',
+            mensaje: `"${unRaw}" no existe en Dimensiones. Se conservará la unidad que tenía (o quedará sin unidad si es nuevo). Créala antes en Dimensiones → Unidades de Negocio.`,
+          });
+        }
+      }
+
       const molecula = getRowValue(fila, 'principio_activo', 'molecula', 'molécula').trim();
       const dosis = getRowValue(fila, 'concentracion', 'dosis').trim();
       if (dosis && !molecula) {

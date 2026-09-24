@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { validarCsv } from '../utils/validarCsv';
+import { validarCsv, resolverUnidadNegocio } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
 import { useDimensiones } from '../hooks/useDimensiones';
 import ConfirmModal from '../components/ConfirmModal';
@@ -15,7 +15,9 @@ import {
   dbDeleteAllProductos,
   dbUpsertProductoCompetencia,
   dbUpsertProductosBulk,
-  dbUpsertCompetenciaBulk
+  dbUpsertCompetenciaBulk,
+  dbNombresDimensionesCerradas,
+  dbCambiarActivoProductos
 } from '../utils/dbClient';
 
 const CATEGORIAS = [
@@ -77,6 +79,13 @@ export default function Productos() {
   const [filtroUrls, setFiltroUrls] = useState('todos'); // todos | con_urls | sin_urls
   const [filtroTipo, setFiltroTipo] = useState('todos'); // todos | generico | marca
   const [filtroUn, setFiltroUn] = useState('todos'); // todos | lasante | pharmetique | otc
+
+  // Seleccion multiple (por id). Se vacia al cambiar la busqueda o los
+  // filtros, para no borrar o dar de baja productos que ya no se ven.
+  const [seleccion, setSeleccion] = useState(() => new Set());
+  const [confirmBorrarSel, setConfirmBorrarSel] = useState(false);
+  const [procesandoSel, setProcesandoSel] = useState(null); // { hechos, total }
+  useEffect(() => { setSeleccion(new Set()); }, [search, filtroActivo, filtroUrls, filtroTipo, filtroUn]);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
   const [progresoCsv, setProgresoCsv] = useState(null);
@@ -205,6 +214,71 @@ export default function Productos() {
     }
   };
 
+  const alternarSeleccion = (id) => {
+    setSeleccion(prev => {
+      const nueva = new Set(prev);
+      if (nueva.has(id)) nueva.delete(id); else nueva.add(id);
+      return nueva;
+    });
+  };
+
+  const seleccionados = useMemo(
+    () => productos.filter(p => seleccion.has(p.id)),
+    [productos, seleccion]
+  );
+  const todosFiltradosSeleccionados = filtrados.length > 0 && filtrados.every(p => seleccion.has(p.id));
+  const urlsSeleccionadas = seleccionados.reduce((n, p) => n + (urlsPorProducto.get(p.id_interno) || []).length, 0);
+
+  const alternarTodosFiltrados = () => {
+    setSeleccion(todosFiltradosSeleccionados ? new Set() : new Set(filtrados.map(p => p.id)));
+  };
+
+  // Baja masiva: conserva historial y enlaces. Es lo recomendado.
+  const cambiarActivoSeleccion = async (activo) => {
+    const ids = seleccionados.map(p => p.id_interno);
+    setProcesandoSel({ hechos: 0, total: ids.length });
+    try {
+      const cambiados = await dbCambiarActivoProductos(ids, activo);
+      if (cambiados < ids.length) {
+        addToast(`Solo se actualizaron ${cambiados} de ${ids.length} productos. Revisa los permisos (RLS) de dim_productos.`, 'error');
+      } else {
+        addToast(`${cambiados} productos ${activo ? 'reactivados' : 'dados de baja'}.`, 'success');
+      }
+      setSeleccion(new Set());
+      await cargar(true);
+    } catch (err) {
+      addToast('Error al actualizar: ' + (err.message || String(err)), 'error');
+    }
+    setProcesandoSel(null);
+  };
+
+  // Borrado masivo: uno por uno, porque cada producto arrastra sus
+  // publicaciones, capturas y equivalencias en un orden fijo (FK RESTRICT).
+  const handleConfirmBorrarSeleccion = async () => {
+    const lista = seleccionados;
+    setConfirmBorrarSel(false);
+    setProcesandoSel({ hechos: 0, total: lista.length });
+    const errores = [];
+    for (let i = 0; i < lista.length; i++) {
+      const p = lista[i];
+      try {
+        await dbDeleteProducto(p.id, urlsPorProducto.get(p.id_interno) || []);
+      } catch (err) {
+        errores.push(`${p.id_interno}: ${err.message || String(err)}`);
+      }
+      setProcesandoSel({ hechos: i + 1, total: lista.length });
+    }
+    if (errores.length > 0) {
+      addToast(`${errores.length} productos no se eliminaron. ${errores.slice(0, 3).join(' · ')}`, 'error');
+    }
+    if (errores.length < lista.length) {
+      addToast(`${lista.length - errores.length} productos eliminados.`, 'success');
+    }
+    setSeleccion(new Set());
+    setProcesandoSel(null);
+    await cargar(true);
+  };
+
   const handleConfirmDeleteAll = async () => {
     setDeletingAll(true);
     try {
@@ -236,14 +310,21 @@ export default function Productos() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const rows = parseCSV(evt.target.result);
         if (rows.length === 0) {
           addToast('El archivo CSV está vacío o no se pudieron reconocer sus columnas.', 'error');
           return;
         }
-        setPreviewCsv({ informe: validarCsv(rows, 'productos'), nombre: file.name });
+        // Si no se pueden leer las dimensiones se valida igual, sin ese aviso.
+        let dimensiones = null;
+        try {
+          dimensiones = await dbNombresDimensionesCerradas();
+        } catch (eDim) {
+          console.warn('[CSV] No se pudieron leer categorías y unidades de negocio:', eDim?.message || String(eDim));
+        }
+        setPreviewCsv({ informe: validarCsv(rows, 'productos', dimensiones || {}), nombre: file.name });
       } catch (err) {
         addToast('No se pudo leer el archivo: ' + (err.message || String(err)), 'error');
       } finally {
@@ -325,17 +406,9 @@ export default function Productos() {
           }
 
           const unOriginal = getRowValue(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN', 'linea_negocio').trim();
-          const unRaw = unOriginal.toUpperCase();
           // Cualquier otra unidad ('Genéricos', 'Prescripción'...) se conserva
           // tal cual; antes caía en 'La Sante' sin avisar.
-          let unidad_negocio = unOriginal || 'La Sante';
-          if (unRaw.includes('PHARMETIQUE') || unRaw === 'PH') {
-            unidad_negocio = 'Pharmetique';
-          } else if (unRaw.includes('OTC')) {
-            unidad_negocio = 'OTC';
-          } else if (unRaw.includes('SANTE') || unRaw.includes('SANTÉ')) {
-            unidad_negocio = 'La Sante';
-          }
+          const unidad_negocio = resolverUnidadNegocio(unOriginal);
 
           // Sin columna `activo` no se toca el estado guardado: la recarga del
           // catalogo reactivaba los productos dados de baja.
@@ -633,6 +706,7 @@ export default function Productos() {
             <table className="m3-table">
               <thead>
                 <tr>
+                  <th className="w-10"></th>
                   <th>ID</th>
                   <th>Nombre del Producto</th>
                   <th>Presentación</th>
@@ -647,6 +721,7 @@ export default function Productos() {
               <tbody className="divide-y divide-surface-variant">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <tr key={n}>
+                    <td></td>
                     <td><div className="h-4 bg-gray-200 rounded w-16"></div></td>
                     <td>
                       <div className="h-4 bg-gray-200 rounded w-48 mb-1.5"></div>
@@ -693,10 +768,44 @@ export default function Productos() {
             )}
           </div>
         ) : (
+          <>
+          {seleccion.size > 0 && (
+            <div className="px-4 py-3 bg-secondary-container text-on-secondary-container border-b border-outline-variant flex flex-wrap items-center gap-3">
+              <span className="text-label-lg font-bold">
+                {procesandoSel
+                  ? `Procesando ${procesandoSel.hechos} de ${procesandoSel.total}…`
+                  : `${seleccion.size} ${seleccion.size === 1 ? 'producto seleccionado' : 'productos seleccionados'}`}
+              </span>
+              <div className="flex flex-wrap gap-2 ml-auto">
+                <button type="button" disabled={!!procesandoSel} onClick={() => cambiarActivoSeleccion(false)}
+                  className="m3-btn-outline h-9 px-4 text-label-lg disabled:opacity-38">
+                  Dar de baja
+                </button>
+                <button type="button" disabled={!!procesandoSel} onClick={() => cambiarActivoSeleccion(true)}
+                  className="m3-btn-outline h-9 px-4 text-label-lg disabled:opacity-38">
+                  Reactivar
+                </button>
+                <button type="button" disabled={!!procesandoSel} onClick={() => setConfirmBorrarSel(true)}
+                  className="h-9 px-4 rounded-full text-label-lg font-bold bg-error text-on-error disabled:opacity-38">
+                  Eliminar
+                </button>
+                <button type="button" disabled={!!procesandoSel} onClick={() => setSeleccion(new Set())}
+                  className="h-9 px-3 text-label-lg font-bold hover:underline disabled:opacity-38">
+                  Quitar selección
+                </button>
+              </div>
+            </div>
+          )}
           <div className="overflow-x-auto max-h-[750px] relative">
             <table className="m3-table">
               <thead className="m3-sticky-header">
                 <tr>
+                  <th className="w-10">
+                    <input type="checkbox" checked={todosFiltradosSeleccionados} onChange={alternarTodosFiltrados}
+                      disabled={!!procesandoSel}
+                      title={`Seleccionar los ${filtrados.length} productos filtrados (todas las páginas)`}
+                      aria-label="Seleccionar todos los productos filtrados" className="w-4 h-4 accent-primary cursor-pointer" />
+                  </th>
                   <th>ID</th>
                   <th>Nombre del Producto</th>
                   <th>Presentación</th>
@@ -714,7 +823,12 @@ export default function Productos() {
                   const links = urlsPorProducto.get(p.id_interno) || [];
                   const count = links.length;
                   return (
-                    <tr key={p.id} className="hover:bg-surface-low transition-colors">
+                    <tr key={p.id} className={`hover:bg-surface-low transition-colors ${seleccion.has(p.id) ? 'bg-secondary-container' : ''}`}>
+                      <td>
+                        <input type="checkbox" checked={seleccion.has(p.id)} onChange={() => alternarSeleccion(p.id)}
+                          disabled={!!procesandoSel}
+                          aria-label={`Seleccionar ${p.nombre}`} className="w-4 h-4 accent-primary cursor-pointer" />
+                      </td>
                       <td className="font-mono text-xs text-primary font-bold">{p.id_interno}</td>
                       <td>
                         <div className="font-bold text-on-surface text-sm font-display flex items-center gap-2 flex-wrap">
@@ -803,6 +917,7 @@ export default function Productos() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {/* Pagination Footer */}
@@ -868,6 +983,19 @@ export default function Productos() {
         isDanger={true}
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDelete(null)}
+      />
+
+      <ConfirmModal
+        isOpen={confirmBorrarSel}
+        title={`¿Eliminar ${seleccionados.length} productos?`}
+        message={`Se eliminarán ${seleccionados.length} productos junto con TODO su historial de precios${
+          urlsSeleccionadas > 0 ? ` y ${urlsSeleccionadas} URL(s) de competencia` : ''
+        }.\n\nEsta acción no se puede deshacer. Si solo quieres dejar de verlos o de vigilarlos, usa "Dar de baja": conserva el historial y se pueden reactivar.`}
+        confirmText={`Eliminar ${seleccionados.length}`}
+        cancelText="Cancelar"
+        isDanger={true}
+        onConfirm={handleConfirmBorrarSeleccion}
+        onCancel={() => setConfirmBorrarSel(false)}
       />
 
       {/* Confirm Modal to Delete All Products and History */}
