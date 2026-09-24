@@ -390,6 +390,13 @@ export async function dbUpsertProducto(data, cache = null) {
     unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null
   };
 
+  // CSV sobre un producto que ya existe: solo se escribe lo que trae el
+  // archivo. Una celda vacia significa "no cambiar", no "poner el valor por
+  // defecto" (antes un laboratorio vacio pasaba a La Sante, un empaque vacio
+  // a 1 unidad, etc.). El formulario y las altas nuevas siguen igual.
+  const soloLoQueViene = data.parcial === true && data.existe === true;
+  const texto = (v) => String(v ?? '').trim();
+
   let ok = false;
   let lastErr = null;
 
@@ -405,7 +412,7 @@ export async function dbUpsertProducto(data, cache = null) {
       let formaId = null;
 
       try {
-        const labNombre = cleanData.laboratorio.toUpperCase().trim();
+        const labNombre = (soloLoQueViene ? texto(data.laboratorio) : cleanData.laboratorio).toUpperCase().trim();
 
         // Solo estos son marca propia. Antes se insertaba TODO laboratorio
         // nuevo con es_propio: true, así que Calox, Genven o Megalabs
@@ -415,12 +422,12 @@ export async function dbUpsertProducto(data, cache = null) {
 
         // Laboratorio y forma se crean si no existen; categoria y unidad de
         // negocio no, porque son catalogos cerrados.
-        labId = await resolverDimension(cache, 'dim_laboratorios', labNombre, { es_propio: esLabPropio });
+        if (labNombre) labId = await resolverDimension(cache, 'dim_laboratorios', labNombre, { es_propio: esLabPropio });
 
-        const catNombre = cleanData.categoria.trim();
+        const catNombre = soloLoQueViene ? texto(data.categoria) : cleanData.categoria.trim();
         if (catNombre) catId = await resolverDimension(cache, 'dim_categorias', catNombre);
 
-        const unNombre = cleanData.unidad_negocio.trim();
+        const unNombre = soloLoQueViene ? texto(data.unidad_negocio) : cleanData.unidad_negocio.trim();
         if (unNombre) unId = await resolverDimension(cache, 'dim_unidades_negocio', unNombre);
 
         // La forma farmaceutica SI se crea si no existe: el catalogo semilla
@@ -435,7 +442,7 @@ export async function dbUpsertProducto(data, cache = null) {
       // Red de seguridad: dim_productos.laboratorio_id es NOT NULL. Si no se
       // pudo resolver ni crear el laboratorio, se cuelga de 'OTRO' (creándolo
       // si hace falta) en vez de asumir un id fijo.
-      if (labId === null) {
+      if (labId === null && !soloLoQueViene) {
         labId = await resolverDimension(cache, 'dim_laboratorios', 'OTRO', { es_propio: false });
       }
 
@@ -445,14 +452,26 @@ export async function dbUpsertProducto(data, cache = null) {
       // que los jarabes y las cremas quedaban mal medidos para el unidosis.
       const contenido = parsearContenido(cleanData.tamano, cleanData.unidosis);
 
-      const dimPayload = {
-        id_interno: cleanData.id_interno,
-        nombre: cleanData.nombre,
-        codigo_barra: cleanData.codigo_barra || null,
-        laboratorio_id: labId,
-        cantidad_contenido: contenido.cantidad,
-        unidad_contenido: contenido.unidad
-      };
+      let dimPayload;
+      if (soloLoQueViene) {
+        dimPayload = {};
+        if (texto(data.nombre)) dimPayload.nombre = cleanData.nombre;
+        if (texto(data.codigo_barra)) dimPayload.codigo_barra = cleanData.codigo_barra;
+        if (labId !== null) dimPayload.laboratorio_id = labId;
+        if (texto(data.tamano)) {
+          dimPayload.cantidad_contenido = contenido.cantidad;
+          dimPayload.unidad_contenido = contenido.unidad;
+        }
+      } else {
+        dimPayload = {
+          id_interno: cleanData.id_interno,
+          nombre: cleanData.nombre,
+          codigo_barra: cleanData.codigo_barra || null,
+          laboratorio_id: labId,
+          cantidad_contenido: contenido.cantidad,
+          unidad_contenido: contenido.unidad
+        };
+      }
 
       // Solo se manda lo que se conoce. PostgREST arma el UPDATE del upsert
       // con las claves que recibe, asi que mandar null borraria la forma, la
@@ -477,11 +496,19 @@ export async function dbUpsertProducto(data, cache = null) {
         dimPayload.tipo_mercado = String(data.market_type).toUpperCase().includes('MARCA') ? 'MARCA' : 'GENERICO';
       }
 
-      const upsertDim = payload => supabase
-        .from('dim_productos')
-        .upsert(payload, { onConflict: 'id_interno' })
-        .select('id')
-        .maybeSingle();
+      // Con soloLoQueViene es un UPDATE: un upsert (INSERT ... ON CONFLICT)
+      // exige las columnas NOT NULL aunque la fila ya exista. Si no hay nada
+      // que cambiar en dim_productos (p. ej. solo PVP) se lee el id.
+      const upsertDim = payload => {
+        const tabla = supabase.from('dim_productos');
+        if (!soloLoQueViene) {
+          return tabla.upsert(payload, { onConflict: 'id_interno' }).select('id').maybeSingle();
+        }
+        if (Object.keys(payload).length === 0) {
+          return tabla.select('id').eq('id_interno', cleanData.id_interno).maybeSingle();
+        }
+        return tabla.update(payload).eq('id_interno', cleanData.id_interno).select('id').maybeSingle();
+      };
 
       let { data: dimProd, error: dimErr } = await upsertDim(dimPayload);
       // Sin la fase 18 la columna no existe: se guarda todo lo demas.

@@ -11,7 +11,9 @@ import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
-import { parseCSV, getRowValue } from '../utils/csvParser';
+import { parsearContenido } from '../utils/parsearFicha';
+import { parseCSV, getRowValue, leerArchivoCsv } from '../utils/csvParser';
+import { leerFilaProducto, calcularCambios } from '../utils/filaProductoCsv';
 import {
   dbUpsertProducto,
   dbDeleteProducto,
@@ -29,11 +31,14 @@ import {
 // panel se puede editar y volver a subir tal cual.
 //
 // tipo_mercado es MARCA o GENERICO (dim_productos.tipo_mercado, fase 18).
+// pvp_propio_usd: cambiarlo en el archivo registra un PVP nuevo (el anterior
+// queda en el historial); dejarlo igual o vacio no toca nada.
 // Lleva `activo` para que reimportar no reactive productos dados de baja.
 // En los dos, una columna ausente conserva lo guardado.
 const COLUMNAS_CSV_PRODUCTOS = [
   'id_interno', 'nombre', 'codigo_barra', 'principio_activo', 'concentracion',
   'tamano', 'forma_farmaceutica', 'laboratorio', 'categoria', 'unidad_negocio', 'tipo_mercado', 'activo',
+  'pvp_propio_usd',
 ].map(key => ({ label: key, key }));
 
 const filaCsvProducto = p => ({
@@ -49,7 +54,36 @@ const filaCsvProducto = p => ({
   unidad_negocio: p.unidad_negocio || '',
   tipo_mercado: (p.market_type || 'GENERICO').toUpperCase(),
   activo: p.activo === false ? 'no' : 'si',
+  pvp_propio_usd: Number(p.pvp_propio_usd) > 0 ? Number(p.pvp_propio_usd).toFixed(2) : '',
 });
+
+// Un enlace esta "caido" si no trae precio desde hace mas de 7 dias (o nunca
+// lo trajo): suele ser una URL que la tienda cambio o retiro.
+const DIAS_ENLACE_CAIDO = 7;
+function enlaceCaido(e) {
+  if (!e.ultimo_scrape) return true;
+  return (Date.now() - new Date(e.ultimo_scrape).getTime()) / 86400000 > DIAS_ENLACE_CAIDO;
+}
+
+// Lo que le falta a la ficha para que el seguimiento de precios funcione.
+function faltantesFicha(p, enlaces) {
+  const faltan = [];
+  if (!p.principio_activo) faltan.push('molécula');
+  if (!p.concentracion) faltan.push('dosis');
+  if (!(Number(p.pvp_propio_usd) > 0)) faltan.push('PVP');
+  if (enlaces.length === 0) faltan.push('enlaces');
+  return faltan;
+}
+
+// Valor por el que se ordena cada columna.
+const ORDENES = {
+  nombre: p => (p.nombre || '').toLowerCase(),
+  linea: p => `${(p.unidad_negocio || '').toLowerCase()} ${(p.market_type || '').toLowerCase()}`,
+  laboratorio: p => `${(p.laboratorio || '').toLowerCase()} ${(p.categoria || '').toLowerCase()}`,
+  pvp: p => Number(p.pvp_propio_usd) || 0,
+  enlaces: (p, ctx) => (ctx.urlsPorProducto.get(p.id_interno) || []).length,
+  estado: p => (p.activo ? 0 : 1),
+};
 
 // Filtro como chip con menu: ocupa el ancho de su texto y no cuatro grupos de
 // botones. Con un valor distinto de 'todos' se marca como activo (check).
@@ -118,13 +152,16 @@ export default function Productos() {
   const [filtroUrls, setFiltroUrls] = useState('todos'); // todos | con_urls | sin_urls
   const [filtroTipo, setFiltroTipo] = useState('todos'); // todos | generico | marca
   const [filtroUn, setFiltroUn] = useState('todos'); // todos | lasante | pharmetique | otc
+  const [filtroFicha, setFiltroFicha] = useState('todos'); // todos | incompletos | completos
+  const [orden, setOrden] = useState({ campo: null, dir: 'asc' });
+  const [duplicarDe, setDuplicarDe] = useState(null); // producto a copiar en un alta
 
   // Seleccion multiple (por id). Se vacia al cambiar la busqueda o los
   // filtros, para no borrar o dar de baja productos que ya no se ven.
   const [seleccion, setSeleccion] = useState(() => new Set());
   const [confirmBorrarSel, setConfirmBorrarSel] = useState(false);
   const [procesandoSel, setProcesandoSel] = useState(null); // { hechos, total }
-  useEffect(() => { setSeleccion(new Set()); }, [search, filtroActivo, filtroUrls, filtroTipo, filtroUn]);
+  useEffect(() => { setSeleccion(new Set()); }, [search, filtroActivo, filtroUrls, filtroTipo, filtroUn, filtroFicha]);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
   const [progresoCsv, setProgresoCsv] = useState(null);
@@ -152,7 +189,7 @@ export default function Productos() {
 
   const filtrados = useMemo(() => {
     const term = search.toLowerCase().trim();
-    return productos.filter(p => {
+    const lista = productos.filter(p => {
       if (filtroActivo === 'activos' && !p.activo) return false;
       if (filtroActivo === 'inactivos' && p.activo) return false;
 
@@ -166,6 +203,13 @@ export default function Productos() {
       const links = urlsPorProducto.get(p.id_interno) || [];
       if (filtroUrls === 'con_urls' && links.length === 0) return false;
       if (filtroUrls === 'sin_urls' && links.length > 0) return false;
+      if (filtroUrls === 'caidos' && !links.some(enlaceCaido)) return false;
+
+      if (filtroFicha !== 'todos') {
+        const incompleta = faltantesFicha(p, links).length > 0;
+        if (filtroFicha === 'incompletos' && !incompleta) return false;
+        if (filtroFicha === 'completos' && incompleta) return false;
+      }
       if (!term) return true;
       return (
         (p.nombre || '').toLowerCase().includes(term) ||
@@ -176,14 +220,43 @@ export default function Productos() {
         (p.id_interno || '').toLowerCase().includes(term)
       );
     });
-  }, [productos, search, filtroActivo, filtroUrls, filtroTipo, filtroUn, urlsPorProducto]);
+    if (!orden.campo) return lista;
+    const valor = ORDENES[orden.campo];
+    const signo = orden.dir === 'asc' ? 1 : -1;
+    return [...lista].sort((a, b) => {
+      const va = valor(a, { urlsPorProducto });
+      const vb = valor(b, { urlsPorProducto });
+      if (va < vb) return -signo;
+      if (va > vb) return signo;
+      return (a.id_interno || '').localeCompare(b.id_interno || '');
+    });
+  }, [productos, search, filtroActivo, filtroUrls, filtroTipo, filtroUn, filtroFicha, orden, urlsPorProducto]);
 
-  const hayFiltros = filtroActivo !== 'todos' || filtroUrls !== 'todos' || filtroTipo !== 'todos' || filtroUn !== 'todos';
+  // Primer clic ascendente, segundo descendente, tercero sin orden.
+  const alternarOrden = (campo) => {
+    setOrden(o => o.campo !== campo ? { campo, dir: 'asc' } : o.dir === 'asc' ? { campo, dir: 'desc' } : { campo: null, dir: 'asc' });
+  };
+  const ariaSort = (campo) => (orden.campo === campo ? (orden.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+  // Funcion y no componente: un componente declarado aqui se remontaria en
+  // cada render y el boton perderia el foco al ordenar.
+  const encabezado = (campo, children, className = '') => (
+    <th aria-sort={ariaSort(campo)} className={className}>
+      <button type="button" onClick={() => alternarOrden(campo)} className={`m3-sort-btn ${orden.campo === campo ? 'is-active' : ''}`}>
+        {children}
+        <span className="material-symbols-outlined" aria-hidden="true">
+          {orden.campo !== campo ? 'unfold_more' : orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+        </span>
+      </button>
+    </th>
+  );
+
+  const hayFiltros = filtroActivo !== 'todos' || filtroUrls !== 'todos' || filtroTipo !== 'todos' || filtroUn !== 'todos' || filtroFicha !== 'todos';
   const limpiarFiltros = () => {
     setFiltroActivo('todos');
     setFiltroUrls('todos');
     setFiltroTipo('todos');
     setFiltroUn('todos');
+    setFiltroFicha('todos');
   };
 
   // Las unidades de negocio salen del catalogo, no de una lista fija: una
@@ -234,7 +307,7 @@ export default function Productos() {
 
   useEffect(() => {
     setPaginaActual(1);
-  }, [search, filtroActivo, filtroUrls, filtroTipo, filtroUn]);
+  }, [search, filtroActivo, filtroUrls, filtroTipo, filtroUn, filtroFicha, orden]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / itemsPorPagina));
   const productosPaginados = useMemo(() => {
@@ -274,6 +347,7 @@ export default function Productos() {
 
       addToast(isNew ? 'Producto creado con éxito' : 'Producto actualizado con éxito', 'success');
       setEditing(null);
+      setDuplicarDe(null);
       await cargar(true);
       return { success: true };
     } catch (err) {
@@ -322,18 +396,38 @@ export default function Productos() {
   };
 
   // Baja masiva: conserva historial y enlaces. Es lo recomendado.
+  // Alta o baja de uno o varios productos con un solo UPDATE. La baja ofrece
+  // "Deshacer" en el aviso: devuelve exactamente esos productos a activo.
+  const cambiarActivo = async (ids, activo, { deshacer = true } = {}) => {
+    const cambiados = await dbCambiarActivoProductos(ids, activo);
+    if (cambiados < ids.length) {
+      addToast(`Solo se actualizaron ${cambiados} de ${ids.length} productos. Revisa los permisos (RLS) de dim_productos.`, 'error');
+    } else {
+      const texto = ids.length === 1
+        ? `Producto ${activo ? 'reactivado' : 'dado de baja'}.`
+        : `${cambiados} productos ${activo ? 'reactivados' : 'dados de baja'}.`;
+      addToast(texto, 'success', !activo && deshacer ? {
+        accion: {
+          texto: 'Deshacer',
+          onClick: async () => {
+            try {
+              await cambiarActivo(ids, true, { deshacer: false });
+            } catch (err) {
+              addToast('No se pudo deshacer: ' + (err.message || String(err)), 'error');
+            }
+          },
+        },
+      } : {});
+    }
+    await cargar(true);
+  };
+
   const cambiarActivoSeleccion = async (activo) => {
     const ids = seleccionados.map(p => p.id_interno);
     setProcesandoSel({ hechos: 0, total: ids.length });
     try {
-      const cambiados = await dbCambiarActivoProductos(ids, activo);
-      if (cambiados < ids.length) {
-        addToast(`Solo se actualizaron ${cambiados} de ${ids.length} productos. Revisa los permisos (RLS) de dim_productos.`, 'error');
-      } else {
-        addToast(`${cambiados} productos ${activo ? 'reactivados' : 'dados de baja'}.`, 'success');
-      }
+      await cambiarActivo(ids, activo);
       setSeleccion(new Set());
-      await cargar(true);
     } catch (err) {
       addToast('Error al actualizar: ' + (err.message || String(err)), 'error');
     }
@@ -380,13 +474,11 @@ export default function Productos() {
     setConfirmDeleteAll(false);
   };
 
+  // Solo cambia `activo`: antes reescribia la ficha entera (laboratorio,
+  // moleculas, PVP...) para mover un booleano.
   const handleToggleActivo = async (producto) => {
     try {
-      await dbUpsertProducto({
-        ...producto,
-        activo: !producto.activo,
-      });
-      await cargar(true);
+      await cambiarActivo([producto.id_interno], !producto.activo);
     } catch (err) {
       addToast(err.message, 'error');
     }
@@ -397,29 +489,35 @@ export default function Productos() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const rows = parseCSV(evt.target.result);
-        if (rows.length === 0) {
-          addToast('El archivo CSV está vacío o no se pudieron reconocer sus columnas.', 'error');
-          return;
-        }
-        // Si no se pueden leer las dimensiones se valida igual, sin ese aviso.
-        let dimensiones = null;
-        try {
-          dimensiones = await dbNombresDimensionesCerradas();
-        } catch (eDim) {
-          console.warn('[CSV] No se pudieron leer categorías y unidades de negocio:', eDim?.message || String(eDim));
-        }
-        setPreviewCsv({ informe: validarCsv(rows, 'productos', dimensiones || {}), nombre: file.name });
-      } catch (err) {
-        addToast('No se pudo leer el archivo: ' + (err.message || String(err)), 'error');
-      } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
+    try {
+      const { texto, codificacion, acentosReparados } = await leerArchivoCsv(file);
+      const rows = parseCSV(texto);
+      if (rows.length === 0) {
+        addToast('El archivo CSV está vacío o no se pudieron reconocer sus columnas.', 'error');
+        return;
       }
-    };
-    reader.readAsText(file, 'UTF-8');
+      // Si no se pueden leer las dimensiones se valida igual, sin ese aviso.
+      let dimensiones = null;
+      try {
+        dimensiones = await dbNombresDimensionesCerradas();
+      } catch (eDim) {
+        console.warn('[CSV] No se pudieron leer categorías y unidades de negocio:', eDim?.message || String(eDim));
+      }
+      const informe = validarCsv(rows, 'productos', { ...(dimensiones || {}), idsExistentes });
+      const productosPorId = new Map(productos.map(p => [p.id_interno, p]));
+      setPreviewCsv({
+        informe,
+        nombre: file.name,
+        cambios: calcularCambios(informe.filasValidas, productosPorId),
+        nota: acentosReparados || codificacion !== 'UTF-8'
+          ? 'El archivo venía de Excel: se corrigieron los acentos al leerlo.'
+          : null,
+      });
+    } catch (err) {
+      addToast('No se pudo leer el archivo: ' + (err.message || String(err)), 'error');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   // Paso 2: el usuario vio el informe y confirmó. Ahora sí se escribe.
@@ -439,94 +537,35 @@ export default function Productos() {
         for (let idx = 0; idx < rows.length; idx++) {
           const row = rows[idx];
 
-          let id = getRowValue(
-            row,
-            'id_interno', 'id', 'ID Interno', 'ID_INTERNO', 'ID', 'codigo', 'código',
-            'cod', 'item', 'ref', 'sku', 'plu', 'clave', 'identificador', 'ID_PRODUCTO', 'PRODUCTO_ID'
-          );
-
-          let nombre = getRowValue(
-            row,
-            'nombre', 'Nombre', 'nombre_producto', 'Nombre Producto', 'producto',
-            'descripcion', 'descripción', 'descripcion_producto', 'desc', 'item_name',
-            'articulo', 'artículo', 'denominacion', 'denominación', 'PRODUCTO'
-          );
-
-          if (!id && nombre) {
-            id = `P${String(idx + 1).padStart(3, '0')}`;
-          } else if (id && !nombre) {
-            nombre = `Producto ${id}`;
-          } else if (!id && !nombre) {
-            const values = Object.values(row).filter(v => v !== undefined && String(v).trim() !== '');
-            if (values.length > 0) {
-              id = `P${String(idx + 1).padStart(3, '0')}`;
-              nombre = values[0];
-            } else {
-              skippedCount++;
-              continue;
-            }
+          const f = leerFilaProducto(row);
+          let id = f.id;
+          const nombre = f.nombre;
+          if (!id && !nombre) {
+            skippedCount++;
+            continue;
           }
+          if (!id) id = `P${String(idx + 1).padStart(3, '0')}`;
+          const existe = idsExistentes.has(id);
 
-          const codigo_barra = getRowValue(
-            row,
-            'codigo_barra', 'Código de Barra', 'Codigo de Barra', 'codigo_barras',
-            'Código de Barras', 'Codigo de Barras', 'gtin', 'GTIN', 'ean', 'EAN',
-            'upc', 'UPC', 'barcode', 'Bar Code', 'barcode_id'
-          );
-
-          const principio_activo = getRowValue(row, 'principio_activo', 'Principio Activo', 'molecula', 'molécula', 'Molecula', 'sustancia_activa');
-          const concentracion = getRowValue(row, 'concentracion', 'Concentración', 'Concentracion', 'dosis', 'concentracion_mg', 'conc');
-          const tamano = getRowValue(row, 'tamano', 'Tamaño', 'Tamano', 'tamano_empaque', 'presentacion', 'Presentación', 'Presentacion', 'empaque');
-          const forma_farmaceutica = getRowValue(row, 'forma_farmaceutica', 'Forma Farmacéutica', 'Forma Farmaceutica', 'forma', 'Forma');
-          const laboratorio = getRowValue(row, 'laboratorio', 'Laboratorio', 'lab', 'Lab', 'fabricante');
-          const catRaw = getRowValue(row, 'categoria', 'Categoría', 'Categoria', 'linea', 'grupo');
-          // Se respeta el nombre tal cual y lo resuelve dim_categorias. Antes se
-          // filtraba contra CATEGORIAS, que no coincide con la base
-          // ('Cardiovasculares' vs 'Cardiovascular', 'Analgésicos' vs
-          // 'Analgesicos'), y una recarga mandaba casi todo a 'Otros'.
-          const categoria = catRaw.trim() || 'Otros';
-
-          // Sin la columna (o vacia) no se toca lo guardado; antes todo lo que
-          // no decia MARCA se guardaba como GENERICO.
-          const tipoRaw = getRowValue(row, 'tipo_mercado', 'market_type', 'Market Type', 'Tipo').toUpperCase();
-          const market_type = tipoRaw ? (tipoRaw.includes('MARCA') ? 'MARCA' : 'GENERICO') : undefined;
-
-          const unOriginal = getRowValue(row, 'unidad_negocio', 'Unidad de Negocio', 'Unidad Negocio', 'unidad', 'un', 'UN', 'linea_negocio').trim();
-          // Cualquier otra unidad ('Genéricos', 'Prescripción'...) se conserva
-          // tal cual; antes caía en 'La Sante' sin avisar.
-          const unidad_negocio = resolverUnidadNegocio(unOriginal);
-
-          // Sin columna `activo` no se toca el estado guardado: la recarga del
-          // catalogo reactivaba los productos dados de baja.
-          // Busqueda exacta: getRowValue tambien acepta subcadenas y con
-          // 'activo' se quedaria con la columna principio_activo.
-          const claveActivo = Object.keys(row).find(k => k.trim().toLowerCase() === 'activo');
-          const activoRaw = claveActivo ? String(row[claveActivo] ?? '').trim().toLowerCase() : '';
-          const activo = activoRaw ? !['no', 'false', '0'].includes(activoRaw) : undefined;
-
-          const pvpRaw = getRowValue(row, 'pvp_propio_usd', 'PVP Propio USD', 'pvp', 'precio', 'pvp usd', 'precio usd', 'mi precio lista (usd)', 'costo');
-          const pvp_propio_usd = parseFloat(pvpRaw.replace(',', '.')) || 0;
+          // Producto que ya existe: se manda solo lo que trae el archivo y
+          // dbUpsertProducto lo aplica como UPDATE (celda vacia = no cambiar).
+          // Producto nuevo: los valores por defecto de siempre.
+          const { concentracion, tamano } = f;
           const presentacion = `${concentracion || ''} ${tamano || ''}`.trim();
-          const unidosis = parseUnidosisCount(tamano || presentacion, nombre);
-
           const cleanProd = {
+            ...f,
             id,
             id_interno: id,
-            nombre,
-            codigo_barra,
-            principio_activo,
-            concentracion,
-            forma_farmaceutica,
-            tamano,
+            nombre: nombre || (existe ? '' : `Producto ${id}`),
+            laboratorio: f.laboratorio || (existe ? '' : 'LA SANTE'),
+            categoria: f.categoria || (existe ? '' : 'Otros'),
+            unidad_negocio: f.unidad_negocio || (existe ? '' : 'La Sante'),
             presentacion,
-            laboratorio: laboratorio || 'La Sante',
-            categoria,
-            pvp_propio_usd,
-            unidosis,
-            market_type,
-            unidad_negocio,
-            activo,
+            unidosis: tamano ? parseUnidosisCount(tamano, nombre) : null,
+            parcial: true,
+            existe,
           };
+          const { laboratorio } = cleanProd;
 
           prodsToUpsert.push(cleanProd);
 
@@ -591,11 +630,14 @@ export default function Productos() {
 
           setProductos(prev => {
             const map = new Map(prev.map(p => [p.id, p]));
-            prodsToUpsert.forEach(p => map.set(p.id, {
-              ...p,
-              activo: p.activo ?? map.get(p.id)?.activo ?? true,
-              market_type: p.market_type ?? map.get(p.id)?.market_type ?? 'GENERICO',
-            }));
+            // Solo lo que traia el archivo pisa lo que ya se veia; el resto
+            // llega con refreshProductos.
+            prodsToUpsert.forEach(p => {
+              const previo = map.get(p.id) || {};
+              const conValor = Object.fromEntries(Object.entries(p).filter(([k, v]) =>
+                v !== '' && v !== undefined && v !== null && !(k === 'pvp_propio_usd' && !v)));
+              map.set(p.id, { ...previo, ...conValor });
+            });
             return Array.from(map.values()).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
           });
 
@@ -790,7 +832,7 @@ export default function Productos() {
                       <span className="material-symbols-outlined">close</span>
                     </button>
                   ) : (
-                    <kbd className="m3-kbd" title="Pulsa / para buscar">/</kbd>
+                    <kbd className="m3-kbd hidden md:inline-flex" title="Pulsa / para buscar">/</kbd>
                   )}
                 </label>
                 <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
@@ -803,7 +845,9 @@ export default function Productos() {
                 <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
                   opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
                 <FiltroChip etiqueta="Enlaces" icono="link" valor={filtroUrls} onChange={setFiltroUrls}
-                  opciones={[['todos', 'Enlaces: todos'], ['con_urls', 'Con enlaces'], ['sin_urls', 'Sin enlaces']]} />
+                  opciones={[['todos', 'Enlaces: todos'], ['con_urls', 'Con enlaces'], ['sin_urls', 'Sin enlaces'], ['caidos', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`]]} />
+                <FiltroChip etiqueta="Ficha" icono="fact_check" valor={filtroFicha} onChange={setFiltroFicha}
+                  opciones={[['todos', 'Ficha: todas'], ['incompletos', 'Incompletas'], ['completos', 'Completas']]} />
                 <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
                   opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
                 <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUn} onChange={setFiltroUn}
@@ -840,7 +884,57 @@ export default function Productos() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Celular: tarjetas. Una tabla de 8 columnas no cabe en 400 px. */}
+          <ul className="md:hidden divide-y divide-outline-variant" aria-label="Productos">
+            {productosPaginados.map(p => {
+              const enlacesProducto = urlsPorProducto.get(p.id_interno) || [];
+              const masBarato = competidorMasBarato(enlacesProducto);
+              const pvp = Number(p.pvp_propio_usd) || 0;
+              const faltan = faltantesFicha(p, enlacesProducto);
+              const caidos = enlacesProducto.filter(enlaceCaido).length;
+              const seleccionado = seleccion.has(p.id);
+              return (
+                <li key={p.id} className={`m3-product-card ${seleccionado ? 'is-selected' : ''}`}>
+                  <input type="checkbox" checked={seleccionado} onChange={() => alternarSeleccion(p.id)}
+                    disabled={!!procesandoSel} aria-label={`Seleccionar ${p.nombre}`} className="m3-checkbox mt-1" />
+                  <button type="button" onClick={() => setFichaId(p.id)} className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className="m3-cell-primary">{p.nombre}</span>
+                      {faltan.length > 0 && (
+                        <span className="m3-incompleto" aria-label={`Falta: ${faltan.join(', ')}`}>
+                          <span className="material-symbols-outlined" aria-hidden="true">error</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="m3-cell-secondary">
+                      <span className="font-mono">{p.id_interno}</span> · {[p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ')}
+                    </div>
+                    <div className="m3-cell-secondary">
+                      {p.unidad_negocio || '—'} · {(p.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico'}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                      <span className="m3-cell-primary tabular-nums">{pvp > 0 ? `$${pvp.toFixed(2)}` : 'Sin PVP'}</span>
+                      {masBarato && (
+                        <span className={`m3-cell-secondary tabular-nums ${pvp > precioEnlaceUsd(masBarato) ? 'text-error' : ''}`}>
+                          comp. ${precioEnlaceUsd(masBarato).toFixed(2)}
+                        </span>
+                      )}
+                      <span className={`m3-count ${enlacesProducto.length === 0 ? 'm3-count-warning' : caidos > 0 ? 'm3-count-stale' : ''}`}>
+                        <span className="material-symbols-outlined" aria-hidden="true">{enlacesProducto.length === 0 ? 'link_off' : caidos > 0 ? 'schedule' : 'link'}</span>
+                        {enlacesProducto.length}
+                      </span>
+                      <span className={`m3-status ${p.activo ? 'is-on' : ''}`}>{p.activo ? 'Activo' : 'De baja'}</span>
+                    </div>
+                  </button>
+                  <button type="button" onClick={() => setEditing(p.id)} className="m3-icon-btn" aria-label={`Editar ${p.nombre}`}>
+                    <span className="material-symbols-outlined">edit</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <table className="m3-table m3-table-productos">
               <colgroup>
                 <col className="w-12" />
@@ -861,13 +955,13 @@ export default function Productos() {
                       title={`Seleccionar los ${filtrados.length} productos de esta lista`}
                       aria-label="Seleccionar todos los productos de esta lista" className="m3-checkbox" />
                   </th>
-                  <th>Producto</th>
+                  {encabezado('nombre', 'Producto')}
                   <th>Presentación</th>
-                  <th>Línea</th>
-                  <th>Laboratorio</th>
-                  <th className="text-right" title="PVP propio y precio más bajo de la competencia">PVP</th>
-                  <th className="text-center">Enlaces</th>
-                  <th>Estado</th>
+                  {encabezado('linea', 'Línea')}
+                  {encabezado('laboratorio', 'Laboratorio')}
+                  {encabezado('pvp', 'PVP', 'text-right')}
+                  {encabezado('enlaces', 'Enlaces', 'text-center')}
+                  {encabezado('estado', 'Estado')}
                   <th className="m3-sticky-actions"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
@@ -878,6 +972,8 @@ export default function Productos() {
                   const masBarato = competidorMasBarato(enlacesProducto);
                   const pvp = Number(p.pvp_propio_usd) || 0;
                   const seleccionado = seleccion.has(p.id);
+                  const faltan = faltantesFicha(p, enlacesProducto);
+                  const caidos = enlacesProducto.filter(enlaceCaido).length;
                   return (
                     <tr key={p.id} className={seleccionado ? 'm3-row-selected' : ''}>
                       <td>
@@ -886,9 +982,17 @@ export default function Productos() {
                           aria-label={`Seleccionar ${p.nombre}`} className="m3-checkbox" />
                       </td>
                       <td>
-                        <button type="button" onClick={() => setFichaId(p.id)} className="m3-cell-link" title="Abrir la ficha del producto">
-                          <span className="m3-cell-primary">{p.nombre}</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <button type="button" onClick={() => setFichaId(p.id)} className="m3-cell-link min-w-0" title="Abrir la ficha del producto">
+                            <span className="m3-cell-primary">{p.nombre}</span>
+                          </button>
+                          {faltan.length > 0 && (
+                            <span className="m3-incompleto" title={`Ficha incompleta. Falta: ${faltan.join(', ')}`}
+                              aria-label={`Ficha incompleta. Falta: ${faltan.join(', ')}`}>
+                              <span className="material-symbols-outlined" aria-hidden="true">error</span>
+                            </span>
+                          )}
+                        </div>
                         <div className="m3-cell-secondary" title={`${p.id_interno} · ${p.principio_activo || 'sin molécula'}`}>
                           <span className="font-mono">{p.id_interno}</span>
                           {p.principio_activo ? <> · {p.principio_activo}</> : <> · <span className="italic">sin molécula</span></>}
@@ -919,7 +1023,13 @@ export default function Productos() {
                             <span className="material-symbols-outlined" aria-hidden="true">link_off</span>0
                           </span>
                         ) : (
-                          <span className="m3-count" title={`${enlaces} enlaces de competencia`}>{enlaces}</span>
+                          <span className={`m3-count ${caidos > 0 ? 'm3-count-stale' : ''}`}
+                            title={caidos > 0
+                              ? `${enlaces} enlaces · ${caidos} sin precio hace más de ${DIAS_ENLACE_CAIDO} días (¿URL rota?)`
+                              : `${enlaces} enlaces de competencia`}>
+                            {caidos > 0 && <span className="material-symbols-outlined" aria-hidden="true">schedule</span>}
+                            {enlaces}
+                          </span>
                         )}
                       </td>
                       <td>
@@ -948,6 +1058,7 @@ export default function Productos() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {filtrados.length > 0 && (
@@ -989,6 +1100,8 @@ export default function Productos() {
             presentacion={describirPresentacion(producto)}
             onClose={() => setFichaId(null)}
             onEditar={() => { setFichaId(null); setEditing(producto.id); }}
+            onDuplicar={() => { setFichaId(null); setDuplicarDe(producto); setEditing('new'); }}
+            esCaido={enlaceCaido}
             onAnalisis={() => { setFichaId(null); setAnalisis({ producto, competencia: enlaces }); }}
             onAlternarActivo={() => handleToggleActivo(producto)}
           />
@@ -1009,10 +1122,12 @@ export default function Productos() {
       {editing && (
         <ProductoModal
           producto={editing === 'new' ? null : productos.find(p => p.id === editing)}
+          plantilla={editing === 'new' ? duplicarDe : null}
+          productos={productos}
           sugerirId={sugerirId}
           idsExistentes={idsExistentes}
           onSave={handleSave}
-          onClose={() => setEditing(null)}
+          onClose={() => { setEditing(null); setDuplicarDe(null); }}
         />
       )}
 
@@ -1095,7 +1210,8 @@ export default function Productos() {
               <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
               <div>concentracion, tamano, forma_farmaceutica, laboratorio, categoria</div>
               <div>unidad_negocio, tipo_mercado <span className="text-on-surface-variant font-sans font-medium">(MARCA / GENERICO)</span></div>
-              <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
+              <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span>, pvp_propio_usd</div>
+              <div className="font-sans font-medium text-on-surface-variant pt-1">Una celda vacía no cambia nada. Para actualizar productos que ya existen basta el id_interno y las columnas que cambian (p. ej. solo el PVP).</div>
             </div>
             <div className="flex justify-between items-center pt-1">
               <button type="button" onClick={downloadCsvPlantilla}
@@ -1136,6 +1252,8 @@ export default function Productos() {
           nombreArchivo={previewCsv.nombre}
           importando={isUploadingCsv}
           progreso={progresoCsv}
+          cambios={previewCsv.cambios}
+          nota={previewCsv.nota}
           onConfirmar={confirmarImportacion}
           onCancelar={() => setPreviewCsv(null)}
         />
@@ -1191,23 +1309,26 @@ const normalizar = (t) => String(t || '').toLowerCase().normalize('NFD').replace
 // con los titulos de las tiendas (ver ESTADO_DEL_PROYECTO.md).
 const RE_DOSIS_EN_NOMBRE = /\d+([.,]\d+)?\s*(mg|mcg|g|gr|ml|%|ui)\b/i;
 
-function ProductoModal({ producto, sugerirId, idsExistentes, onSave, onClose }) {
+function ProductoModal({ producto, plantilla = null, productos = [], sugerirId, idsExistentes, onSave, onClose }) {
   const dimensiones = useDimensiones();
   const isNew = !producto;
+  // Al duplicar se copia la ficha de otro producto, salvo lo que identifica
+  // a uno solo (ID y codigo de barras) y el PVP, que suele ser otro.
+  const base = producto || plantilla;
   const [form, setForm] = useState({
     id_interno: producto?.id_interno || sugerirId(),
-    nombre: producto?.nombre || '',
+    nombre: base?.nombre || '',
     codigo_barra: producto?.codigo_barra || '',
-    principio_activo: producto?.principio_activo || '',
-    concentracion: producto?.concentracion || '',
-    tamano: producto?.tamano || '',
-    forma_farmaceutica: producto?.forma_farmaceutica || '',
+    principio_activo: base?.principio_activo || '',
+    concentracion: base?.concentracion || '',
+    tamano: base?.tamano || '',
+    forma_farmaceutica: base?.forma_farmaceutica || '',
     // Los productos son propios: La Sante es el fabricante por defecto.
-    laboratorio: producto?.laboratorio || 'LA SANTE',
-    categoria: producto?.categoria && producto.categoria !== 'Otros' ? producto.categoria : '',
+    laboratorio: base?.laboratorio || 'LA SANTE',
+    categoria: base?.categoria && base.categoria !== 'Otros' ? base.categoria : '',
     // Unidad y tipo en blanco en un alta: hay que elegirlos a conciencia.
-    unidad_negocio: producto?.unidad_negocio || '',
-    market_type: producto?.market_type || '',
+    unidad_negocio: base?.unidad_negocio || '',
+    market_type: base?.market_type || '',
     pvp_propio_usd: producto?.pvp_propio_usd ? String(producto.pvp_propio_usd) : '',
     activo: producto?.activo ?? true,
   });
@@ -1269,6 +1390,25 @@ function ProductoModal({ producto, sugerirId, idsExistentes, onSave, onClose }) 
   };
 
   const nombreConDosis = RE_DOSIS_EN_NOMBRE.test(form.nombre);
+
+  // Posibles duplicados en un alta: mismo nombre, dosis y empaque, o mismo
+  // codigo de barras. Avisa, no bloquea: puede ser una presentacion distinta.
+  const duplicados = useMemo(() => {
+    if (!isNew) return [];
+    const nombre = normalizar(form.nombre);
+    const dosis = normalizar(form.concentracion).replace(/\s/g, '');
+    const empaque = form.tamano.trim() ? parsearContenido(form.tamano) : null;
+    const ean = form.codigo_barra.trim();
+    if (!nombre && !ean) return [];
+    return productos.filter(p => {
+      if (ean && p.codigo_barra && p.codigo_barra === ean && p.codigo_barra !== p.id_interno) return true;
+      if (!nombre || normalizar(p.nombre) !== nombre) return false;
+      if (normalizar(p.concentracion).replace(/\s/g, '') !== dosis) return false;
+      if (!empaque) return !form.tamano.trim() && !p.tamano;
+      const otro = parsearContenido(p.tamano);
+      return otro.cantidad === empaque.cantidad && otro.unidad === empaque.unidad;
+    }).slice(0, 3);
+  }, [isNew, productos, form.nombre, form.concentracion, form.tamano, form.codigo_barra]);
   const vistaPrevia = [form.nombre.trim(), form.concentracion.trim(),
     describirPresentacion({ tamano: form.tamano, forma_farmaceutica: form.forma_farmaceutica }).replace(/^—$/, '')]
     .filter(Boolean).join(' · ');
@@ -1277,9 +1417,11 @@ function ProductoModal({ producto, sugerirId, idsExistentes, onSave, onClose }) 
     <ModalWrapper
       isOpen={true}
       onClose={onClose}
-      title={isNew ? 'Nuevo producto' : 'Editar producto'}
-      subtitle={isNew ? 'Los campos con * son obligatorios.' : `${form.id_interno} · ${producto?.nombre || ''}`}
-      icon={isNew ? 'add_box' : 'edit'}
+      title={plantilla ? 'Duplicar producto' : isNew ? 'Nuevo producto' : 'Editar producto'}
+      subtitle={plantilla
+        ? `Copia de ${plantilla.id_interno} ${plantilla.nombre}. Cambia lo que distingue a esta presentación (empaque, dosis) y el PVP.`
+        : isNew ? 'Los campos con * son obligatorios.' : `${form.id_interno} · ${producto?.nombre || ''}`}
+      icon={plantilla ? 'content_copy' : isNew ? 'add_box' : 'edit'}
       maxWidth="max-w-3xl"
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3 w-full">
@@ -1298,6 +1440,16 @@ function ProductoModal({ producto, sugerirId, idsExistentes, onSave, onClose }) 
       }
     >
       <form id="producto-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        {duplicados.length > 0 && (
+          <div className="m3-form-alert m3-form-alert-warning" role="status">
+            <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
+            <span className="flex-1">
+              Parece que ya existe:{' '}
+              {duplicados.map(d => `${d.id_interno} ${d.nombre}${d.concentracion ? ` · ${d.concentracion}` : ''} · ${describirPresentacion(d)}`).join('; ')}.
+              Revisa antes de crearlo.
+            </span>
+          </div>
+        )}
         {errorGeneral && (
           <div className="m3-form-alert" role="alert">
             <span className="material-symbols-outlined" aria-hidden="true">error</span>

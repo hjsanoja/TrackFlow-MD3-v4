@@ -135,6 +135,8 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #29 | `tipo_mercado` guardado (fase 18) y en los CSV |
 | #30 | Rediseño M3 de la tabla: 8 columnas uniformes, acciones fijas a la derecha, barra contextual de selección, buscador grande con atajo `/`, filtros como chips |
 | #31 | Ficha lateral del producto, columna PVP, filas por página (10 por defecto), laboratorio único (fase 19) |
+| #33 | Formulario rediseñado: secciones, unidad y tipo como chips obligatorios sin valor por defecto, LA SANTE por defecto, listas que muestran todas las opciones (`ComboField`), PVP, validación en línea |
+| #34 | Ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
 
 ### Cómo queda la pantalla
 
@@ -156,33 +158,33 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 
 ```
 id_interno, nombre, codigo_barra, principio_activo, concentracion, tamano,
-forma_farmaceutica, laboratorio, categoria, unidad_negocio, tipo_mercado, activo
+forma_farmaceutica, laboratorio, categoria, unidad_negocio, tipo_mercado,
+activo, pvp_propio_usd
 ```
 
 - **Plantilla de carga** (modal de Carga masiva): todo el catálogo,
   `productos_plantilla_carga_<fecha>.csv`. **Reporte** (botón Exportar): lo
   filtrado en pantalla, `productos_reporte_<fecha>.csv`. Los dos se pueden
-  volver a subir tal cual. Ninguno lleva precio: no tocan el PVP.
-- La carga es un **upsert por `id_interno`**: lo que no está en el archivo no
-  se toca. No toca `publicaciones` ni `fact_precios`.
+  volver a subir tal cual.
+- **Celda vacía = no cambiar** (PR #34). Un producto que ya existe se
+  actualiza con un `UPDATE` de solo las columnas con valor
+  (`dbUpsertProducto` con `parcial` + `existe`). El `nombre` solo es
+  obligatorio en productos nuevos, así que `id_interno,pvp_propio_usd` basta
+  para actualizar PVP en masa. Un PVP igual al vigente no crea historial.
+  Contrapartida: por CSV no se puede *borrar* un valor (vaciar el código de
+  barras, p. ej.); eso se hace en el formulario.
+- **Revisión previa "antes → después"** por producto
+  (`utils/filaProductoCsv.js`: `leerFilaProducto` + `calcularCambios`, que
+  usan el importador y la revisión, así leen el archivo igual).
+- **Archivos de Excel**: `leerArchivoCsv` prueba UTF-8, si no Windows-1252, y
+  repara acentos ya rotos (`SuspensiÃ³n` → `Suspensión`).
+- La carga es por `id_interno`: lo que no está en el archivo no se toca. No
+  toca `publicaciones` ni `fact_precios`.
 - **Varias moléculas:** `Losartán + Hidroclorotiazida` con `50 mg + 12.5 mg`,
   emparejadas por posición. Las dosis también se separan con ` - `. Una
   molécula sin dosis no se guarda (la columna es `NOT NULL > 0`).
 - Laboratorio, forma farmacéutica y molécula **se crean solos** si no existen.
   Categoría y unidad de negocio **no**: la revisión previa avisa.
-
-**⚠️ Celda vacía NO siempre es "no cambiar"** (Hernando decidió dejarlo así
-por ahora; la plantilla descargada trae todo lleno, así que partir de ella es
-seguro):
-
-| Columna vacía | Qué pasa |
-|---|---|
-| `principio_activo`, `concentracion`, `forma_farmaceutica`, `tipo_mercado`, `activo` | Se conserva |
-| `codigo_barra` | Lo borra |
-| `laboratorio` | Pasa a LA SANTE |
-| `categoria` | Pasa a Otros |
-| `unidad_negocio` | Pasa a La Sante |
-| `tamano` | Pasa a 1 unidad |
 
 ### Datos que Hernando tiene pendientes (no son bugs)
 
@@ -337,8 +339,8 @@ resto quedaban 71 colores hex sueltos (sobre todo gradientes y Recharts en
 Competencia, Cadenas y Dimensiones.
 
 **Ideas que quedaron sobre la mesa**
-- Celda vacía = "no cambiar" en todas las columnas del CSV (hoy no; ver la
-  tabla de arriba).
+- Productos: filtro "más caro que la competencia", historial del PVP en la
+  ficha, gestionar enlaces desde la ficha, filtros en la dirección web.
 - Siglas de unidad de negocio (`PH`): la tabla no tiene columna `codigo`;
   haría falta SQL.
 
