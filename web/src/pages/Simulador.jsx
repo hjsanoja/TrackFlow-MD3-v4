@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import StatCard from '../components/StatCard';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
@@ -1398,88 +1399,69 @@ export default function Simulador({ user, userDoc }) {
           {/* Side-by-side KPI Output Cards */}
           <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Simulated IPR Card */}
-            <div className="neural-card p-5 flex items-center justify-between">
-              <div className="space-y-1 flex-1 min-w-0 pr-2">
-                <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Paridad Global Simulada</span>
-                <div className="flex items-baseline gap-2">
-                  <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-primary' : 'text-on-surface-variant'}`}>
-                    {simulatedStats.simGlobalIpr ? `${simulatedStats.simGlobalIpr.toFixed(1)}%` : '—'}
-                  </div>
-                  {simulacionVariacion !== 0 && (
-                    <span className={`text-label-sm font-mono font-bold flex items-center ${simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'text-emerald-600' : 'text-error'}`}>
+            {/* Los tres usan el StatCard único. El delta va dentro de `value`
+                porque forma parte de la cifra, no es un dato aparte. */}
+            <StatCard
+              label="Paridad Global Simulada"
+              value={
+                <span className="inline-flex items-baseline gap-2">
+                  {simulatedStats.simGlobalIpr ? `${simulatedStats.simGlobalIpr.toFixed(1)}%` : '—'}
+                  {simulacionVariacion !== 0 && simulatedStats.simGlobalIpr && (
+                    <span className={`text-label-md font-mono font-bold inline-flex items-center ${simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-error'}`}>
                       <span className="material-symbols-outlined text-body-sm leading-none mr-0.5">
                         {simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'arrow_downward' : 'arrow_upward'}
                       </span>
                       {Math.abs(simulatedStats.simGlobalIpr - (kpiStats.globalIpr || 100)).toFixed(1)}%
                     </span>
                   )}
-                </div>
-                <p className="text-label-md text-on-surface-variant font-sans truncate">
-                  Base: <strong className="font-mono">{kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}</strong>
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-2">
-                <span className="material-symbols-outlined text-2xl select-none">speed</span>
-              </div>
-            </div>
+                </span>
+              }
+              hint={`Base: ${kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}`}
+              icon="speed"
+              tono="primary"
+            />
 
-            {/* Simulated Leadership Percentage Card */}
-            <div className="neural-card p-5 flex items-center justify-between">
-              <div className="space-y-1 flex-1 min-w-0 pr-2">
-                <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Liderazgo Góndola</span>
-                <div className="flex items-baseline gap-2">
-                  <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-secondary' : 'text-on-surface-variant'}`}>
-                    {simulatedStats.porcentajeLiderazgoSim}%
-                  </div>
+            <StatCard
+              label="Liderazgo Góndola"
+              value={
+                <span className="inline-flex items-baseline gap-2">
+                  {simulatedStats.porcentajeLiderazgoSim}%
                   {simulacionVariacion !== 0 && (
-                    <span className={`text-label-sm font-mono font-bold flex items-center ${simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'text-emerald-600' : 'text-error'}`}>
+                    <span className={`text-label-md font-mono font-bold inline-flex items-center ${simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-error'}`}>
                       <span className="material-symbols-outlined text-body-sm leading-none mr-0.5">
                         {simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'arrow_upward' : 'arrow_downward'}
                       </span>
                       {Math.abs(simulatedStats.porcentajeLiderazgoSim - kpiStats.porcentajeLiderazgoPropio)}%
                     </span>
                   )}
-                </div>
-                <p className="text-label-md text-on-surface-variant font-sans truncate">
-                  Base: <strong className="font-mono">{kpiStats.porcentajeLiderazgoPropio}%</strong>
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-secondary-container/50 border border-secondary/20 flex items-center justify-center text-secondary shrink-0 ml-2">
-                <span className="material-symbols-outlined text-2xl select-none">leaderboard</span>
-              </div>
-            </div>
+                </span>
+              }
+              hint={`Base: ${kpiStats.porcentajeLiderazgoPropio}%`}
+              icon="leaderboard"
+            />
 
-            {/* Elasticity / Estimated Margin Card */}
-            <div className="neural-card p-5 flex items-center justify-between">
-              <div className="space-y-1 flex-1 min-w-0 pr-2">
-                <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Impacto en Góndola</span>
-                <div className={`text-base font-display font-extrabold flex items-center gap-1 ${
-                  simulacionVariacion > 12 ? 'text-error'
-                  : simulacionVariacion > 0 ? 'text-amber-600'
-                  : simulacionVariacion < 0 ? 'text-emerald-700'
-                  : 'text-on-surface-variant'
-                }`}>
-                  <span className="material-symbols-outlined text-base leading-none">
+            <StatCard
+              label="Impacto en Góndola"
+              value={
+                <span className="inline-flex items-center gap-1.5 text-xl">
+                  <span className="material-symbols-outlined text-[22px] leading-none">
                     {simulacionVariacion > 0 ? 'trending_up' : simulacionVariacion < 0 ? 'trending_down' : 'remove'}
                   </span>
                   {simulacionVariacion > 12 ? 'Riesgo Crítico'
                     : simulacionVariacion > 0 ? 'Margen Elevado'
                     : simulacionVariacion < 0 ? 'Volumen Activo'
                     : 'Estable'}
-                </div>
-                <p className="text-label-md text-on-surface-variant font-sans truncate">
-                  Brecha mín: <strong className="font-mono">{simulatedStats.brechaPromedioVsMinSim.toFixed(1)}%</strong>
-                </p>
-              </div>
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ml-2 ${
-                simulacionVariacion > 12 ? 'bg-rose-50 border border-rose-200 text-rose-700'
-                : simulacionVariacion > 0 ? 'bg-amber-50 border border-amber-200 text-amber-700'
-                : simulacionVariacion < 0 ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                : 'bg-surface-low border border-outline-variant/60 text-outline'
-              }`}>
-                <span className="material-symbols-outlined text-2xl select-none">insights</span>
-              </div>
-            </div>
+                </span>
+              }
+              hint={`Brecha mínima: ${simulatedStats.brechaPromedioVsMinSim.toFixed(1)}%`}
+              icon="insights"
+              tono={
+                simulacionVariacion > 12 ? 'negative'
+                : simulacionVariacion > 0 ? 'warning'
+                : simulacionVariacion < 0 ? 'positive'
+                : 'neutral'
+              }
+            />
           </div>
         </div>
       </div>

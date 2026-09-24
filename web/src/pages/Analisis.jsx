@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import StatCard from '../components/StatCard';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { getChainColor, getLabColor } from '../utils/brandColors';
@@ -248,7 +249,7 @@ export default function Analisis() {
             <select
               value={selectedCategoria}
               onChange={e => setSelectedCategoria(e.target.value)}
-              className="m3-select"
+              className="m3-select m3-select-dense"
             >
               {categorias.map(cat => (
                 <option key={cat} value={cat}>
@@ -279,72 +280,40 @@ export default function Analisis() {
       {/* BLOQUE DE KPIs PRINCIPALES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: ICP */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-on-surface-variant block">Índice ICP</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-display font-extrabold text-primary">{analisisData.icpScore}%</span>
-              <span className="text-label-sm font-mono font-semibold text-on-surface-variant">({analisisData.totalAnalizados} SKUs)</span>
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              Score de competitividad global vs mercado.
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">speed</span>
-          </div>
-        </div>
+        <StatCard
+            label="Índice ICP"
+            value={<>{analisisData.icpScore}% ({analisisData.totalAnalizados} SKUs)</>}
+            hint="Score de competitividad global vs mercado."
+            icon="speed"
+            tono="primary"
+          />
 
         {/* KPI 2: Sobreprecio */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-rose-700 block">Sobreprecio</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-display font-extrabold text-rose-700">{analisisData.carosCount}</span>
-              <span className="text-label-sm font-mono font-semibold text-rose-600">SKUs (&gt;+3%)</span>
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              Superan la media del mercado por más de 3%.
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center justify-center shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">warning</span>
-          </div>
-        </div>
+        <StatCard
+            label="Sobreprecio"
+            value={<>{analisisData.carosCount} SKUs (&gt;+3%)</>}
+            hint="Superan la media del mercado por más de 3%."
+            icon="warning"
+            tono="negative"
+          />
 
         {/* KPI 3: Alineados */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-sky-700 block">Alineados</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-display font-extrabold text-sky-700">{analisisData.justosCount}</span>
-              <span className="text-label-sm font-mono font-semibold text-sky-600">SKUs (±3%)</span>
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              Dentro del rango promedio del mercado.
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">balance</span>
-          </div>
-        </div>
+        <StatCard
+            label="Alineados"
+            value={<>{analisisData.justosCount} SKUs (±3%)</>}
+            hint="Dentro del rango promedio del mercado."
+            icon="balance"
+            tono="primary"
+          />
 
         {/* KPI 4: Más Económicos */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-emerald-700 block">Económicos</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-display font-extrabold text-emerald-700">{analisisData.baratosCount}</span>
-              <span className="text-label-sm font-mono font-semibold text-emerald-600">SKUs (&lt;-3%)</span>
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              Ventaja competitiva por debajo del promedio.
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">trending_down</span>
-          </div>
-        </div>
+        <StatCard
+            label="Económicos"
+            value={<>{analisisData.baratosCount} SKUs (&lt;-3%)</>}
+            hint="Ventaja competitiva por debajo del promedio."
+            icon="trending_down"
+            tono="positive"
+          />
       </div>
 
       {/* SIMULADOR BCV + POSICIONAMIENTO */}

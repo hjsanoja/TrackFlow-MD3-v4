@@ -321,7 +321,7 @@ function CadenaModal({ cadena, onSave, onClose }) {
         <Field label="Módulo de Scraping" hint="Módulo Python de scraping asociado en backend">
           <select required value={form.modulo_scraper}
             onChange={e => handleChange('modulo_scraper', e.target.value)}
-            className="m3-select w-full bg-surface-container-lowest text-on-surface">
+            className="m3-select w-full">
             {SCRAPERS_DISPONIBLES.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}

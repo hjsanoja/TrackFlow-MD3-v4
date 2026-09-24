@@ -505,24 +505,74 @@ body {
     padding-left: 2.625rem !important;
   }
 
+  /* -------------------------------------------------------------------------
+     DESPLEGABLES
+     -------------------------------------------------------------------------
+     Habia 28 desplegables con 14 estilos distintos: unos con .m3-select, otros
+     con .m3-input, y varios con clases sueltas que mezclaban rounded-full,
+     rounded-xl y rounded-lg, paddings distintos y bordes de outline o de
+     outline-variant. Por eso unos se veian diferentes de otros.
+
+     Ahora hay dos variantes y ninguna mas:
+       .m3-select        altura 48 px, la de los formularios
+       .m3-select-dense  altura 36 px, para barras de filtros compactas
+
+     Campo outlined de M3: borde 1 px outline, radio medio y trazo de foco de
+     2 px en primary. La flecha se dibuja aqui para que sea igual en todos los
+     navegadores, en vez de dejar la nativa de cada sistema.
+     -----------------------------------------------------------------------*/
   .m3-select {
     width: 100%;
-    height: 40px;
+    /* 48 px es el minimo tactil de M3. Antes eran 40 px. */
+    height: 48px;
     background-color: var(--md-sys-color-surface-container-low);
-    border: 1px solid var(--md-sys-color-outline-variant);
+    border: 1px solid var(--md-sys-color-outline);
     border-radius: var(--md-sys-shape-medium);
-    padding: 0.5rem 0.875rem;
+    padding: 0.5rem 2.5rem 0.5rem 0.875rem;
     font-size: 0.875rem;
     font-weight: 500;
+    line-height: 1.4;
     color: var(--md-sys-color-on-surface);
+    font-family: inherit;
     box-sizing: border-box;
-    transition: border-color var(--spring-duration-effects-fast) var(--spring-curve-effects-fast);
     cursor: pointer;
+
+    /* Flecha propia, identica en todos los navegadores. */
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2349454f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1.125rem;
+
+    transition:
+      border-color var(--md-motion-duration-short) var(--md-motion-standard),
+      background-color var(--md-motion-duration-short) var(--md-motion-standard);
+  }
+
+  .m3-select:hover:not(:disabled) {
+    border-color: var(--md-sys-color-on-surface);
   }
 
   .m3-select:focus {
     outline: none;
+    /* Trazo de 2 px sin empujar el contenido: se compensa el borde. */
     border-color: var(--md-sys-color-primary);
+    box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+  }
+
+  .m3-select:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+
+  /* Variante compacta para barras de filtros. */
+  .m3-select-dense {
+    height: 36px;
+    font-size: 0.8125rem;
+    padding: 0.25rem 2.25rem 0.25rem 0.75rem;
+    background-size: 1rem;
+    background-position: right 0.5rem center;
   }
 }
 

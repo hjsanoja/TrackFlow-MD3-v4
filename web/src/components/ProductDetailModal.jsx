@@ -913,7 +913,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 <select
                   value={filterRelacion}
                   onChange={(e) => setFilterRelacion(e.target.value)}
-                  className="bg-surface-container-lowest border border-outline-variant rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-primary text-on-surface-variant h-[34px] w-full"
+                  className="m3-select m3-select-dense w-full"
                 >
                   <option value="todos">Todos</option>
                   <option value="propio">Mi Marca</option>
@@ -930,7 +930,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 <select
                   value={filterCadena}
                   onChange={(e) => setFilterCadena(e.target.value)}
-                  className="bg-surface-container-lowest border border-outline-variant rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-primary text-on-surface-variant h-[34px] w-full"
+                  className="m3-select m3-select-dense w-full"
                 >
                   <option value="todas">Todas</option>
                   {cadenasDisponibles.map(c => (

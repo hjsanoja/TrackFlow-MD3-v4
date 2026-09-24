@@ -437,7 +437,7 @@ export default function MapaCalor({ user, userDoc }) {
             <select
               value={cadenaSeleccionada}
               onChange={(e) => setCadenaSeleccionada(e.target.value)}
-              className="m3-select"
+              className="m3-select m3-select-dense"
             >
               <option value="Todas">Cadena: Todas</option>
               {cadenas.filter(c => c !== 'Todas').map(cad => (
@@ -451,7 +451,7 @@ export default function MapaCalor({ user, userDoc }) {
             <select
               value={unSeleccionada}
               onChange={(e) => setUnSeleccionada(e.target.value)}
-              className="m3-select"
+              className="m3-select m3-select-dense"
             >
               <option value="Todas">Unidad de Negocio: Todas</option>
               {unidadesNegocio.filter(u => u !== 'Todas').map(un => (
@@ -465,7 +465,7 @@ export default function MapaCalor({ user, userDoc }) {
             <select
               value={filtroPosicionamiento}
               onChange={(e) => setFiltroPosicionamiento(e.target.value)}
-              className="m3-select"
+              className="m3-select m3-select-dense"
             >
               <option value="Todos">Posición: Todos</option>
               <option value="Bajo Promedio">Bajo el Promedio</option>

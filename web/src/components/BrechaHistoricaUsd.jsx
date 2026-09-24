@@ -359,7 +359,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
               <select
                 value={prodActivo?.id_interno || prodActivo?.id || ''}
                 onChange={e => setProductoSeleccionadoId(e.target.value)}
-                className="flex-1 px-3 py-2 text-xs rounded-xl bg-surface-container-lowest border border-outline-variant font-semibold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                className="m3-select m3-select-dense flex-1"
               >
                 {productosPropiosConDatos.map(p => (
                   <option key={p.id_interno || p.id} value={p.id_interno || p.id}>
@@ -378,7 +378,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <select
               value={cadenaSeleccionada}
               onChange={e => setCadenaSeleccionada(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl bg-surface-container-lowest border border-outline-variant text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+              className="m3-select m3-select-dense w-full"
             >
               <option value="todas">Todas las cadenas ({cadenasDisponibles.length})</option>
               {cadenasDisponibles.map(c => (
