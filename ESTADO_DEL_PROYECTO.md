@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 19 fases de SQL
+## Las 20 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -101,8 +101,9 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 17 | Forma farmacéutica + abreviaturas de envase (`CJAX30`, `FCOX15ML`) |
 | 18 | `dim_productos.tipo_mercado` (MARCA/GENERICO), rellenado con la regla vieja |
 | 19 | Un solo laboratorio propio `LA SANTE`; borra PHARMETIQUE*, BIOQU* y duplicados |
+| 20 | Une moléculas duplicadas (`Acetaminofen` / `Acetaminofén`…) y deja **todas sin tildes** ("Losartan potasico"); los nombres anteriores quedan como `sinonimos`. `fn_clave_molecula`, `fn_nombre_molecula` |
 
-**Todas corridas en Supabase, de la 1 a la 19.**
+**Corridas en Supabase de la 1 a la 19. La 20 está pendiente de correr** (PR #35).
 
 ---
 
@@ -136,7 +137,8 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #30 | Rediseño M3 de la tabla: 8 columnas uniformes, acciones fijas a la derecha, barra contextual de selección, buscador grande con atajo `/`, filtros como chips |
 | #31 | Ficha lateral del producto, columna PVP, filas por página (10 por defecto), laboratorio único (fase 19) |
 | #33 | Formulario rediseñado: secciones, unidad y tipo como chips obligatorios sin valor por defecto, LA SANTE por defecto, listas que muestran todas las opciones (`ComboField`), PVP, validación en línea |
-| #34 | Ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
+| #35 | Fase 20 (moléculas duplicadas) y comparación de nombres sin tildes al guardar |
+| #34 | Menús desplegables M3 en toda la app (`components/Select.jsx`, 31 `<select>`), deshacer al eliminar (borrado diferido 8 s), ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
 
 ### Cómo queda la pantalla
 
@@ -291,7 +293,13 @@ No volver a tropezar con estas:
   esquinas y mantener lo sticky, `overflow: clip`.
 - **`getRowValue` acepta subcadenas**: `'activo'` encaja con
   `principio_activo`. Para columnas cortas y ambiguas, búsqueda exacta.
-- **`ilike` respeta las tildes**: `Analgésicos` ≠ `Analgesicos`.
+- **`ilike` respeta las tildes**: `Analgésicos` ≠ `Analgesicos`. Por eso
+  `resolverDimension` (dbClient) ya no usa `ilike`: lee la tabla entera y
+  compara con `claveNombre` (sin mayúsculas, tildes ni signos, y también contra
+  `sinonimos`). Así se crearon las moléculas duplicadas que une la fase 20.
+- **Regla de escritura: moléculas sin tildes**, como "La Sante" (decisión de
+  Hernando: evita diferencias y que Excel rompa las tildes). Las nuevas se
+  guardan así (`formatearMolecula` en dbClient = `fn_nombre_molecula`).
 - En Tailwind, `bg-x/40` **no funciona** con colores definidos como
   `var(--...)`: no genera nada. Usar `color-mix()` en CSS.
 

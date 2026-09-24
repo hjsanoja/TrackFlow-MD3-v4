@@ -241,33 +241,77 @@ export async function guardarEnlaceCompetencia(item) {
 // moleculas puede cambiar (un producto simple que pasa a combinado) y porque
 // el esquema tiene un indice unico parcial que solo admite una fila con
 // es_principal por producto: un UPDATE parcial lo violaria a mitad de camino.
-// Busca una fila de dimension por nombre (sin distinguir mayusculas) y, si
-// se pasa `crear`, la da de alta cuando no existe. Devuelve el id o null.
+// Clave para comparar nombres: sin mayusculas, tildes ni signos. Con ilike
+// (que respeta las tildes) "Acetaminofen" no encontraba "Acetaminofén" y se
+// creaba otra molecula; lo mismo con "Analgésicos" / "Analgesicos".
+export function claveNombre(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Como se escribe una molecula nueva (igual que fn_nombre_molecula, fase 20):
+// sin tildes, espacios simples y la primera letra en mayuscula; si viene toda
+// en mayusculas pasa a minusculas. "LOSARTÁN POTÁSICO" -> "Losartan potasico".
+export function formatearMolecula(texto) {
+  const t = String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!t) return t;
+  const resto = t === t.toUpperCase() ? t.slice(1).toLowerCase() : t.slice(1);
+  return t.charAt(0).toUpperCase() + resto;
+}
+
+// Las tablas de dimensiones son pequenas (decenas o cientos de filas): se
+// leen enteras una vez por importacion y se compara en el navegador.
+function listarDimension(cache, tabla) {
+  const clave = `${tabla}|*`;
+  if (cache?.has(clave)) return cache.get(clave);
+  const promesa = (async () => {
+    const { data, error } = await supabase.from(tabla).select('*');
+    if (error) throw error;
+    return data || [];
+  })();
+  if (cache) {
+    cache.set(clave, promesa);
+    promesa.catch(() => cache.delete(clave));
+  }
+  return promesa;
+}
+
+// Busca una fila de dimension por nombre (sin mayusculas, tildes ni signos, y
+// tambien entre los sinonimos de las moleculas) y, si se pasa `crear`, la da
+// de alta cuando no existe. Devuelve el id o null.
 //
 // Con `cache` (una importacion masiva) cada nombre se resuelve una sola vez:
 // 78 productos del mismo laboratorio eran 78 consultas identicas. Se guarda
 // la promesa y no el resultado para que dos filas que se procesan a la vez no
 // creen la misma molecula dos veces.
 function resolverDimension(cache, tabla, nombre, crear = null) {
-  const clave = `${tabla}|${nombre.toLowerCase()}`;
+  const buscada = claveNombre(nombre);
+  const clave = `${tabla}|${buscada}`;
   if (cache?.has(clave)) return cache.get(clave);
 
   const promesa = (async () => {
-    const { data } = await supabase
-      .from(tabla)
-      .select('id')
-      .ilike('nombre', nombre)
-      .limit(1)
-      .maybeSingle();
-    if (data?.id) return data.id;
+    const filas = await listarDimension(cache, tabla);
+    const hallada = filas.find(f =>
+      claveNombre(f.nombre) === buscada ||
+      (Array.isArray(f.sinonimos) && f.sinonimos.some(sin => claveNombre(sin) === buscada)));
+    if (hallada) return hallada.id;
     if (!crear) return null;
 
     const { data: nuevo, error } = await supabase
       .from(tabla)
-      .insert({ nombre, ...crear })
-      .select('id')
+      .insert({ nombre: tabla === 'dim_principios_activos' ? formatearMolecula(nombre) : nombre, ...crear })
+      .select('id, nombre')
       .maybeSingle();
     if (error) throw error;
+    if (nuevo) filas.push(nuevo);
     return nuevo?.id ?? null;
   })();
 
