@@ -139,7 +139,7 @@ export default function Layout({ user, userDoc, children }) {
                   <h1 className="text-xl font-display font-bold tracking-tight text-on-surface flex items-center gap-0.5">
                     Track<span className="text-secondary font-display font-bold">Flow</span>
                   </h1>
-                  <p className="text-[10px] text-on-surface-variant font-mono tracking-wider uppercase font-semibold truncate">Monitor de Precios</p>
+                  <p className="text-label-sm text-on-surface-variant font-mono tracking-wider uppercase font-semibold truncate">Monitor de Precios</p>
                 </div>
               )}
             </div>
@@ -159,7 +159,7 @@ export default function Layout({ user, userDoc, children }) {
           {/* Navigation Links */}
           <nav className="space-y-1">
             {!menuColapsado && (
-              <div className="px-4 py-2 text-[11px] font-mono font-bold tracking-wider text-on-surface-variant uppercase">
+              <div className="px-4 py-2 text-label-md font-mono font-bold tracking-wider text-on-surface-variant uppercase">
                 Menú Principal
               </div>
             )}
@@ -172,7 +172,7 @@ export default function Layout({ user, userDoc, children }) {
                   end={item.to === '/'}
                   title={menuColapsado ? item.label : undefined}
                   className={({ isActive }) =>
-                    `flex items-center rounded-full text-sm font-medium transition-all duration-150 ${
+                    `flex items-center rounded-full text-sm font-medium transition-all duration-effects-fast ease-effects-fast ${
                       menuColapsado ? 'justify-center px-0 py-3' : 'justify-between px-4 py-3'
                     } ${
                       isActive
@@ -188,7 +188,7 @@ export default function Layout({ user, userDoc, children }) {
                     {!menuColapsado && <span className="truncate">{item.label}</span>}
                   </div>
                   {!menuColapsado && item.badge && (
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
+                    <span className="text-label-sm font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
                       {item.badge}
                     </span>
                   )}
@@ -216,7 +216,7 @@ export default function Layout({ user, userDoc, children }) {
                       <div className="text-sm font-bold text-on-surface truncate font-display">{displayName}</div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="m3-live-indicator"></span>
-                        <span className="text-[10px] text-on-surface-variant uppercase font-mono font-semibold tracking-wider">
+                        <span className="text-label-sm text-on-surface-variant uppercase font-mono font-semibold tracking-wider">
                           {isAdmin ? 'ADMINISTRADOR' : 'USUARIO CONSULTA'}
                         </span>
                       </div>
@@ -239,10 +239,10 @@ export default function Layout({ user, userDoc, children }) {
 
           {/* Version Footer */}
           <div className={`pt-3 text-center border-t border-outline-variant/40 flex-col items-center gap-1 ${menuColapsado ? 'hidden' : 'flex'}`}>
-            <span className="text-[10px] text-on-surface-variant font-mono tracking-wide">
+            <span className="text-label-sm text-on-surface-variant font-mono tracking-wide">
               Sistema de Inteligencia Competitiva
             </span>
-            <span className="text-[9px] text-on-surface-variant/70 font-mono">
+            <span className="text-label-sm text-on-surface-variant/70 font-mono">
               TrackFlow v7.4 · Supabase RLS Ready
             </span>
           </div>
@@ -268,7 +268,7 @@ export default function Layout({ user, userDoc, children }) {
             >
               <span className="material-symbols-outlined text-base text-on-surface-variant group-hover:text-primary transition-colors">search</span>
               <span className="font-sans">Buscar módulo o molécula...</span>
-              <kbd className="font-mono text-[10px] bg-surface-container-lowest border border-outline-variant px-1.5 py-0.5 rounded text-on-surface-variant font-bold">⌘K</kbd>
+              <kbd className="font-mono text-label-sm bg-surface-container-lowest border border-outline-variant px-1.5 py-0.5 rounded text-on-surface-variant font-bold">⌘K</kbd>
             </button>
           </div>
 
@@ -316,13 +316,13 @@ export default function Layout({ user, userDoc, children }) {
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full bg-transparent border-none outline-none font-sans text-sm text-on-surface placeholder:text-on-surface-variant/60"
               />
-              <kbd className="text-[10px] font-mono font-bold bg-surface-container-high px-2 py-0.5 rounded text-on-surface-variant">ESC</kbd>
+              <kbd className="text-label-sm font-mono font-bold bg-surface-container-high px-2 py-0.5 rounded text-on-surface-variant">ESC</kbd>
             </div>
 
             <div className="max-h-80 overflow-y-auto p-3 space-y-3">
               {/* Navigation Modules */}
               <div>
-                <div className="px-3 py-1 text-[11px] font-mono font-bold uppercase tracking-wider text-on-surface-variant">
+                <div className="px-3 py-1 text-label-md font-mono font-bold uppercase tracking-wider text-on-surface-variant">
                   Módulos de la Plataforma
                 </div>
                 <div className="mt-1 space-y-1">
@@ -345,7 +345,7 @@ export default function Layout({ user, userDoc, children }) {
               {/* Products match */}
               {filteredProducts.length > 0 && (
                 <div className="pt-2 border-t border-surface-container-high">
-                  <div className="px-3 py-1 text-[11px] font-mono font-bold uppercase tracking-wider text-on-surface-variant">
+                  <div className="px-3 py-1 text-label-md font-mono font-bold uppercase tracking-wider text-on-surface-variant">
                     Productos Encontrados ({filteredProducts.length})
                   </div>
                   <div className="mt-1 space-y-1">
@@ -357,7 +357,7 @@ export default function Layout({ user, userDoc, children }) {
                       >
                         <div>
                           <div className="font-bold text-on-surface">{p.nombre}</div>
-                          <div className="text-[11px] text-on-surface-variant">{p.principio_activo} · {p.laboratorio}</div>
+                          <div className="text-label-md text-on-surface-variant">{p.principio_activo} · {p.laboratorio}</div>
                         </div>
                         <span className="font-mono font-bold text-primary">${Number(p.pvp_propio_usd || 0).toFixed(2)}</span>
                       </button>
@@ -392,7 +392,7 @@ export default function Layout({ user, userDoc, children }) {
               <span className="material-symbols-outlined text-xl select-none">
                 {item.icon}
               </span>
-              <span className="text-[10px] font-medium tracking-tight mt-0.5">
+              <span className="text-label-sm font-medium tracking-tight mt-0.5">
                 {item.label}
               </span>
             </NavLink>

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { tokensGrafico, paletaSeries } from '../utils/chartTokens';
 import { useBcvRate } from '../hooks/useBcvRate';
 import ProductDetailModal from '../components/ProductDetailModal';
 import BcvDetailModal from '../components/BcvDetailModal';
@@ -16,6 +17,8 @@ import {
 } from 'recharts';
 
 export default function Dashboard({ user, userDoc }) {
+  // Colores de gráfico leídos de los tokens MD3, para que sigan el tema activo.
+  const tg = tokensGrafico();
   const {
     productos,
     productosCompetencia,
@@ -571,7 +574,7 @@ export default function Dashboard({ user, userDoc }) {
       }
     });
 
-    const colors = ['#016874', '#4f378a', '#7c0090', '#30312f', '#B3261E'];
+    const colors = paletaSeries();
     return Object.keys(counts).map((key, index) => ({
       name: key,
       liderazgos: counts[key],
@@ -744,7 +747,7 @@ export default function Dashboard({ user, userDoc }) {
       const gapAbs = Math.abs(data.gap).toFixed(1);
       
       return (
-        <div className="bg-white/95 p-3.5 border border-outline-variant rounded-2xl shadow-lg backdrop-blur-sm max-w-xs font-sans">
+        <div className="bg-surface-container-lowest/95 p-3.5 border border-outline-variant rounded-2xl shadow-lg backdrop-blur-sm max-w-xs font-sans">
           <p className="text-xs font-bold text-on-surface mb-1.5">{data.fullName}</p>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between gap-6 text-on-surface-variant">
@@ -757,12 +760,12 @@ export default function Dashboard({ user, userDoc }) {
             </div>
             <div className="pt-1.5 border-t border-outline/10 flex justify-between gap-6 items-center">
               <span>Desviación:</span>
-              <span className={`font-bold px-1.5 py-0.5 rounded-full text-[11px] ${isCheaper ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              <span className={`font-bold px-1.5 py-0.5 rounded-full text-label-md ${isCheaper ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                 {isCheaper ? `-${gapAbs}%` : `+${gapAbs}%`}
               </span>
             </div>
           </div>
-          <p className={`text-[10px] mt-2 font-medium ${isCheaper ? 'text-emerald-600' : 'text-red-600'}`}>
+          <p className={`text-label-sm mt-2 font-medium ${isCheaper ? 'text-emerald-600' : 'text-red-600'}`}>
             {isCheaper 
               ? `Estás un ${gapAbs}% más barato que el promedio.` 
               : `Estás un ${gapAbs}% más caro que el promedio.`}
@@ -904,7 +907,7 @@ export default function Dashboard({ user, userDoc }) {
               onClick={() => setAnalisisMode('empaque')}
               className={`m3-segmented-item ${analisisMode === 'empaque' ? 'active' : ''}`}
             >
-              <span className="material-symbols-outlined text-[15px]">inventory_2</span>
+              <span className="material-symbols-outlined text-body-md">inventory_2</span>
               <span>Empaque</span>
             </button>
             <button
@@ -912,7 +915,7 @@ export default function Dashboard({ user, userDoc }) {
               className={`m3-segmented-item ${analisisMode === 'unidosis' ? 'active' : ''}`}
               title="Analizar precios normalizados por 1 unidad/tableta/dosis"
             >
-              <span className="material-symbols-outlined text-[15px]">medication</span>
+              <span className="material-symbols-outlined text-body-md">medication</span>
               <span>Por Unidosis</span>
             </button>
           </div>
@@ -925,7 +928,7 @@ export default function Dashboard({ user, userDoc }) {
                 onClick={() => setVentanaVariacion(dias)}
                 className={`m3-segmented-item ${ventanaVariacion === dias ? 'active' : ''}`}
               >
-                <span className="material-symbols-outlined text-[15px]">trending_up</span>
+                <span className="material-symbols-outlined text-body-md">trending_up</span>
                 <span>{dias === 1 ? '24 h' : `${dias} días`}</span>
               </button>
             ))}
@@ -1034,13 +1037,13 @@ export default function Dashboard({ user, userDoc }) {
       {/* Visual Analytics Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Leadership Bar Chart */}
-        <div className="bg-white rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between">
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between">
           <div>
             <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider mb-1 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-base">bar_chart</span>
               Liderazgo de Precios
             </h2>
-            <p className="text-[11px] text-on-surface-variant font-sans mb-4 leading-relaxed">
+            <p className="text-label-md text-on-surface-variant font-sans mb-4 leading-relaxed">
               Cantidad de productos donde cada cadena ofrece la opción más económica.
             </p>
           </div>
@@ -1051,9 +1054,9 @@ export default function Dashboard({ user, userDoc }) {
                 data={chartChainLeadershipData} 
                 margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#464650' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#464650' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke={tg.rejilla} />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: tg.eje }} />
+                <YAxis tick={{ fontSize: 10, fill: tg.eje }} />
                 <Tooltip formatter={(value) => [`${value} productos`, 'Líder en']} />
                 <Bar 
                   dataKey="liderazgos"
@@ -1075,7 +1078,7 @@ export default function Dashboard({ user, userDoc }) {
         {/* Historical BCV rate chart */}
         <div 
           onClick={() => setShowBcvModal(true)}
-          className="bg-white rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between hover:border-primary/60 transition-all hover:shadow-md cursor-pointer group relative"
+          className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between hover:border-primary/60 transition-all hover:shadow-md cursor-pointer group relative"
         >
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -1085,7 +1088,7 @@ export default function Dashboard({ user, userDoc }) {
               </h2>
               <button 
                 onClick={(e) => { e.stopPropagation(); setShowBcvModal(true); }}
-                className="text-[11px] font-bold font-mono text-primary hover:bg-primary/10 px-2.5 py-1 rounded-full flex items-center gap-1 transition-all"
+                className="text-label-md font-bold font-mono text-primary hover:bg-primary/10 px-2.5 py-1 rounded-full flex items-center gap-1 transition-all"
                 title="Ver historial completo y detalle"
               >
                 <span>Ver Detalle</span>
@@ -1094,7 +1097,7 @@ export default function Dashboard({ user, userDoc }) {
             </div>
             
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <p className="text-[11px] text-on-surface-variant font-sans leading-relaxed">
+              <p className="text-label-md text-on-surface-variant font-sans leading-relaxed">
                 Evolución de los últimos 7 días de la tasa oficial del BCV.
               </p>
 
@@ -1102,7 +1105,7 @@ export default function Dashboard({ user, userDoc }) {
               <div className="flex items-center gap-1.5">
                 {/* Badge Día */}
                 <span 
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border flex items-center gap-0.5 ${
+                  className={`px-2 py-0.5 rounded-full text-label-sm font-bold font-mono border flex items-center gap-0.5 ${
                     bcvVariations.dailyPct > 0 
                       ? 'bg-amber-50 text-amber-800 border-amber-200' 
                       : bcvVariations.dailyPct < 0 
@@ -1119,7 +1122,7 @@ export default function Dashboard({ user, userDoc }) {
 
                 {/* Badge Mes */}
                 <span 
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border flex items-center gap-0.5 ${
+                  className={`px-2 py-0.5 rounded-full text-label-sm font-bold font-mono border flex items-center gap-0.5 ${
                     bcvVariations.monthlyPct > 0 
                       ? 'bg-blue-50 text-blue-800 border-blue-200' 
                       : bcvVariations.monthlyPct < 0 
@@ -1139,7 +1142,7 @@ export default function Dashboard({ user, userDoc }) {
 
           <div className="h-60 mt-2">
             {bcvHistorico.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs text-[#464650] italic">No hay registros históricos de tasa cargados.</div>
+              <div className="h-full flex items-center justify-center text-body-sm text-on-surface-variant italic">No hay registros históricos de tasa cargados.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart 
@@ -1149,18 +1152,18 @@ export default function Dashboard({ user, userDoc }) {
                 >
                   <defs>
                     <linearGradient id="colorBcv" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#016874" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#016874" stopOpacity={0}/>
+                      <stop offset="5%" stopColor={paletaSeries()[0]} stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor={paletaSeries()[0]} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                  <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: '#464650' }} />
-                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#464650' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={tg.rejilla} />
+                  <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: tg.eje }} />
+                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: tg.eje }} />
                   <Tooltip formatter={(value) => [`Bs ${value.toFixed(2)}`, 'Tasa Oficial']} />
                   <Area 
                     type="monotone" 
                     dataKey="valor" 
-                    stroke="#016874" 
+                    stroke={paletaSeries()[0]} 
                     strokeWidth={2} 
                     fillOpacity={1} 
                     fill="url(#colorBcv)" 
@@ -1178,7 +1181,7 @@ export default function Dashboard({ user, userDoc }) {
 
       {/* Versión 1.2: Gráfico "Análisis de Paridad de Escala Farmacéutica" ocultado temporalmente por solicitud del usuario. Descomentar para Reactivar.
       {analisisMoleculaParidad.length > 0 && (
-        <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
           <div>
             <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
               <span className="material-symbols-outlined text-xl text-primary">balance</span>
@@ -1250,7 +1253,7 @@ export default function Dashboard({ user, userDoc }) {
                     </div>
                   </div>
 
-                  <div className={`p-2.5 rounded-xl border text-[11px] font-sans leading-relaxed flex items-start gap-2 ${severityBadge}`}>
+                  <div className={`p-2.5 rounded-xl border text-label-md font-sans leading-relaxed flex items-start gap-2 ${severityBadge}`}>
                     <span className="material-symbols-outlined text-base select-none mt-0.5">
                       {item.nivelSeveridad === 'critico' ? 'dangerous' : item.nivelSeveridad === 'alerta' ? 'warning' : item.nivelSeveridad === 'oportunidad' ? 'rocket_launch' : 'verified_user'}
                     </span>
@@ -1279,14 +1282,14 @@ export default function Dashboard({ user, userDoc }) {
                 onClick={() => setDashboardPriceMode('descuento')}
                 className={`m3-segmented-item ${dashboardPriceMode === 'descuento' ? 'active' : ''}`}
               >
-                <span className="material-symbols-outlined text-[14px]">sell</span>
+                <span className="material-symbols-outlined text-body-md">sell</span>
                 <span>Con Descuento</span>
               </button>
               <button
                 onClick={() => setDashboardPriceMode('lista')}
                 className={`m3-segmented-item ${dashboardPriceMode === 'lista' ? 'active' : ''}`}
               >
-                <span className="material-symbols-outlined text-[14px]">receipt_long</span>
+                <span className="material-symbols-outlined text-body-md">receipt_long</span>
                 <span>Precio Lista</span>
               </button>
             </div>
@@ -1305,9 +1308,9 @@ export default function Dashboard({ user, userDoc }) {
               </span>
               <span className="font-medium whitespace-nowrap">¿Qué cambió hoy?</span>
               {kpiStats.totalChangesToday > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold tracking-tight ${
+                <span className={`px-2 py-0.5 rounded-full text-label-md font-mono font-extrabold tracking-tight ${
                   mostrarCambiosHoy 
-                    ? 'bg-white text-amber-800 shadow-xs' 
+                    ? 'bg-surface-container-lowest text-amber-800 shadow-xs' 
                     : 'bg-amber-100 text-amber-900 border border-amber-300'
                 }`}>
                   {kpiStats.totalChangesToday}
@@ -1330,9 +1333,9 @@ export default function Dashboard({ user, userDoc }) {
               </span>
               <span className="font-medium whitespace-nowrap">Ocultar sin precio</span>
               {sinPreciosCount > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold tracking-tight ${
+                <span className={`px-2 py-0.5 rounded-full text-label-md font-mono font-extrabold tracking-tight ${
                   ocultarSinPrecios 
-                    ? 'bg-white text-primary shadow-xs' 
+                    ? 'bg-surface-container-lowest text-primary shadow-xs' 
                     : 'bg-primary-container text-on-primary-container border border-primary/20'
                 }`}>
                   {sinPreciosCount}
@@ -1390,7 +1393,7 @@ export default function Dashboard({ user, userDoc }) {
 
           {/* Categorías */}
           <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase mr-1 shrink-0">Categoría:</span>
+            <span className="text-label-md font-mono font-bold text-on-surface-variant uppercase mr-1 shrink-0">Categoría:</span>
             {categorias.map(cat => (
               <button key={cat} onClick={() => setCategoriaSeleccionada(cat)}
                 className={`h-9 px-3.5 text-xs font-semibold rounded-full border transition-all inline-flex items-center justify-center ${
@@ -1457,7 +1460,7 @@ export default function Dashboard({ user, userDoc }) {
                         <div className="min-h-9 flex flex-col justify-center">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="font-bold text-on-surface font-display text-sm leading-tight">{producto.nombre}</span>
-                            <span className={`px-1.5 py-0.5 text-[8px] rounded font-mono font-bold tracking-wider ${
+                            <span className={`px-1.5 py-0.5 text-label-sm rounded font-mono font-bold tracking-wider ${
                               (producto.market_type || 'GENERICO').toUpperCase() === 'MARCA'
                                 ? 'bg-purple-100 text-purple-800 border border-purple-200'
                                 : 'bg-green-100 text-green-800 border border-green-200'
@@ -1465,12 +1468,12 @@ export default function Dashboard({ user, userDoc }) {
                               {(producto.market_type || 'GENERICO').toUpperCase()}
                             </span>
                             {ranking && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-[#e8f0fe] text-[#1a73e8] border border-[#d2e3fc]" title={`Posición de nuestra marca entre todas las opciones del mercado (1° es la más económica)`}>
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-label-sm font-bold font-mono bg-primary-container text-on-primary-container border border-primary/20" title={`Posición de nuestra marca entre todas las opciones del mercado (1° es la más económica)`}>
                                 Rank: {ranking}°/{totalOptionsCount}
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-on-surface-variant font-mono mt-0.5">{producto.id_interno} · {producto.laboratorio}</div>
+                          <div className="text-label-sm text-on-surface-variant font-mono mt-0.5">{producto.id_interno} · {producto.laboratorio}</div>
                         </div>
                       </td>
 
@@ -1487,7 +1490,7 @@ export default function Dashboard({ user, userDoc }) {
 
                         // Check if this chain is the cheapest for this product
                         const isCheapest = cheapestChains.includes(cadena);
-                        let cellBg = 'bg-white';
+                        let cellBg = 'bg-surface-container-lowest';
                         let cellText = 'text-on-surface';
 
                         if (isCheapest) {
@@ -1504,8 +1507,8 @@ export default function Dashboard({ user, userDoc }) {
                             <div className="h-9 flex flex-col justify-center items-end">
                               <div>{fmt(cellPrice)}</div>
                               {Math.abs(changePercent) > 0.05 ? (
-                                <div className={`text-[9px] font-bold flex items-center justify-end gap-0.5 leading-none mt-0.5 ${changePercent > 0 ? 'text-error' : 'text-green-600'}`}>
-                                  <span className="material-symbols-outlined text-[10px] leading-none">{changePercent > 0 ? 'arrow_upward' : 'arrow_downward'}</span>
+                                <div className={`text-label-sm font-bold flex items-center justify-end gap-0.5 leading-none mt-0.5 ${changePercent > 0 ? 'text-error' : 'text-green-600'}`}>
+                                  <span className="material-symbols-outlined text-label-sm leading-none">{changePercent > 0 ? 'arrow_upward' : 'arrow_downward'}</span>
                                   {changePercent > 0 ? '+' : ''}{changePercent.toFixed(1)}%
                                 </div>
                               ) : (
@@ -1536,8 +1539,8 @@ export default function Dashboard({ user, userDoc }) {
                               const changePercent = matchItem?.changePercent || 0;
                               if (Math.abs(changePercent) > 0.05) {
                                 return (
-                                  <div className={`text-[9px] font-bold flex items-center justify-end gap-0.5 leading-none mt-0.5 ${changePercent > 0 ? 'text-error' : 'text-green-600'}`}>
-                                    <span className="material-symbols-outlined text-[10px] leading-none">{changePercent > 0 ? 'arrow_upward' : 'arrow_downward'}</span>
+                                  <div className={`text-label-sm font-bold flex items-center justify-end gap-0.5 leading-none mt-0.5 ${changePercent > 0 ? 'text-error' : 'text-green-600'}`}>
+                                    <span className="material-symbols-outlined text-label-sm leading-none">{changePercent > 0 ? 'arrow_upward' : 'arrow_downward'}</span>
                                     {changePercent > 0 ? '+' : ''}{changePercent.toFixed(1)}%
                                   </div>
                                 );
@@ -1553,7 +1556,7 @@ export default function Dashboard({ user, userDoc }) {
                       {/* Mi Desviación */}
                       <td className="px-6 py-3.5 text-right whitespace-nowrap bg-surface-low/30 border-r border-surface-variant align-middle">
                         {propioPriceUsd ? (
-                          <div className="h-9 flex flex-col justify-center items-end gap-0.5 text-[10px] font-mono leading-none">
+                          <div className="h-9 flex flex-col justify-center items-end gap-0.5 text-label-sm font-mono leading-none">
                             <span className={diffMinPercent && diffMinPercent > 0.1 ? 'text-error font-extrabold' : 'text-secondary font-extrabold'}>
                               {diffMinPercent && diffMinPercent > 0.1 ? `vs Mín: +${diffMinPercent.toFixed(1)}%` : 'vs Mín: Mismo'}
                             </span>
@@ -1569,7 +1572,7 @@ export default function Dashboard({ user, userDoc }) {
                       {/* Dispersion Column */}
                       <td className="px-6 py-3.5 text-center whitespace-nowrap align-middle">
                         <div className="h-9 flex items-center justify-center">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-wide uppercase ${
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-label-sm font-mono font-bold tracking-wide uppercase ${
                             dispersionPercent > 20 ? 'bg-error-container text-error border border-error/20'
                             : dispersionPercent > 0 ? 'bg-secondary-container text-on-secondary-container border border-secondary/20'
                             : 'bg-surface-low text-on-surface-variant'
@@ -1669,9 +1672,9 @@ function KpiCard({ label, value, sub, icon, color = 'text-primary', iconBg = 'bg
   return (
     <div className="neural-card p-5 flex items-center justify-between">
       <div className="space-y-1">
-        <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block">{label}</span>
+        <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block">{label}</span>
         <div className={`text-2xl font-display font-extrabold ${color}`}>{value}</div>
-        <p className="text-[11px] text-on-surface-variant font-sans">{sub}</p>
+        <p className="text-label-md text-on-surface-variant font-sans">{sub}</p>
       </div>
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ml-4 ${iconBg}`}>
         <span className="material-symbols-outlined text-2xl select-none">{icon}</span>
@@ -1722,26 +1725,26 @@ function BcvController({ bcv, onOpenHistory }) {
         <div className="flex items-center gap-1.5">
           <input type="text" value={val} onChange={e => setVal(e.target.value)}
             className="w-24 px-3 py-1.5 border border-outline-variant rounded-xl text-xs font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-primary bg-surface-container-lowest text-on-surface" placeholder="0.00" />
-          <button onClick={handleSave} className="m3-btn-primary h-7 px-3 text-[10px]">Guardar</button>
-          <button onClick={() => setEditing(false)} className="m3-btn-outline h-7 px-3 text-[10px]">Cancelar</button>
-          {bcv.error && <span className="text-[10px] text-error font-bold">{bcv.error}</span>}
+          <button onClick={handleSave} className="m3-btn-primary h-7 px-3 text-label-sm">Guardar</button>
+          <button onClick={() => setEditing(false)} className="m3-btn-outline h-7 px-3 text-label-sm">Cancelar</button>
+          {bcv.error && <span className="text-label-sm text-error font-bold">{bcv.error}</span>}
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-extrabold text-primary text-base">
             {bcv.loading ? 'Recuperando...' : bcv.rate ? `Bs ${bcv.rate.toFixed(4)} / USD` : 'Sin tasa'}
           </span>
-          <span className="text-[9px] uppercase bg-primary-container px-2.5 py-1 rounded-full text-on-primary-container font-bold">
+          <span className="text-label-sm uppercase bg-primary-container px-2.5 py-1 rounded-full text-on-primary-container font-bold">
             {bcv.source || 'Auto'}
           </span>
           {formattedDate && (
-            <span className="text-[11px] text-on-surface-variant font-sans flex items-center gap-1 bg-surface-container-low px-2.5 py-1 rounded-full border border-outline-variant/50" title="Fecha y hora de la última actualización de la tasa">
+            <span className="text-label-md text-on-surface-variant font-sans flex items-center gap-1 bg-surface-container-low px-2.5 py-1 rounded-full border border-outline-variant/50" title="Fecha y hora de la última actualización de la tasa">
               <span className="material-symbols-outlined text-xs text-primary leading-none">schedule</span>
               <span className="font-semibold">{formattedDate}</span>
             </span>
           )}
           <button onClick={() => { setEditing(true); setVal(bcv.rate || ''); }}
-            className="text-[11px] font-bold text-primary hover:underline uppercase inline-flex items-center gap-0.5">
+            className="text-label-md font-bold text-primary hover:underline uppercase inline-flex items-center gap-0.5">
             <span className="material-symbols-outlined text-xs">edit</span>
             Editar Tasa
           </button>

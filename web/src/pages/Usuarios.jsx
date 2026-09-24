@@ -292,7 +292,7 @@ export default function Usuarios({ userDoc }) {
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-on-surface font-display text-sm">{u.nombre}</span>
                           {isCurrent && (
-                            <span className="text-[10px] bg-primary-container text-on-primary-container font-mono uppercase font-bold px-2 py-0.5 rounded-full">
+                            <span className="text-label-sm bg-primary-container text-on-primary-container font-mono uppercase font-bold px-2 py-0.5 rounded-full">
                               Tú
                             </span>
                           )}
@@ -302,7 +302,7 @@ export default function Usuarios({ userDoc }) {
                       <td className="align-top py-3.5 min-w-[220px]">
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-1.5">
-                            <span className={`text-[10px] uppercase font-mono font-bold px-2.5 py-0.5 rounded-full border ${
+                            <span className={`text-label-sm uppercase font-mono font-bold px-2.5 py-0.5 rounded-full border ${
                               isUserAdmin 
                                 ? 'bg-primary/10 text-primary border-primary/30' 
                                 : 'bg-sky-50 text-sky-800 border-sky-200'
@@ -310,7 +310,7 @@ export default function Usuarios({ userDoc }) {
                               {isUserAdmin ? 'Administrador' : 'Usuario Consulta'}
                             </span>
                             {isUserAdmin && (
-                              <span className="text-[10px] text-on-surface-variant font-mono">
+                              <span className="text-label-sm text-on-surface-variant font-mono">
                                 (Acceso Total)
                               </span>
                             )}
@@ -321,10 +321,10 @@ export default function Usuarios({ userDoc }) {
                               {AVAILABLE_MENUS.filter(m => userPermittedMenus.includes(m.id)).map(m => (
                                 <span
                                   key={m.id}
-                                  className="inline-flex items-center gap-1 text-[10px] bg-surface-container-high text-on-surface font-sans px-2 py-0.5 rounded-md border border-outline-variant/50"
+                                  className="inline-flex items-center gap-1 text-label-sm bg-surface-container-high text-on-surface font-sans px-2 py-0.5 rounded-md border border-outline-variant/50"
                                   title={`Acceso a: ${m.label}`}
                                 >
-                                  <span className="material-symbols-outlined text-[11px] text-primary">{m.icon}</span>
+                                  <span className="material-symbols-outlined text-label-md text-primary">{m.icon}</span>
                                   <span>{m.label}</span>
                                 </span>
                               ))}
@@ -348,7 +348,7 @@ export default function Usuarios({ userDoc }) {
                       </td>
                       <td className="text-center align-top py-3.5">
                         <button onClick={() => handleToggleActivo(u)} disabled={isCurrent && u.activo}
-                          className={`text-[10px] uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
+                          className={`text-label-sm uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
                             u.activo ? 'bg-secondary/10 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
                           } ${isCurrent && u.activo ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           {u.activo ? 'Activo' : 'Inactivo'}
@@ -383,7 +383,7 @@ export default function Usuarios({ userDoc }) {
       </div>
 
       {/* GitHub Integration Card (Solo Administradores) */}
-      <div className="bg-white rounded-3xl border border-[#e1e2ec] shadow-sm p-6 space-y-4">
+      <div className="bg-surface-container-lowest rounded-3xl border border-[#e1e2ec] shadow-sm p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-2xl">
@@ -565,7 +565,7 @@ function UsuarioModal({ usuario, onSave, onClose }) {
                   <span className="material-symbols-outlined text-base">checklist</span>
                   <span>Menús y Módulos Autorizados</span>
                 </label>
-                <p className="text-[11px] text-on-surface-variant font-sans mt-0.5">
+                <p className="text-label-md text-on-surface-variant font-sans mt-0.5">
                   Predefinido: <strong>Dashboard</strong> y <strong>Mapa de Calor</strong> (con descarga de reportes).
                 </p>
               </div>
@@ -573,7 +573,7 @@ function UsuarioModal({ usuario, onSave, onClose }) {
                 <button
                   type="button"
                   onClick={handleSetDefaultMenus}
-                  className="text-[10px] font-mono font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded-md transition-colors"
+                  className="text-label-sm font-mono font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded-md transition-colors"
                 >
                   Predeterminado
                 </button>
@@ -581,7 +581,7 @@ function UsuarioModal({ usuario, onSave, onClose }) {
                 <button
                   type="button"
                   onClick={handleSelectAllMenus}
-                  className="text-[10px] font-mono font-bold text-on-surface-variant hover:bg-surface-container px-2 py-1 rounded-md transition-colors"
+                  className="text-label-sm font-mono font-bold text-on-surface-variant hover:bg-surface-container px-2 py-1 rounded-md transition-colors"
                 >
                   Todos
                 </button>
@@ -589,7 +589,7 @@ function UsuarioModal({ usuario, onSave, onClose }) {
                 <button
                   type="button"
                   onClick={handleClearMenus}
-                  className="text-[10px] font-mono font-bold text-error hover:bg-error/10 px-2 py-1 rounded-md transition-colors"
+                  className="text-label-sm font-mono font-bold text-error hover:bg-error/10 px-2 py-1 rounded-md transition-colors"
                 >
                   Limpiar
                 </button>
@@ -604,8 +604,8 @@ function UsuarioModal({ usuario, onSave, onClose }) {
                     key={menu.id}
                     className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
                       isChecked
-                        ? 'bg-white dark:bg-surface-container-high border-primary/40 shadow-xs'
-                        : 'bg-surface-container-lowest/50 border-outline-variant/40 hover:bg-white opacity-70'
+                        ? 'bg-surface-container-lowest dark:bg-surface-container-high border-primary/40 shadow-xs'
+                        : 'bg-surface-container-lowest/50 border-outline-variant/40 hover:bg-surface-container-lowest opacity-70'
                     }`}
                   >
                     <input
@@ -619,12 +619,12 @@ function UsuarioModal({ usuario, onSave, onClose }) {
                         <span className="material-symbols-outlined text-[17px] text-primary">{menu.icon}</span>
                         <span className="text-xs font-bold text-on-surface font-display">{menu.label}</span>
                         {menu.isDefault && (
-                          <span className="text-[9px] font-mono font-semibold bg-primary-container text-on-primary-container px-1.5 py-0.2 rounded">
+                          <span className="text-label-sm font-mono font-semibold bg-primary-container text-on-primary-container px-1.5 py-0.2 rounded">
                             Predefinido
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-on-surface-variant font-sans truncate mt-0.5">
+                      <p className="text-label-sm text-on-surface-variant font-sans truncate mt-0.5">
                         {menu.desc}
                       </p>
                     </div>
@@ -679,7 +679,7 @@ function Field({ label, hint, children }) {
     <div className="space-y-1">
       <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
       {children}
-      {hint && <p className="text-[10px] text-on-surface-variant font-mono">{hint}</p>}
+      {hint && <p className="text-label-sm text-on-surface-variant font-mono">{hint}</p>}
     </div>
   );
 }

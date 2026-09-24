@@ -244,7 +244,7 @@ export default function Analisis() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase">Categoría:</span>
+            <span className="text-label-md font-mono font-bold text-on-surface-variant uppercase">Categoría:</span>
             <select
               value={selectedCategoria}
               onChange={e => setSelectedCategoria(e.target.value)}
@@ -262,12 +262,12 @@ export default function Analisis() {
         {/* Sugerencias de búsqueda */}
         {principiosActivos.length > 0 && !searchTerm && (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase shrink-0">Populares:</span>
+            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase shrink-0">Populares:</span>
             {principiosActivos.slice(0, 5).map(pa => (
               <button
                 key={pa}
                 onClick={() => setSearchTerm(pa)}
-                className="px-2 py-0.5 bg-surface-low hover:bg-primary-container/40 text-on-surface text-[10px] font-medium rounded-full border border-outline-variant/40 transition-colors shrink-0"
+                className="px-2 py-0.5 bg-surface-low hover:bg-primary-container/40 text-on-surface text-label-sm font-medium rounded-full border border-outline-variant/40 transition-colors shrink-0"
               >
                 {pa}
               </button>
@@ -281,12 +281,12 @@ export default function Analisis() {
         {/* KPI 1: ICP */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant block">Índice ICP</span>
+            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-on-surface-variant block">Índice ICP</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-display font-extrabold text-primary">{analisisData.icpScore}%</span>
-              <span className="text-[10px] font-mono font-semibold text-on-surface-variant">({analisisData.totalAnalizados} SKUs)</span>
+              <span className="text-label-sm font-mono font-semibold text-on-surface-variant">({analisisData.totalAnalizados} SKUs)</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               Score de competitividad global vs mercado.
             </p>
           </div>
@@ -298,12 +298,12 @@ export default function Analisis() {
         {/* KPI 2: Sobreprecio */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-700 block">Sobreprecio</span>
+            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-rose-700 block">Sobreprecio</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-display font-extrabold text-rose-700">{analisisData.carosCount}</span>
-              <span className="text-[10px] font-mono font-semibold text-rose-600">SKUs (&gt;+3%)</span>
+              <span className="text-label-sm font-mono font-semibold text-rose-600">SKUs (&gt;+3%)</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               Superan la media del mercado por más de 3%.
             </p>
           </div>
@@ -315,12 +315,12 @@ export default function Analisis() {
         {/* KPI 3: Alineados */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-sky-700 block">Alineados</span>
+            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-sky-700 block">Alineados</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-display font-extrabold text-sky-700">{analisisData.justosCount}</span>
-              <span className="text-[10px] font-mono font-semibold text-sky-600">SKUs (±3%)</span>
+              <span className="text-label-sm font-mono font-semibold text-sky-600">SKUs (±3%)</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               Dentro del rango promedio del mercado.
             </p>
           </div>
@@ -332,12 +332,12 @@ export default function Analisis() {
         {/* KPI 4: Más Económicos */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700 block">Económicos</span>
+            <span className="text-label-sm font-mono font-bold uppercase tracking-wider text-emerald-700 block">Económicos</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-display font-extrabold text-emerald-700">{analisisData.baratosCount}</span>
-              <span className="text-[10px] font-mono font-semibold text-emerald-600">SKUs (&lt;-3%)</span>
+              <span className="text-label-sm font-mono font-semibold text-emerald-600">SKUs (&lt;-3%)</span>
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               Ventaja competitiva por debajo del promedio.
             </p>
           </div>
@@ -367,7 +367,7 @@ export default function Analisis() {
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs font-mono font-bold">
               <span>Ajuste Tasa: {bcvSimulatedRate > 0 ? `+${bcvSimulatedRate}%` : `${bcvSimulatedRate}%`}</span>
-              <span className="text-primary bg-primary-container/40 px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
+              <span className="text-primary bg-primary-container/40 px-2.5 py-0.5 rounded-full border border-primary/20 text-label-md">
                 Tasa Simulada: {effectiveRate.toFixed(2)} Bs/$
               </span>
             </div>
@@ -382,7 +382,7 @@ export default function Analisis() {
               className="w-full accent-primary h-2 bg-surface-variant rounded-lg cursor-pointer"
             />
 
-            <div className="flex items-center justify-between text-[10px] font-mono text-on-surface-variant">
+            <div className="flex items-center justify-between text-label-sm font-mono text-on-surface-variant">
               <span>-15% (Apreciación)</span>
               <span>0% (Actual)</span>
               <span>+25% (Devaluación)</span>
@@ -431,12 +431,12 @@ export default function Analisis() {
             )}
           </div>
 
-          <div className="space-y-1 text-[11px] font-mono">
+          <div className="space-y-1 text-label-md font-mono">
             {positioningPieData.map(item => (
               <div key={item.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></span>
-                  <span className="text-on-surface-variant text-[10px]">{item.name}</span>
+                  <span className="text-on-surface-variant text-label-sm">{item.name}</span>
                 </div>
                 <span className="font-bold text-on-surface">{item.value}</span>
               </div>
@@ -465,7 +465,7 @@ export default function Analisis() {
               <button
                 key={limit}
                 onClick={() => setTableLimit(limit)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                className={`px-2.5 py-1 rounded-lg text-label-md font-bold border transition-colors ${
                   tableLimit === limit
                     ? 'bg-primary text-white border-primary'
                     : 'bg-surface-low text-on-surface border-outline-variant/50 hover:bg-surface-variant'
@@ -521,7 +521,7 @@ export default function Analisis() {
                       </td>
                       <td className="font-mono">
                         <span
-                          className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white"
+                          className="px-2 py-0.5 rounded-full text-label-sm font-bold text-white"
                           style={{ backgroundColor: labColor }}
                         >
                           {b.producto.laboratorio || 'N/A'}
@@ -572,7 +572,7 @@ export default function Analisis() {
 
         {analisisData.brechasOportunidad.length > tableLimit && (
           <div className="text-center pt-2">
-            <span className="text-[11px] font-mono text-on-surface-variant">
+            <span className="text-label-md font-mono text-on-surface-variant">
               Mostrando los primeros {tableLimit} de {analisisData.brechasOportunidad.length} productos analizados.
             </span>
           </div>
@@ -601,11 +601,11 @@ export default function Analisis() {
             {comparedProductsData.map(({ prod, compItems }) => {
               const labColor = getLabColor(prod.laboratorio);
               return (
-                <div key={prod.id} className="bg-white rounded-xl p-3 border border-outline-variant/50 shadow-xs space-y-2 flex flex-col justify-between">
+                <div key={prod.id} className="bg-surface-container-lowest rounded-xl p-3 border border-outline-variant/50 shadow-xs space-y-2 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between gap-1 mb-1">
                       <span
-                        className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white font-mono"
+                        className="px-2 py-0.5 rounded-full text-label-sm font-bold text-white font-mono"
                         style={{ backgroundColor: labColor }}
                       >
                         {prod.laboratorio}
@@ -620,20 +620,20 @@ export default function Analisis() {
                     <h3 className="text-xs font-bold font-display text-on-surface leading-tight">{prod.nombre}</h3>
 
                     <div className="mt-2 p-2 bg-surface-low rounded-lg text-center border border-outline-variant/30 font-mono">
-                      <div className="text-[9px] text-on-surface-variant uppercase">PVP Propio</div>
+                      <div className="text-label-sm text-on-surface-variant uppercase">PVP Propio</div>
                       <div className="text-base font-extrabold text-primary">${(prod.pvp_propio_usd || 0).toFixed(2)}</div>
                     </div>
 
                     <div className="mt-2 space-y-1">
-                      <div className="text-[9px] font-mono font-bold text-on-surface-variant uppercase">Competencia ({compItems.length}):</div>
+                      <div className="text-label-sm font-mono font-bold text-on-surface-variant uppercase">Competencia ({compItems.length}):</div>
                       {compItems.length === 0 ? (
-                        <div className="text-[10px] text-on-surface-variant italic">No registrado.</div>
+                        <div className="text-label-sm text-on-surface-variant italic">No registrado.</div>
                       ) : (
                         compItems.map(c => {
                           const chainColor = getChainColor(c.cadena);
                           const pUsd = (c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs) ? ((c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs) / effectiveRate) : 0;
                           return (
-                            <div key={c.id} className="flex items-center justify-between text-[10px] font-mono bg-surface-low/50 p-1 rounded border border-outline-variant/20">
+                            <div key={c.id} className="flex items-center justify-between text-label-sm font-mono bg-surface-low/50 p-1 rounded border border-outline-variant/20">
                               <span className="font-bold" style={{ color: chainColor }}>{c.cadena}</span>
                               <span className="font-bold text-on-surface">${pUsd.toFixed(2)}</span>
                             </div>

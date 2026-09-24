@@ -91,8 +91,8 @@ export default function GitHubConfigModal({ isOpen, onClose, onSaveSuccess }) {
               {showToken ? 'Ocultar' : 'Ver'}
             </button>
           </div>
-          <p className="text-[11px] text-on-surface-variant mt-1 font-sans">
-            Crea un token en GitHub: <span className="font-semibold">Settings &gt; Developer Settings &gt; Personal access tokens</span> con alcance <code className="bg-surface-container-high px-1.5 py-0.5 rounded font-mono text-[10px]">repo</code>.
+          <p className="text-label-md text-on-surface-variant mt-1 font-sans">
+            Crea un token en GitHub: <span className="font-semibold">Settings &gt; Developer Settings &gt; Personal access tokens</span> con alcance <code className="bg-surface-container-high px-1.5 py-0.5 rounded font-mono text-label-sm">repo</code>.
           </p>
         </div>
 

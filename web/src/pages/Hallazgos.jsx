@@ -393,14 +393,14 @@ export default function Hallazgos({ user, userDoc }) {
         {/* Mode & Currency controls & Action button */}
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           {/* Mode Switcher: Empaque vs Unidosis */}
-          <div className="bg-white rounded-full border border-outline-variant p-0.5 flex text-xs font-mono font-bold shadow-sm">
+          <div className="bg-surface-container-lowest rounded-full border border-outline-variant p-0.5 flex text-xs font-mono font-bold shadow-sm">
             <button
               onClick={() => setAnalisisMode('empaque')}
               className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1 ${
                 analisisMode === 'empaque' ? 'bg-[#040d53] text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
               }`}
             >
-              <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+              <span className="material-symbols-outlined text-body-md">inventory_2</span>
               Empaque
             </button>
             <button
@@ -410,12 +410,12 @@ export default function Hallazgos({ user, userDoc }) {
               }`}
               title="Analizar hallazgos con precios normalizados por 1 unidad/tableta/dosis"
             >
-              <span className="material-symbols-outlined text-[14px]">medication</span>
+              <span className="material-symbols-outlined text-body-md">medication</span>
               Por Unidosis
             </button>
           </div>
 
-          <div className="bg-white rounded-full border border-outline-variant p-0.5 flex text-xs font-mono font-bold shadow-sm">
+          <div className="bg-surface-container-lowest rounded-full border border-outline-variant p-0.5 flex text-xs font-mono font-bold shadow-sm">
             <button
               onClick={() => setCurrency('usd')}
               className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
@@ -431,7 +431,7 @@ export default function Hallazgos({ user, userDoc }) {
               }`}
             >
               VES
-              {bcv.rate && <span className="text-[9px] opacity-75">({bcv.rate.toFixed(2)})</span>}
+              {bcv.rate && <span className="text-label-sm opacity-75">({bcv.rate.toFixed(2)})</span>}
             </button>
           </div>
 
@@ -450,11 +450,11 @@ export default function Hallazgos({ user, userDoc }) {
         {/* Total scan */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Escaneados</span>
+            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Escaneados</span>
             <div className="text-2xl font-display font-extrabold text-primary">
               {productos.filter(p => p.activo).length}
             </div>
-            <p className="text-[11px] text-on-surface-variant font-sans">
+            <p className="text-label-md text-on-surface-variant font-sans">
               Catálogo de marcas activas
             </p>
           </div>
@@ -466,11 +466,11 @@ export default function Hallazgos({ user, userDoc }) {
         {/* Critical Alerts */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-error uppercase tracking-wider block">Alertas Críticas</span>
+            <span className="text-label-sm font-mono font-bold text-error uppercase tracking-wider block">Alertas Críticas</span>
             <div className="text-2xl font-display font-extrabold text-error">
               {totalConAlertasCriticas}
             </div>
-            <p className="text-[11px] text-error/80 font-sans">
+            <p className="text-label-md text-error/80 font-sans">
               Inversión de precios urgentes
             </p>
           </div>
@@ -482,11 +482,11 @@ export default function Hallazgos({ user, userDoc }) {
         {/* Moderated Alerts */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-amber-700 uppercase tracking-wider block">Alertas de Portafolio</span>
+            <span className="text-label-sm font-mono font-bold text-amber-700 uppercase tracking-wider block">Alertas de Portafolio</span>
             <div className="text-2xl font-display font-extrabold text-amber-700">
               {totalConAlertasModeradas}
             </div>
-            <p className="text-[11px] text-amber-600 font-sans">
+            <p className="text-label-md text-amber-600 font-sans">
               Canibalización o sobreprecio
             </p>
           </div>
@@ -498,11 +498,11 @@ export default function Hallazgos({ user, userDoc }) {
         {/* EBITDA Opportunities */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider block">Brechas de EBITDA</span>
+            <span className="text-label-sm font-mono font-bold text-emerald-700 uppercase tracking-wider block">Brechas de EBITDA</span>
             <div className="text-2xl font-display font-extrabold text-emerald-700">
               {totalOportunidadesEbitda}
             </div>
-            <p className="text-[11px] text-emerald-600 font-sans">
+            <p className="text-label-md text-emerald-600 font-sans">
               Oportunidades de alza de precio
             </p>
           </div>
@@ -513,7 +513,7 @@ export default function Hallazgos({ user, userDoc }) {
       </div>
 
       {/* Advanced search and filtering bar */}
-      <div className="bg-white rounded-3xl border border-outline-variant p-5 shadow-sm space-y-4">
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 shadow-sm space-y-4">
         <div className="flex items-center gap-2 border-b pb-3 mb-1">
           <span className="material-symbols-outlined text-primary text-xl">filter_alt</span>
           <h2 className="font-display font-extrabold text-sm text-on-background uppercase tracking-wide">
@@ -530,7 +530,7 @@ export default function Hallazgos({ user, userDoc }) {
               placeholder="Buscar por producto o principio..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full text-xs pl-10 pr-4 py-2.5 rounded-full border border-outline bg-white hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface"
+              className="w-full text-xs pl-10 pr-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface"
             />
           </div>
 
@@ -539,7 +539,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={unSeleccionada}
               onChange={(e) => setUnSeleccionada(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-white hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
             >
               <option value="Todas">Todas las Unidades (UN)</option>
               <option value="La Sante">La Santé</option>
@@ -553,7 +553,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={tipoMercadoSeleccionado}
               onChange={(e) => setTipoMercadoSeleccionado(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-white hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
             >
               <option value="Todos">Todos los Mercados</option>
               <option value="GENERICO">Genérico</option>
@@ -566,7 +566,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={categoriaSeleccionada}
               onChange={(e) => setCategoriaSeleccionada(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-white hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
             >
               {categorias.map(cat => (
                 <option key={cat} value={cat}>{cat === 'Todas' ? 'Todas las Categorías' : cat}</option>
@@ -579,7 +579,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={severidadSeleccionada}
               onChange={(e) => setSeveridadSeleccionada(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-white hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
             >
               <option value="Todos">Cualquier Gravedad</option>
               <option value="critico">Crítico (Inversiones de precio)</option>
@@ -599,7 +599,7 @@ export default function Hallazgos({ user, userDoc }) {
               onChange={(e) => setMostrarSoloConHallazgos(e.target.checked)}
               className="sr-only peer"
             />
-            <div className="relative w-9 h-5 bg-on-surface/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+            <div className="relative w-9 h-5 bg-on-surface/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface-container-lowest after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
             <span className="text-xs font-semibold text-on-surface">
               Mostrar únicamente productos con hallazgos activos ({productosConHallazgos.filter(p => p.hasHallazgos).length})
             </span>
@@ -614,7 +614,7 @@ export default function Hallazgos({ user, userDoc }) {
       {/* Main product audit list */}
       <div className="space-y-4">
         {paginatedProducts.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-outline-variant p-10 text-center space-y-3">
+          <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-10 text-center space-y-3">
             <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 animate-pulse">fact_check</span>
             <h3 className="font-display font-extrabold text-base text-on-background">Ningún producto cumple con los criterios</h3>
             <p className="text-xs text-on-surface-variant max-w-md mx-auto">
@@ -625,7 +625,7 @@ export default function Hallazgos({ user, userDoc }) {
           paginatedProducts.map(item => {
             const p = item.producto;
             const cardBgClass = item.hasHallazgos 
-              ? 'bg-white hover:border-outline transition-all shadow-sm'
+              ? 'bg-surface-container-lowest hover:border-outline transition-all shadow-sm'
               : 'bg-emerald-50/[0.02] border-emerald-500/10 hover:border-emerald-500/25 transition-all shadow-sm';
 
             return (
@@ -635,7 +635,7 @@ export default function Hallazgos({ user, userDoc }) {
                 <div className="space-y-4 lg:w-1/3">
                   <div>
                     <div className="flex flex-wrap gap-1.5 mb-1.5">
-                      <span className={`text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                      <span className={`text-label-sm font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                         p.unidad_negocio === 'OTC' 
                           ? 'bg-amber-50 text-amber-800 border-amber-200' 
                           : p.unidad_negocio === 'Pharmetique' 
@@ -644,10 +644,10 @@ export default function Hallazgos({ user, userDoc }) {
                       }`}>
                         UN {p.unidad_negocio || 'La Sante'}
                       </span>
-                      <span className="text-[9px] font-mono font-bold text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-md border border-outline-variant/60">
+                      <span className="text-label-sm font-mono font-bold text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-md border border-outline-variant/60">
                         {(p.market_type || 'GENERICO').toUpperCase()}
                       </span>
-                      <span className="text-[9px] font-mono font-bold text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-md border border-outline-variant/60">
+                      <span className="text-label-sm font-mono font-bold text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-md border border-outline-variant/60">
                         {p.categoria}
                       </span>
                     </div>
@@ -659,7 +659,7 @@ export default function Hallazgos({ user, userDoc }) {
                     <p className="text-xs font-mono font-bold text-primary uppercase tracking-wide mt-1">
                       {p.principio_activo || '—'} {p.concentracion} · {p.tamano}
                     </p>
-                    <p className="text-[10px] text-on-surface-variant font-mono mt-0.5">
+                    <p className="text-label-sm text-on-surface-variant font-mono mt-0.5">
                       Código Interno: {p.id_interno} | Laboratorio: {p.laboratorio || 'La Santé'}
                     </p>
                   </div>
@@ -667,21 +667,21 @@ export default function Hallazgos({ user, userDoc }) {
                   {/* Price Metrics mini-grid */}
                   <div className="grid grid-cols-3 gap-2.5 pt-4 border-t border-dashed border-outline-variant/50 text-xs">
                     <div className="bg-surface-low/45 p-2.5 rounded-2xl border border-outline-variant/40 text-center">
-                      <span className="text-[10px] text-on-surface-variant block mb-1">Mi Precio</span>
+                      <span className="text-label-sm text-on-surface-variant block mb-1">Mi Precio</span>
                       <span className="font-mono font-extrabold text-on-surface text-sm">
                         {fmt(item.propioPriceUsd)}
                       </span>
                     </div>
 
                     <div className="bg-surface-low/45 p-2.5 rounded-2xl border border-outline-variant/40 text-center">
-                      <span className="text-[10px] text-on-surface-variant block mb-1">Mín Mercado</span>
+                      <span className="text-label-sm text-on-surface-variant block mb-1">Mín Mercado</span>
                       <span className="font-mono font-extrabold text-on-surface text-sm">
                         {fmt(item.minCompUsd)}
                       </span>
                     </div>
 
                     <div className="bg-surface-low/45 p-2.5 rounded-2xl border border-outline-variant/40 text-center">
-                      <span className="text-[10px] text-on-surface-variant block mb-1">Promedio Comp</span>
+                      <span className="text-label-sm text-on-surface-variant block mb-1">Promedio Comp</span>
                       <span className="font-mono font-extrabold text-on-surface text-sm">
                         {fmt(item.avgCompUsd)}
                       </span>
@@ -707,7 +707,7 @@ export default function Hallazgos({ user, userDoc }) {
 
                 {/* Rules audit list */}
                 <div className="flex-1 space-y-3 lg:border-l lg:pl-6 lg:border-outline-variant/50">
-                  <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant mb-2 flex items-center gap-1.5">
+                  <div className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant mb-2 flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-sm">assignment_turned_in</span>
                     Auditoría de consistencia de precios:
                   </div>
@@ -752,17 +752,17 @@ export default function Hallazgos({ user, userDoc }) {
                                 {hallazgo.titulo}
                               </h4>
                             </div>
-                            <span className={`text-[8px] font-mono font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${badgeColor}`}>
+                            <span className={`text-label-sm font-mono font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${badgeColor}`}>
                               {hallazgo.tipo}
                             </span>
                           </div>
 
-                          <p className="text-[11px] font-sans leading-relaxed text-on-surface opacity-90">
+                          <p className="text-label-md font-sans leading-relaxed text-on-surface opacity-90">
                             {hallazgo.detalle}
                           </p>
 
-                          <div className="pt-2 border-t border-current/10 text-[11px] leading-relaxed">
-                            <strong className="font-bold block uppercase font-mono text-[9px] tracking-wide mb-0.5">Sugerencia Estratégica:</strong>
+                          <div className="pt-2 border-t border-current/10 text-label-md leading-relaxed">
+                            <strong className="font-bold block uppercase font-mono text-label-sm tracking-wide mb-0.5">Sugerencia Estratégica:</strong>
                             <span className="font-sans text-on-surface">{hallazgo.recomendacion}</span>
                           </div>
                         </div>

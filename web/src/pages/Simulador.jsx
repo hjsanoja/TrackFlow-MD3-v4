@@ -719,24 +719,24 @@ export default function Simulador({ user, userDoc }) {
       const symbol = '$';
 
       return (
-        <div className="bg-white border border-outline-variant p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 max-w-xs font-sans">
+        <div className="bg-surface-container-lowest border border-outline-variant p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 max-w-xs font-sans">
           <div className="font-bold text-primary font-display border-b border-outline-variant/40 pb-1">{data.name}</div>
-          <div className="text-[10px] text-on-surface-variant font-mono">{data.categoria} · {data.id}</div>
+          <div className="text-label-sm text-on-surface-variant font-mono">{data.categoria} · {data.id}</div>
           <div className="grid grid-cols-2 gap-3 pt-1 font-mono">
             <div className="bg-surface-low p-2 rounded-xl border border-outline-variant/30">
-              <span className="text-[10px] text-on-surface-variant font-sans block">Mi Precio:</span>
+              <span className="text-label-sm text-on-surface-variant font-sans block">Mi Precio:</span>
               <span className="font-bold text-primary text-sm">{symbol}{(data.y).toFixed(2)}</span>
             </div>
             <div className="bg-surface-low p-2 rounded-xl border border-outline-variant/30">
-              <span className="text-[10px] text-on-surface-variant font-sans block">Prom. Mercado:</span>
+              <span className="text-label-sm text-on-surface-variant font-sans block">Prom. Mercado:</span>
               <span className="font-bold text-secondary text-sm">{symbol}{(data.x).toFixed(2)}</span>
             </div>
           </div>
-          <div className="text-[11px] font-mono pt-1 flex justify-between items-center">
+          <div className="text-label-md font-mono pt-1 flex justify-between items-center">
             <span className={data.diffAvgPercent > 0 ? 'text-red-700 font-bold' : 'text-emerald-700 font-bold'}>
               Brecha: {data.diffAvgPercent > 0 ? '+' : ''}{data.diffAvgPercent}%
             </span>
-            <span className="text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-full text-[10px]">
+            <span className="text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-full text-label-sm">
               Posición: #{data.ranking || '—'} / {data.totalOptions}
             </span>
           </div>
@@ -754,7 +754,7 @@ export default function Simulador({ user, userDoc }) {
       const gapAbs = Math.abs(data.gap).toFixed(1);
       
       return (
-        <div className="bg-white/95 p-3.5 border border-outline-variant rounded-2xl shadow-lg backdrop-blur-sm max-w-xs font-sans text-on-surface">
+        <div className="bg-surface-container-lowest/95 p-3.5 border border-outline-variant rounded-2xl shadow-lg backdrop-blur-sm max-w-xs font-sans text-on-surface">
           <p className="text-xs font-bold mb-1.5">{data.fullName}</p>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between gap-6">
@@ -767,12 +767,12 @@ export default function Simulador({ user, userDoc }) {
             </div>
             <div className="pt-1.5 border-t border-outline/10 flex justify-between gap-6 items-center">
               <span>Desviación:</span>
-              <span className={`font-bold px-1.5 py-0.5 rounded-full text-[11px] ${isCheaper ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              <span className={`font-bold px-1.5 py-0.5 rounded-full text-label-md ${isCheaper ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                 {isCheaper ? `-${gapAbs}%` : `+${gapAbs}%`}
               </span>
             </div>
           </div>
-          <p className={`text-[10px] mt-2 font-semibold ${isCheaper ? 'text-emerald-600' : 'text-red-600'}`}>
+          <p className={`text-label-sm mt-2 font-semibold ${isCheaper ? 'text-emerald-600' : 'text-red-600'}`}>
             {isCheaper 
               ? `Estás un ${gapAbs}% más barato que el promedio.` 
               : `Estás un ${gapAbs}% más caro que el promedio.`}
@@ -993,30 +993,30 @@ export default function Simulador({ user, userDoc }) {
         {/* Price mode toggle and export button */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Mode Switcher: Empaque vs Unidosis */}
-          <div className="flex bg-white p-1 rounded-2xl border border-outline-variant shadow-sm text-xs font-mono font-bold">
+          <div className="flex bg-surface-container-lowest p-1 rounded-2xl border border-outline-variant shadow-sm text-xs font-mono font-bold">
             <button onClick={() => setAnalisisMode('empaque')}
               className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${analisisMode === 'empaque' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>
-              <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+              <span className="material-symbols-outlined text-body-md">inventory_2</span>
               Empaque
             </button>
             <button onClick={() => setAnalisisMode('unidosis')}
               className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${analisisMode === 'unidosis' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}
               title="Analizar precios normalizados por 1 unidad/tableta/dosis">
-              <span className="material-symbols-outlined text-[14px]">medication</span>
+              <span className="material-symbols-outlined text-body-md">medication</span>
               Por Unidosis
             </button>
           </div>
 
           <button
             onClick={handleExportarSimulacion}
-            className="px-4 py-2 bg-white border border-outline-variant hover:bg-surface-low rounded-2xl text-xs font-bold text-primary transition-all flex items-center gap-1.5 shadow-sm"
+            className="px-4 py-2 bg-surface-container-lowest border border-outline-variant hover:bg-surface-low rounded-2xl text-xs font-bold text-primary transition-all flex items-center gap-1.5 shadow-sm"
             title="Exportar productos y sus precios simulados a CSV"
           >
             <span className="material-symbols-outlined text-[16px]">download</span>
             Exportar Simulación CSV
           </button>
 
-          <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-outline-variant shadow-sm">
+          <div className="flex items-center gap-1.5 bg-surface-container-lowest p-1.5 rounded-2xl border border-outline-variant shadow-sm">
             <button
               onClick={() => setDashboardPriceMode('descuento')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -1025,7 +1025,7 @@ export default function Simulador({ user, userDoc }) {
                   : 'text-on-surface-variant hover:bg-surface/50'
               }`}
             >
-              <span className="material-symbols-outlined text-[14px]">sell</span>
+              <span className="material-symbols-outlined text-body-md">sell</span>
               Con Descuento
             </button>
             <button
@@ -1036,7 +1036,7 @@ export default function Simulador({ user, userDoc }) {
                   : 'text-on-surface-variant hover:bg-surface/50'
               }`}
             >
-              <span className="material-symbols-outlined text-[14px]">receipt_long</span>
+              <span className="material-symbols-outlined text-body-md">receipt_long</span>
               Precio de Lista
             </button>
           </div>
@@ -1044,7 +1044,7 @@ export default function Simulador({ user, userDoc }) {
       </div>
 
       {/* Strategic Business Unit Analytics & Recommendations */}
-      <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
         <div>
           <h2 className="text-sm font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5 mb-1">
             <span className="material-symbols-outlined text-lg">corporate_fare</span>
@@ -1077,7 +1077,7 @@ export default function Simulador({ user, userDoc }) {
                         {item.un === 'La Sante' ? 'La Santé' : item.un}
                       </h3>
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-md border border-outline-variant/50">
+                    <span className="text-label-sm font-mono font-bold text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-md border border-outline-variant/50">
                       {item.totalProductos} Productos
                     </span>
                   </div>
@@ -1116,7 +1116,7 @@ export default function Simulador({ user, userDoc }) {
 
                   {/* Recommendations */}
                   <div className="mt-5 pt-4 border-t border-dashed border-outline-variant/50 space-y-3">
-                    <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant">
+                    <div className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant">
                       Prescripción Estratégica:
                     </div>
                     {item.recomendaciones.map((rec, idx) => (
@@ -1134,7 +1134,7 @@ export default function Simulador({ user, userDoc }) {
                         </span>
                         <div>
                           <strong className="block font-bold">{rec.titulo}</strong>
-                          <span className="text-[11px] text-on-surface-variant font-sans">{rec.detalle}</span>
+                          <span className="text-label-md text-on-surface-variant font-sans">{rec.detalle}</span>
                         </div>
                       </div>
                     ))}
@@ -1143,7 +1143,7 @@ export default function Simulador({ user, userDoc }) {
 
                 {/* Bulletins/Alerts indicator */}
                 {hasAlerts && (
-                  <div className="mt-4 p-2 bg-error-container/30 border border-error/10 rounded-xl text-[10px] text-error flex gap-1.5 items-center">
+                  <div className="mt-4 p-2 bg-error-container/30 border border-error/10 rounded-xl text-label-sm text-error flex gap-1.5 items-center">
                     <span className="material-symbols-outlined text-xs">warning</span>
                     <span className="font-semibold leading-tight">{item.alertas[0]}</span>
                   </div>
@@ -1155,7 +1155,7 @@ export default function Simulador({ user, userDoc }) {
       </div>
 
       {/* Simulator Control and KPIs Row */}
-      <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm space-y-6">
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-outline-variant pb-4 gap-4">
           <div>
             <h2 className="text-lg font-display font-extrabold text-primary flex items-center gap-1.5">
@@ -1200,7 +1200,7 @@ export default function Simulador({ user, userDoc }) {
                 <span className="material-symbols-outlined text-primary text-sm">assignment</span>
                 <span className="text-xs font-bold text-primary uppercase font-mono tracking-wider">{reporteGenerado.titulo}</span>
               </div>
-              <span className="text-[10px] text-on-surface-variant font-mono">{reporteGenerado.fecha}</span>
+              <span className="text-label-sm text-on-surface-variant font-mono">{reporteGenerado.fecha}</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 border-b border-outline-variant text-center divide-x divide-outline-variant text-xs font-mono font-bold">
@@ -1229,7 +1229,7 @@ export default function Simulador({ user, userDoc }) {
                 <div className="space-y-3 leading-relaxed">
                   <h4 className="font-bold text-primary text-sm font-display">Situación de Posicionamiento Global</h4>
                   <p dangerouslySetInnerHTML={{ __html: reporteGenerado.resumenEjecutivo.replaceAll('**', '<strong>').replaceAll('</strong></strong>', '</strong>') }}></p>
-                  <p className="bg-primary/5 p-3 rounded-xl border border-primary/10 text-[11px]">
+                  <p className="bg-primary/5 p-3 rounded-xl border border-primary/10 text-label-md">
                     <strong>Indicación estratégica:</strong> Mantener un IPR cercano al 100% asegura que tu catálogo preserve el balance óptimo de rentabilidad y recordación de marca de bajo precio ante tus pacientes/clientes de farmacia.
                   </p>
                 </div>
@@ -1244,7 +1244,7 @@ export default function Simulador({ user, userDoc }) {
                         <span className="material-symbols-outlined text-base">savings</span>
                         Oportunidades de Captura de Margen (Evitar Pérdidas por Subprecio)
                       </h4>
-                      <p className="text-[11px] text-on-surface-variant">
+                      <p className="text-label-md text-on-surface-variant">
                         Los siguientes productos se venden <strong>excesivamente baratos</strong> frente al promedio de los competidores. Puedes aumentar sus precios para capturar márgenes sin perder competitividad:
                       </p>
                       <div className="space-y-3">
@@ -1252,21 +1252,21 @@ export default function Simulador({ user, userDoc }) {
                           <div key={o.id} className="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/10 flex justify-between items-start gap-4 flex-wrap">
                             <div className="flex-1 min-w-[260px]">
                               <strong className="text-emerald-800 font-sans block text-sm">{o.nombre}</strong>
-                              <span className="text-[10px] font-mono text-on-surface-variant mt-0.5 block">ID: {o.id}</span>
-                              <p className="text-[11px] text-on-surface mt-2 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20 leading-relaxed">
+                              <span className="text-label-sm font-mono text-on-surface-variant mt-0.5 block">ID: {o.id}</span>
+                              <p className="text-label-md text-on-surface mt-2 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20 leading-relaxed">
                                 {o.recomendacion}
                               </p>
                             </div>
-                            <div className="text-right font-mono shrink-0 bg-white p-3 rounded-xl border border-outline-variant/40 shadow-sm min-w-[150px]">
-                              <div className="text-on-surface-variant text-[10px]">Precio actual:</div>
+                            <div className="text-right font-mono shrink-0 bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/40 shadow-sm min-w-[150px]">
+                              <div className="text-on-surface-variant text-label-sm">Precio actual:</div>
                               <div className="text-on-surface font-bold font-sans text-xs">{fmt(o.precioPropio)}</div>
                               
-                              <div className="text-emerald-700 text-[10px] mt-2 font-semibold">Sugerido (+{o.incrementoPct}%):</div>
+                              <div className="text-emerald-700 text-label-sm mt-2 font-semibold">Sugerido (+{o.incrementoPct}%):</div>
                               <div className="text-emerald-700 font-extrabold font-sans text-sm">{fmt(o.precioSugeridoUsd)}</div>
-                              <div className="text-[10px] text-emerald-600">{fmtBs(o.precioSugeridoUsd)}</div>
+                              <div className="text-label-sm text-emerald-600">{fmtBs(o.precioSugeridoUsd)}</div>
                               
-                              <div className="text-on-surface-variant text-[9px] mt-2 pt-1.5 border-t border-outline/10">Promedio Comp: {fmt(o.precioPromedio)}</div>
-                              <div className="text-emerald-600 font-extrabold text-[10px]">Brecha: {o.gap.toFixed(1)}%</div>
+                              <div className="text-on-surface-variant text-label-sm mt-2 pt-1.5 border-t border-outline/10">Promedio Comp: {fmt(o.precioPromedio)}</div>
+                              <div className="text-emerald-600 font-extrabold text-label-sm">Brecha: {o.gap.toFixed(1)}%</div>
                             </div>
                           </div>
                         ))}
@@ -1281,7 +1281,7 @@ export default function Simulador({ user, userDoc }) {
                         <span className="material-symbols-outlined text-base">error</span>
                         Riesgos Críticos de Fuga de Ventas (Alineación por Sobreprecio)
                       </h4>
-                      <p className="text-[11px] text-on-surface-variant">
+                      <p className="text-label-md text-on-surface-variant">
                         Estás perdiendo el posicionamiento de bajo costo en estos ítems. Se recomienda un ajuste correctivo a la baja para evitar que tus clientes migren a la competencia:
                       </p>
                       <div className="space-y-3">
@@ -1289,21 +1289,21 @@ export default function Simulador({ user, userDoc }) {
                           <div key={o.id} className="bg-error-container/10 p-4 rounded-xl border border-error/10 flex justify-between items-start gap-4 flex-wrap">
                             <div className="flex-1 min-w-[260px]">
                               <strong className="text-error font-sans block text-sm">{o.nombre}</strong>
-                              <span className="text-[10px] font-mono text-on-surface-variant mt-0.5 block">ID: {o.id}</span>
-                              <p className="text-[11px] text-on-surface mt-2 bg-error-container/20 p-2.5 rounded-lg border border-error/20 leading-relaxed">
+                              <span className="text-label-sm font-mono text-on-surface-variant mt-0.5 block">ID: {o.id}</span>
+                              <p className="text-label-md text-on-surface mt-2 bg-error-container/20 p-2.5 rounded-lg border border-error/20 leading-relaxed">
                                 {o.recomendacion}
                               </p>
                             </div>
-                            <div className="text-right font-mono shrink-0 bg-white p-3 rounded-xl border border-outline-variant/40 shadow-sm min-w-[150px]">
-                              <div className="text-on-surface-variant text-[10px]">Precio actual:</div>
+                            <div className="text-right font-mono shrink-0 bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/40 shadow-sm min-w-[150px]">
+                              <div className="text-on-surface-variant text-label-sm">Precio actual:</div>
                               <div className="text-on-surface font-bold font-sans text-xs">{fmt(o.precioPropio)}</div>
                               
-                              <div className="text-error text-[10px] mt-2 font-semibold">Sugerido (-{o.descuentoPct}%):</div>
+                              <div className="text-error text-label-sm mt-2 font-semibold">Sugerido (-{o.descuentoPct}%):</div>
                               <div className="text-error font-extrabold font-sans text-sm">{fmt(o.precioSugeridoUsd)}</div>
-                              <div className="text-[10px] text-error/80">{fmtBs(o.precioSugeridoUsd)}</div>
+                              <div className="text-label-sm text-error/80">{fmtBs(o.precioSugeridoUsd)}</div>
                               
-                              <div className="text-on-surface-variant text-[9px] mt-2 pt-1.5 border-t border-outline/10">Promedio Comp: {fmt(o.precioPromedio)}</div>
-                              <div className="text-error font-extrabold text-[10px]">Brecha: +{o.gap.toFixed(1)}%</div>
+                              <div className="text-on-surface-variant text-label-sm mt-2 pt-1.5 border-t border-outline/10">Promedio Comp: {fmt(o.precioPromedio)}</div>
+                              <div className="text-error font-extrabold text-label-sm">Brecha: +{o.gap.toFixed(1)}%</div>
                             </div>
                           </div>
                         ))}
@@ -1321,7 +1321,7 @@ export default function Simulador({ user, userDoc }) {
                 <div className="space-y-3 leading-relaxed">
                   <h4 className="font-bold text-primary text-sm font-display">Estudio de Elasticidad del Ajuste Simulado</h4>
                   <p>{reporteGenerado.estrategiaElasticidad}</p>
-                  <p className="bg-amber-500/5 p-3 rounded-xl border border-amber-500/15 text-[11px]">
+                  <p className="bg-amber-500/5 p-3 rounded-xl border border-amber-500/15 text-label-md">
                     <strong>Nota Metodológica:</strong> El cálculo de volumen estimado asume una elasticidad precio promedio de la demanda farmacéutica del sector de medicamentos básicos de -1.15. Las variaciones son sugerencias algorítmicas de paridad de góndola.
                   </p>
                 </div>
@@ -1331,7 +1331,7 @@ export default function Simulador({ user, userDoc }) {
             <div className="bg-surface-low px-5 py-3 border-t border-outline-variant flex items-center justify-end gap-2.5">
               <button
                 onClick={handleCopiarReporte}
-                className="text-[11px] font-bold text-primary hover:underline uppercase inline-flex items-center gap-1"
+                className="text-label-md font-bold text-primary hover:underline uppercase inline-flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-xs">content_copy</span>
                 Copiar Markdown
@@ -1339,7 +1339,7 @@ export default function Simulador({ user, userDoc }) {
               <span className="text-outline-variant">|</span>
               <button
                 onClick={handleDescargarReporteTxt}
-                className="text-[11px] font-bold text-primary hover:underline uppercase inline-flex items-center gap-1"
+                className="text-label-md font-bold text-primary hover:underline uppercase inline-flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-xs">download_file</span>
                 Descargar Reporte (.TXT)
@@ -1354,7 +1354,7 @@ export default function Simulador({ user, userDoc }) {
           <div className="md:col-span-1 bg-surface-low border border-outline-variant p-5 rounded-2xl flex flex-col justify-between">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono font-bold uppercase text-on-surface-variant tracking-wider">Ajuste de Mi Marca</span>
+                <span className="text-label-sm font-mono font-bold uppercase text-on-surface-variant tracking-wider">Ajuste de Mi Marca</span>
                 <span className={`text-base font-mono font-extrabold ${simulacionVariacion > 0 ? 'text-primary' : simulacionVariacion < 0 ? 'text-emerald-700' : 'text-on-surface-variant'}`}>
                   {simulacionVariacion > 0 ? `+${simulacionVariacion}` : simulacionVariacion}%
                 </span>
@@ -1372,25 +1372,25 @@ export default function Simulador({ user, userDoc }) {
 
               {/* Slider Quick Preset Buttons */}
               <div className="space-y-1 pt-1">
-                <span className="text-[9px] uppercase font-mono text-on-surface-variant block font-bold">Escenarios Preconfigurados:</span>
-                <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono font-bold text-center">
-                  <button onClick={() => setSimulacionVariacion(-10)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === -10 ? 'bg-primary text-on-primary border-primary' : 'bg-white border-outline-variant hover:bg-surface text-on-surface'}`}>
+                <span className="text-label-sm uppercase font-mono text-on-surface-variant block font-bold">Escenarios Preconfigurados:</span>
+                <div className="grid grid-cols-2 gap-1.5 text-label-sm font-mono font-bold text-center">
+                  <button onClick={() => setSimulacionVariacion(-10)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === -10 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
                     -10% Agresivo
                   </button>
-                  <button onClick={() => setSimulacionVariacion(-3)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === -3 ? 'bg-primary text-on-primary border-primary' : 'bg-white border-outline-variant hover:bg-surface text-on-surface'}`}>
+                  <button onClick={() => setSimulacionVariacion(-3)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === -3 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
                     -3% Descuento
                   </button>
-                  <button onClick={() => setSimulacionVariacion(0)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === 0 ? 'bg-primary text-on-primary border-primary' : 'bg-white border-outline-variant hover:bg-surface text-on-surface'}`}>
+                  <button onClick={() => setSimulacionVariacion(0)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === 0 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
                     0% Base Actual
                   </button>
-                  <button onClick={() => setSimulacionVariacion(5)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === 5 ? 'bg-primary text-on-primary border-primary' : 'bg-white border-outline-variant hover:bg-surface text-on-surface'}`}>
+                  <button onClick={() => setSimulacionVariacion(5)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === 5 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
                     +5% Inflación
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/50 text-[10px] text-on-surface-variant font-sans leading-relaxed mt-4">
+            <div className="pt-4 border-t border-outline-variant/50 text-label-sm text-on-surface-variant font-sans leading-relaxed mt-4">
               Desliza para aplicar un porcentaje de cambio sobre tu precio base y simular los nuevos indicadores.
             </div>
           </div>
@@ -1400,21 +1400,21 @@ export default function Simulador({ user, userDoc }) {
             {/* Simulated IPR Card */}
             <div className="neural-card p-5 flex items-center justify-between">
               <div className="space-y-1 flex-1 min-w-0 pr-2">
-                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Paridad Global Simulada</span>
+                <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Paridad Global Simulada</span>
                 <div className="flex items-baseline gap-2">
                   <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-primary' : 'text-on-surface-variant'}`}>
                     {simulatedStats.simGlobalIpr ? `${simulatedStats.simGlobalIpr.toFixed(1)}%` : '—'}
                   </div>
                   {simulacionVariacion !== 0 && (
-                    <span className={`text-[10px] font-mono font-bold flex items-center ${simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'text-emerald-600' : 'text-error'}`}>
-                      <span className="material-symbols-outlined text-[12px] leading-none mr-0.5">
+                    <span className={`text-label-sm font-mono font-bold flex items-center ${simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'text-emerald-600' : 'text-error'}`}>
+                      <span className="material-symbols-outlined text-body-sm leading-none mr-0.5">
                         {simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'arrow_downward' : 'arrow_upward'}
                       </span>
                       {Math.abs(simulatedStats.simGlobalIpr - (kpiStats.globalIpr || 100)).toFixed(1)}%
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                <p className="text-label-md text-on-surface-variant font-sans truncate">
                   Base: <strong className="font-mono">{kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}</strong>
                 </p>
               </div>
@@ -1426,21 +1426,21 @@ export default function Simulador({ user, userDoc }) {
             {/* Simulated Leadership Percentage Card */}
             <div className="neural-card p-5 flex items-center justify-between">
               <div className="space-y-1 flex-1 min-w-0 pr-2">
-                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Liderazgo Góndola</span>
+                <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Liderazgo Góndola</span>
                 <div className="flex items-baseline gap-2">
                   <div className={`text-2xl font-display font-extrabold ${simulacionVariacion !== 0 ? 'text-secondary' : 'text-on-surface-variant'}`}>
                     {simulatedStats.porcentajeLiderazgoSim}%
                   </div>
                   {simulacionVariacion !== 0 && (
-                    <span className={`text-[10px] font-mono font-bold flex items-center ${simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'text-emerald-600' : 'text-error'}`}>
-                      <span className="material-symbols-outlined text-[12px] leading-none mr-0.5">
+                    <span className={`text-label-sm font-mono font-bold flex items-center ${simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'text-emerald-600' : 'text-error'}`}>
+                      <span className="material-symbols-outlined text-body-sm leading-none mr-0.5">
                         {simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'arrow_upward' : 'arrow_downward'}
                       </span>
                       {Math.abs(simulatedStats.porcentajeLiderazgoSim - kpiStats.porcentajeLiderazgoPropio)}%
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                <p className="text-label-md text-on-surface-variant font-sans truncate">
                   Base: <strong className="font-mono">{kpiStats.porcentajeLiderazgoPropio}%</strong>
                 </p>
               </div>
@@ -1452,7 +1452,7 @@ export default function Simulador({ user, userDoc }) {
             {/* Elasticity / Estimated Margin Card */}
             <div className="neural-card p-5 flex items-center justify-between">
               <div className="space-y-1 flex-1 min-w-0 pr-2">
-                <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Impacto en Góndola</span>
+                <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block truncate">Impacto en Góndola</span>
                 <div className={`text-base font-display font-extrabold flex items-center gap-1 ${
                   simulacionVariacion > 12 ? 'text-error'
                   : simulacionVariacion > 0 ? 'text-amber-600'
@@ -1467,7 +1467,7 @@ export default function Simulador({ user, userDoc }) {
                     : simulacionVariacion < 0 ? 'Volumen Activo'
                     : 'Estable'}
                 </div>
-                <p className="text-[11px] text-on-surface-variant font-sans truncate">
+                <p className="text-label-md text-on-surface-variant font-sans truncate">
                   Brecha mín: <strong className="font-mono">{simulatedStats.brechaPromedioVsMinSim.toFixed(1)}%</strong>
                 </p>
               </div>
@@ -1485,7 +1485,7 @@ export default function Simulador({ user, userDoc }) {
       </div>
 
       {/* Pricing Positioning (Price Gap vs Competitors) */}
-      <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm flex flex-col justify-between">
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm flex flex-col justify-between">
         <div>
           <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider mb-1 flex items-center gap-1.5">
             <span className="material-symbols-outlined text-base">bar_chart</span>
@@ -1542,7 +1542,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Positioning Matrix (Scatter Chart: Mi Precio vs. Promedio Mercado) */}
       {scatterPlotData.length > 0 && (
-        <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
             <div>
               <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
@@ -1612,7 +1612,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Indicador: Cadena en que los productos son más costosos en promedio */}
       {cadenaComparacionCostos && (
-        <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
             <div>
               <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
@@ -1645,7 +1645,7 @@ export default function Simulador({ user, userDoc }) {
                   <p className="text-xs text-on-surface-variant font-sans">
                     Nuestros productos son <strong>{isCostly ? 'más costosos' : 'más económicos'}</strong> que en {item.cadena} en promedio.
                   </p>
-                  <div className="pt-2 border-t border-outline-variant/30 text-[11px] text-on-surface-variant flex justify-between font-mono">
+                  <div className="pt-2 border-t border-outline-variant/30 text-label-md text-on-surface-variant flex justify-between font-mono">
                     <span>{item.count} SKUs comparados</span>
                     <span className={isCostly ? 'text-amber-800 font-bold' : 'text-emerald-800 font-bold'}>
                       {isCostly ? `${item.masCostososCount} arriba` : `${item.masBaratosCount} abajo`}
@@ -1660,7 +1660,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Indicador: Share of Voice (SoV) de Precios por Cadena */}
       {shareOfVoiceData.length > 0 && (
-        <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
           <div>
             <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
               <span className="material-symbols-outlined text-xl text-primary">pie_chart</span>
@@ -1676,7 +1676,7 @@ export default function Simulador({ user, userDoc }) {
               <div key={ch.cadena} className="p-4 rounded-2xl border border-outline-variant bg-surface-low/30 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="font-display font-extrabold text-sm text-primary">{ch.cadena}</span>
-                  <span className="text-[10px] font-mono font-bold bg-primary-container text-on-primary-container px-2.5 py-0.5 rounded-full">
+                  <span className="text-label-sm font-mono font-bold bg-primary-container text-on-primary-container px-2.5 py-0.5 rounded-full">
                     {ch.skusMonitoreados} SKUs ({ch.coveragePct.toFixed(0)}%)
                   </span>
                 </div>
@@ -1691,13 +1691,13 @@ export default function Simulador({ user, userDoc }) {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-outline-variant/40 grid grid-cols-2 gap-2 text-[11px] font-mono">
-                  <div className="bg-white p-2 rounded-xl text-center border border-outline-variant/30">
-                    <span className="text-[10px] text-on-surface-variant font-sans block">Líder Mínimo</span>
+                <div className="pt-2 border-t border-outline-variant/40 grid grid-cols-2 gap-2 text-label-md font-mono">
+                  <div className="bg-surface-container-lowest p-2 rounded-xl text-center border border-outline-variant/30">
+                    <span className="text-label-sm text-on-surface-variant font-sans block">Líder Mínimo</span>
                     <span className="font-bold text-emerald-700">{ch.lowestCount} prods</span>
                   </div>
-                  <div className="bg-white p-2 rounded-xl text-center border border-outline-variant/30">
-                    <span className="text-[10px] text-on-surface-variant font-sans block">Máximo Precio</span>
+                  <div className="bg-surface-container-lowest p-2 rounded-xl text-center border border-outline-variant/30">
+                    <span className="text-label-sm text-on-surface-variant font-sans block">Máximo Precio</span>
                     <span className="font-bold text-red-700">{ch.highestCount} prods</span>
                   </div>
                 </div>
@@ -1709,7 +1709,7 @@ export default function Simulador({ user, userDoc }) {
 
       {/* Indicador: Elasticidad Histórica por Molécula */}
       {elasticidadPorMolecula.length > 0 && (
-        <div className="bg-white rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
             <div>
               <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
@@ -1753,7 +1753,7 @@ export default function Simulador({ user, userDoc }) {
                       {m.avgVolatilidad > 0 ? `${m.avgVolatilidad.toFixed(1)}%` : 'Estable'}
                     </td>
                     <td className="text-center">
-                      <span className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-full border ${m.badgeClass}`}>
+                      <span className={`px-2.5 py-1 text-label-sm font-mono font-bold rounded-full border ${m.badgeClass}`}>
                         {m.tipoElasticidad}
                       </span>
                     </td>

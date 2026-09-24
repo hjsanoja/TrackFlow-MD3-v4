@@ -320,7 +320,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
               <h2 className="text-xl font-display font-extrabold text-on-surface">
                 Histórico de Brecha de Precios en USD (Tasa BCV del Día)
               </h2>
-              <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full uppercase">
+              <span className="text-label-sm font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full uppercase">
                 Ajustado a Tasa Oficial Diaria
               </span>
             </div>
@@ -344,7 +344,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
           <div className="md:col-span-6 space-y-1.5">
             <label className="text-xs font-semibold text-on-surface flex items-center justify-between">
               <span>Selecciona un Producto Propio:</span>
-              <span className="text-[10px] text-on-surface-variant font-mono">
+              <span className="text-label-sm text-on-surface-variant font-mono">
                 {productosPropiosConDatos.length} disponibles
               </span>
             </label>
@@ -425,7 +425,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
               {datosSerieHistorica.metricas.brechaPromedio > 0 ? '+' : ''}
               {datosSerieHistorica.metricas.brechaPromedio.toFixed(1)}%
             </div>
-            <span className="text-[11px] text-on-surface-variant">Frente a competidores</span>
+            <span className="text-label-md text-on-surface-variant">Frente a competidores</span>
           </div>
 
           <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60">
@@ -433,7 +433,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <div className="text-2xl font-display font-black text-on-surface mt-1">
               Bs {datosSerieHistorica.metricas.tasaFinal.toFixed(2)}
             </div>
-            <span className="text-[11px] text-on-surface-variant">
+            <span className="text-label-md text-on-surface-variant">
               Inició en Bs {datosSerieHistorica.metricas.tasaInicial.toFixed(2)}
             </span>
           </div>
@@ -443,7 +443,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <div className="text-2xl font-display font-black text-primary mt-1">
               +{datosSerieHistorica.metricas.devaluacionPct.toFixed(1)}%
             </div>
-            <span className="text-[11px] text-on-surface-variant">Devaluación oficial acumulada</span>
+            <span className="text-label-md text-on-surface-variant">Devaluación oficial acumulada</span>
           </div>
 
           <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60">
@@ -451,7 +451,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <div className="text-2xl font-display font-black text-on-surface mt-1">
               {datosSerieHistorica.metricas.totalMediciones}
             </div>
-            <span className="text-[11px] text-on-surface-variant">Mediciones auditadas</span>
+            <span className="text-label-md text-on-surface-variant">Mediciones auditadas</span>
           </div>
         </div>
       )}
@@ -569,7 +569,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-outline-variant/60 text-on-surface-variant font-mono uppercase text-[10px]">
+              <tr className="border-b border-outline-variant/60 text-on-surface-variant font-mono uppercase text-label-sm">
                 <th className="py-2.5 px-3">Fecha</th>
                 <th className="py-2.5 px-3">Tasa BCV del Día</th>
                 <th className="py-2.5 px-3">Propio Bs</th>
@@ -615,7 +615,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
                     <td className="py-2.5 px-3 text-center">
                       {fila.brecha_pct !== null ? (
                         <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                          className={`inline-block px-2 py-0.5 rounded-full text-label-sm font-mono font-bold uppercase ${
                             esFavorable
                               ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                               : 'bg-red-500/10 text-red-700 dark:text-red-300'

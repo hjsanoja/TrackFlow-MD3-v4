@@ -343,14 +343,14 @@ export default function MapaCalor({ user, userDoc }) {
               onClick={() => setAnalisisMode('empaque')}
               className={`m3-segmented-item ${analisisMode === 'empaque' ? 'active' : ''}`}
             >
-              <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+              <span className="material-symbols-outlined text-body-md">inventory_2</span>
               <span>Empaque</span>
             </button>
             <button
               onClick={() => setAnalisisMode('unidosis')}
               className={`m3-segmented-item ${analisisMode === 'unidosis' ? 'active' : ''}`}
             >
-              <span className="material-symbols-outlined text-[14px]">medication</span>
+              <span className="material-symbols-outlined text-body-md">medication</span>
               <span>Por Unidosis</span>
             </button>
           </div>
@@ -386,9 +386,9 @@ export default function MapaCalor({ user, userDoc }) {
         {/* Total con precio */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Vigentes</span>
+            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Vigentes</span>
             <div className="text-2xl font-display font-extrabold text-primary">{statsSummary.total}</div>
-            <p className="text-[11px] text-on-surface-variant font-sans">Con precio o competencia activa</p>
+            <p className="text-label-md text-on-surface-variant font-sans">Con precio o competencia activa</p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-4">
             <span className="material-symbols-outlined text-2xl select-none">medication</span>
@@ -398,9 +398,9 @@ export default function MapaCalor({ user, userDoc }) {
         {/* Bajo Promedio (Más competitivos) */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-sky-700 uppercase tracking-wider block">Bajo el Promedio</span>
+            <span className="text-label-sm font-mono font-bold text-sky-700 uppercase tracking-wider block">Bajo el Promedio</span>
             <div className="text-2xl font-display font-extrabold text-sky-800">{statsSummary.bajoPromedio}</div>
-            <p className="text-[11px] text-sky-600 font-sans">Precios altamente competitivos</p>
+            <p className="text-label-md text-sky-600 font-sans">Precios altamente competitivos</p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 ml-4">
             <span className="material-symbols-outlined text-2xl select-none">trending_down</span>
@@ -410,9 +410,9 @@ export default function MapaCalor({ user, userDoc }) {
         {/* En Paridad */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider block">En Paridad</span>
+            <span className="text-label-sm font-mono font-bold text-emerald-700 uppercase tracking-wider block">En Paridad</span>
             <div className="text-2xl font-display font-extrabold text-emerald-800">{statsSummary.enParidad}</div>
-            <p className="text-[11px] text-emerald-600 font-sans">Dentro del ±5% del promedio</p>
+            <p className="text-label-md text-emerald-600 font-sans">Dentro del ±5% del promedio</p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 ml-4">
             <span className="material-symbols-outlined text-2xl select-none">drag_handle</span>
@@ -422,9 +422,9 @@ export default function MapaCalor({ user, userDoc }) {
         {/* Sobre Promedio */}
         <div className="neural-card p-5 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono font-bold text-amber-700 uppercase tracking-wider block">Sobre el Promedio</span>
+            <span className="text-label-sm font-mono font-bold text-amber-700 uppercase tracking-wider block">Sobre el Promedio</span>
             <div className="text-2xl font-display font-extrabold text-amber-800">{statsSummary.sobrePromedio}</div>
-            <p className="text-[11px] text-amber-600 font-sans">Posibles márgenes premium</p>
+            <p className="text-label-md text-amber-600 font-sans">Posibles márgenes premium</p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 ml-4">
             <span className="material-symbols-outlined text-2xl select-none">trending_up</span>
@@ -511,7 +511,7 @@ export default function MapaCalor({ user, userDoc }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold">
+          <div className="flex items-center gap-1.5 font-mono text-label-md font-bold">
             <span className="material-symbols-outlined text-xs text-primary">info</span>
             <span>Mostrando <span className="font-black text-primary">{filteredRows.length}</span> de <span className="font-bold">{heatmapData.length}</span> productos</span>
           </div>
@@ -562,7 +562,7 @@ export default function MapaCalor({ user, userDoc }) {
                         <div className="flex flex-col space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-bold text-on-surface text-sm font-display leading-tight">{item.producto.nombre}</span>
-                            <span className={`px-1.5 py-0.5 text-[9px] rounded font-mono font-bold tracking-wider uppercase ${
+                            <span className={`px-1.5 py-0.5 text-label-sm rounded font-mono font-bold tracking-wider uppercase ${
                               (item.producto.market_type || 'GENERICO').toUpperCase() === 'MARCA'
                                 ? 'bg-purple-100 text-purple-800 border border-purple-200'
                                 : 'bg-green-100 text-green-800 border border-green-200'
@@ -578,8 +578,8 @@ export default function MapaCalor({ user, userDoc }) {
                           </div>
 
                           <div className="pt-1">
-                            <span className="text-[10px] text-primary bg-primary/5 border border-primary/15 rounded-lg px-2 py-0.5 font-bold inline-flex items-center gap-1 hover:bg-primary/10 transition-colors">
-                              <span className="material-symbols-outlined text-[11px]">visibility</span>
+                            <span className="text-label-sm text-primary bg-primary/5 border border-primary/15 rounded-lg px-2 py-0.5 font-bold inline-flex items-center gap-1 hover:bg-primary/10 transition-colors">
+                              <span className="material-symbols-outlined text-label-md">visibility</span>
                               Analizar competencia ↗
                             </span>
                           </div>
@@ -595,9 +595,9 @@ export default function MapaCalor({ user, userDoc }) {
                             <div className="w-full h-full rounded-full bg-gradient-to-r from-red-500 via-amber-400 via-emerald-500 via-amber-400 to-red-500 shadow-[inset_0_1.5px_2px_rgba(0,0,0,0.15)]"></div>
 
                             {/* Center and bounds markers on track */}
-                            <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-white/40" title="Mínimo"></div>
-                            <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-white/60 -translate-x-1/2" title="Promedio"></div>
-                            <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/40" title="Máximo"></div>
+                            <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-surface-container-lowest/40" title="Mínimo"></div>
+                            <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-surface-container-lowest/60 -translate-x-1/2" title="Promedio"></div>
+                            <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-surface-container-lowest/40" title="Máximo"></div>
 
                             {/* Floating Marker pointing to our exact pricing position */}
                             {item.propioPriceUsd !== null ? (
@@ -608,10 +608,10 @@ export default function MapaCalor({ user, userDoc }) {
                                 <div className="relative flex flex-col items-center">
                                   {/* Permanent Floating Label above spectrum bar */}
                                   <div className="absolute bottom-6 mb-1.5 bg-primary text-on-primary text-[10.5px] px-2.5 py-1 rounded-xl shadow-lg font-mono font-extrabold whitespace-nowrap flex items-center gap-1.5 border border-white/10 transition-all duration-300 transform group-hover:scale-105 group-hover:-translate-y-1">
-                                    <span className="text-[9px] uppercase tracking-wider text-white/75 font-sans">MI PRECIO:</span>
+                                    <span className="text-label-sm uppercase tracking-wider text-white/75 font-sans">MI PRECIO:</span>
                                     <span>{fmt(item.propioPriceUsd)}</span>
                                     {devVal !== null && (
-                                      <span className={`ml-1 px-1.5 py-0.2 rounded-md text-[9px] font-black ${
+                                      <span className={`ml-1 px-1.5 py-0.2 rounded-md text-label-sm font-black ${
                                         isUnder ? 'bg-sky-500 text-white' : isOver ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
                                       }`}>
                                         {devVal > 0 ? '+' : ''}{devVal.toFixed(1)}%
@@ -621,7 +621,7 @@ export default function MapaCalor({ user, userDoc }) {
 
                                   {/* Custom physical pin with glowing radar aura */}
                                   <div className="relative flex items-center justify-center">
-                                    <div className="w-5.5 h-5.5 rounded-full bg-white border-[3.5px] border-primary shadow-md flex items-center justify-center transition-all duration-300 transform group-hover:scale-115">
+                                    <div className="w-5.5 h-5.5 rounded-full bg-surface-container-lowest border-[3.5px] border-primary shadow-md flex items-center justify-center transition-all duration-300 transform group-hover:scale-115">
                                       <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
                                     </div>
                                     <div className="absolute top-4.5 w-[2px] h-3 bg-primary/80"></div>
@@ -633,7 +633,7 @@ export default function MapaCalor({ user, userDoc }) {
                             ) : (
                               /* Subtle label if no own price is active */
                               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <span className="text-[10px] text-primary font-mono font-bold tracking-wider uppercase bg-white/85 px-2 py-0.5 rounded-full shadow-sm border border-outline-variant/50">
+                                <span className="text-label-sm text-primary font-mono font-bold tracking-wider uppercase bg-surface-container-lowest/85 px-2 py-0.5 rounded-full shadow-sm border border-outline-variant/50">
                                   COMPETENCIA ÚNICAMENTE (SIN MI PRECIO)
                                 </span>
                               </div>
@@ -644,7 +644,7 @@ export default function MapaCalor({ user, userDoc }) {
                           <div className="grid grid-cols-3 text-xs font-mono font-bold pt-2.5 border-t border-outline-variant/30">
                             {/* Left (Min) */}
                             <div className="text-left flex flex-col">
-                              <span className="text-rose-700 flex items-center gap-1 text-[10px] font-sans">
+                              <span className="text-rose-700 flex items-center gap-1 text-label-sm font-sans">
                                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
                                 MÍNIMO
                               </span>
@@ -655,7 +655,7 @@ export default function MapaCalor({ user, userDoc }) {
 
                             {/* Center (Avg) */}
                             <div className="text-center flex flex-col items-center">
-                              <span className="text-emerald-700 flex items-center gap-1 justify-center text-[10px] font-sans">
+                              <span className="text-emerald-700 flex items-center gap-1 justify-center text-label-sm font-sans">
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                                 PROMEDIO
                               </span>
@@ -666,7 +666,7 @@ export default function MapaCalor({ user, userDoc }) {
 
                             {/* Right (Max) */}
                             <div className="text-right flex flex-col items-end">
-                              <span className="text-rose-700 flex items-center gap-1 justify-end text-[10px] font-sans">
+                              <span className="text-rose-700 flex items-center gap-1 justify-end text-label-sm font-sans">
                                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
                                 MÁXIMO
                               </span>
