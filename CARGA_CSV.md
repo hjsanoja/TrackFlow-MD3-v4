@@ -32,10 +32,10 @@ Una fila por producto propio.
   muestra en columnas propias. Si los repites en el nombre, salen dos veces en
   pantalla:
 
-  | | `nombre` | `concentracion` | `tamano` | Cómo se ve |
+  | | `nombre` | `concentracion` | `tamano` | `forma_farmaceutica` |
   |---|---|---|---|---|
-  | Mal | `Bumetin 300mg x 10tab` | `300mg` | `10 tabletas` | Bumetin 300mg x 10tab · 300mg · 10 tabletas |
-  | Bien | `Bumetin` | `300mg` | `10 tabletas` | Bumetin · 300mg · 10 tabletas |
+  | Mal | `BUMETIN 300MG TAB X 10` | | | |
+  | Bien | `Bumetin` | `300 mg` | `10 tabletas` | `Tabletas` |
 
   En los genéricos sin marca la molécula **sí** es el nombre comercial
   (`Amlodipino La Santé`), pero la dosis y el empaque siguen fuera.
@@ -47,8 +47,12 @@ Una fila por producto propio.
 - `laboratorio`, `unidad_negocio` y `categoria` se crean solos si no existen.
 - `pvp_propio_usd` es tu precio oficial en dólares; queda registrado con la
   fecha de carga como inicio de vigencia.
-- `presentacion` en texto libre basta: el sistema deduce la unidosis. Manda
-  `unidosis` solo si quieres fijar el número a mano.
+- `tamano` en texto libre basta: el sistema deduce la cantidad y la unidad.
+  `120 ml` se guarda como volumen y `10 tabletas` como unidades, que es lo que
+  distingue un jarabe de una caja para el cálculo de precio unidosis.
+- `forma_farmaceutica` se crea sola si no existe, igual que el laboratorio.
+  Ahí van `Tabletas`, `Jarabe`, `Crema`, `Solución oftálmica`… y **no** dentro
+  del nombre.
 
 ## productos_competencia.csv
 

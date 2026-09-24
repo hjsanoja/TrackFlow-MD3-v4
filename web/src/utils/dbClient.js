@@ -355,6 +355,7 @@ export async function dbUpsertProducto(data) {
     // 'codigo_barras' en la entrada por compatibilidad con CSV antiguos.
     codigo_barra: data.codigo_barra || data.codigo_barras || '',
     laboratorio: data.laboratorio || 'La Sante',
+    forma_farmaceutica: (data.forma_farmaceutica || '').trim(),
     principio_activo: data.principio_activo || '',
     concentracion: data.concentracion || '',
     tamano: data.tamano || '',
@@ -379,6 +380,7 @@ export async function dbUpsertProducto(data) {
       let labId = null;
       let catId = null;
       let unId = null;
+      let formaId = null;
 
       try {
         const labNombre = cleanData.laboratorio.toUpperCase().trim();
@@ -420,6 +422,30 @@ export async function dbUpsertProducto(data) {
         if (unNombre) {
           const { data: unData } = await supabase.from('dim_unidades_negocio').select('id').ilike('nombre', unNombre).maybeSingle();
           if (unData?.id) unId = unData.id;
+        }
+
+        // La forma farmaceutica SI se crea si no existe: el catalogo semilla
+        // trae las habituales, pero cada laboratorio tiene las suyas y
+        // obligar a darla de alta aparte rompe la importacion por CSV.
+        const formaNombre = cleanData.forma_farmaceutica;
+        if (formaNombre) {
+          const { data: formaData } = await supabase
+            .from('dim_formas_farmaceuticas')
+            .select('id')
+            .ilike('nombre', formaNombre)
+            .limit(1)
+            .maybeSingle();
+
+          if (formaData?.id) {
+            formaId = formaData.id;
+          } else {
+            const { data: nuevaForma } = await supabase
+              .from('dim_formas_farmaceuticas')
+              .insert({ nombre: formaNombre })
+              .select('id')
+              .maybeSingle();
+            if (nuevaForma?.id) formaId = nuevaForma.id;
+          }
         }
       } catch (refErr) {
         console.warn('[Supabase] Warning resolviendo dimensiones foráneas:', refErr);
@@ -465,6 +491,13 @@ export async function dbUpsertProducto(data) {
         unidad_contenido: contenido.unidad,
         activo: cleanData.activo
       };
+
+      // Solo se manda la forma cuando se conoce. PostgREST arma el UPDATE del
+      // upsert con las claves que recibe, asi que mandar null la borraria en
+      // cada alta que no traiga la columna.
+      if (formaId !== null) {
+        dimPayload.forma_farmaceutica_id = formaId;
+      }
 
       const { data: dimProd, error: dimErr } = await supabase
         .from('dim_productos')
