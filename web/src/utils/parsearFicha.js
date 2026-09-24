@@ -81,7 +81,9 @@ export function parsearPrincipios(principioActivo, concentracion) {
   const nombres = partir(principioActivo);
   if (nombres.length === 0) return [];
 
-  const dosis = partir(concentracion).map(parsearDosis);
+  // En las dosis el catalogo tambien separa con guion: "5MG - 10MG". Solo
+  // con espacios a los dos lados, para no partir un rango ni un nombre.
+  const dosis = partir(String(concentracion || '').replace(/\s+-\s+/g, ' + ')).map(parsearDosis);
 
   return nombres.map((nombre, i) => {
     const d = dosis[i] || null;
