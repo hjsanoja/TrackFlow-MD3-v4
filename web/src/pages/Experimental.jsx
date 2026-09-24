@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import RevisionCapturas from './RevisionCapturas';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Analisis from './Analisis';
 import Simulador from './Simulador';
@@ -12,7 +13,7 @@ export default function Experimental({ user, userDoc }) {
   const navigate = useNavigate();
 
   const tabParam = searchParams.get('tab');
-  const validTabs = ['canibalizacion', 'brecha_usd', 'reporteria', 'analisis', 'simulador', 'hallazgos'];
+  const validTabs = ['revision', 'canibalizacion', 'brecha_usd', 'reporteria', 'analisis', 'simulador', 'hallazgos'];
   const activeTab = validTabs.includes(tabParam) ? tabParam : 'canibalizacion';
 
   const handleTabChange = (tabId) => {
@@ -20,6 +21,14 @@ export default function Experimental({ user, userDoc }) {
   };
 
   const tabs = [
+    {
+      id: 'revision',
+      label: 'Revisión de Capturas',
+      shortLabel: 'Revisión',
+      icon: 'rule',
+      desc: 'Capturas que el control de calidad marcó como dudosas y aún nadie ha revisado',
+      status: 'Nuevo'
+    },
     {
       id: 'canibalizacion',
       label: 'Canibalización de Marcas',
@@ -120,6 +129,7 @@ export default function Experimental({ user, userDoc }) {
 
       {/* Renderizado dinámico del submenú seleccionado */}
       <div className="transition-opacity duration-200">
+        {activeTab === 'revision' && <RevisionCapturas />}
         {activeTab === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activeTab === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
         {activeTab === 'reporteria' && <Reporteria user={user} userDoc={userDoc} />}
