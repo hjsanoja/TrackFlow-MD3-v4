@@ -77,24 +77,10 @@ export function normalizarUrl(url) {
 // Devuelve el id de un laboratorio, creándolo si no existe.
 async function resolverLaboratorioId(nombre) {
   const labNombre = String(nombre || '').toUpperCase().trim() || 'OTRO';
-
-  const { data: existente } = await supabase
-    .from('dim_laboratorios')
-    .select('id')
-    .ilike('nombre', labNombre)
-    .limit(1)
-    .maybeSingle();
-
-  if (existente?.id) return existente.id;
-
-  const { data: nuevo, error } = await supabase
-    .from('dim_laboratorios')
-    .insert({ nombre: labNombre, es_propio: LABS_PROPIOS.includes(labNombre) })
-    .select('id')
-    .maybeSingle();
-
-  if (error) throw new Error(`No se pudo crear el laboratorio "${labNombre}": ${error.message}`);
-  return nuevo?.id ?? null;
+  // resolverDimension compara sin mayusculas ni tildes (ilike las respeta).
+  const id = await resolverDimension(null, 'dim_laboratorios', labNombre, { es_propio: LABS_PROPIOS.includes(labNombre) });
+  if (!id) throw new Error(`No se pudo crear el laboratorio "${labNombre}".`);
+  return id;
 }
 
 // dim_cadenas.id es un VARCHAR elegido a mano (p.ej. 'farmatodo'), así que el
@@ -132,12 +118,110 @@ async function resolverCadenaId(cadena) {
 // Guarda un enlace de competencia en el modelo dimensional.
 // `item` viene con la forma antigua de productos_competencia:
 //   { id, id_producto_propio, cadena, tipo, marca, url, laboratorio, unidosis, activo }
+// Id de la publicacion (la URL monitoreada) de un enlace del panel. La vista
+// productos_competencia arma el id como "<publicacion>_<producto propio>".
+export function publicacionIdDe(item) {
+  if (item?.publicacion_id) return Number(item.publicacion_id);
+  const m = /^(\d+)_\d+$/.exec(String(item?.id || ''));
+  return m ? Number(m[1]) : null;
+}
+
+// Edicion de un enlace que ya existe. Antes se trataba como uno nuevo con id
+// "COMP_<id de la vista>": cada edicion (o cada activar/desactivar) creaba otro
+// producto competidor y le pasaba la URL, y el anterior quedaba huerfano.
+// Ahora se actualizan la publicacion y SU competidor.
+async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
+  const { data: prod } = await supabase
+    .from('dim_productos')
+    .select('id, id_interno, laboratorio_id')
+    .eq('id', pub.producto_id)
+    .maybeSingle();
+  if (!prod) throw new Error('No se encontró el producto de este enlace. Recarga la página.');
+
+  const esCompetidor = String(prod.id_interno || '').startsWith('COMP_');
+  if (esCompetidor) {
+    const cambios = {};
+    const marca = String(item.marca || '').trim();
+    if (marca) cambios.nombre = marca.slice(0, 255);
+    if (String(item.laboratorio || '').trim()) cambios.laboratorio_id = await resolverLaboratorioId(item.laboratorio);
+    if (Object.keys(cambios).length > 0) {
+      const { error } = await supabase.from('dim_productos').update(cambios).eq('id', prod.id);
+      if (error) throw new Error(`No se pudo actualizar el competidor: ${error.message}`);
+    }
+
+    // Con que producto propio se compara (puede haber cambiado).
+    const idPropio = String(item.id_producto_propio || '').trim();
+    if (idPropio) {
+      const { data: propio } = await supabase.from('dim_productos').select('id').eq('id_interno', idPropio).maybeSingle();
+      if (!propio?.id) throw new Error(`No existe el producto propio "${idPropio}".`);
+      const labId = cambios.laboratorio_id ?? prod.laboratorio_id;
+      const { data: lab } = await supabase.from('dim_laboratorios').select('es_propio').eq('id', labId).maybeSingle();
+      const { error: errEq } = await supabase
+        .from('producto_equivalencias')
+        .upsert({
+          producto_propio_id: propio.id,
+          producto_competidor_id: prod.id,
+          tipo_equivalencia: lab?.es_propio ? 'canibalizacion_interna' : 'bioequivalente',
+          activo: true
+        }, { onConflict: 'producto_propio_id,producto_competidor_id' });
+      if (errEq) throw new Error(`No se pudo registrar la equivalencia con "${idPropio}": ${errEq.message}`);
+      // Si se cambio de producto propio, la equivalencia vieja deja de contar.
+      await supabase.from('producto_equivalencias')
+        .update({ activo: false })
+        .eq('producto_competidor_id', prod.id)
+        .neq('producto_propio_id', propio.id);
+    }
+  }
+
+  const pubCambios = { activo: item.activo !== false };
+  if (normalizarUrl(url) !== normalizarUrl(pub.url) || cadenaId !== pub.cadena_id) {
+    pubCambios.url = url;
+    pubCambios.url_normalizada = normalizarUrl(url);
+    pubCambios.cadena_id = cadenaId;
+    pubCambios.sku_cadena = (url.match(/\/producto\/([0-9]+)/) || [])[1] || null;
+  }
+  const { data: actualizada, error: errPub } = await supabase
+    .from('publicaciones')
+    .update(pubCambios)
+    .eq('id', pub.id)
+    .select('id');
+  if (errPub) {
+    if (errPub.code === '23505') throw new Error('Esa URL ya está registrada en esa cadena.');
+    throw new Error(`No se pudo guardar la publicación: ${errPub.message}`);
+  }
+  if (!actualizada || actualizada.length === 0) {
+    throw new Error('No se actualizó el enlace. Revisa los permisos (RLS) de publicaciones.');
+  }
+  return { producto_id: prod.id, publicacion_id: pub.id, cadena_id: cadenaId };
+}
+
 export async function guardarEnlaceCompetencia(item) {
   const url = String(item.url || '').trim();
   if (!url) throw new Error('El enlace no tiene URL.');
 
   const cadenaId = await resolverCadenaId(item.cadena);
   const esPropio = String(item.tipo || '').toLowerCase() === 'propio';
+
+  // 0. ¿Ya existe? Por su id de publicacion (edicion desde el panel) o por
+  //    cadena + URL (una importacion que repite enlaces). Si existe se
+  //    actualiza; crearlo de nuevo le cambiaba el producto competidor.
+  const columnasPub = 'id, producto_id, cadena_id, url';
+  let existente = null;
+  const pubId = publicacionIdDe(item);
+  if (pubId) {
+    const { data } = await supabase.from('publicaciones').select(columnasPub).eq('id', pubId).maybeSingle();
+    existente = data || null;
+  }
+  if (!existente) {
+    const { data } = await supabase
+      .from('publicaciones')
+      .select(columnasPub)
+      .eq('cadena_id', cadenaId)
+      .eq('url_normalizada', normalizarUrl(url))
+      .maybeSingle();
+    existente = data || null;
+  }
+  if (existente) return actualizarEnlaceExistente(existente, item, cadenaId, url);
 
   // 1. ¿De qué producto cuelga esta publicación?
   let productoId = null;
@@ -830,6 +914,7 @@ export async function dbDeleteAllProductos() {
 export async function dbUpsertProductoCompetencia(data) {
   const cleanData = {
     id: data.id,
+    publicacion_id: data.publicacion_id ?? null,
     id_producto_propio: data.id_producto_propio,
     cadena: data.cadena,
     tipo: data.tipo || 'alternativa',
@@ -895,11 +980,57 @@ export async function dbUpsertProductoCompetencia(data) {
   }
 }
 
+// Activar o desactivar enlaces: solo cambia publicaciones.activo. Antes se
+// reescribia el enlace entero (y eso creaba un competidor nuevo).
+export async function dbCambiarActivoEnlaces(enlaces, activo) {
+  const ids = enlaces.map(publicacionIdDe).filter(Boolean);
+  if (!isSupabaseActive() || ids.length === 0) return ids.length;
+  const { data, error } = await supabase
+    .from('publicaciones')
+    .update({ activo })
+    .in('id', ids)
+    .select('id');
+  if (error) throw error;
+  return (data || []).length;
+}
+
+// Precio cargado a mano cuando el robot falla. Lo escribe la funcion
+// fn_registrar_precio_manual (fase 21): el panel no tiene permiso para
+// insertar en fact_precios, que es del scraper. Antes se escribia en
+// historico_precios, una vista de solo lectura desde la fase 5: el aviso
+// decia "actualizado" y no se guardaba nada.
+export async function dbRegistrarPrecioManual(enlace, precioBs, precioOfertaBs = null) {
+  let pubId = publicacionIdDe(enlace);
+  if (!pubId && enlace?.url) {
+    const { data } = await supabase
+      .from('publicaciones')
+      .select('id')
+      .eq('url_normalizada', normalizarUrl(enlace.url))
+      .limit(1)
+      .maybeSingle();
+    pubId = data?.id ?? null;
+  }
+  if (!pubId) throw new Error('No se encontró la publicación de este enlace. Recarga la página.');
+
+  const { error } = await supabase.rpc('fn_registrar_precio_manual', {
+    p_publicacion_id: pubId,
+    p_precio_full_bs: precioBs,
+    p_precio_desc_bs: precioOfertaBs,
+  });
+  if (error) {
+    if (/fn_registrar_precio_manual/.test(error.message || '') || error.code === 'PGRST202') {
+      throw new Error('Falta correr fase21_competencia.sql en Supabase.');
+    }
+    throw error;
+  }
+}
+
 export async function dbUpsertCompetenciaBulk(compList) {
   if (!compList || compList.length === 0) return;
 
   const cleanList = compList.map(data => ({
     id: data.id,
+    publicacion_id: data.publicacion_id ?? null,
     id_producto_propio: data.id_producto_propio,
     cadena: data.cadena,
     tipo: data.tipo || 'alternativa',

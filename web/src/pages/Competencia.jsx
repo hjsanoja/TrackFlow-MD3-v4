@@ -17,8 +17,11 @@ import {
   dbUpsertProductoCompetencia,
   dbDeleteProductoCompetencia,
   dbDeleteAllProductosCompetencia,
-  dbAddHistoricoPrecio,
   dbUpsertCompetenciaBulk,
+  dbCambiarActivoEnlaces,
+  dbRegistrarPrecioManual,
+  publicacionIdDe,
+  normalizarUrl,
   dbUpsertProductosBulk
 } from '../utils/dbClient';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
@@ -84,6 +87,20 @@ export default function Competencia({ user, userDoc }) {
     }
   }, [searchParams]);
 
+  // Los enlaces traen el id de la cadena (p. ej. 'Saas') y la pantalla muestra
+  // su nombre ('Farmacias SAAS'). Antes el filtro comparaba el id con el
+  // nombre y, en las cadenas donde no coinciden, no mostraba nada.
+  const cadenaPorClave = useMemo(() => {
+    const m = new Map();
+    (cadenas || []).forEach(c => {
+      m.set(String(c.id).toLowerCase(), c);
+      m.set(String(c.nombre).toLowerCase(), c);
+    });
+    return m;
+  }, [cadenas]);
+  const nombreCadena = (valor) => cadenaPorClave.get(String(valor || '').toLowerCase())?.nombre || valor || '—';
+  const nombreCadenaId = (valor) => cadenaPorClave.get(String(valor || '').toLowerCase())?.id || valor;
+
   const prodMap = useMemo(() => {
     const map = new Map();
     (productos || []).forEach(p => {
@@ -96,7 +113,7 @@ export default function Competencia({ user, userDoc }) {
   const filtrados = useMemo(() => {
     const term = search.toLowerCase().trim();
     return items.filter(it => {
-      if (filtroCadena !== 'todas' && it.cadena !== filtroCadena) return false;
+      if (filtroCadena !== 'todas' && nombreCadenaId(it.cadena) !== filtroCadena) return false;
       if (filtroProducto !== 'todos' && String(it.id_producto_propio).trim() !== String(filtroProducto).trim()) return false;
       if (filtroTipo !== 'todos' && it.tipo !== filtroTipo) return false;
       if (!term) return true;
@@ -154,36 +171,36 @@ export default function Competencia({ user, userDoc }) {
       const editingId = typeof editing === 'string' ? editing : editing?.id;
       const currentItem = (!isNew && editingId) ? items.find(i => i.id === editingId) : null;
 
-      const labPart = data.laboratorio?.trim() ? `_${data.laboratorio.trim()}` : '';
-      const existing = isNew ? (
-        items.find(it =>
-          it.id_producto_propio === data.id_producto_propio &&
-          it.cadena.toLowerCase().trim() === data.cadena.toLowerCase().trim() &&
-          (data.marca ? (it.marca || '').toLowerCase().trim() === data.marca.toLowerCase().trim() : true)
-        ) || items.find(it =>
-          it.id_producto_propio === data.id_producto_propio &&
-          it.cadena.toLowerCase().trim() === data.cadena.toLowerCase().trim()
-        )
-      ) : null;
+      // Un enlace nuevo con una URL que ya esta registrada en esa cadena es un
+      // duplicado. Antes, al vincular un segundo competidor en la misma cadena
+      // se reutilizaba el id del primero (bastaba con coincidir producto y
+      // cadena) y podia pisarlo.
+      if (isNew) {
+        const repetido = items.find(it =>
+          nombreCadenaId(it.cadena) === nombreCadenaId(data.cadena) &&
+          normalizarUrl(it.url || '') === normalizarUrl(cleanUrl));
+        if (repetido) {
+          throw new Error(`Esa URL ya está vinculada en ${nombreCadena(repetido.cadena)} (producto ${repetido.id_producto_propio}). Edita ese enlace en vez de crear otro.`);
+        }
+      }
 
+      const labPart = data.laboratorio?.trim() ? `_${data.laboratorio.trim()}` : '';
       const docId = !isNew
-        ? (data.id || editingId || currentItem?.id || `${data.id_producto_propio}_${data.cadena}_${data.marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_'))
-        : existing
-          ? existing.id
-          : `${data.id_producto_propio}_${data.cadena}_${data.marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
+        ? (data.id || editingId || currentItem?.id)
+        : `${data.id_producto_propio}_${data.cadena}_${data.marca || 'comp'}${labPart}`.replace(/[\s/\\]+/g, '_');
 
       if (!docId) {
         throw new Error('No se pudo determinar el identificador único del enlace');
       }
 
-      const cadenaObj = cadenas.find(c => c.nombre.toLowerCase().trim() === data.cadena.toLowerCase().trim());
+      const cadenaObj = cadenas.find(c => c.id === data.cadena || c.nombre.toLowerCase().trim() === String(data.cadena).toLowerCase().trim());
       if (cadenaObj && cadenaObj.website && cleanUrl) {
         try {
           const urlHost = new URL(cleanUrl).hostname.replace(/^www\./, '');
           const websiteWithProto = cadenaObj.website.startsWith('http') ? cadenaObj.website : `https://${cadenaObj.website}`;
           const cadenaHost = new URL(websiteWithProto).hostname.replace(/^www\./, '');
           if (!urlHost.endsWith(cadenaHost) && !cadenaHost.endsWith(urlHost)) {
-            console.warn(`La URL parece ser de "${urlHost}" pero la cadena "${data.cadena}" usa "${cadenaHost}".`);
+            addToast(`Ojo: la URL es de "${urlHost}" pero ${cadenaObj.nombre} usa "${cadenaHost}". Revisa que sea la cadena correcta.`, 'warning');
           }
         } catch {
           // Do not fail if cadena website has strange format, just ensure cleanUrl is valid
@@ -197,6 +214,9 @@ export default function Competencia({ user, userDoc }) {
 
       await dbUpsertProductoCompetencia({
         id: docId,
+        // Al editar, el enlace se identifica por su publicacion: asi se
+        // actualiza el existente en vez de crear otro competidor.
+        publicacion_id: currentItem ? publicacionIdDe(currentItem) : null,
         id_producto_propio: data.id_producto_propio,
         cadena: data.cadena,
         tipo: data.tipo,
@@ -217,7 +237,7 @@ export default function Competencia({ user, userDoc }) {
         } : {})
       });
 
-      addToast(isNew ? (existing ? 'URL de competencia actualizada con éxito' : 'URL de competencia creada con éxito') : 'Cambios guardados con éxito', 'success');
+      addToast(isNew ? 'Enlace vinculado' : 'Cambios guardados', 'success');
       setEditing(null);
       await cargar(true);
       return { success: true };
@@ -285,10 +305,8 @@ export default function Competencia({ user, userDoc }) {
 
   const handleToggleActivo = async (item) => {
     try {
-      await dbUpsertProductoCompetencia({
-        ...item,
-        activo: !item.activo,
-      });
+      const cambiados = await dbCambiarActivoEnlaces([item], !item.activo);
+      if (cambiados === 0) throw new Error('No se actualizó el enlace. Revisa los permisos (RLS) de publicaciones.');
       await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
@@ -377,8 +395,10 @@ export default function Competencia({ user, userDoc }) {
   // Cálculos para KPIs de Competencia
   const kpis = useMemo(() => {
     const activos = items.filter(it => it.activo);
+    // La vista solo distingue 'ok' (tiene precio) y 'pendiente' (el robot
+    // todavia no le saco precio). No hay estado 'error'.
     const exitosos = activos.filter(it => it.estado === 'ok');
-    const conError = activos.filter(it => it.estado === 'error');
+    const conError = activos.filter(it => it.estado !== 'ok');
     
     // 1. Tasa de Salud Técnica
     const tasaSalud = activos.length > 0 ? Math.round((exitosos.length / activos.length) * 100) : 100;
@@ -818,9 +838,9 @@ export default function Competencia({ user, userDoc }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* KPI 1: Tasa de Salud Técnica */}
         <StatCard
-          label="Salud del Catálogo"
-          value={<>{kpis.tasaSalud}% <span className="text-label-sm font-semibold text-on-surface-variant">Enlaces OK</span></>}
-          hint={`${kpis.exitososCount} de ${kpis.activosCount} activos sin fallos de lectura.`}
+          label="Enlaces con precio"
+          value={<>{kpis.tasaSalud}% <span className="text-label-sm font-semibold text-on-surface-variant">de los activos</span></>}
+          hint={`${kpis.exitososCount} de ${kpis.activosCount} activos ya tienen precio${kpis.erroresCount ? `; ${kpis.erroresCount} esperan su primera captura` : ''}.`}
           icon={kpis.tasaSalud > 90 ? 'health_and_safety' : 'sync_problem'}
           tono={kpis.tasaSalud > 90 ? 'positive' : 'negative'}
         />
@@ -873,7 +893,7 @@ export default function Competencia({ user, userDoc }) {
           className="m3-select max-w-[180px]"
         >
           <option value="todas">Todas las cadenas</option>
-          {cadenas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+          {cadenas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </Select>
 
         <Select
@@ -977,7 +997,7 @@ export default function Competencia({ user, userDoc }) {
                       </div>
                       <div className="text-xs text-on-surface-variant font-mono mt-0.5">{it.id_producto_propio}</div>
                     </td>
-                    <td className="font-bold text-primary font-display text-sm">{it.cadena}</td>
+                    <td className="font-bold text-primary font-display text-sm">{nombreCadena(it.cadena)}</td>
                     <td>
                       <div className="font-bold text-on-surface text-sm">
                         {it.marca} {it.concentracion || ''} {it.tamano || ''}
@@ -1300,7 +1320,7 @@ export default function Competencia({ user, userDoc }) {
           isOpen={Boolean(manualPriceItem)}
           onClose={() => setManualPriceItem(null)}
           title="Ingresar Precio Manual"
-          subtitle={`Anula los errores del scraper para ${manualPriceItem.marca} en ${manualPriceItem.cadena}.`}
+          subtitle={`${manualPriceItem.marca} en ${nombreCadena(manualPriceItem.cadena)}`}
           icon="edit_note"
           maxWidth="max-w-md"
           footer={
@@ -1316,32 +1336,14 @@ export default function Competencia({ user, userDoc }) {
                     addToast('Por favor ingresa un precio válido mayor a 0', 'error');
                     return;
                   }
+                  const ofertaVal = document.getElementById('manualOfferInput').value;
+                  const oferta = ofertaVal ? parseFloat(ofertaVal) : null;
+                  if (oferta !== null && (isNaN(oferta) || oferta <= 0 || oferta > price)) {
+                    addToast('El precio de oferta tiene que ser mayor que 0 y no mayor que el precio normal', 'error');
+                    return;
+                  }
                   try {
-                    const docId = manualPriceItem.id;
-                    const ahora = new Date();
-                    const runId = 'MANUAL_' + ahora.toISOString().slice(0, 10).replace(/-/g, '') + '_' + ahora.toTimeString().slice(0, 8).replace(/:/g, '');
-                    
-                    await dbUpsertProductoCompetencia({
-                      ...manualPriceItem,
-                      ultimo_precio_full_bs: price,
-                      ultimo_precio_desc_bs: price,
-                      ultimo_scrape: ahora,
-                      estado: 'ok',
-                      ultimo_error: null,
-                    });
-
-                    await dbAddHistoricoPrecio({
-                      prod_comp_id: docId,
-                      id_producto_propio: manualPriceItem.id_producto_propio,
-                      cadena: manualPriceItem.cadena,
-                      marca: manualPriceItem.marca,
-                      nombre: manualPriceItem.marca + ' (Manual)',
-                      precio_full_bs: price,
-                      precio_desc_bs: price,
-                      tiene_descuento: false,
-                      scraped_at: ahora,
-                      run_id: runId,
-                    });
+                    await dbRegistrarPrecioManual(manualPriceItem, price, oferta);
 
                     addToast(`Precio de ${manualPriceItem.marca} actualizado manualmente a Bs ${price.toFixed(2)}.`, 'success');
                     setManualPriceItem(null);
@@ -1359,18 +1361,31 @@ export default function Competencia({ user, userDoc }) {
         >
           <div className="space-y-4 text-sm text-on-surface">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-primary font-mono">Precio en Bolívares (Bs. *):</label>
+              <label className="m3-field-label" htmlFor="manualPriceInput">Precio normal (Bs) *</label>
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 placeholder="Ej: 450.50"
                 id="manualPriceInput"
-                defaultValue={manualPriceItem.ultimo_precio_desc_bs || manualPriceItem.ultimo_precio_full_bs || ''}
-                className="m3-input font-mono"
+                defaultValue={manualPriceItem.ultimo_precio_full_bs || ''}
+                className="m3-input tabular-nums"
               />
             </div>
-            <p className="text-label-md text-on-surface-variant italic">
-              * Esto establecerá el estado de la URL como "OK" y registrará el precio ingresado en el historial de precios y en el panel.
+            <div className="space-y-1.5">
+              <label className="m3-field-label" htmlFor="manualOfferInput">Precio de oferta (Bs), si lo hay</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Vacío si no hay oferta"
+                id="manualOfferInput"
+                defaultValue={manualPriceItem.ultimo_precio_desc_bs && manualPriceItem.ultimo_precio_desc_bs !== manualPriceItem.ultimo_precio_full_bs ? manualPriceItem.ultimo_precio_desc_bs : ''}
+                className="m3-input tabular-nums"
+              />
+            </div>
+            <p className="m3-body-small text-on-surface-variant">
+              Se guarda como una captura manual de hoy, con la última tasa BCV, y pasa a ser el precio vigente de este enlace.
             </p>
           </div>
         </ModalWrapper>
@@ -1515,7 +1530,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
               disabled={!isNew}
               className="m3-input bg-surface-container-lowest text-on-surface">
               <option value="">— Seleccionar —</option>
-              {cadenasActivas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+              {cadenasActivas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </Select>
           </Field>
           

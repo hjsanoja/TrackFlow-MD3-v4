@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 20 fases de SQL
+## Las 21 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -102,8 +102,9 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 18 | `dim_productos.tipo_mercado` (MARCA/GENERICO), rellenado con la regla vieja |
 | 19 | Un solo laboratorio propio `LA SANTE`; borra PHARMETIQUE*, BIOQU* y duplicados |
 | 20 | Une moléculas duplicadas (`Acetaminofen` / `Acetaminofén`…) y deja **todas sin tildes** ("Losartan potasico"); los nombres anteriores quedan como `sinonimos`. `fn_clave_molecula`, `fn_nombre_molecula` |
+| 21 | Competencia: borra competidores `COMP_` sin URL (huérfanos) y crea `fn_registrar_precio_manual` (SECURITY DEFINER: el panel no puede insertar en `fact_precios`) |
 
-**Corridas en Supabase de la 1 a la 19. La 20 está pendiente de correr** (PR #35).
+**Corridas en Supabase de la 1 a la 20. La 21 está pendiente de correr** (PR #36).
 
 ---
 
@@ -137,6 +138,7 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #30 | Rediseño M3 de la tabla: 8 columnas uniformes, acciones fijas a la derecha, barra contextual de selección, buscador grande con atajo `/`, filtros como chips |
 | #31 | Ficha lateral del producto, columna PVP, filas por página (10 por defecto), laboratorio único (fase 19) |
 | #33 | Formulario rediseñado: secciones, unidad y tipo como chips obligatorios sin valor por defecto, LA SANTE por defecto, listas que muestran todas las opciones (`ComboField`), PVP, validación en línea |
+| #36 | Competencia, etapa A: editar/activar un enlace ya no crea competidores nuevos, un 2.º competidor en la misma cadena no pisa al primero, precio manual que sí se guarda (fase 21), filtro de cadena por id, KPI "Enlaces con precio" |
 | #35 | Fase 20 (moléculas duplicadas) y comparación de nombres sin tildes al guardar |
 | #34 | Menús desplegables M3 en toda la app (`components/Select.jsx`, 31 `<select>`), deshacer al eliminar (borrado diferido 8 s), ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
 
@@ -282,6 +284,19 @@ No volver a tropezar con estas:
 - Crear la base local **con locale UTF-8** (`C.UTF-8`). Sin locale, el plegado
   de mayúsculas de los acentos no funciona igual que en Supabase y los fallos
   se ven donde no son, o peor, quedan tapados.
+
+**Competencia**
+- La vista `productos_competencia` arma el `id` como `<publicacion>_<producto
+  propio>` (`publicacionIdDe` en dbClient lo descompone). **No es** el id del
+  competidor: tratarlo como tal (`COMP_<id>`) creaba un competidor nuevo en
+  cada edición. Editar va por `actualizarEnlaceExistente` (publicación + su
+  competidor); `guardarEnlaceCompetencia` busca primero por publicación y por
+  cadena + URL.
+- Los enlaces traen el **id** de la cadena (`Saas`), no su nombre (`Farmacias
+  SAAS`): filtros y formularios usan el id y la pantalla muestra el nombre.
+- El panel no puede escribir en `fact_precios` (RLS): el precio manual va por
+  `fn_registrar_precio_manual`. `historico_precios` es una vista: escribir ahí
+  no guarda nada.
 
 **Frontend**
 - **Un ancestro con `transform` rompe `position: fixed`**: el hijo queda fijo
