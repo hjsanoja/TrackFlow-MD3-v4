@@ -4,7 +4,7 @@ import ImportPreview from '../components/ImportPreview';
 import FichaProducto, { competidorMasBarato, precioEnlaceUsd } from '../components/FichaProducto';
 import ProductDetailModal from '../components/ProductDetailModal';
 import { useBcvRate } from '../hooks/useBcvRate';
-import { useDimensiones } from '../hooks/useDimensiones';
+import { useDimensiones, invalidarDimensiones } from '../hooks/useDimensiones';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
 import { useToast } from '../context/ToastContext';
@@ -22,18 +22,6 @@ import {
   dbNombresDimensionesCerradas,
   dbCambiarActivoProductos
 } from '../utils/dbClient';
-
-const CATEGORIAS = [
-  'Analgésicos',
-  'Antialérgicos',
-  'Antibióticos',
-  'Antigripales',
-  'Cardiovasculares',
-  'Dermatológicos',
-  'Gastrointestinales',
-  'Vitaminas',
-  'Otros',
-];
 
 // Un solo formato de CSV de productos para exportar, para la plantilla y para
 // importar: mismos encabezados, mismo orden, en minusculas y sin acentos, que
@@ -119,6 +107,9 @@ export default function Productos() {
   } = useData();
 
   const [editing, setEditing] = useState(null);
+  // Se piden al entrar en la pantalla y no al abrir el formulario: asi las
+  // listas ya estan cargadas cuando se necesitan.
+  useDimensiones();
   const [fichaId, setFichaId] = useState(null);
   const [analisis, setAnalisis] = useState(null); // { producto, competencia }
   const bcv = useBcvRate();
@@ -268,7 +259,7 @@ export default function Productos() {
         concentracion: (data.concentracion || '').trim(),
         forma_farmaceutica: (data.forma_farmaceutica || '').trim(),
         tamano: (data.tamano || '').trim(),
-        laboratorio: (data.laboratorio || '').trim() || 'La Sante',
+        laboratorio: (data.laboratorio || '').trim() || 'LA SANTE',
         categoria: data.categoria || 'Otros',
         pvp_propio_usd: parseFloat(data.pvp_propio_usd) || 0,
         unidosis: data.unidosis ? parseInt(data.unidosis, 10) : parseUnidosisCount(data.tamano || ''),
@@ -278,6 +269,8 @@ export default function Productos() {
       };
 
       await dbUpsertProducto(cleanProductData);
+      // Un laboratorio, forma o molecula nuevos deben aparecer ya en las listas.
+      invalidarDimensiones();
 
       addToast(isNew ? 'Producto creado con éxito' : 'Producto actualizado con éxito', 'success');
       setEditing(null);
@@ -638,12 +631,15 @@ export default function Productos() {
     await procesar();
   };
 
+  const idsExistentes = useMemo(() => new Set(productos.map(p => p.id_interno)), [productos]);
+
+  // Los SKU propios son numeros de 6 digitos (140216): se sugiere el
+  // siguiente. 'P001' solo si el catalogo todavia usa ese formato.
   const sugerirId = () => {
-    const numeros = productos
-      .map(p => p.id_interno)
-      .filter(id => /^P\d+$/.test(id))
-      .map(id => parseInt(id.slice(1), 10));
-    const max = numeros.length > 0 ? Math.max(...numeros) : 0;
+    const numericos = productos.map(p => p.id_interno).filter(id => /^\d+$/.test(id)).map(Number);
+    if (numericos.length > 0) return String(Math.max(...numericos) + 1);
+    const conP = productos.map(p => p.id_interno).filter(id => /^P\d+$/.test(id)).map(id => parseInt(id.slice(1), 10));
+    const max = conP.length > 0 ? Math.max(...conP) : 0;
     return 'P' + String(max + 1).padStart(3, '0');
   };
 
@@ -1014,9 +1010,8 @@ export default function Productos() {
         <ProductoModal
           producto={editing === 'new' ? null : productos.find(p => p.id === editing)}
           sugerirId={sugerirId}
+          idsExistentes={idsExistentes}
           onSave={handleSave}
-          cadenas={cadenas}
-          competenciaActual={competencia}
           onClose={() => setEditing(null)}
         />
       )}
@@ -1189,211 +1184,327 @@ export default function Productos() {
   );
 }
 
-function ProductoModal({ producto, sugerirId, onSave, onClose }) {
-  // Catálogos reales para sugerir en los campos y evitar duplicados por tipeo
-  // ("Calox" / "CALOX" / "Calox " acababan como tres laboratorios distintos).
+// Normaliza para comparar sin mayusculas ni tildes.
+const normalizar = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+// Una dosis metida en el nombre ("ACETAMINOFEN 500 MG") rompe la comparacion
+// con los titulos de las tiendas (ver ESTADO_DEL_PROYECTO.md).
+const RE_DOSIS_EN_NOMBRE = /\d+([.,]\d+)?\s*(mg|mcg|g|gr|ml|%|ui)\b/i;
+
+function ProductoModal({ producto, sugerirId, idsExistentes, onSave, onClose }) {
   const dimensiones = useDimensiones();
   const isNew = !producto;
   const [form, setForm] = useState({
     id_interno: producto?.id_interno || sugerirId(),
     nombre: producto?.nombre || '',
     codigo_barra: producto?.codigo_barra || '',
-    laboratorio: producto?.laboratorio || '',
     principio_activo: producto?.principio_activo || '',
     concentracion: producto?.concentracion || '',
     tamano: producto?.tamano || '',
     forma_farmaceutica: producto?.forma_farmaceutica || '',
-    unidosis: producto?.unidosis || '',
-    presentacion: producto?.presentacion || '',
-    categoria: producto?.categoria || '',
-    market_type: producto?.market_type || 'GENERICO',
-    unidad_negocio: producto?.unidad_negocio || 'La Sante',
+    // Los productos son propios: La Sante es el fabricante por defecto.
+    laboratorio: producto?.laboratorio || 'LA SANTE',
+    categoria: producto?.categoria && producto.categoria !== 'Otros' ? producto.categoria : '',
+    // Unidad y tipo en blanco en un alta: hay que elegirlos a conciencia.
+    unidad_negocio: producto?.unidad_negocio || '',
+    market_type: producto?.market_type || '',
+    pvp_propio_usd: producto?.pvp_propio_usd ? String(producto.pvp_propio_usd) : '',
     activo: producto?.activo ?? true,
   });
-
+  const [errores, setErrores] = useState({});
   const [saving, setSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
+  const [errorGeneral, setErrorGeneral] = useState(null);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    if (!form.id_interno || !form.nombre) {
-      setErrorMessage('Por favor completa los campos obligatorios (*).');
+  const unidades = dimensiones.unidadesNegocio.length ? dimensiones.unidadesNegocio : ['La Sante', 'Pharmetique', 'OTC'];
+
+  const handleChange = (key, value) => {
+    setErrorGeneral(null);
+    setErrores(e => ({ ...e, [key]: undefined }));
+    setForm(f => {
+      const nuevo = { ...f, [key]: value };
+      // Sugerencia, no imposicion: al elegir la unidad se propone el tipo
+      // habitual solo si todavia no se habia elegido.
+      if (key === 'unidad_negocio' && !f.market_type) {
+        const un = normalizar(value);
+        if (un.includes('pharmetique')) nuevo.market_type = 'MARCA';
+        else if (un === 'la sante') nuevo.market_type = 'GENERICO';
+      }
+      return nuevo;
+    });
+  };
+
+  const validar = () => {
+    const e = {};
+    const id = form.id_interno.trim();
+    if (!id) e.id_interno = 'Obligatorio';
+    else if (isNew && idsExistentes.has(id)) e.id_interno = 'Ya existe un producto con este ID';
+    if (!form.nombre.trim()) e.nombre = 'Obligatorio';
+    if (!form.unidad_negocio) e.unidad_negocio = 'Elige una unidad de negocio';
+    if (!form.market_type) e.market_type = 'Elige el tipo';
+    if (form.pvp_propio_usd && !(Number(String(form.pvp_propio_usd).replace(',', '.')) >= 0)) e.pvp_propio_usd = 'Escribe un número, ej: 2.50';
+    return e;
+  };
+
+  const handleSubmit = async (ev) => {
+    ev.preventDefault();
+    const e = validar();
+    setErrores(e);
+    if (Object.keys(e).length > 0) {
+      // Llevar la vista al primer campo con error.
+      setTimeout(() => {
+        const campo = document.querySelector('#producto-form .m3-field.has-error');
+        campo?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        campo?.querySelector('input:not([type=radio]), input[type=radio]')?.focus({ preventScroll: true });
+      }, 0);
       return;
     }
     setSaving(true);
-    const res = await onSave(form, isNew);
+    const res = await onSave({
+      ...form,
+      categoria: form.categoria || 'Otros',
+      pvp_propio_usd: String(form.pvp_propio_usd).replace(',', '.'),
+    }, isNew);
     setSaving(false);
-    if (res && !res.success) {
-      setErrorMessage(res.error || 'Ocurrió un error al intentar guardar el producto.');
-    }
+    if (res && !res.success) setErrorGeneral(res.error || 'No se pudo guardar el producto.');
   };
 
-  const handleChange = (key, value) => {
-    setErrorMessage(null);
-    setForm(f => ({ ...f, [key]: value }));
-  };
+  const nombreConDosis = RE_DOSIS_EN_NOMBRE.test(form.nombre);
+  const vistaPrevia = [form.nombre.trim(), form.concentracion.trim(),
+    describirPresentacion({ tamano: form.tamano, forma_farmaceutica: form.forma_farmaceutica }).replace(/^—$/, '')]
+    .filter(Boolean).join(' · ');
 
   return (
     <ModalWrapper
       isOpen={true}
       onClose={onClose}
-      title={isNew ? 'Registrar Nuevo Producto' : 'Editar Propiedades'}
-      subtitle={isNew ? 'Ingresa los datos para registrar un nuevo producto en el catálogo' : `Editando ${form.nombre || form.id_interno}`}
-      icon="inventory_2"
-      maxWidth="max-w-2xl"
-    >
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {errorMessage && (
-          <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl flex items-start gap-3 text-red-900 dark:text-red-200 text-xs font-semibold animate-fade-in shadow-xs">
-            <span className="material-symbols-outlined text-red-600 text-xl shrink-0 select-none">error</span>
-            <div className="flex-1 min-w-0">
-              <div className="font-bold">No se pudieron guardar los cambios</div>
-              <div className="text-[11.5px] font-normal text-red-700 dark:text-red-300 mt-0.5 leading-relaxed break-words">{errorMessage}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setErrorMessage(null)}
-              className="text-red-500 hover:text-red-800 transition-colors p-0.5"
-            >
-              <span className="material-symbols-outlined text-base">close</span>
+      title={isNew ? 'Nuevo producto' : 'Editar producto'}
+      subtitle={isNew ? 'Los campos con * son obligatorios.' : `${form.id_interno} · ${producto?.nombre || ''}`}
+      icon={isNew ? 'add_box' : 'edit'}
+      maxWidth="max-w-3xl"
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+          <label className="m3-switch-label">
+            <input type="checkbox" role="switch" checked={form.activo}
+              onChange={e => handleChange('activo', e.target.checked)} className="m3-switch" />
+            <span>{form.activo ? 'Activo' : 'De baja'}</span>
+          </label>
+          <div className="flex gap-2 ml-auto">
+            <button type="button" onClick={onClose} className="m3-btn-text">Cancelar</button>
+            <button type="submit" form="producto-form" disabled={saving} className="m3-btn-primary h-10 px-6">
+              {saving ? 'Guardando…' : isNew ? 'Crear producto' : 'Guardar cambios'}
             </button>
+          </div>
+        </div>
+      }
+    >
+      <form id="producto-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        {errorGeneral && (
+          <div className="m3-form-alert" role="alert">
+            <span className="material-symbols-outlined" aria-hidden="true">error</span>
+            <span className="flex-1">{errorGeneral}</span>
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Field label="ID Interno *" hint="Código único (ej: P001)">
-            <input type="text" required value={form.id_interno}
-              onChange={e => handleChange('id_interno', e.target.value)}
-              disabled={!isNew}
-              className="m3-input font-mono disabled:opacity-60" />
-          </Field>
-          
-          <Field label="Nombre del Producto *" hint="Ej. Atamel">
-            <input type="text" required value={form.nombre}
-              onChange={e => handleChange('nombre', e.target.value)}
-              placeholder="Nombre comercial"
-              className="m3-input font-sans" />
-          </Field>
 
-          <Field label="Código de Barra" hint="EAN / GTIN (ej: 759245000123)">
-            <input type="text" value={form.codigo_barra}
-              onChange={e => handleChange('codigo_barra', e.target.value)}
-              placeholder="EAN / GTIN"
-              className="m3-input font-mono" />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Field label="Principio Activo">
-            <input type="text" value={form.principio_activo}
-              onChange={e => handleChange('principio_activo', e.target.value)}
-              placeholder="Acetaminofén"
-              list="dim-principios" className="m3-input" />
-            <datalist id="dim-principios">
-              {dimensiones.principiosActivos.map(n => <option key={n} value={n} />)}
-            </datalist>
-          </Field>
-
-          <Field label="Concentración" hint="Ej: 500 mg, 10%">
-            <input type="text" value={form.concentracion}
-              onChange={e => handleChange('concentracion', e.target.value)}
-              placeholder="500 mg"
-              className="m3-input" />
-          </Field>
-
-          <Field label="Presentación" hint="Ej: 10 tabletas">
-            <input type="text" value={form.tamano}
-              onChange={e => handleChange('tamano', e.target.value)}
-              placeholder="10 tabletas"
-              className="m3-input" />
-          </Field>
-
-          <Field label="Forma Farmacéutica" hint="Ej: Tabletas, Jarabe">
-            <input type="text" list="dim-formas" value={form.forma_farmaceutica}
-              onChange={e => handleChange('forma_farmaceutica', e.target.value)}
-              placeholder="Tabletas"
-              className="m3-input" />
-            <datalist id="dim-formas">
-              {dimensiones.formasFarmaceuticas.map(n => <option key={n} value={n} />)}
-            </datalist>
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Laboratorio" hint="Elige uno existente o escribe uno nuevo">
-            <input type="text" value={form.laboratorio}
-              onChange={e => handleChange('laboratorio', e.target.value)}
-              list="dim-laboratorios"
-              placeholder="La Santé"
-              className="m3-input" />
-            <datalist id="dim-laboratorios">
-              {dimensiones.laboratorios.map(n => <option key={n} value={n} />)}
-            </datalist>
-          </Field>
-
-          <Field label="Categoría" hint="Elige una existente o escribe una nueva">
-            <input type="text" value={form.categoria}
-              onChange={e => handleChange('categoria', e.target.value)}
-              list="dim-categorias"
-              placeholder="Analgésicos"
-              className="m3-input" />
-            {/* El catálogo real manda; CATEGORIAS era una lista fija en el
-                código que se desincronizaba de dim_categorias. */}
-            <datalist id="dim-categorias">
-              {(dimensiones.categorias.length ? dimensiones.categorias : CATEGORIAS).map(c => <option key={c} value={c} />)}
-            </datalist>
-          </Field>
-
-          <Field label="Market Type (Tipo)">
-            <select value={form.market_type} onChange={e => handleChange('market_type', e.target.value)}
-              className="m3-select">
-              <option value="GENERICO">GENÉRICO</option>
-              <option value="MARCA">MARCA</option>
-            </select>
-          </Field>
-
-          <Field label="Unidad de Negocio" hint="Elige una existente o escribe una nueva">
-            <input type="text" value={form.unidad_negocio}
-              onChange={e => handleChange('unidad_negocio', e.target.value)}
-              list="dim-unidades-negocio"
-              placeholder="La Sante"
-              className="m3-input font-bold text-secondary" />
-            <datalist id="dim-unidades-negocio">
-              {(dimensiones.unidadesNegocio.length ? dimensiones.unidadesNegocio : ['La Sante', 'Pharmetique', 'OTC']).map(u => <option key={u} value={u} />)}
-            </datalist>
-          </Field>
-        </div>
-
-        <div className="flex justify-between items-center pt-4 border-t border-outline-variant/60">
-          <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-primary select-none">
-            <input type="checkbox" checked={form.activo}
-              onChange={e => handleChange('activo', e.target.checked)}
-              className="rounded text-primary focus:ring-primary h-4 w-4" />
-            <span>PRODUCTO ACTIVO</span>
-          </label>
-          
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose}
-              className="m3-btn-outline h-9 px-4 text-xs">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-              className="m3-btn-primary h-9 px-5 text-xs">
-              {saving ? 'Guardando...' : isNew ? 'Registrar' : 'Guardar Cambios'}
-            </button>
+        <FormSection titulo="Identificación" icono="badge">
+          <div className="grid grid-cols-1 md:grid-cols-[140px_1fr_200px] gap-4">
+            <Field label="ID interno" requerido error={errores.id_interno} hint={isNew ? 'Siguiente disponible' : 'No se puede cambiar'}>
+              <input type="text" value={form.id_interno} disabled={!isNew} inputMode="numeric"
+                onChange={e => handleChange('id_interno', e.target.value)} className="m3-input font-mono" />
+            </Field>
+            <Field label="Nombre comercial" requerido error={errores.nombre}
+              aviso={nombreConDosis ? 'El nombre no debe llevar la dosis: va en Concentración.' : null}
+              hint="Solo la marca o la molécula, sin dosis ni empaque. Ej: ESOZ, ACETAMINOFEN">
+              <input type="text" value={form.nombre} autoFocus={isNew}
+                onChange={e => handleChange('nombre', e.target.value)} className="m3-input" />
+            </Field>
+            <Field label="Código de barras" hint="Opcional. EAN / GTIN">
+              <input type="text" value={form.codigo_barra} inputMode="numeric"
+                onChange={e => handleChange('codigo_barra', e.target.value)} className="m3-input font-mono" />
+            </Field>
           </div>
-        </div>
+        </FormSection>
+
+        <FormSection titulo="Composición y presentación" icono="science">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Principio activo" hint="Varias moléculas: Losartán + Hidroclorotiazida">
+              <ComboField value={form.principio_activo} onChange={v => handleChange('principio_activo', v)}
+                opciones={dimensiones.principiosActivos} cargando={!dimensiones.cargado} permitirNuevo />
+            </Field>
+            <Field label="Concentración" hint="Ej: 500 mg · 250 mg/5 ml · 50 mg + 12.5 mg">
+              <input type="text" value={form.concentracion}
+                onChange={e => handleChange('concentracion', e.target.value)} className="m3-input" />
+            </Field>
+            <Field label="Forma farmacéutica">
+              <ComboField value={form.forma_farmaceutica} onChange={v => handleChange('forma_farmaceutica', v)}
+                opciones={dimensiones.formasFarmaceuticas} cargando={!dimensiones.cargado} permitirNuevo />
+            </Field>
+            <Field label="Empaque" hint="Ej: 20 tabletas · 120 ml · 30 g">
+              <input type="text" value={form.tamano}
+                onChange={e => handleChange('tamano', e.target.value)} className="m3-input" />
+            </Field>
+          </div>
+          {vistaPrevia && (
+            <div className="m3-form-preview">
+              <span className="material-symbols-outlined" aria-hidden="true">visibility</span>
+              <span>Se verá así: <strong>{vistaPrevia}</strong></span>
+            </div>
+          )}
+        </FormSection>
+
+        <FormSection titulo="Clasificación y precio" icono="category">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
+            <Field label="Unidad de negocio" requerido error={errores.unidad_negocio}>
+              <ChoiceChips valor={form.unidad_negocio} onChange={v => handleChange('unidad_negocio', v)}
+                opciones={unidades.map(u => [u, u])} nombre="unidad_negocio" />
+            </Field>
+            <Field label="Tipo" requerido error={errores.market_type}>
+              <ChoiceChips valor={form.market_type} onChange={v => handleChange('market_type', v)}
+                opciones={[['GENERICO', 'Genérico'], ['MARCA', 'Marca']]} nombre="market_type" />
+            </Field>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_160px] gap-4">
+            <Field label="Laboratorio" hint="Fabricante. Por defecto La Sante">
+              <ComboField value={form.laboratorio} onChange={v => handleChange('laboratorio', v)}
+                opciones={dimensiones.laboratorios} cargando={!dimensiones.cargado} permitirNuevo />
+            </Field>
+            <Field label="Categoría" hint="Opcional. Se crean en Dimensiones">
+              <ComboField value={form.categoria} onChange={v => handleChange('categoria', v)}
+                opciones={dimensiones.categorias.filter(c => c !== 'Otros')} cargando={!dimensiones.cargado}
+                placeholder="Sin categoría" />
+            </Field>
+            <Field label="PVP (USD)" error={errores.pvp_propio_usd}
+              hint={isNew ? 'Opcional' : 'El anterior queda en el historial'}>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" aria-hidden="true">$</span>
+                <input type="text" inputMode="decimal" value={form.pvp_propio_usd} placeholder="0.00"
+                  onChange={e => handleChange('pvp_propio_usd', e.target.value)} className="m3-input pl-8 tabular-nums" />
+              </div>
+            </Field>
+          </div>
+        </FormSection>
+
       </form>
     </ModalWrapper>
   );
 }
 
-function Field({ label, hint, children }) {
+function FormSection({ titulo, icono, children }) {
   return (
-    <div className="space-y-1">
-      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
+    <fieldset className="m3-form-section">
+      <legend className="m3-form-section-title">
+        <span className="material-symbols-outlined" aria-hidden="true">{icono}</span>
+        {titulo}
+      </legend>
+      <div className="space-y-4">{children}</div>
+    </fieldset>
+  );
+}
+
+function Field({ label, hint, error, aviso, requerido, children }) {
+  return (
+    <div className={`m3-field ${error ? 'has-error' : ''}`}>
+      <label className="m3-field-label">
+        {label}{requerido && <span className="text-error" aria-hidden="true"> *</span>}
+      </label>
       {children}
-      {hint && <p className="text-label-sm text-on-surface-variant font-mono">{hint}</p>}
+      {error ? (
+        <p className="m3-field-support text-error" role="alert">{error}</p>
+      ) : aviso ? (
+        <p className="m3-field-support m3-field-warning">{aviso}</p>
+      ) : hint ? (
+        <p className="m3-field-support">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+// Opciones cerradas y pocas (unidad de negocio, tipo): todas a la vista, un
+// clic. Sin nada elegido por defecto.
+function ChoiceChips({ valor, onChange, opciones, nombre }) {
+  return (
+    <div className="flex flex-wrap gap-2" role="radiogroup">
+      {opciones.map(([v, texto]) => {
+        const activo = normalizar(valor) === normalizar(v);
+        return (
+          <label key={v} className={`m3-choice-chip ${activo ? 'is-selected' : ''}`}>
+            <input type="radio" name={nombre} value={v} checked={activo} onChange={() => onChange(v)} className="sr-only" />
+            {activo && <span className="material-symbols-outlined" aria-hidden="true">check</span>}
+            {texto}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+// Campo con lista desplegable propia. El <datalist> del navegador filtra por
+// lo ya escrito: con "La Sante" puesto solo ofrecia "La Sante" y parecia que
+// no se podia elegir otra cosa. Aqui, al abrir, se ven todas las opciones; se
+// filtra solo cuando el usuario escribe algo distinto.
+function ComboField({ value, onChange, opciones = [], cargando = false, permitirNuevo = false, placeholder = '' }) {
+  const [abierto, setAbierto] = useState(false);
+  const [escrito, setEscrito] = useState(false);
+  const [activo, setActivo] = useState(-1);
+  const listaId = useMemo(() => `combo-${Math.random().toString(36).slice(2, 9)}`, []);
+
+  const filtradas = useMemo(() => {
+    const q = normalizar(value);
+    const lista = escrito && q ? opciones.filter(o => normalizar(o).includes(q)) : opciones;
+    return lista.slice(0, 80);
+  }, [opciones, value, escrito]);
+
+  const existe = opciones.some(o => normalizar(o) === normalizar(value));
+
+  const elegir = (v) => {
+    onChange(v);
+    setAbierto(false);
+    setEscrito(false);
+    setActivo(-1);
+  };
+
+  const alPulsar = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setAbierto(true); setActivo(i => Math.min(i + 1, filtradas.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActivo(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter' && abierto && activo >= 0 && filtradas[activo]) { e.preventDefault(); elegir(filtradas[activo]); }
+    else if (e.key === 'Escape' && abierto) { e.stopPropagation(); setAbierto(false); }
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        role="combobox"
+        aria-expanded={abierto}
+        aria-controls={listaId}
+        aria-autocomplete="list"
+        onChange={e => { onChange(e.target.value); setEscrito(true); setAbierto(true); setActivo(-1); }}
+        onFocus={() => { setAbierto(true); setEscrito(false); }}
+        onClick={() => setAbierto(true)}
+        onBlur={() => setTimeout(() => setAbierto(false), 120)}
+        onKeyDown={alPulsar}
+        className="m3-input pr-10"
+        autoComplete="off"
+      />
+      <span className="material-symbols-outlined m3-combo-arrow" aria-hidden="true">arrow_drop_down</span>
+      {abierto && (
+        <ul id={listaId} role="listbox" className="m3-combo-list">
+          {cargando && opciones.length === 0 && <li className="m3-combo-empty">Cargando opciones…</li>}
+          {filtradas.map((o, i) => (
+            <li key={o} role="option" aria-selected={normalizar(o) === normalizar(value)}
+              onMouseDown={e => { e.preventDefault(); elegir(o); }}
+              className={`m3-combo-option ${i === activo ? 'is-active' : ''} ${normalizar(o) === normalizar(value) ? 'is-selected' : ''}`}>
+              {o}
+              {normalizar(o) === normalizar(value) && <span className="material-symbols-outlined" aria-hidden="true">check</span>}
+            </li>
+          ))}
+          {!cargando && filtradas.length === 0 && !permitirNuevo && <li className="m3-combo-empty">Sin coincidencias</li>}
+          {permitirNuevo && value.trim() && !existe && (
+            <li className="m3-combo-empty">Se creará «{value.trim()}» al guardar</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }
