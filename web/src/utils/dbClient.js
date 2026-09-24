@@ -1,4 +1,5 @@
 import { supabase, isSupabaseActive } from '../supabase';
+import { parsearPrincipios, parsearContenido } from './parsearFicha';
 
 export { isSupabaseActive };
 
@@ -233,6 +234,117 @@ export async function guardarEnlaceCompetencia(item) {
 }
 
 // --- PRODUCTOS ---
+// Reemplaza la ficha tecnica de un producto: resuelve (o crea) cada molecula
+// en dim_principios_activos y reescribe sus filas en producto_principios.
+//
+// Se borra y se vuelve a insertar en vez de actualizar porque el numero de
+// moleculas puede cambiar (un producto simple que pasa a combinado) y porque
+// el esquema tiene un indice unico parcial que solo admite una fila con
+// es_principal por producto: un UPDATE parcial lo violaria a mitad de camino.
+async function guardarPrincipiosActivos(productoDbId, principioActivo, concentracion) {
+  const filas = parsearPrincipios(principioActivo, concentracion);
+
+  // Sin datos utiles no se toca lo que ya hubiera: un CSV sin la columna
+  // `concentracion` no debe borrar fichas cargadas antes.
+  if (filas.length === 0) return;
+
+  const conIds = [];
+  for (const fila of filas) {
+    const nombre = fila.nombre.trim();
+
+    const { data: existente } = await supabase
+      .from('dim_principios_activos')
+      .select('id')
+      .ilike('nombre', nombre)
+      .limit(1)
+      .maybeSingle();
+
+    let principioId = existente?.id ?? null;
+    if (principioId === null) {
+      const { data: nuevo, error } = await supabase
+        .from('dim_principios_activos')
+        .insert({ nombre })
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      principioId = nuevo?.id ?? null;
+    }
+
+    if (principioId !== null) {
+      conIds.push({
+        producto_id: productoDbId,
+        principio_activo_id: principioId,
+        concentracion_valor: fila.valor,
+        concentracion_unidad: fila.unidad,
+        por_cantidad: fila.porCantidad ?? 1,
+        por_unidad: fila.porUnidad ?? null,
+        es_principal: fila.esPrincipal
+      });
+    }
+  }
+
+  if (conIds.length === 0) return;
+
+  await supabase.from('producto_principios').delete().eq('producto_id', productoDbId);
+
+  const { error } = await supabase.from('producto_principios').insert(conIds);
+  if (error) throw error;
+}
+
+// Registra un PVP nuevo cerrando el anterior, en vez de insertar a ciegas.
+//
+// pvp_propio tiene una restriccion de exclusion (excl_pvp_sin_solape) que
+// prohibe dos rangos de vigencia solapados para el mismo producto. La fila
+// vigente tiene vigente_hasta NULL, o sea que cubre "desde X hasta siempre":
+// cualquier insercion posterior choca con ella y Postgres responde 23P01.
+//
+// El codigo anterior insertaba sin mirar y sin comprobar el error, asi que al
+// reimportar el CSV el precio nuevo se perdia en silencio y el panel seguia
+// mostrando el viejo.
+async function guardarPvpPropio(productoDbId, pvpUsd) {
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  const { data: vigente, error: errLectura } = await supabase
+    .from('pvp_propio')
+    .select('id, pvp_usd, vigente_desde')
+    .eq('producto_id', productoDbId)
+    .is('vigente_hasta', null)
+    .maybeSingle();
+
+  if (errLectura) throw errLectura;
+
+  if (vigente) {
+    // Mismo precio: no hay nada que historiar.
+    if (Number(vigente.pvp_usd) === Number(pvpUsd)) return;
+
+    // Correccion del mismo dia: se edita la fila en vez de cerrarla, porque
+    // chk_pvp_rango_valido exige vigente_hasta > vigente_desde y un rango de
+    // duracion cero no es valido.
+    if (vigente.vigente_desde === hoy) {
+      const { error } = await supabase
+        .from('pvp_propio')
+        .update({ pvp_usd: pvpUsd })
+        .eq('id', vigente.id);
+      if (error) throw error;
+      return;
+    }
+
+    // Cambio real: se cierra el tramo anterior hoy y empieza el nuevo.
+    const { error: errCierre } = await supabase
+      .from('pvp_propio')
+      .update({ vigente_hasta: hoy })
+      .eq('id', vigente.id);
+    if (errCierre) throw errCierre;
+  }
+
+  const { error } = await supabase.from('pvp_propio').insert({
+    producto_id: productoDbId,
+    pvp_usd: pvpUsd,
+    vigente_desde: hoy
+  });
+  if (error) throw error;
+}
+
 export async function dbUpsertProducto(data) {
   const targetId = (data.id_interno || data.id || '').trim();
   const cleanData = {
@@ -337,6 +449,11 @@ export async function dbUpsertProducto(data) {
       }
 
       // 2. Upsert en dim_productos
+      // El empaque sale del texto de `tamano` ("120 ml" es volumen, no 120
+      // tabletas). Antes se forzaba unidad_contenido a 'unidad' siempre, asi
+      // que los jarabes y las cremas quedaban mal medidos para el unidosis.
+      const contenido = parsearContenido(cleanData.tamano, cleanData.unidosis);
+
       const dimPayload = {
         id_interno: cleanData.id_interno,
         nombre: cleanData.nombre,
@@ -344,8 +461,8 @@ export async function dbUpsertProducto(data) {
         laboratorio_id: labId,
         categoria_id: catId,
         unidad_negocio_id: unId,
-        cantidad_contenido: cleanData.unidosis || 1,
-        unidad_contenido: 'unidad',
+        cantidad_contenido: contenido.cantidad,
+        unidad_contenido: contenido.unidad,
         activo: cleanData.activo
       };
 
@@ -355,13 +472,23 @@ export async function dbUpsertProducto(data) {
         .select('id')
         .maybeSingle();
 
+      // 3. Ficha tecnica: molecula y dosis a producto_principios.
+      // Sin esto el panel no tiene de donde sacar la concentracion y la unica
+      // forma de verla vuelve a ser leerla dentro del nombre.
+      if (!dimErr && dimProd?.id) {
+        try {
+          await guardarPrincipiosActivos(dimProd.id, cleanData.principio_activo, cleanData.concentracion);
+        } catch (ePrin) {
+          console.warn('[Supabase] No se pudo guardar la ficha tecnica:', ePrin?.message || String(ePrin));
+        }
+      }
+
       if (!dimErr && dimProd?.id && cleanData.pvp_propio_usd > 0) {
-        // Upsert en pvp_propio
-        await supabase.from('pvp_propio').insert({
-          producto_id: dimProd.id,
-          pvp_usd: cleanData.pvp_propio_usd,
-          vigente_desde: new Date().toISOString().slice(0, 10)
-        });
+        try {
+          await guardarPvpPropio(dimProd.id, cleanData.pvp_propio_usd);
+        } catch (ePvp) {
+          console.warn('[Supabase] No se pudo guardar el PVP propio:', ePvp?.message || String(ePvp));
+        }
       }
 
       // También mantener tabla productos / legacy_productos para retrocompatibilidad

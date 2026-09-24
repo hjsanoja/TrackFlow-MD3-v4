@@ -141,6 +141,44 @@ export function limpiarNombreCapturado(nombre) {
   return String(nombre).replace(/^[\s/|·•\-]+/, '').trim();
 }
 
+// La molecula y la concentracion viven en producto_principios, no en el nombre.
+// Un producto puede tener varios principios (combinaciones), asi que se ordenan
+// dejando el rector primero y se unen con " + ":
+//   "Losartan + Hidroclorotiazida"  /  "50 mg + 12.5 mg"
+// Cuando la concentracion es por volumen (jarabes, soluciones) se expresa como
+// "250 mg/5 ml", que es como se lee en el empaque.
+function ordenarPrincipios(filas) {
+  return [...(filas || [])].sort((a, b) => {
+    if (a.es_principal !== b.es_principal) return a.es_principal ? -1 : 1;
+    const na = a.dim_principios_activos?.nombre || '';
+    const nb = b.dim_principios_activos?.nombre || '';
+    return na.localeCompare(nb, 'es');
+  });
+}
+
+function formatearPrincipioActivo(filas) {
+  const nombres = ordenarPrincipios(filas)
+    .map(f => (f.dim_principios_activos?.nombre || '').trim())
+    .filter(Boolean);
+  return nombres.join(' + ');
+}
+
+function formatearConcentracion(filas) {
+  const partes = ordenarPrincipios(filas).map(f => {
+    const valor = Number(f.concentracion_valor);
+    if (!Number.isFinite(valor) || valor <= 0) return '';
+    // NUMERIC(10,2) llega como "300.00"; se muestra "300" y se conserva "12.5".
+    const cantidad = String(Number(valor.toFixed(2)));
+    const base = `${cantidad} ${f.concentracion_unidad || ''}`.trim();
+    const porCantidad = Number(f.por_cantidad);
+    if (f.por_unidad && Number.isFinite(porCantidad) && porCantidad > 0) {
+      return `${base}/${String(Number(porCantidad.toFixed(2)))} ${f.por_unidad}`;
+    }
+    return base;
+  }).filter(Boolean);
+  return partes.join(' + ');
+}
+
 async function fetchDimProductos() {
   if (!isSupabaseActive() || !supabase) return [];
   try {
@@ -159,6 +197,14 @@ async function fetchDimProductos() {
         dim_categorias ( nombre ),
         dim_unidades_negocio ( nombre ),
         dim_formas_farmaceuticas ( nombre ),
+        producto_principios (
+          concentracion_valor,
+          concentracion_unidad,
+          por_cantidad,
+          por_unidad,
+          es_principal,
+          dim_principios_activos ( nombre )
+        ),
         pvp_propio ( pvp_usd, vigente_desde, vigente_hasta )
       `);
 
@@ -199,7 +245,9 @@ async function fetchDimProductos() {
           categoria: d.dim_categorias?.nombre || 'Otros',
           unidad_negocio: unNombre,
           forma_farmaceutica: d.dim_formas_farmaceuticas?.nombre || '',
-          tamano: d.cantidad_contenido ? `${d.cantidad_contenido} ${d.unidad_contenido || 'unidad'}` : '',
+          principio_activo: formatearPrincipioActivo(d.producto_principios),
+          concentracion: formatearConcentracion(d.producto_principios),
+          tamano: d.cantidad_contenido ? `${Number(d.cantidad_contenido)} ${d.unidad_contenido || 'unidad'}` : '',
           unidosis: d.cantidad_contenido ? Number(d.cantidad_contenido) : null,
           pvp_propio_usd: pvpUsd,
           activo: d.activo !== false,

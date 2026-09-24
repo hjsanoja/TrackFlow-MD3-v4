@@ -27,6 +27,23 @@ Una fila por producto propio.
 - **`id_interno`** es tu SKU y la llave de todo lo demás. El CSV de competencia
   lo referencia con ese mismo valor. Si se repite, la segunda fila actualiza a
   la primera.
+- **`nombre` es solo la identidad comercial: sin dosis y sin empaque.** La
+  concentración va en `concentracion` y el tamaño en `tamano`, y el panel los
+  muestra en columnas propias. Si los repites en el nombre, salen dos veces en
+  pantalla:
+
+  | | `nombre` | `concentracion` | `tamano` | Cómo se ve |
+  |---|---|---|---|---|
+  | Mal | `Bumetin 300mg x 10tab` | `300mg` | `10 tabletas` | Bumetin 300mg x 10tab · 300mg · 10 tabletas |
+  | Bien | `Bumetin` | `300mg` | `10 tabletas` | Bumetin · 300mg · 10 tabletas |
+
+  En los genéricos sin marca la molécula **sí** es el nombre comercial
+  (`Amlodipino La Santé`), pero la dosis y el empaque siguen fuera.
+
+  El nombre también es lo que el scraper compara contra el título de la tienda
+  para detectar capturas malas. Un nombre cargado con dosis y empaque no se
+  parece al título publicado y hace saltar la alarma todos los días sobre un
+  producto que en realidad se está leyendo bien.
 - `laboratorio`, `unidad_negocio` y `categoria` se crean solos si no existen.
 - `pvp_propio_usd` es tu precio oficial en dólares; queda registrado con la
   fecha de carga como inicio de vigencia.

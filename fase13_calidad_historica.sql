@@ -169,6 +169,52 @@ SELECT jsonb_pretty(fn_evaluar_calidad_historica(TRUE, 0.80, 0.25));
 SELECT * FROM v_calidad_datos;
 */
 
+-- ----------------------------------------------------------------------------
+-- DIAGNOSTICO: MIRAR ANTES DE DECIDIR
+-- ----------------------------------------------------------------------------
+
+-- D1. Ejemplos de nombres que no coinciden, del mas raro al menos raro.
+--     Sirve para saber SI son fallos reales (paginas de oferta, producto
+--     agotado, la tienda cambio el producto de esa URL) o solo variantes del
+--     titulo. La similitud aguanta bien acentos y reordenamientos: una
+--     puntuacion baja significa que el texto es de verdad distinto.
+/*
+SELECT
+  p.nombre                    AS "esperado",
+  fp.nombre_capturado         AS "lo que se leyo",
+  ROUND(word_similarity(LOWER(p.nombre), LOWER(fp.nombre_capturado))::numeric, 3) AS parecido,
+  COUNT(*) OVER (PARTITION BY fp.nombre_capturado) AS "veces que se repite",
+  pub.url
+FROM fact_precios fp
+JOIN publicaciones pub ON pub.id = fp.publicacion_id
+JOIN dim_productos p   ON p.id = pub.producto_id
+WHERE fp.origen = 'legacy'
+  AND fp.nombre_capturado IS NOT NULL
+  AND word_similarity(LOWER(p.nombre), LOWER(fp.nombre_capturado)) < 0.40
+ORDER BY parecido
+LIMIT 25;
+*/
+
+-- D2. Los nombres capturados mas repetidos entre los que fallan. Si uno solo
+--     explica cientos de casos, es un patron (por ejemplo, una pagina de
+--     "producto no disponible") y no hace falta revisarlos uno por uno.
+/*
+SELECT fp.nombre_capturado, COUNT(*) AS veces
+FROM fact_precios fp
+JOIN publicaciones pub ON pub.id = fp.publicacion_id
+JOIN dim_productos p   ON p.id = pub.producto_id
+WHERE fp.origen = 'legacy'
+  AND fp.nombre_capturado IS NOT NULL
+  AND word_similarity(LOWER(p.nombre), LOWER(fp.nombre_capturado)) < 0.40
+GROUP BY 1 ORDER BY 2 DESC LIMIT 15;
+*/
+
+-- D3. Solo el criterio de precio: pasar 0 como umbral de nombre lo desactiva,
+--     porque la similitud nunca es menor que cero.
+/*
+SELECT jsonb_pretty(fn_evaluar_calidad_historica(FALSE, 0.40, 0));
+*/
+
 -- Para deshacerlo: quita la marca de todo lo que no se haya revisado a mano.
 /*
 UPDATE fact_precios SET sospechoso = FALSE, motivo_sospecha = NULL
