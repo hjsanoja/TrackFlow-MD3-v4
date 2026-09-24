@@ -30,6 +30,34 @@ const CATEGORIAS = [
   'Otros',
 ];
 
+// Un solo formato de CSV de productos para exportar, para la plantilla y para
+// importar: mismos encabezados, mismo orden, en minusculas y sin acentos, que
+// son los nombres que lee el importador. Asi cualquier archivo que sale del
+// panel se puede editar y volver a subir tal cual.
+//
+// No lleva market_type: se calcula a partir de la unidad de negocio y del
+// laboratorio (Pharmetique = MARCA), asi que editarlo en el CSV no cambiaba
+// nada. Si lleva `activo`, para que reimportar no reactive productos dados
+// de baja.
+const COLUMNAS_CSV_PRODUCTOS = [
+  'id_interno', 'nombre', 'codigo_barra', 'principio_activo', 'concentracion',
+  'tamano', 'forma_farmaceutica', 'laboratorio', 'categoria', 'unidad_negocio', 'activo',
+].map(key => ({ label: key, key }));
+
+const filaCsvProducto = p => ({
+  id_interno: p.id_interno || '',
+  nombre: p.nombre || '',
+  codigo_barra: p.codigo_barra || '',
+  principio_activo: p.principio_activo || '',
+  concentracion: p.concentracion || '',
+  tamano: p.tamano || '',
+  forma_farmaceutica: p.forma_farmaceutica || '',
+  laboratorio: p.laboratorio || '',
+  categoria: p.categoria || '',
+  unidad_negocio: p.unidad_negocio || '',
+  activo: p.activo === false ? 'no' : 'si',
+});
+
 export default function Productos() {
   const {
     productos,
@@ -449,82 +477,28 @@ export default function Productos() {
     return 'P' + String(max + 1).padStart(3, '0');
   };
 
+  // Todo el catalogo, pensado para editarlo y volver a subirlo.
   const downloadCsvPlantilla = () => {
-    const headers = ['id_interno', 'nombre', 'codigo_barra', 'principio_activo', 'concentracion', 'tamano', 'forma_farmaceutica', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio'].join(',') + '\n';
+    const filas = productos.length > 0
+      ? productos.map(filaCsvProducto)
+      : [
+          filaCsvProducto({ id_interno: 'P001', nombre: 'ATAMEL', codigo_barra: '7592450001234', principio_activo: 'Acetaminofén', concentracion: '500 mg', tamano: '10 unidades', forma_farmaceutica: 'Tabletas', laboratorio: 'LA SANTE', categoria: 'Otros', unidad_negocio: 'La Sante' }),
+          filaCsvProducto({ id_interno: 'P002', nombre: 'LOSARTAN + HCTZ', principio_activo: 'Losartán + Hidroclorotiazida', concentracion: '50 mg + 12.5 mg', tamano: '30 unidades', forma_farmaceutica: 'Tabletas', laboratorio: 'LA SANTE', categoria: 'Otros', unidad_negocio: 'La Sante' }),
+        ];
 
-    let content = '\ufeff' + headers; // UTF-8 BOM for Excel compatibility
-
-    if (productos.length > 0) {
-      productos.forEach(p => {
-        const row = [
-          p.id_interno || '',
-          p.nombre || '',
-          p.codigo_barra || '',
-          p.principio_activo || '',
-          p.concentracion || '',
-          p.tamano || '',
-          p.forma_farmaceutica || '',
-          p.laboratorio || '',
-          p.categoria || '',
-          p.market_type || 'GENERICO',
-          p.unidad_negocio || 'La Sante'
-        ].map(val => {
-          const str = String(val || '');
-          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return `"${str.replace(/"/g, '""')}"`;
-          }
-          return str;
-        }).join(',');
-
-        content += row + '\n';
-      });
-    } else {
-      // Fallback example rows if database is empty
-      const row1 = 'P001,Atamel,7592450001234,Acetaminofén,500 mg,10 tabletas,La Santé,Analgésicos,MARCA,La Sante\n';
-      const row2 = 'P002,Calox,,Ibuprofeno,400 mg,20 capsulas,Calox,Analgésicos,GENERICO,OTC\n';
-      content += row1 + row2;
-    }
-
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Plantilla_Catalogo_Productos_${new Date().toISOString().slice(0, 10)}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    addToast(productos.length > 0 ? `Plantilla con tus ${productos.length} productos cargados descargada con éxito.` : 'Plantilla de ejemplo descargada.', 'success');
+    exportToCSV(productos.length > 0 ? 'productos_plantilla_carga' : 'productos_plantilla_carga_ejemplo', COLUMNAS_CSV_PRODUCTOS, filas);
+    addToast(productos.length > 0 ? `Plantilla con tus ${productos.length} productos descargada.` : 'Plantilla de ejemplo descargada.', 'success');
   };
 
+
+  // Lo que se ve en pantalla, con los filtros aplicados. Mismo formato que la
+  // plantilla: tambien se puede volver a subir.
   const handleExportarCatalogo = () => {
-    const headers = [
-      { label: 'ID Interno', key: 'id_interno' },
-      { label: 'Nombre', key: 'nombre' },
-      { label: 'Código de Barra', key: 'codigo_barra' },
-      { label: 'Principio Activo', key: 'principio_activo' },
-      { label: 'Concentración', key: 'concentracion' },
-      { label: 'Presentación/Tamaño', key: 'tamano_empaque' },
-      { label: 'Forma Farmacéutica', key: 'forma_farmaceutica' },
-      { label: 'Tipo', key: 'market_type' },
-      { label: 'Unidad de Negocio', key: 'unidad_negocio' },
-      { label: 'Laboratorio', key: 'laboratorio' },
-      { label: 'Categoría', key: 'categoria' },
-      { label: 'Estado', key: 'estado_str' }
-    ];
-
-    const dataRows = filtrados.map(p => ({
-      ...p,
-      market_type: p.market_type || 'GENERICO',
-      unidad_negocio: p.unidad_negocio || 'Sin UN',
-      laboratorio: p.laboratorio || '—',
-      categoria: p.categoria || 'Sin Categ',
-      estado_str: p.activo ? 'ACTIVO' : 'INACTIVO'
-    }));
-
-    exportToCSV('Catalogo_Productos_Farmaceuticos', headers, dataRows);
-    addToast(`Exportados ${dataRows.length} productos a CSV.`, 'success');
+    const filas = filtrados.map(filaCsvProducto);
+    exportToCSV('productos_reporte', COLUMNAS_CSV_PRODUCTOS, filas);
+    addToast(`Exportados ${filas.length} productos a CSV.`, 'success');
   };
+
 
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
@@ -941,13 +915,13 @@ export default function Productos() {
               <div>codigo_barra <span className="text-on-surface-variant font-sans font-medium">(Opcional / EAN / GTIN)</span></div>
               <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
               <div>concentracion, tamano, forma_farmaceutica, laboratorio, categoria</div>
-              <div>market_type, unidad_negocio</div>
+              <div>unidad_negocio, activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
             </div>
             <div className="flex justify-between items-center pt-1">
               <button type="button" onClick={downloadCsvPlantilla}
                 className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm">download</span>
-                Descargar Plantilla / Catálogo Actual (CSV)
+                Descargar plantilla de carga (catálogo actual)
               </button>
             </div>
 

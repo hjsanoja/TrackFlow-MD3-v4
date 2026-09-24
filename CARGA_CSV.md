@@ -44,7 +44,16 @@ Una fila por producto propio.
   para detectar capturas malas. Un nombre cargado con dosis y empaque no se
   parece al título publicado y hace saltar la alarma todos los días sobre un
   producto que en realidad se está leyendo bien.
-- `laboratorio`, `unidad_negocio` y `categoria` se crean solos si no existen.
+- `laboratorio` se crea solo si no existe. `categoria` y `unidad_negocio` no:
+  tienen que existir en **Dimensiones**. Si el nombre no coincide, el
+  producto conserva la que ya tenía.
+- `activo` admite `si` o `no`. Si el archivo no trae la columna, el estado
+  guardado no se toca.
+- Los dos CSV que descarga la pantalla **Productos** tienen estas mismas
+  columnas, en este orden, y se pueden volver a subir tal cual:
+  `productos_plantilla_carga_AAAA-MM-DD.csv` (todo el catálogo, para editarlo)
+  y `productos_reporte_AAAA-MM-DD.csv` (lo que se ve en pantalla, con los
+  filtros aplicados). Ninguno lleva precio, así que no tocan los PVP.
 - `pvp_propio_usd` es tu precio oficial en dólares; queda registrado con la
   fecha de carga como inicio de vigencia.
 - `tamano` en texto libre basta: el sistema deduce la cantidad y la unidad.
