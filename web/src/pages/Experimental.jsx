@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DevaluacionReal from './DevaluacionReal';
 import RevisionCapturas from './RevisionCapturas';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Analisis from './Analisis';
@@ -13,7 +14,7 @@ export default function Experimental({ user, userDoc }) {
   const navigate = useNavigate();
 
   const tabParam = searchParams.get('tab');
-  const validTabs = ['revision', 'canibalizacion', 'brecha_usd', 'reporteria', 'analisis', 'simulador', 'hallazgos'];
+  const validTabs = ['revision', 'devaluacion', 'canibalizacion', 'brecha_usd', 'reporteria', 'analisis', 'simulador', 'hallazgos'];
   const activeTab = validTabs.includes(tabParam) ? tabParam : 'canibalizacion';
 
   const handleTabChange = (tabId) => {
@@ -27,6 +28,14 @@ export default function Experimental({ user, userDoc }) {
       shortLabel: 'Revisión',
       icon: 'rule',
       desc: 'Capturas que el control de calidad marcó como dudosas y aún nadie ha revisado',
+      status: 'Nuevo'
+    },
+    {
+      id: 'devaluacion',
+      label: 'Devaluación vs Subida Real',
+      shortLabel: 'Devaluación',
+      icon: 'currency_exchange',
+      desc: 'Separa cuánto de una subida de precio fue la tasa BCV y cuánto decisión comercial',
       status: 'Nuevo'
     },
     {
@@ -130,6 +139,7 @@ export default function Experimental({ user, userDoc }) {
       {/* Renderizado dinámico del submenú seleccionado */}
       <div className="transition-opacity duration-200">
         {activeTab === 'revision' && <RevisionCapturas />}
+        {activeTab === 'devaluacion' && <DevaluacionReal />}
         {activeTab === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activeTab === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
         {activeTab === 'reporteria' && <Reporteria user={user} userDoc={userDoc} />}
