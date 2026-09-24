@@ -120,14 +120,27 @@ escribe `producto_principios` y `forma_farmaceutica_id`, la lectura los pide,
 `parsearFicha.js` convierte el texto libre en filas atómicas, y el PVP ya no
 se descarta en silencio al reimportar.
 
-### ⏭️ EL SIGUIENTE PASO, Y ESTÁ SIN HACER
+### ⏭️ DÓNDE ESTAMOS
 
-**Falta correr `fase16_limpieza_catalogo.sql` y `fase17_forma_farmaceutica.sql`
-en el SQL Editor de Supabase, en ese orden.** Ninguno cambia datos: solo crean
-funciones y vistas. Hasta que se corran, `v_csv_productos` no existe en la base
-y la recarga del catálogo no se puede hacer.
+| | |
+|---|---|
+| Código en `main` | Hasta la fase 17, desplegado |
+| SQL corrido en Supabase | **Hasta la fase 17** |
+| Recarga del catálogo | **Sin empezar ← aquí vamos** |
 
-Después, la recarga:
+Antes de dar nada por hecho, confirmar con:
+
+```sql
+SELECT to_regclass('public.v_csv_productos') IS NOT NULL AS fase16_17_corridas,
+       (SELECT count(*) FROM v_csv_productos)            AS productos,
+       (SELECT count(*) FROM v_csv_productos WHERE zz_revisar IS NOT NULL) AS a_revisar,
+       (SELECT count(*) FROM v_productos_sin_ficha WHERE es_propio)        AS sin_ficha;
+```
+
+Si `sin_ficha` sigue en ~200, la recarga no se ha hecho. Si baja a casi cero,
+ya está hecha y este documento necesita actualizarse.
+
+### La recarga, paso a paso
 
 1. `SELECT id_interno, zz_nombre_original, nombre, concentracion,
    forma_farmaceutica, tamano, zz_empaque_guardado, zz_revisar
