@@ -241,7 +241,45 @@ export async function guardarEnlaceCompetencia(item) {
 // moleculas puede cambiar (un producto simple que pasa a combinado) y porque
 // el esquema tiene un indice unico parcial que solo admite una fila con
 // es_principal por producto: un UPDATE parcial lo violaria a mitad de camino.
-async function guardarPrincipiosActivos(productoDbId, principioActivo, concentracion) {
+// Busca una fila de dimension por nombre (sin distinguir mayusculas) y, si
+// se pasa `crear`, la da de alta cuando no existe. Devuelve el id o null.
+//
+// Con `cache` (una importacion masiva) cada nombre se resuelve una sola vez:
+// 78 productos del mismo laboratorio eran 78 consultas identicas. Se guarda
+// la promesa y no el resultado para que dos filas que se procesan a la vez no
+// creen la misma molecula dos veces.
+function resolverDimension(cache, tabla, nombre, crear = null) {
+  const clave = `${tabla}|${nombre.toLowerCase()}`;
+  if (cache?.has(clave)) return cache.get(clave);
+
+  const promesa = (async () => {
+    const { data } = await supabase
+      .from(tabla)
+      .select('id')
+      .ilike('nombre', nombre)
+      .limit(1)
+      .maybeSingle();
+    if (data?.id) return data.id;
+    if (!crear) return null;
+
+    const { data: nuevo, error } = await supabase
+      .from(tabla)
+      .insert({ nombre, ...crear })
+      .select('id')
+      .maybeSingle();
+    if (error) throw error;
+    return nuevo?.id ?? null;
+  })();
+
+  if (cache) {
+    cache.set(clave, promesa);
+    // Un fallo no se queda en cache: la siguiente fila lo reintenta.
+    promesa.catch(() => cache.delete(clave));
+  }
+  return promesa;
+}
+
+async function guardarPrincipiosActivos(productoDbId, principioActivo, concentracion, cache = null) {
   const filas = parsearPrincipios(principioActivo, concentracion);
 
   // Sin datos utiles no se toca lo que ya hubiera: un CSV sin la columna
@@ -252,23 +290,7 @@ async function guardarPrincipiosActivos(productoDbId, principioActivo, concentra
   for (const fila of filas) {
     const nombre = fila.nombre.trim();
 
-    const { data: existente } = await supabase
-      .from('dim_principios_activos')
-      .select('id')
-      .ilike('nombre', nombre)
-      .limit(1)
-      .maybeSingle();
-
-    let principioId = existente?.id ?? null;
-    if (principioId === null) {
-      const { data: nuevo, error } = await supabase
-        .from('dim_principios_activos')
-        .insert({ nombre })
-        .select('id')
-        .maybeSingle();
-      if (error) throw error;
-      principioId = nuevo?.id ?? null;
-    }
+    const principioId = await resolverDimension(cache, 'dim_principios_activos', nombre, {});
 
     if (principioId !== null) {
       conIds.push({
@@ -345,7 +367,7 @@ async function guardarPvpPropio(productoDbId, pvpUsd) {
   if (error) throw error;
 }
 
-export async function dbUpsertProducto(data) {
+export async function dbUpsertProducto(data, cache = null) {
   const targetId = (data.id_interno || data.id || '').trim();
   const cleanData = {
     id: targetId,
@@ -391,62 +413,21 @@ export async function dbUpsertProducto(data) {
         const LABS_PROPIOS = ['LA SANTE', 'LA SANTÉ', 'PHARMETIQUE', 'PHARMETIQUE LABS', 'PHARMETIQUELABS'];
         const esLabPropio = LABS_PROPIOS.includes(labNombre);
 
-        // `.limit(1)` antes de maybeSingle(): si hay dos laboratorios con
-        // nombres equivalentes, maybeSingle() devolvía error y se creaba un
-        // duplicado más.
-        const { data: labData } = await supabase
-          .from('dim_laboratorios')
-          .select('id')
-          .ilike('nombre', labNombre)
-          .limit(1)
-          .maybeSingle();
-
-        if (labData?.id) {
-          labId = labData.id;
-        } else {
-          const { data: newLab } = await supabase
-            .from('dim_laboratorios')
-            .insert({ nombre: labNombre, es_propio: esLabPropio })
-            .select('id')
-            .maybeSingle();
-          if (newLab?.id) labId = newLab.id;
-        }
+        // Laboratorio y forma se crean si no existen; categoria y unidad de
+        // negocio no, porque son catalogos cerrados.
+        labId = await resolverDimension(cache, 'dim_laboratorios', labNombre, { es_propio: esLabPropio });
 
         const catNombre = cleanData.categoria.trim();
-        if (catNombre) {
-          const { data: catData } = await supabase.from('dim_categorias').select('id').ilike('nombre', catNombre).limit(1).maybeSingle();
-          if (catData?.id) catId = catData.id;
-        }
+        if (catNombre) catId = await resolverDimension(cache, 'dim_categorias', catNombre);
 
         const unNombre = cleanData.unidad_negocio.trim();
-        if (unNombre) {
-          const { data: unData } = await supabase.from('dim_unidades_negocio').select('id').ilike('nombre', unNombre).limit(1).maybeSingle();
-          if (unData?.id) unId = unData.id;
-        }
+        if (unNombre) unId = await resolverDimension(cache, 'dim_unidades_negocio', unNombre);
 
         // La forma farmaceutica SI se crea si no existe: el catalogo semilla
         // trae las habituales, pero cada laboratorio tiene las suyas y
         // obligar a darla de alta aparte rompe la importacion por CSV.
         const formaNombre = cleanData.forma_farmaceutica;
-        if (formaNombre) {
-          const { data: formaData } = await supabase
-            .from('dim_formas_farmaceuticas')
-            .select('id')
-            .ilike('nombre', formaNombre)
-            .limit(1)
-            .maybeSingle();
-
-          if (formaData?.id) {
-            formaId = formaData.id;
-          } else {
-            const { data: nuevaForma } = await supabase
-              .from('dim_formas_farmaceuticas')
-              .insert({ nombre: formaNombre })
-              .select('id')
-              .maybeSingle();
-            if (nuevaForma?.id) formaId = nuevaForma.id;
-          }
-        }
+        if (formaNombre) formaId = await resolverDimension(cache, 'dim_formas_farmaceuticas', formaNombre, {});
       } catch (refErr) {
         console.warn('[Supabase] Warning resolviendo dimensiones foráneas:', refErr);
       }
@@ -455,23 +436,7 @@ export async function dbUpsertProducto(data) {
       // pudo resolver ni crear el laboratorio, se cuelga de 'OTRO' (creándolo
       // si hace falta) en vez de asumir un id fijo.
       if (labId === null) {
-        const { data: otroLab } = await supabase
-          .from('dim_laboratorios')
-          .select('id')
-          .ilike('nombre', 'OTRO')
-          .limit(1)
-          .maybeSingle();
-
-        if (otroLab?.id) {
-          labId = otroLab.id;
-        } else {
-          const { data: nuevoOtro } = await supabase
-            .from('dim_laboratorios')
-            .insert({ nombre: 'OTRO', es_propio: false })
-            .select('id')
-            .maybeSingle();
-          if (nuevoOtro?.id) labId = nuevoOtro.id;
-        }
+        labId = await resolverDimension(cache, 'dim_laboratorios', 'OTRO', { es_propio: false });
       }
 
       // 2. Upsert en dim_productos
@@ -519,7 +484,7 @@ export async function dbUpsertProducto(data) {
       // forma de verla vuelve a ser leerla dentro del nombre.
       if (!dimErr && dimProd?.id) {
         try {
-          await guardarPrincipiosActivos(dimProd.id, cleanData.principio_activo, cleanData.concentracion);
+          await guardarPrincipiosActivos(dimProd.id, cleanData.principio_activo, cleanData.concentracion, cache);
         } catch (ePrin) {
           console.warn('[Supabase] No se pudo guardar la ficha tecnica:', ePrin?.message || String(ePrin));
         }
@@ -533,23 +498,14 @@ export async function dbUpsertProducto(data) {
         }
       }
 
-      // También mantener tabla productos / legacy_productos para retrocompatibilidad
-      try {
-        await supabaseUpsertSafe('productos', cleanData);
-      } catch (_) {
-        try {
-          await supabaseUpsertSafe('legacy_productos', cleanData);
-        } catch (eLegacy) {
-          // Si dim_productos tuvo éxito, no es bloqueante
-          if (dimErr) console.warn('[Supabase] Error en legacy_productos:', eLegacy);
-        }
-      }
-
-      if (!dimErr) {
-        ok = true;
+      // Ya no se escribe en `productos` / `legacy_productos`: la primera es
+      // una vista de solo lectura desde la fase 5 y la segunda solo se lee
+      // si dim_productos esta vacia. Eran hasta 15 reintentos por producto
+      // y, peor, marcaban como exito un alta que habia fallado en
+      // dim_productos.
+      if (dimErr) {
+        lastErr = dimErr;
       } else {
-        console.warn('[Supabase] Error en dim_productos upsert:', dimErr);
-        // Si falló dim_productos pero funcionó legacy, marcar ok
         ok = true;
       }
     } catch (e) {
@@ -567,12 +523,39 @@ export async function dbUpsertProducto(data) {
   }
 }
 
-export async function dbUpsertProductosBulk(prodsList) {
-  if (!prodsList || prodsList.length === 0) return;
+// Alta masiva. Antes iba de uno en uno y repetia las mismas busquedas de
+// laboratorio, categoria y forma en cada fila: 78 productos tardaban varios
+// minutos sin dar senales de vida. Ahora:
+//  - las dimensiones se resuelven una vez por nombre (cache compartida),
+//  - se procesan varios productos a la vez,
+//  - `onProgreso(hechos, total)` permite mostrar el avance,
+//  - un producto que falla no detiene al resto: se devuelve en `errores`.
+const ALTAS_EN_PARALELO = 6;
 
-  for (const item of prodsList) {
-    await dbUpsertProducto(item);
-  }
+export async function dbUpsertProductosBulk(prodsList, onProgreso = null) {
+  const resultado = { total: prodsList?.length || 0, ok: 0, errores: [] };
+  if (!prodsList || prodsList.length === 0) return resultado;
+
+  const cache = new Map();
+  let siguiente = 0;
+  let hechos = 0;
+
+  const trabajador = async () => {
+    while (siguiente < prodsList.length) {
+      const item = prodsList[siguiente++];
+      try {
+        await dbUpsertProducto(item, cache);
+        resultado.ok++;
+      } catch (e) {
+        resultado.errores.push({ id: item.id_interno || item.id, mensaje: e?.message || String(e) });
+      }
+      hechos++;
+      if (onProgreso) onProgreso(hechos, prodsList.length);
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(ALTAS_EN_PARALELO, prodsList.length) }, trabajador));
+  return resultado;
 }
 
 // Vacía una tabla completa reportando el resultado real.

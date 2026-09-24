@@ -1,0 +1,79 @@
+﻿id_interno,nombre,codigo_barra,principio_activo,concentracion,tamano,forma_farmaceutica,laboratorio,categoria,market_type,unidad_negocio
+140216,ACETAMINOFEN,,Acetaminofén,500 MG,20 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140218,ACETAMINOFEN,,Acetaminofén,650 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140220,ACICLOVIR,,Aciclovir,200 MG,24 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140224,ALBENDAZOL,,Albendazol,200 MG,2 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140225,ALBENDAZOL,,Albendazol,200 MG,6 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140226,ALBENDAZOL,,Albendazol,400MG/20 ML,120 ml,Suspensión,LA SANTE,Otros,GENERICO,La Sante
+140227,AMBROXOL AD,,Ambroxol,30 MG/5 ML,120 ml,Jarabe,LA SANTE,Otros,GENERICO,La Sante
+140228,AMBROXOL PED,,Ambroxol,15 MG/5 ML,120 ml,Jarabe,LA SANTE,Otros,GENERICO,La Sante
+140229,AMLODIPINO,,Amlodipino,10 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140232,AMLODIPINO,,Amlodipino,5 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140237,AMOXICILINA VZLA,,Amoxicilina,500 MG,12 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140238,AMOXICILINA VZLA,,Amoxicilina,500 MG,6 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140240,AMPICILINA VZLA,,Ampicilina,250MG/5ML,60 ml,Polvo para suspensión,LA SANTE,Otros,GENERICO,La Sante
+140254,ATENOLOL,,Atenolol,100 MG,30 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140255,ATENOLOL,,Atenolol,50 MG,30 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140263,ATORVASTATINA VZLA,,Atorvastatina,20 MG,14 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140265,ATORVASTATINA,,Atorvastatina,40 MG,14 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140269,AZITROMICINA VZLA,,Azitromicina,500 MG,5 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140280,BROXOL FLEM AD,,,,120 ml,Otro,LA SANTE,Otros,GENERICO,OTC
+140284,BROXOL FLEM PED,,,,120 ml,Otro,LA SANTE,Otros,GENERICO,OTC
+140291,BROXOL GRIP PEDIÃTRICO,,,,120 ml,Jarabe,LA SANTE,Otros,GENERICO,OTC
+140307,CAPTOPRIL,,Captopril,25 MG,20 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140312,CEFADROXILO VZL,,Cefadroxilo,250 MG/5 ML,60 ml,Polvo para suspensión,LA SANTE,Otros,GENERICO,La Sante
+140313,CEFADROXILO VZLA,,Cefadroxilo,500 MG,12 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140319,CETIRIZINA,,Cetirizina,10 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140328,CIPROFLOXACINA,,Ciprofloxacina,500 MG,6 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140334,CLARITROMICINA VZL,,Claritromicina,500 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140337,CLOPIDOGREL,,Clopidogrel,75 MG,14 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140339,CLOTRIM+NEOMIC+DEXAMETA VZL,,Clotrimazol + Neomicina + Dexametasona,,20 g,Crema,LA SANTE,Otros,GENERICO,La Sante
+140357,DESLORATADINA,,Desloratadina,2.5 MG/5ML,60 ml,Jarabe,LA SANTE,Otros,GENERICO,La Sante
+140358,DESLORATADINA,,Desloratadina,5 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140365,DICLOFENACO SODICO,,Diclofenaco sódico,50 MG,20 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140373,ENALAPRIL VEN,,Enalapril,20 MG,20 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140375,ENALAPRIL,,Enalapril,10 MG,20 unidades,Comprimidos,LA SANTE,Otros,GENERICO,La Sante
+140391,FLUCONAZOL,,Fluconazol,150 MG,2 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140398,GENTAMICINA,,Gentamicina,0.1%,15 g,Crema,LA SANTE,Otros,GENERICO,La Sante
+140402,GLIMEPIRIDE,,Glimepirida,2 MG,16 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140403,GLIMEPIRIDE,,Glimepirida,2 MG,30 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140404,GLIMEPIRIDE,,Glimepirida,4 MG,16 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140405,GLIMEPIRIDE,,Glimepirida,4 MG,30 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140418,IBUPROFENO,,Ibuprofeno,100 mg/5 ml,60 ml,Suspensión,BIOQU�MUICA,Otros,GENERICO,La Sante
+140431,ITISONA,,,,30 g,Crema,LA SANTE,Otros,MARCA,Pharmetique
+140435,KETOPROFENO,,Ketoprofeno,100 MG,20 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140451,LORATADINA,,Loratadina,10MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140459,LOSARTAN + HCTZ,,Losartán + Hidroclorotiazida,50 mg + 12.5 mg,15 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140463,LOSARTAN POTASICO,,Losartán potásico,50 MG,14 unidades,Tabletas,CALOX,Otros,GENERICO,La Sante
+140465,MELOXICAM,,Meloxicam,15 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140466,MELOXICAM VZL,,Meloxicam,7.5 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140475,MONTELUKAST,,Montelukast,10MG,30 unidades,Tabletas recubiertas,LA SANTE,Otros,GENERICO,La Sante
+140476,MONTELUKAST,,Montelukast,5MG,30 unidades,Tabletas masticables,LA SANTE,Otros,GENERICO,La Sante
+140489,MOXIFLOXACINO VZL,,Moxifloxacino,400 MG,7 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140499,OMEPRAZOL,,Omeprazol,20 MG,30 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140501,OMEPRAZOL,,Omeprazol,20 MG,8 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140505,PIROXICAM,,Piroxicam,20 MG,10 unidades,Cápsulas,LA SANTE,Otros,GENERICO,La Sante
+140518,SERTRALINA VZL,,Sertralina,50 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140526,SILDENAFIL,,Sildenafil,50 MG,1 unidad,Tabletas recubiertas,LA SANTE,Otros,GENERICO,La Sante
+140568,VALSARTAN-HCTZ VZL,,Valsartán + Hidroclorotiazida,80 mg + 12.5 mg,14 unidades,Tabletas recubiertas,LA SANTE,Otros,GENERICO,La Sante
+140570,VALSARTAN VZL,,Valsartán,80 MG,14 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+140621,IBUPROFENO,,Ibuprofeno,800 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+141167,NITAZOXANIDA VZL,,Nitazoxanida,500MG,6 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+141799,ANALPER FEM PLUS PHARMETIQUE LABS,,,,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,OTC
+141807,BROXOL TOS PED S/AZUC,,,,120 ml,Jarabe,LA SANTE,Otros,GENERICO,OTC
+141829,BETAHISTINA,,Betahistina,16 MG,20 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142358,IRBESARTAN,,Irbesartán,150 MG,30 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142361,IRBESARTAN,,Irbesartán,150 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142362,IRBESARTAN,,Irbesartán,300 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142635,ROSUVASTATINA,,Rosuvastatina,10 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142637,ROSUVASTATINA,,Rosuvastatina,20 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142639,DICLOFENAC POTASICO,,Diclofenaco potásico,50 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142640,DICLOFENAC POTASICO,,Diclofenaco potásico,50 MG,30 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142675,CARVEDILOL VZL,,Carvedilol,6.25 MG,30 unidades,Tabletas recubiertas,LA SANTE,Otros,GENERICO,La Sante
+142677,CARVEDILOL VZL,,Carvedilol,12.5 MG,30 unidades,Tabletas recubiertas,LA SANTE,Otros,GENERICO,La Sante
+142682,HEDRALIV,,,,120 ml,Jarabe,PHARMETIQUELABS,Otros,MARCA,La Sante
+142741,LEVOCETIRIZINA,,Levocetirizina,5 MG,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante
+142748,ACETAMINOFEN,,Acetaminofén,150MG/5ML,120 ml,Jarabe,LA SANTE,Otros,GENERICO,La Sante
+142784,ANALPER FORTE PHARMETIQUE LABS,,,,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,OTC
+142785,ANALPER NAX PHARMETIQUE LABS,,,,10 unidades,Cápsulas,LA SANTE,Otros,GENERICO,OTC
+142905,DIOSMINA-HESPERIDINA,,Diosmina + Hesperidina,450 mg + 50 mg,10 unidades,Tabletas,LA SANTE,Otros,GENERICO,La Sante

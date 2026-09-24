@@ -8,7 +8,7 @@ import ModalWrapper from './ModalWrapper';
  * por qué. Aquí se ve el recuento, cada problema con su número de fila y su
  * motivo, y solo entonces se decide si continuar.
  */
-export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onCancelar, importando }) {
+export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onCancelar, importando, progreso = null }) {
   if (!informe) return null;
 
   const { errores, avisos, filasValidas, total } = informe;
@@ -34,7 +34,7 @@ export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onC
             className="m3-btn-primary h-10 px-5 text-label-lg disabled:opacity-38 disabled:cursor-not-allowed"
           >
             {importando
-              ? 'Importando...'
+              ? (progreso ? `Importando ${progreso.hechos} de ${progreso.total}…` : 'Importando…')
               : `Importar ${filasValidas.length} ${filasValidas.length === 1 ? 'fila' : 'filas'}`}
           </button>
         </>
