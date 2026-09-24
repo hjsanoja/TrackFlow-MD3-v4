@@ -558,6 +558,38 @@ export async function dbUpsertProductosBulk(prodsList, onProgreso = null) {
   return resultado;
 }
 
+// Nombres actuales de categorias y unidades de negocio, leidos en el momento
+// (sin la cache de useDimensiones, que no se entera si se dio de alta una
+// en Dimensiones hace un minuto). Sirven para avisar antes de importar.
+export async function dbNombresDimensionesCerradas() {
+  if (!isSupabaseActive()) return null;
+  const leer = async tabla => {
+    const { data, error } = await supabase.from(tabla).select('nombre');
+    if (error) throw error;
+    return (data || []).map(r => r.nombre).filter(Boolean);
+  };
+  const [categorias, unidadesNegocio] = await Promise.all([
+    leer('dim_categorias'),
+    leer('dim_unidades_negocio'),
+  ]);
+  return { categorias, unidadesNegocio };
+}
+
+// Alta o baja de varios productos en una sola peticion. Solo toca `activo`:
+// no reescribe la ficha ni el PVP como haria pasar por dbUpsertProducto.
+// `.select()` para saber cuantos cambiaron de verdad (un UPDATE bloqueado por
+// RLS responde sin error y sin filas).
+export async function dbCambiarActivoProductos(idsInternos, activo) {
+  if (!isSupabaseActive() || idsInternos.length === 0) return idsInternos.length;
+  const { data, error } = await supabase
+    .from('dim_productos')
+    .update({ activo })
+    .in('id_interno', idsInternos)
+    .select('id');
+  if (error) throw error;
+  return (data || []).length;
+}
+
 // Vacía una tabla completa reportando el resultado real.
 //
 // Dos trampas que hacían que estos borrados fallaran en silencio:
