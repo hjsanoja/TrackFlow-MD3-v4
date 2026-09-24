@@ -60,6 +60,48 @@ const filaCsvProducto = p => ({
   activo: p.activo === false ? 'no' : 'si',
 });
 
+// Filtro como chip con menu: ocupa el ancho de su texto y no cuatro grupos de
+// botones. Con un valor distinto de 'todos' se marca como activo (check).
+function FiltroChip({ etiqueta, icono, valor, onChange, opciones }) {
+  const activo = valor !== 'todos';
+  return (
+    <label className={`m3-filter-chip ${activo ? 'is-active' : ''}`}>
+      <span className="material-symbols-outlined" aria-hidden="true">{activo ? 'check' : icono}</span>
+      <select value={valor} onChange={e => onChange(e.target.value)} aria-label={etiqueta}>
+        {opciones.map(([v, texto]) => <option key={v} value={v}>{texto}</option>)}
+      </select>
+      <span className="material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
+    </label>
+  );
+}
+
+// "20 tabletas", "120 ml · Jarabe", "30 g · Crema". Antes salia "20 unidad"
+// mas una etiqueta "20u", y en los jarabes "120u", que se leia como 120
+// unidades. El volumen y el peso se dicen en ml y g; las unidades se nombran
+// con la forma farmaceutica cuando la hay.
+const NOMBRES_POR_FORMA = [
+  [/tableta/i, 'tableta', 'tabletas'],
+  [/c[aá]psula/i, 'cápsula', 'cápsulas'],
+  [/comprimido/i, 'comprimido', 'comprimidos'],
+  [/sobre/i, 'sobre', 'sobres'],
+  [/ampolla/i, 'ampolla', 'ampollas'],
+  [/[oó]vulo/i, 'óvulo', 'óvulos'],
+];
+
+function describirPresentacion(p) {
+  const forma = p.forma_farmaceutica || '';
+  const m = String(p.tamano || '').match(/^\s*([\d.,]+)\s*(ml|g|unidad(?:es)?)?/i);
+  if (!m) return forma || '—';
+  const n = Number(m[1].replace(',', '.'));
+  const cantidad = Number.isFinite(n) ? n.toLocaleString('es-VE') : m[1];
+  const unidad = (m[2] || 'unidad').toLowerCase();
+  if (unidad === 'ml' || unidad === 'g') return forma ? `${cantidad} ${unidad} · ${forma}` : `${cantidad} ${unidad}`;
+  const nombres = NOMBRES_POR_FORMA.find(([re]) => re.test(forma));
+  if (nombres) return `${cantidad} ${n === 1 ? nombres[1] : nombres[2]}`;
+  const texto = `${cantidad} ${n === 1 ? 'unidad' : 'unidades'}`;
+  return forma ? `${texto} · ${forma}` : texto;
+}
+
 export default function Productos() {
   const {
     productos,
@@ -138,6 +180,40 @@ export default function Productos() {
       );
     });
   }, [productos, search, filtroActivo, filtroUrls, filtroTipo, filtroUn, urlsPorProducto]);
+
+  const hayFiltros = filtroActivo !== 'todos' || filtroUrls !== 'todos' || filtroTipo !== 'todos' || filtroUn !== 'todos';
+  const limpiarFiltros = () => {
+    setFiltroActivo('todos');
+    setFiltroUrls('todos');
+    setFiltroTipo('todos');
+    setFiltroUn('todos');
+  };
+
+  // Las unidades de negocio salen del catalogo, no de una lista fija: una
+  // unidad nueva aparece sola en el filtro.
+  const unidadesDisponibles = useMemo(() => {
+    const vistas = new Map();
+    productos.forEach(p => {
+      const nombre = p.unidad_negocio || 'La Sante';
+      vistas.set(nombre.toLowerCase().replace(/\s/g, ''), nombre);
+    });
+    return [...vistas.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [productos]);
+
+  // "/" lleva al buscador, como en Gmail o GitHub.
+  const buscadorRef = useRef(null);
+  const menuMasRef = useRef(null);
+  useEffect(() => {
+    const alPulsar = (e) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return;
+      e.preventDefault();
+      buscadorRef.current?.focus();
+    };
+    window.addEventListener('keydown', alPulsar);
+    return () => window.removeEventListener('keydown', alPulsar);
+  }, []);
 
   const huerfanos = useMemo(() => {
     return productos.filter(p => p.activo && (urlsPorProducto.get(p.id_interno) || []).length === 0).length;
@@ -590,348 +666,254 @@ export default function Productos() {
             Gestiona el catálogo de medicamentos registrados y asocia sus enlaces de competencia.
           </p>
         </div>
-        <div className="flex gap-2.5 flex-wrap items-center">
-          <button
-            onClick={() => setConfirmDeleteAll(true)}
-            disabled={deletingAll || productos.length === 0}
-            className="m3-btn-danger-outline"
-            title="Eliminar todos los productos, enlaces de competencia e historial"
-          >
-            <span className="material-symbols-outlined text-base">delete_sweep</span>
-            <span>{deletingAll ? 'Vaciando...' : 'Vaciar Catálogo'}</span>
-          </button>
-          <button
-            onClick={handleExportarCatalogo}
-            className="m3-btn-outline"
-            title="Exportar vista actual a archivo CSV"
-          >
+        <div className="flex gap-2 flex-wrap lg:flex-nowrap items-center shrink-0">
+          <button onClick={handleExportarCatalogo} className="m3-btn-outline" title="Descargar en CSV lo que se ve en la tabla">
             <span className="material-symbols-outlined text-base">download</span>
-            <span>Exportar CSV</span>
+            <span>Exportar</span>
           </button>
-          <button
-            onClick={() => setShowCsvModal(true)}
-            className="m3-btn-outline"
-          >
+          <button onClick={() => setShowCsvModal(true)} className="m3-btn-outline" title="Crear o actualizar muchos productos con un CSV">
             <span className="material-symbols-outlined text-base">upload_file</span>
-            <span>Carga Masiva (CSV)</span>
+            <span>Carga masiva</span>
           </button>
-          <button
-            onClick={() => setEditing('new')}
-            className="m3-btn-primary"
-          >
+          <button onClick={() => setEditing('new')} className="m3-btn-primary">
             <span className="material-symbols-outlined text-base">add</span>
-            <span>Nuevo Producto</span>
+            <span>Nuevo producto</span>
           </button>
+          {/* Lo destructivo y poco frecuente va en un menu, no junto a las
+              acciones del dia a dia. */}
+          <details ref={menuMasRef} className="m3-menu">
+            <summary className="m3-icon-btn" title="Más acciones" aria-label="Más acciones">
+              <span className="material-symbols-outlined">more_vert</span>
+            </summary>
+            <div className="m3-menu-panel" role="menu">
+              <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
+                disabled={deletingAll || productos.length === 0}
+                onClick={() => { menuMasRef.current?.removeAttribute('open'); setConfirmDeleteAll(true); }}>
+                <span className="material-symbols-outlined">delete_sweep</span>
+                {deletingAll ? 'Vaciando…' : 'Vaciar catálogo'}
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
-      {huerfanos > 0 && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-5 py-3.5 rounded-2xl flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-xl text-amber-700">warning</span>
-            <span className="text-xs font-medium">
-              Hay <strong>{huerfanos} producto{huerfanos > 1 ? 's activos' : ' activo'} sin enlaces</strong> de competencia registrados para el scraper.
-            </span>
-          </div>
-          <button
-            onClick={() => setFiltroUrls('sin_urls')}
-            className="text-xs px-3.5 py-1.5 bg-surface-container-lowest border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-full font-bold shadow-xs transition-all"
-          >
-            Ver Cuáles
-          </button>
+      {huerfanos > 0 && filtroUrls !== 'sin_urls' && (
+        <div className="m3-banner" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">link_off</span>
+          <span className="m3-body-medium flex-1">
+            <strong>{huerfanos} {huerfanos === 1 ? 'producto activo no tiene' : 'productos activos no tienen'} enlaces</strong> de competencia: el scraper no los vigila.
+          </span>
+          <button type="button" onClick={() => setFiltroUrls('sin_urls')} className="m3-btn-text">Ver cuáles</button>
         </div>
       )}
 
-      {/* Structured Grid & Filters Area */}
-      <div className="neural-card p-4 space-y-3">
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between">
-          <div className="flex-1 w-full relative">
-            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
-            <input
-              type="text"
-              placeholder="Buscar por nombre, molécula, ID o laboratorio..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="m3-input m3-input-search pr-8"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>
-            )}
-          </div>
-          
-          <div className="flex gap-2 flex-wrap items-center">
-            <div className="m3-segmented">
-              <button onClick={() => setFiltroActivo('todos')}
-                className={`m3-segmented-item ${filtroActivo === 'todos' ? 'active' : ''}`}>TODOS</button>
-              <button onClick={() => setFiltroActivo('activos')}
-                className={`m3-segmented-item ${filtroActivo === 'activos' ? 'active' : ''}`}>ACTIVOS</button>
-              <button onClick={() => setFiltroActivo('inactivos')}
-                className={`m3-segmented-item ${filtroActivo === 'inactivos' ? 'active' : ''}`}>INACTIVOS</button>
+      {/* Tabla de datos: barra de herramientas + tabla + paginacion en una
+          sola superficie. Sin el efecto de "levantar" al pasar el raton: una
+          tabla que se mueve bajo el cursor cansa y descolocaba lo fijado. */}
+      <section className="m3-data-table" aria-label="Catálogo de productos">
+        {/* Barra superior contextual: con productos seleccionados muestra sus
+            acciones en el mismo sitio que la busqueda (patron de Gmail o
+            Drive), pegada arriba al desplazarse. */}
+        <div className="m3-data-table-toolbar">
+          {seleccion.size > 0 ? (
+            <div className="m3-selection-bar" role="toolbar" aria-label="Acciones sobre los productos seleccionados">
+              <button type="button" onClick={() => setSeleccion(new Set())} disabled={!!procesandoSel}
+                className="m3-icon-btn" title="Quitar selección" aria-label="Quitar selección">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+              <div className="flex flex-col min-w-0 mr-auto">
+                <span className="m3-title-medium">
+                  {procesandoSel
+                    ? `Procesando ${procesandoSel.hechos} de ${procesandoSel.total}…`
+                    : `${seleccion.size} ${seleccion.size === 1 ? 'seleccionado' : 'seleccionados'}`}
+                </span>
+                {!procesandoSel && !todosFiltradosSeleccionados && (
+                  <button type="button" onClick={alternarTodosFiltrados}
+                    className="self-start text-primary m3-label-medium hover:underline">
+                    Seleccionar los {filtrados.length} de esta lista
+                  </button>
+                )}
+              </div>
+              {!procesandoSel && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => cambiarActivoSeleccion(false)} className="m3-btn-primary h-10"
+                    title="Deja de mostrarse y de vigilarse. Conserva el historial.">
+                    <span className="material-symbols-outlined">archive</span>
+                    Dar de baja
+                  </button>
+                  <button type="button" onClick={() => cambiarActivoSeleccion(true)} className="m3-btn-text">
+                    <span className="material-symbols-outlined">unarchive</span>
+                    Reactivar
+                  </button>
+                  <button type="button" onClick={() => setConfirmBorrarSel(true)} className="m3-btn-text m3-btn-text-danger">
+                    <span className="material-symbols-outlined">delete</span>
+                    Eliminar
+                  </button>
+                </div>
+              )}
+              {procesandoSel && (
+                <div className="m3-linear-progress" aria-hidden="true">
+                  <div style={{ width: `${procesandoSel.total ? (procesandoSel.hechos / procesandoSel.total) * 100 : 0}%` }} />
+                </div>
+              )}
             </div>
-
-            <div className="m3-segmented">
-              <button onClick={() => setFiltroUrls('todos')}
-                className={`m3-segmented-item ${filtroUrls === 'todos' ? 'active' : ''}`}>TODOS</button>
-              <button onClick={() => setFiltroUrls('con_urls')}
-                className={`m3-segmented-item ${filtroUrls === 'con_urls' ? 'active' : ''}`}>CON ENLACES</button>
-              <button onClick={() => setFiltroUrls('sin_urls')}
-                className={`m3-segmented-item ${filtroUrls === 'sin_urls' ? 'active' : ''}`}>SIN ENLACES</button>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                <label className="m3-search-field">
+                  <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                  <input
+                    ref={buscadorRef}
+                    type="search"
+                    placeholder="Buscar por nombre, ID, molécula, código de barras o laboratorio"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    aria-label="Buscar productos"
+                  />
+                  {search ? (
+                    <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  ) : (
+                    <kbd className="m3-kbd" title="Pulsa / para buscar">/</kbd>
+                  )}
+                </label>
+                <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
+                  {filtrados.length === productos.length
+                    ? `${productos.length} productos`
+                    : `${filtrados.length} de ${productos.length} productos`}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
+                  opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
+                <FiltroChip etiqueta="Enlaces" icono="link" valor={filtroUrls} onChange={setFiltroUrls}
+                  opciones={[['todos', 'Enlaces: todos'], ['con_urls', 'Con enlaces'], ['sin_urls', 'Sin enlaces']]} />
+                <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
+                  opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
+                <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUn} onChange={setFiltroUn}
+                  opciones={[['todos', 'Unidad: todas'], ...unidadesDisponibles]} />
+                {hayFiltros && (
+                  <button type="button" onClick={limpiarFiltros} className="m3-btn-text">
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div className="m3-segmented">
-              <button onClick={() => setFiltroTipo('todos')}
-                className={`m3-segmented-item ${filtroTipo === 'todos' ? 'active' : ''}`}>TODOS TIPO</button>
-              <button onClick={() => setFiltroTipo('generico')}
-                className={`m3-segmented-item ${filtroTipo === 'generico' ? 'active' : ''}`}>GENÉRICOS</button>
-              <button onClick={() => setFiltroTipo('marca')}
-                className={`m3-segmented-item ${filtroTipo === 'marca' ? 'active' : ''}`}>MARCA</button>
-            </div>
-
-            <div className="m3-segmented">
-              <button onClick={() => setFiltroUn('todos')}
-                className={`m3-segmented-item ${filtroUn === 'todos' ? 'active' : ''}`}>TODAS UN</button>
-              <button onClick={() => setFiltroUn('lasante')}
-                className={`m3-segmented-item ${filtroUn === 'lasante' ? 'active' : ''}`}>LA SANTÉ</button>
-              <button onClick={() => setFiltroUn('pharmetique')}
-                className={`m3-segmented-item ${filtroUn === 'pharmetique' ? 'active' : ''}`}>PHARMETIQUE</button>
-              <button onClick={() => setFiltroUn('otc')}
-                className={`m3-segmented-item ${filtroUn === 'otc' ? 'active' : ''}`}>OTC</button>
-            </div>
-          </div>
+          )}
         </div>
-      </div>
 
-      {/* Main Table View */}
-      <div className="neural-card overflow-hidden">
         {loading ? (
-          <div className="overflow-x-auto animate-pulse">
-            <table className="m3-table">
-              <thead>
-                <tr>
-                  <th className="w-10"></th>
-                  <th>ID</th>
-                  <th>Nombre del Producto</th>
-                  <th>Presentación</th>
-                  <th>Tipo</th>
-                  <th>Laboratorio</th>
-                  <th>Categoría</th>
-                  <th className="text-center">Enlaces Activos</th>
-                  <th className="text-center">Estado</th>
-                  <th className="text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <tr key={n}>
-                    <td></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-16"></div></td>
-                    <td>
-                      <div className="h-4 bg-gray-200 rounded w-48 mb-1.5"></div>
-                      <div className="h-3 bg-gray-100 rounded w-32"></div>
-                    </td>
-                    <td><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-12"></div></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-28"></div></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                    <td className="text-center"><div className="h-4 bg-gray-200 rounded w-8 mx-auto"></div></td>
-                    <td><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
-                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-4 space-y-3" aria-busy="true">
+            {[1, 2, 3, 4, 5, 6].map(n => <div key={n} className="h-14 rounded-xl m3-skeleton" />)}
           </div>
         ) : filtrados.length === 0 ? (
           <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
-              <span className="material-symbols-outlined text-2xl">medication</span>
+            <div className="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center">
+              <span className="material-symbols-outlined text-2xl">{hayFiltros || search ? 'search_off' : 'medication'}</span>
             </div>
-            <div>
-              <div className="font-bold text-on-surface font-display text-base">No se encontraron productos</div>
-              <div className="text-xs text-on-surface-variant mt-0.5">
-                {search || filtroActivo !== 'todos' || filtroUrls !== 'todos' || filtroTipo !== 'todos' || filtroUn !== 'todos'
-                  ? 'Prueba ajustando los términos de búsqueda o los filtros activos.'
-                  : 'Aún no hay productos registrados. Sube un CSV o haz click en "+ Nuevo Producto".'}
-              </div>
+            <div className="m3-title-medium text-on-surface">No se encontraron productos</div>
+            <div className="m3-body-medium">
+              {hayFiltros || search
+                ? 'Prueba con otra búsqueda o quita algún filtro.'
+                : 'Aún no hay productos. Súbelos con Carga masiva o crea uno con Nuevo producto.'}
             </div>
-            {(search || filtroActivo !== 'todos' || filtroUrls !== 'todos' || filtroTipo !== 'todos' || filtroUn !== 'todos') && (
-              <button
-                onClick={() => {
-                  setSearch('');
-                  setFiltroActivo('todos');
-                  setFiltroUrls('todos');
-                  setFiltroTipo('todos');
-                  setFiltroUn('todos');
-                }}
-                className="m3-btn-outline h-8 px-4 text-xs mt-1"
-              >
-                Limpiar todos los filtros
+            {(hayFiltros || search) && (
+              <button type="button" onClick={() => { setSearch(''); limpiarFiltros(); }} className="m3-btn-tonal mt-1">
+                Quitar búsqueda y filtros
               </button>
             )}
           </div>
         ) : (
-          <>
-          {seleccion.size > 0 && (
-            <div role="toolbar" aria-label="Acciones sobre los productos seleccionados" className="m3-floating-toolbar">
-              {procesandoSel ? (
-                <div className="flex items-center gap-3 h-12 px-4 m3-label-large" aria-live="polite">
-                  <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
-                  Procesando {procesandoSel.hechos} de {procesandoSel.total}…
-                  <div className="m3-toolbar-progress"
-                    style={{ width: `${procesandoSel.total ? (procesandoSel.hechos / procesandoSel.total) * 100 : 0}%` }} />
-                </div>
-              ) : (
-                <>
-                  <button type="button" onClick={() => setSeleccion(new Set())}
-                    className="m3-toolbar-btn px-0 text-on-surface-variant"
-                    title="Quitar selección" aria-label="Quitar selección">
-                    <span className="material-symbols-outlined">close</span>
-                  </button>
-                  <div className="flex flex-col justify-center pr-2 min-w-0">
-                    <span className="m3-title-small whitespace-nowrap">
-                      {seleccion.size} {seleccion.size === 1 ? 'seleccionado' : 'seleccionados'}
-                    </span>
-                    {!todosFiltradosSeleccionados && (
-                      <button type="button" onClick={alternarTodosFiltrados}
-                        className="text-left text-primary m3-label-medium hover:underline whitespace-nowrap">
-                        Seleccionar los {filtrados.length}
-                      </button>
-                    )}
-                  </div>
-                  <span className="w-px h-8 bg-outline-variant mx-1 shrink-0" aria-hidden="true" />
-                  <button type="button" onClick={() => cambiarActivoSeleccion(false)}
-                    className="m3-toolbar-btn m3-toolbar-btn-tonal" title="Dar de baja: conserva el historial">
-                    <span className="material-symbols-outlined">archive</span>
-                    <span className="hidden sm:inline">Dar de baja</span>
-                  </button>
-                  <button type="button" onClick={() => cambiarActivoSeleccion(true)}
-                    className="m3-toolbar-btn text-primary" title="Reactivar">
-                    <span className="material-symbols-outlined">unarchive</span>
-                    <span className="hidden sm:inline">Reactivar</span>
-                  </button>
-                  <button type="button" onClick={() => setConfirmBorrarSel(true)}
-                    className="m3-toolbar-btn m3-toolbar-btn-danger" title="Eliminar con su historial">
-                    <span className="material-symbols-outlined">delete</span>
-                    <span className="hidden sm:inline">Eliminar</span>
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          <div className="overflow-x-auto max-h-[750px] relative">
-            <table className="m3-table">
+          <div className="overflow-x-auto">
+            <table className="m3-table m3-table-productos">
+              <colgroup>
+                <col className="w-12" />
+                <col />
+                <col className="w-[17%]" />
+                <col className="w-[12%]" />
+                <col className="w-[15%]" />
+                <col className="w-[88px]" />
+                <col className="w-[104px]" />
+                <col className="w-[136px]" />
+              </colgroup>
               <thead className="m3-sticky-header">
                 <tr>
-                  <th className="w-10">
+                  <th>
                     <input type="checkbox" checked={todosFiltradosSeleccionados} onChange={alternarTodosFiltrados}
                       disabled={!!procesandoSel}
-                      title={`Seleccionar los ${filtrados.length} productos filtrados (todas las páginas)`}
-                      aria-label="Seleccionar todos los productos filtrados" className="w-4 h-4 accent-primary cursor-pointer" />
+                      title={`Seleccionar los ${filtrados.length} productos de esta lista`}
+                      aria-label="Seleccionar todos los productos de esta lista" className="m3-checkbox" />
                   </th>
-                  <th>ID</th>
-                  <th>Nombre del Producto</th>
+                  <th>Producto</th>
                   <th>Presentación</th>
-                  <th>Tipo</th>
-                  <th>UN</th>
+                  <th>Línea</th>
                   <th>Laboratorio</th>
-                  <th>Categoría</th>
-                  <th className="text-center">Enlaces Activos</th>
-                  <th className="text-center">Estado</th>
-                  <th className="text-right">Acciones</th>
+                  <th className="text-center">Enlaces</th>
+                  <th>Estado</th>
+                  <th className="m3-sticky-actions"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-variant">
+              <tbody>
                 {productosPaginados.map(p => {
-                  const links = urlsPorProducto.get(p.id_interno) || [];
-                  const count = links.length;
+                  const enlaces = (urlsPorProducto.get(p.id_interno) || []).length;
+                  const seleccionado = seleccion.has(p.id);
                   return (
-                    <tr key={p.id} className={`hover:bg-surface-low transition-colors ${seleccion.has(p.id) ? 'm3-row-selected' : ''}`}>
+                    <tr key={p.id} className={seleccionado ? 'm3-row-selected' : ''}>
                       <td>
-                        <input type="checkbox" checked={seleccion.has(p.id)} onChange={() => alternarSeleccion(p.id)}
+                        <input type="checkbox" checked={seleccionado} onChange={() => alternarSeleccion(p.id)}
                           disabled={!!procesandoSel}
-                          aria-label={`Seleccionar ${p.nombre}`} className="w-4 h-4 accent-primary cursor-pointer" />
-                      </td>
-                      <td className="font-mono text-xs text-primary font-bold">{p.id_interno}</td>
-                      <td>
-                        <div className="font-bold text-on-surface text-sm font-display flex items-center gap-2 flex-wrap">
-                          <span>{p.nombre}</span>
-                          {p.codigo_barra && (
-                            <span className="text-label-md font-mono px-1.5 py-0.5 rounded bg-surface-low border border-outline-variant text-on-surface-variant font-medium shrink-0" title="Código de barras / EAN">
-                              EAN: {p.codigo_barra}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-on-surface-variant font-mono mt-0.5">{p.principio_activo || 'Sin molécula'}</div>
+                          aria-label={`Seleccionar ${p.nombre}`} className="m3-checkbox" />
                       </td>
                       <td>
-                        <div className="text-on-surface font-semibold">{p.concentracion || '—'}</div>
-                        <div className="text-xs text-on-surface-variant font-mono mt-0.5 flex items-center gap-1.5">
-                          <span>{p.tamano || '—'}</span>
-                          {parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis) > 1 && (
-                            <span className="px-1.5 py-0.2 text-label-sm bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold" title="Unidades/Tabletas por empaque para cálculo unidosis">
-                              {parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis)}u
-                            </span>
-                          )}
+                        <button type="button" onClick={() => setEditing(p.id)} className="m3-cell-link" title="Abrir la ficha del producto">
+                          <span className="m3-cell-primary">{p.nombre}</span>
+                        </button>
+                        <div className="m3-cell-secondary" title={`${p.id_interno} · ${p.principio_activo || 'sin molécula'}`}>
+                          <span className="font-mono">{p.id_interno}</span>
+                          {p.principio_activo ? <> · {p.principio_activo}</> : <> · <span className="italic">sin molécula</span></>}
                         </div>
-                        {p.forma_farmaceutica && (
-                          <div className="text-label-md text-on-surface-variant mt-0.5 m3-cell-clamp">{p.forma_farmaceutica}</div>
+                      </td>
+                      <td>
+                        <div className="m3-cell-primary">{p.concentracion || '—'}</div>
+                        <div className="m3-cell-secondary">{describirPresentacion(p)}</div>
+                      </td>
+                      <td>
+                        <div className="m3-cell-primary">{p.unidad_negocio || '—'}</div>
+                        <div className="m3-cell-secondary">{(p.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico'}</div>
+                      </td>
+                      <td>
+                        <div className="m3-cell-primary">{p.laboratorio || '—'}</div>
+                        <div className="m3-cell-secondary">{p.categoria || 'Sin categoría'}</div>
+                      </td>
+                      <td className="text-center">
+                        {enlaces === 0 ? (
+                          <span className="m3-count m3-count-warning" title="Sin enlaces: el scraper no vigila este producto">
+                            <span className="material-symbols-outlined" aria-hidden="true">link_off</span>0
+                          </span>
+                        ) : (
+                          <span className="m3-count" title={`${enlaces} enlaces de competencia`}>{enlaces}</span>
                         )}
                       </td>
                       <td>
-                        <span className={`px-2.5 py-0.5 text-label-sm rounded font-mono font-bold tracking-wider ${
-                          (p.market_type || 'GENERICO').toUpperCase() === 'MARCA'
-                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                            : 'bg-green-100 text-green-800 border border-green-200'
-                        }`}>
-                          {p.market_type || 'GENERICO'}
-                        </span>
+                        <span className={`m3-status ${p.activo ? 'is-on' : ''}`}>{p.activo ? 'Activo' : 'De baja'}</span>
                       </td>
-                      <td>
-                        <span className={`px-2 py-1 rounded text-xs font-mono font-bold border ${
-                          (p.unidad_negocio || 'La Sante') === 'OTC'
-                            ? 'bg-amber-100 text-amber-800 border-amber-200'
-                            : (p.unidad_negocio || 'La Sante') === 'Pharmetique'
-                            ? 'bg-blue-100 text-blue-800 border-blue-200'
-                            : 'bg-teal-100 text-teal-800 border-teal-200'
-                        }`}>
-                          {p.unidad_negocio || 'La Sante'}
-                        </span>
-                      </td>
-                      <td className="text-on-surface font-sans">{p.laboratorio || '—'}</td>
-                      <td>
-                        <span className="px-3 py-1 text-xs rounded-full bg-surface-low text-on-surface font-medium border border-outline-variant">
-                          {p.categoria || 'Otros'}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full font-mono text-xs font-bold ${
-                          count === 0
-                            ? 'bg-error-container text-error border border-error/20'
-                            : 'bg-primary-container text-on-primary-container border border-outline-variant/30'
-                        }`}>
-                          <span className="material-symbols-outlined text-sm leading-none">{count === 0 ? 'link_off' : 'link'}</span>
-                          {count === 0 ? 'Sin Enlaces' : `${count} Enlace${count > 1 ? 's' : ''}`}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <button onClick={() => handleToggleActivo(p)}
-                          className={`text-xs px-3 py-1 rounded-full font-mono font-bold uppercase tracking-wider transition-all ${
-                            p.activo ? 'bg-secondary/15 text-secondary border border-secondary/30' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
-                          }`}>
-                          {p.activo ? 'Activo' : 'Inactivo'}
-                        </button>
-                      </td>
-                      <td className="text-right whitespace-nowrap">
-                        <button onClick={() => setEditing(p.id)}
-                          className="text-xs text-primary hover:text-primary/85 font-bold mr-4 inline-flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">edit</span>
-                          Editar
-                        </button>
-                        <button onClick={() => handleDelete(p)}
-                          className="text-xs text-error hover:text-error/85 font-bold inline-flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                          Eliminar
-                        </button>
+                      <td className="m3-sticky-actions">
+                        <div className="flex justify-end gap-1">
+                          <button type="button" onClick={() => setEditing(p.id)} className="m3-icon-btn"
+                            title="Editar" aria-label={`Editar ${p.nombre}`}>
+                            <span className="material-symbols-outlined">edit</span>
+                          </button>
+                          <button type="button" onClick={() => handleToggleActivo(p)} className="m3-icon-btn"
+                            title={p.activo ? 'Dar de baja' : 'Reactivar'}
+                            aria-label={`${p.activo ? 'Dar de baja' : 'Reactivar'} ${p.nombre}`}>
+                            <span className="material-symbols-outlined">{p.activo ? 'archive' : 'unarchive'}</span>
+                          </button>
+                          <button type="button" onClick={() => handleDelete(p)} className="m3-icon-btn m3-icon-btn-danger"
+                            title="Eliminar" aria-label={`Eliminar ${p.nombre}`}>
+                            <span className="material-symbols-outlined">delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -939,44 +921,29 @@ export default function Productos() {
               </tbody>
             </table>
           </div>
-          </>
         )}
 
-        {/* Pagination Footer */}
         {filtrados.length > 0 && (
-          <div className="px-6 py-4 bg-surface-low border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-on-surface-variant font-mono">
-              Mostrando <span className="font-bold text-primary">{Math.min(filtrados.length, (paginaActual - 1) * itemsPorPagina + 1)}</span> - <span className="font-bold text-primary">{Math.min(filtrados.length, paginaActual * itemsPorPagina)}</span> de <span className="font-bold text-primary">{filtrados.length}</span> productos
-            </div>
+          <footer className="m3-data-table-footer">
+            <span className="m3-body-medium text-on-surface-variant">
+              {Math.min(filtrados.length, (paginaActual - 1) * itemsPorPagina + 1)}–{Math.min(filtrados.length, paginaActual * itemsPorPagina)} de {filtrados.length}
+            </span>
             {totalPaginas > 1 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                  disabled={paginaActual === 1}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-sm">chevron_left</span>
-                  Anterior
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setPaginaActual(p => Math.max(1, p - 1))} disabled={paginaActual === 1}
+                  className="m3-icon-btn" aria-label="Página anterior">
+                  <span className="material-symbols-outlined">chevron_left</span>
                 </button>
-                <span className="text-xs font-mono font-bold px-3 py-1 bg-surface-container-lowest border border-outline-variant rounded-lg text-primary">
-                  {paginaActual} / {totalPaginas}
-                </span>
-                <button
-                  onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
-                  disabled={paginaActual === totalPaginas}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-bold text-primary disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-all flex items-center gap-1"
-                >
-                  Siguiente
-                  <span className="material-symbols-outlined text-sm">chevron_right</span>
+                <span className="m3-label-large px-2">Página {paginaActual} de {totalPaginas}</span>
+                <button type="button" onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} disabled={paginaActual === totalPaginas}
+                  className="m3-icon-btn" aria-label="Página siguiente">
+                  <span className="material-symbols-outlined">chevron_right</span>
                 </button>
               </div>
             )}
-          </div>
+          </footer>
         )}
-      </div>
-
-      {/* Hueco para que la barra flotante no tape la paginacion. */}
-      {seleccion.size > 0 && <div className="h-24" aria-hidden="true" />}
+      </section>
 
       {/* Create/Edit Product Modal */}
       {editing && (
