@@ -10,6 +10,11 @@ un nombre.
    `full_price`.
 2. **Toda dimensión se describe con `nombre`.** No `titulo`, no `descripcion`,
    no `nombre_dci`. `descripcion` queda para el texto largo opcional.
+   En `dim_productos` el `nombre` es **solo la identidad comercial**: la dosis
+   vive en `producto_principios.concentracion_valor` y el empaque en
+   `cantidad_contenido`, así que meterlos en el nombre los duplica en pantalla
+   y además rompe la comparación contra el título de la tienda. `Bumetin`, no
+   `Bumetin 300mg x 10tab` (ver `fase15_catalogo_nombres.sql`).
 3. **Las llaves foráneas terminan en `_id`** y se llaman como la tabla a la que
    apuntan en singular: `laboratorio_id` → `dim_laboratorios.id`.
 4. **Sustantivo primero, calificador después:** `unidad_contenido`,

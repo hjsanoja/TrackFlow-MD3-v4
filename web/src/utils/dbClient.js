@@ -1,4 +1,5 @@
 import { supabase, isSupabaseActive } from '../supabase';
+import { parsearPrincipios, parsearContenido } from './parsearFicha';
 
 export { isSupabaseActive };
 
@@ -233,6 +234,63 @@ export async function guardarEnlaceCompetencia(item) {
 }
 
 // --- PRODUCTOS ---
+// Reemplaza la ficha tecnica de un producto: resuelve (o crea) cada molecula
+// en dim_principios_activos y reescribe sus filas en producto_principios.
+//
+// Se borra y se vuelve a insertar en vez de actualizar porque el numero de
+// moleculas puede cambiar (un producto simple que pasa a combinado) y porque
+// el esquema tiene un indice unico parcial que solo admite una fila con
+// es_principal por producto: un UPDATE parcial lo violaria a mitad de camino.
+async function guardarPrincipiosActivos(productoDbId, principioActivo, concentracion) {
+  const filas = parsearPrincipios(principioActivo, concentracion);
+
+  // Sin datos utiles no se toca lo que ya hubiera: un CSV sin la columna
+  // `concentracion` no debe borrar fichas cargadas antes.
+  if (filas.length === 0) return;
+
+  const conIds = [];
+  for (const fila of filas) {
+    const nombre = fila.nombre.trim();
+
+    const { data: existente } = await supabase
+      .from('dim_principios_activos')
+      .select('id')
+      .ilike('nombre', nombre)
+      .limit(1)
+      .maybeSingle();
+
+    let principioId = existente?.id ?? null;
+    if (principioId === null) {
+      const { data: nuevo, error } = await supabase
+        .from('dim_principios_activos')
+        .insert({ nombre })
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      principioId = nuevo?.id ?? null;
+    }
+
+    if (principioId !== null) {
+      conIds.push({
+        producto_id: productoDbId,
+        principio_activo_id: principioId,
+        concentracion_valor: fila.valor,
+        concentracion_unidad: fila.unidad,
+        por_cantidad: fila.porCantidad ?? 1,
+        por_unidad: fila.porUnidad ?? null,
+        es_principal: fila.esPrincipal
+      });
+    }
+  }
+
+  if (conIds.length === 0) return;
+
+  await supabase.from('producto_principios').delete().eq('producto_id', productoDbId);
+
+  const { error } = await supabase.from('producto_principios').insert(conIds);
+  if (error) throw error;
+}
+
 export async function dbUpsertProducto(data) {
   const targetId = (data.id_interno || data.id || '').trim();
   const cleanData = {
@@ -337,6 +395,11 @@ export async function dbUpsertProducto(data) {
       }
 
       // 2. Upsert en dim_productos
+      // El empaque sale del texto de `tamano` ("120 ml" es volumen, no 120
+      // tabletas). Antes se forzaba unidad_contenido a 'unidad' siempre, asi
+      // que los jarabes y las cremas quedaban mal medidos para el unidosis.
+      const contenido = parsearContenido(cleanData.tamano, cleanData.unidosis);
+
       const dimPayload = {
         id_interno: cleanData.id_interno,
         nombre: cleanData.nombre,
@@ -344,8 +407,8 @@ export async function dbUpsertProducto(data) {
         laboratorio_id: labId,
         categoria_id: catId,
         unidad_negocio_id: unId,
-        cantidad_contenido: cleanData.unidosis || 1,
-        unidad_contenido: 'unidad',
+        cantidad_contenido: contenido.cantidad,
+        unidad_contenido: contenido.unidad,
         activo: cleanData.activo
       };
 
@@ -354,6 +417,17 @@ export async function dbUpsertProducto(data) {
         .upsert(dimPayload, { onConflict: 'id_interno' })
         .select('id')
         .maybeSingle();
+
+      // 3. Ficha tecnica: molecula y dosis a producto_principios.
+      // Sin esto el panel no tiene de donde sacar la concentracion y la unica
+      // forma de verla vuelve a ser leerla dentro del nombre.
+      if (!dimErr && dimProd?.id) {
+        try {
+          await guardarPrincipiosActivos(dimProd.id, cleanData.principio_activo, cleanData.concentracion);
+        } catch (ePrin) {
+          console.warn('[Supabase] No se pudo guardar la ficha tecnica:', ePrin?.message || String(ePrin));
+        }
+      }
 
       if (!dimErr && dimProd?.id && cleanData.pvp_propio_usd > 0) {
         // Upsert en pvp_propio
