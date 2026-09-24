@@ -44,8 +44,9 @@ const TABLAS_CONFIG = {
     descripcion: 'Líneas comerciales y de negocio internas (La Santé, Pharmetique, OTC, etc.)',
     columnas: [
       { key: 'id', label: 'ID', type: 'number', readOnly: true },
-      { key: 'nombre', label: 'Nombre Unidad', type: 'text', required: true },
-      { key: 'codigo', label: 'Código / Siglas', type: 'text' }
+      // dim_unidades_negocio no tiene columna `codigo` (fase1_esquema.sql):
+      // el campo "Código / Siglas" hacia fallar todo guardado con PGRST204.
+      { key: 'nombre', label: 'Nombre Unidad', type: 'text', required: true }
     ],
     pk: 'id',
     dependencias: [
