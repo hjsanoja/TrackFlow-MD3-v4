@@ -1,6 +1,4 @@
 import { supabase, isSupabaseActive } from '../supabase';
-import { db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export async function getGitHubConfig() {
   let config = null;
@@ -18,16 +16,6 @@ export async function getGitHubConfig() {
   }
 
   // 2. Intentar desde Firestore
-  if (!config && db) {
-    try {
-      const secretSnap = await getDoc(doc(db, 'secrets', 'github_dispatch'));
-      if (secretSnap.exists()) {
-        config = secretSnap.data();
-      }
-    } catch (e) {
-      console.warn('Error leyendo secrets desde Firestore:', e);
-    }
-  }
 
   // 3. Fallback localStorage
   if (!config) {
@@ -65,13 +53,6 @@ export async function saveGitHubConfig(configData) {
   }
 
   // Guardar en Firestore
-  if (db) {
-    try {
-      await setDoc(doc(db, 'secrets', 'github_dispatch'), cleanConfig, { merge: true });
-    } catch (e) {
-      console.warn('Error guardando secret en Firestore:', e);
-    }
-  }
 
   return cleanConfig;
 }

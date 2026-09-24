@@ -1,6 +1,4 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '../firebase';
 import { supabase, isSupabaseActive } from '../supabase';
 
 const DataContext = createContext(null);
@@ -501,88 +499,12 @@ export function DataProvider({ children, user }) {
       }
     }
 
-    // Fallback Firebase
-    try {
-      if (!db) {
-        applyDefaultSeed();
-        return;
-      }
-
-      const [pSnap, pcSnap, cSnap, hSnap, rSnap, bSnap, uSnap] = await Promise.all([
-        getDocs(collection(db, 'productos')),
-        getDocs(collection(db, 'productos_competencia')),
-        getDocs(collection(db, 'cadenas')),
-        getDocs(query(collection(db, 'historico_precios'), orderBy('scraped_at', 'desc'), limit(1500))),
-        getDocs(query(collection(db, 'scrape_runs'), orderBy('started_at', 'desc'), limit(1))),
-        getDocs(query(collection(db, 'bcv_rates'), orderBy('updated_at', 'asc'))),
-        getDocs(collection(db, 'usuarios')),
-      ]);
-
-      if (pSnap.empty) {
-        applyDefaultSeed();
-        return;
-      }
-
-      const prods = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      prods.sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
-      setProductos(prods);
-
-      setProductosCompetencia(pcSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-      const cDocs = cSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      cDocs.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-      setCadenas(cDocs);
-
-      setHistoricoPrecios(
-        hSnap.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          scraped_at: d.data().scraped_at?.toDate?.() || null
-        }))
-      );
-
-      if (!rSnap.empty) {
-        const data = rSnap.docs[0].data();
-        setUltimaCorrida({ ...data, started_at: data.started_at?.toDate?.() || null });
-      }
-
-      const rawRates = bSnap.docs.map(d => {
-        const data = d.data();
-        const dateObj = data.updated_at?.toDate?.() || (data.updated_at ? new Date(data.updated_at) : new Date());
-        return {
-          dayKey: dateObj.toLocaleDateString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit' }),
-          fecha: dateObj.toLocaleDateString('es-VE', { month: 'short', day: 'numeric' }) || '—',
-          valor: Number(data.value || data.valor || 0),
-          source: data.source || 'oficial',
-          rawDate: dateObj
-        };
-      });
-
-      const ratesByDay = {};
-      rawRates.forEach(rate => {
-        const existing = ratesByDay[rate.dayKey];
-        if (!existing || rate.rawDate > existing.rawDate) {
-          ratesByDay[rate.dayKey] = rate;
-        }
-      });
-
-      const uniqueDaysRates = Object.values(ratesByDay)
-        .sort((a, b) => a.rawDate - b.rawDate);
-
-      setBcvRates(uniqueDaysRates.map(({ dayKey, fecha, valor, source, rawDate }) => ({ dayKey, fecha, valor, source, rawDate })));
-
-      const uDocs = uSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      uDocs.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-      setUsuarios(uDocs);
-
-      setIsLoadedOnce(true);
-    } catch (err) {
-      console.warn('Error cargando datos globales, aplicando datos semilla por defecto:', err?.message || String(err));
-      applyDefaultSeed();
-    } finally {
-      setLoadingInitial(false);
-      setIsRefreshing(false);
-    }
+    // Sin Supabase configurado no hay de dónde leer: estado vacío y listo.
+    // Antes aquí había un respaldo a Firestore, pero la migración a Supabase
+    // lo dejó apuntando a un proyecto que ya no existe.
+    applyDefaultSeed();
+    setLoadingInitial(false);
+    setIsRefreshing(false);
   }, [isLoadedOnce, applyDefaultSeed]);
 
   useEffect(() => {
@@ -603,14 +525,7 @@ export function DataProvider({ children, user }) {
           return;
         }
       }
-      if (!db) {
-        setProductos([]);
-        return;
-      }
-      const snap = await getDocs(collection(db, 'productos'));
-      const prods = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      prods.sort((a, b) => (a.id_interno || '').localeCompare(b.id_interno || ''));
-      setProductos(prods);
+      setProductos([]);
     } catch (e) {
       console.warn('Aviso actualizando productos:', e?.message || String(e));
     }
@@ -671,12 +586,7 @@ export function DataProvider({ children, user }) {
           return;
         }
       }
-      if (!db) {
-        setProductosCompetencia([]);
-        return;
-      }
-      const snap = await getDocs(collection(db, 'productos_competencia'));
-      setProductosCompetencia(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setProductosCompetencia([]);
     } catch (e) {
       console.warn('Aviso actualizando competencia:', e?.message || String(e));
     }
@@ -702,13 +612,6 @@ export function DataProvider({ children, user }) {
           return;
         }
       }
-      if (!db) return;
-      const snap = await getDocs(collection(db, 'cadenas'));
-      if (!snap.empty) {
-        const cDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        cDocs.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-        setCadenas(cDocs);
-      }
     } catch (e) {
       console.warn('Aviso actualizando cadenas:', e?.message || String(e));
     }
@@ -723,13 +626,6 @@ export function DataProvider({ children, user }) {
           setUsuarios(uDocs);
           return;
         }
-      }
-      if (!db) return;
-      const snap = await getDocs(collection(db, 'usuarios'));
-      if (!snap.empty) {
-        const uDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        uDocs.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-        setUsuarios(uDocs);
       }
     } catch (e) {
       console.warn('Aviso actualizando usuarios:', e?.message || String(e));

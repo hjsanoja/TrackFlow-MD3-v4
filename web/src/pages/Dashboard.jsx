@@ -1,6 +1,4 @@
 import { useEffect, useState, useMemo } from 'react';
-import { collection, query, orderBy, limit, doc, getDoc, getDocs, writeBatch, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useBcvRate } from '../hooks/useBcvRate';
 import ProductDetailModal from '../components/ProductDetailModal';
 import BcvDetailModal from '../components/BcvDetailModal';
@@ -130,38 +128,10 @@ export default function Dashboard({ user, userDoc }) {
     await refreshData(showSilently);
   };
 
-  // Listener en tiempo real para detectar cuándo termina el scraper
-  useEffect(() => {
-    if (!db) return;
-    let unsubscribe = () => {};
-    try {
-      const q = query(collection(db, 'scrape_runs'), orderBy('started_at', 'desc'), limit(1));
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-          const docData = snapshot.docs[0].data();
-          const runDate = docData.started_at?.toDate?.() || null;
-          setLocalUltimaCorrida({ ...docData, started_at: runDate });
-          
-          if (waitingForScraper && runDate && scraperTriggerTime && runDate >= scraperTriggerTime) {
-            setWaitingForScraper(false);
-            setScraperTriggerTime(null);
-            addToast(`¡Actualización completada! El robot ha terminado de extraer y analizar los últimos precios (${docData.ok} exitosos, ${docData.errores} errores).`, 'success');
-            cargarDatos(true); // Recargar los datos silenciosamente para actualizar la tabla
-          }
-        }
-      }, (err) => {
-        console.warn('Aviso en onSnapshot de scrape_runs (modo sin conexión / permisos):', err?.message || String(err));
-      });
-    } catch (err) {
-      console.warn('No se pudo suscribir a scrape_runs:', err?.message || String(err));
-    }
-
-    return () => {
-      try {
-        unsubscribe();
-      } catch (_) {}
-    };
-  }, [waitingForScraper, scraperTriggerTime]);
+  // Aquí había un listener en tiempo real de Firestore sobre scrape_runs para
+  // avisar cuándo terminaba el scraper. Firestore quedó fuera al migrar a
+  // Supabase; el estado de la última corrida llega ahora con la carga normal
+  // de datos (ultimaCorrida del contexto).
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -1060,8 +1030,6 @@ export default function Dashboard({ user, userDoc }) {
           iconBg="bg-secondary-container/50 border-secondary/20 text-secondary" 
         />
       </div>
-
-
 
       {/* Visual Analytics Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

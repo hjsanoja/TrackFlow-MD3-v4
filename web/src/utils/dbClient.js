@@ -1,6 +1,4 @@
 import { supabase, isSupabaseActive } from '../supabase';
-import { db } from '../firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, writeBatch, addDoc, query, where } from 'firebase/firestore';
 
 export { isSupabaseActive };
 
@@ -391,17 +389,7 @@ export async function dbUpsertProducto(data) {
     }
   }
 
-  if (db) {
-    try {
-      await setDoc(doc(db, 'productos', cleanData.id), cleanData, { merge: true });
-      ok = true;
-    } catch (e) {
-      console.warn('[Firestore] Error en upsertProducto:', e?.message || String(e));
-      if (!lastErr) lastErr = e;
-    }
-  }
-
-  if (!isSupabaseActive() && !db) {
+  if (!isSupabaseActive()) {
     ok = true; // Modo local / mock
   }
 
@@ -525,19 +513,6 @@ export async function dbDeleteProducto(id, linksCompetencia = []) {
     }
   }
 
-  if (db) {
-    try {
-      await deleteDoc(doc(db, 'productos', id));
-      if (linksCompetencia.length > 0) {
-        const batch = writeBatch(db);
-        linksCompetencia.forEach(l => batch.delete(doc(db, 'productos_competencia', l.id)));
-        await batch.commit();
-      }
-    } catch (e) {
-      console.warn('[Firestore] Error en deleteProducto:', e?.message || String(e));
-    }
-  }
-
   // Limpiar cache local de sesión para forzar render fresco
   try {
     sessionStorage.removeItem('trackflow_data_cache_v3');
@@ -573,24 +548,6 @@ export async function dbDeleteAllProductos() {
     } catch (e) {
       console.warn('[Supabase] Error en deleteAllProductos:', e?.message || String(e));
       anyError = e;
-    }
-  }
-
-  if (db) {
-    try {
-      const collections = ['productos', 'productos_competencia', 'historico_precios', 'scrape_runs'];
-      for (const colName of collections) {
-        const snap = await getDocs(collection(db, colName));
-        const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += 500) {
-          const chunk = docs.slice(i, i + 500);
-          const batch = writeBatch(db);
-          chunk.forEach(d => batch.delete(d.ref));
-          await batch.commit();
-        }
-      }
-    } catch (e) {
-      console.warn('[Firestore] Aviso en deleteAllProductos (Firestore omitido):', e?.message || String(e));
     }
   }
 
@@ -658,17 +615,7 @@ export async function dbUpsertProductoCompetencia(data) {
     }
   }
 
-  if (db) {
-    try {
-      await setDoc(doc(db, 'productos_competencia', cleanData.id), cleanData, { merge: true });
-      ok = true;
-    } catch (e) {
-      console.warn('[Firestore] Error en upsertProductoCompetencia:', e?.message || String(e));
-      if (!lastErr) lastErr = e;
-    }
-  }
-
-  if (!isSupabaseActive() && !db) {
+  if (!isSupabaseActive()) {
     ok = true;
   }
 
@@ -743,20 +690,6 @@ export async function dbUpsertCompetenciaBulk(compList) {
     }
   }
 
-  if (db) {
-    for (let i = 0; i < cleanList.length; i += 500) {
-      const chunk = cleanList.slice(i, i + 500);
-      try {
-        const batch = writeBatch(db);
-        chunk.forEach(c => {
-          batch.set(doc(db, 'productos_competencia', c.id), c, { merge: true });
-        });
-        await batch.commit();
-      } catch (e) {
-        console.warn('[Firestore] Error en dbUpsertCompetenciaBulk chunk:', e?.message || String(e));
-      }
-    }
-  }
 }
 
 // Acepta el enlace completo (recomendado) o solo su id, por compatibilidad.
@@ -849,26 +782,6 @@ export async function dbDeleteAllProductosCompetencia() {
     }
   }
 
-  if (db) {
-    try {
-      const collections = ['productos_competencia', 'historico_precios', 'scrape_runs'];
-      for (const colName of collections) {
-        try {
-          const snap = await getDocs(collection(db, colName));
-          const docs = snap.docs;
-          for (let i = 0; i < docs.length; i += 500) {
-            const chunk = docs.slice(i, i + 500);
-            const batch = writeBatch(db);
-            chunk.forEach(d => batch.delete(d.ref));
-            await batch.commit();
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      console.warn('[Firestore] Aviso en deleteAllProductosCompetencia:', e?.message || String(e));
-    }
-  }
-
   try {
     sessionStorage.removeItem('trackflow_data_cache_v3');
   } catch (_) {}
@@ -889,27 +802,6 @@ export async function dbClearAllHistoricoPrecios() {
     }
   }
 
-  if (db) {
-    try {
-      const collections = ['historico_precios', 'scrape_runs'];
-      for (const colName of collections) {
-        try {
-          const snap = await getDocs(collection(db, colName));
-          const docs = snap.docs;
-          for (let i = 0; i < docs.length; i += 500) {
-            const chunk = docs.slice(i, i + 500);
-            const batch = writeBatch(db);
-            chunk.forEach(d => batch.delete(d.ref));
-            await batch.commit();
-          }
-        } catch (innerErr) {
-          console.warn(`[Firestore] Permiso o error al vaciar colección ${colName}:`, innerErr?.message || String(innerErr));
-        }
-      }
-    } catch (e) {
-      console.warn('[Firestore] Aviso en dbClearAllHistoricoPrecios:', e?.message || String(e));
-    }
-  }
 }
 
 export async function dbClearHistoricoPrecioForProduct(id_producto_propio) {
@@ -923,24 +815,6 @@ export async function dbClearHistoricoPrecioForProduct(id_producto_propio) {
     }
   }
 
-  if (db) {
-    try {
-      const q = query(
-        collection(db, 'historico_precios'),
-        where('id_producto_propio', '==', id_producto_propio)
-      );
-      const snap = await getDocs(q);
-      const docs = snap.docs;
-      for (let i = 0; i < docs.length; i += 500) {
-        const chunk = docs.slice(i, i + 500);
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-    } catch (e) {
-      console.warn('[Firestore] Permiso o aviso en dbClearHistoricoPrecioForProduct:', e?.message || String(e));
-    }
-  }
 }
 
 // --- HISTORICO PRECIOS ---
@@ -966,24 +840,6 @@ export async function dbAddHistoricoPrecio(data) {
     }
   }
 
-  if (db) {
-    try {
-      await addDoc(collection(db, 'historico_precios'), {
-        prod_comp_id: data.prod_comp_id,
-        id_producto_propio: data.id_producto_propio || '',
-        cadena: data.cadena || '',
-        marca: data.marca || '',
-        nombre: data.nombre || data.marca || '',
-        precio_full_bs: data.precio_full_bs,
-        precio_desc_bs: data.precio_desc_bs || null,
-        tiene_descuento: Boolean(data.tiene_descuento),
-        scraped_at: data.scraped_at instanceof Date ? data.scraped_at : new Date(isoDate),
-        run_id: data.run_id || `run_${Date.now()}`
-      });
-    } catch (e) {
-      console.warn('[Firestore] Error insertando historico_precios:', e?.message || String(e));
-    }
-  }
 }
 
 // --- SCRAPE RUNS ---
@@ -1006,21 +862,6 @@ export async function dbAddScrapeRun(data) {
     }
   }
 
-  if (db) {
-    try {
-      await setDoc(doc(db, 'scrape_runs', data.run_id), {
-        run_id: data.run_id,
-        started_at: data.started_at instanceof Date ? data.started_at : new Date(isoDate),
-        total: data.total || 0,
-        ok: data.ok || 0,
-        errores: data.errores || 0,
-        status: data.status || 'exitosa',
-        trigger: data.trigger || 'manual_app'
-      });
-    } catch (e) {
-      console.warn('[Firestore] Error insertando scrape_runs:', e?.message || String(e));
-    }
-  }
 }
 
 // --- CADENAS ---
@@ -1033,13 +874,6 @@ export async function dbUpsertCadena(data) {
     }
   }
 
-  if (db) {
-    try {
-      await setDoc(doc(db, 'cadenas', data.id), data, { merge: true });
-    } catch (e) {
-      console.warn('[Firestore] Error upsertCadena:', e?.message || String(e));
-    }
-  }
 }
 
 export async function dbDeleteCadena(id) {
@@ -1051,13 +885,6 @@ export async function dbDeleteCadena(id) {
     }
   }
 
-  if (db) {
-    try {
-      await deleteDoc(doc(db, 'cadenas', id));
-    } catch (e) {
-      console.warn('[Firestore] Error deleteCadena:', e?.message || String(e));
-    }
-  }
 }
 
 // --- USUARIOS ---
@@ -1070,13 +897,6 @@ export async function dbUpsertUsuario(data) {
     }
   }
 
-  if (db) {
-    try {
-      await setDoc(doc(db, 'usuarios', data.id), data, { merge: true });
-    } catch (e) {
-      console.warn('[Firestore] Error upsertUsuario:', e?.message || String(e));
-    }
-  }
 }
 
 export async function dbDeleteUsuario(id) {
@@ -1088,11 +908,4 @@ export async function dbDeleteUsuario(id) {
     }
   }
 
-  if (db) {
-    try {
-      await deleteDoc(doc(db, 'usuarios', id));
-    } catch (e) {
-      console.warn('[Firestore] Error deleteUsuario:', e?.message || String(e));
-    }
-  }
 }

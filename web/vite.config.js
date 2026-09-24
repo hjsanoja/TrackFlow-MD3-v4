@@ -189,7 +189,6 @@ export default defineConfig({
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],
           charts: ['recharts'],
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           supabase: ['@supabase/supabase-js']
         }
       }
