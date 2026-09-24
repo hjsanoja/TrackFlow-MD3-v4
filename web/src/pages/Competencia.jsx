@@ -1,7 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
-import { db } from '../firebase';
 import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
@@ -326,12 +324,6 @@ export default function Competencia({ user, userDoc }) {
               .maybeSingle();
             if (!error && data) {
               updatedItem = data;
-            }
-          }
-          if (!updatedItem && db) {
-            const docSnap = await getDoc(doc(db, 'productos_competencia', item.id));
-            if (docSnap.exists()) {
-              updatedItem = { id: docSnap.id, ...docSnap.data() };
             }
           }
 

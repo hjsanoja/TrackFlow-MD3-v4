@@ -1,7 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { db } from '../firebase';
 import ConfirmModal from './ConfirmModal';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { useData } from '../context/DataContext';
@@ -264,21 +262,6 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           console.warn('Supabase historico fetch warning:', e?.message || String(e));
         }
 
-        if (docs.length === 0 && db) {
-          try {
-            const q = query(
-              collection(db, 'historico_precios'),
-              where('id_producto_propio', '==', activeProduct.id_interno)
-            );
-            const snap = await getDocs(q);
-            docs = snap.docs.map(d => ({
-              ...d.data(),
-              scraped_at: d.data().scraped_at?.toDate?.() || null,
-            }));
-          } catch (err) {
-            console.warn('Firestore historico fetch warning (insufficient permissions or missing collection):', err?.message || String(err));
-          }
-        }
       }
 
       docs.sort((a, b) => {

@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
 import { supabase, isSupabaseActive } from '../supabase';
 import { supabaseInsertSafe } from '../utils/dbClient';
 
@@ -56,19 +54,7 @@ export function useBcvRate() {
 
   const loadFromFirestore = async () => {
     try {
-      if (!db) return null;
-      const q = query(collection(db, 'bcv_rates'), orderBy('updated_at', 'desc'), limit(1));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
-        const val = Number(data.value);
-        if (!isNaN(val) && val > 0) {
-          setRate(val);
-          setSource(data.source || 'oficial');
-          setUpdatedAt(data.updated_at?.toDate?.() || new Date());
-          return data;
-        }
-      }
+
       return null;
     } catch (err) {
       console.warn('[useBcvRate] aviso leyendo Firestore:', err?.message || String(err));
@@ -138,12 +124,6 @@ export function useBcvRate() {
             tasa: auto,
             fuente: 'BCV'
           }, { onConflict: 'fecha' }).then(() => {}).catch(() => {});
-        } else if (db) {
-          addDoc(collection(db, 'bcv_rates'), {
-            value: auto,
-            source: 'auto',
-            updated_at: serverTimestamp(),
-          }).catch(() => {});
         }
       }
     } catch (err) {
@@ -177,12 +157,6 @@ export function useBcvRate() {
             fuente: 'manual'
           }, { onConflict: 'fecha' })
         ]);
-      } else if (db) {
-        await addDoc(collection(db, 'bcv_rates'), {
-          value: num,
-          source: 'manual',
-          updated_at: serverTimestamp(),
-        });
       }
       return true;
     } catch (err) {
@@ -197,5 +171,4 @@ export function useBcvRate() {
 
   return { rate, source, updatedAt, loading, error, refresh, setManual };
 }
-
 
