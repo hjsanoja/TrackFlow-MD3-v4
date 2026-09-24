@@ -27,7 +27,9 @@ export const ESQUEMAS = {
       { campo: 'unidad_negocio', etiqueta: 'Unidad de Negocio', obligatorio: false, alias: ['un'] },
       { campo: 'pvp_propio_usd', etiqueta: 'PVP Propio (USD)', obligatorio: false,
         alias: ['pvp', 'pvp_usd', 'precio_usd'], tipo: 'numero' },
-      { campo: 'activo', etiqueta: 'Activo', obligatorio: false, tipo: 'booleano' },
+      // exacto: getRowValue acepta subcadenas y 'activo' encajaria con
+      // 'principio_activo'.
+      { campo: 'activo', etiqueta: 'Activo', obligatorio: false, tipo: 'booleano', exacto: true },
     ],
   },
   competencia: {
@@ -114,7 +116,9 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
     let filaOk = true;
 
     for (const col of esquema.columnas) {
-      const valor = getRowValue(fila, col.campo, ...(col.alias || [])).trim();
+      const valor = col.exacto
+        ? String(fila[Object.keys(fila).find(k => k.trim().toLowerCase() === col.campo)] ?? '').trim()
+        : getRowValue(fila, col.campo, ...(col.alias || [])).trim();
 
       if (col.obligatorio && !valor) {
         errores.push({ fila: numero, campo: col.etiqueta, mensaje: 'Campo obligatorio vacío' });
@@ -187,6 +191,18 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
         } else {
           clavesVistas.set(id, numero);
         }
+      }
+
+      // Sin molecula la dosis no tiene donde guardarse (producto_principios
+      // la necesita), y el nombre limpio de v_csv_productos ya no la lleva:
+      // se perderia del todo.
+      const molecula = getRowValue(fila, 'principio_activo', 'molecula', 'molécula').trim();
+      const dosis = getRowValue(fila, 'concentracion', 'dosis').trim();
+      if (dosis && !molecula) {
+        avisos.push({
+          fila: numero, campo: 'Principio Activo',
+          mensaje: `Trae concentración (${dosis}) pero no principio activo: la dosis no se guardará.`,
+        });
       }
     }
 
