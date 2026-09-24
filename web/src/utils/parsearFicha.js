@@ -108,7 +108,9 @@ export function parsearContenido(tamano, unidosis) {
   }
 
   // "10 tabletas", "x 12 cápsulas", o el numero que ya venia calculado.
-  const mUnidades = texto.match(/([\d.,]+)\s*(tab|tabletas?|c[aá]p(?:sulas?)?|comp(?:rimidos?)?|amp(?:ollas?)?|sobres?|unidades?|u)\b/i);
+  // "10 unidad" en singular es como lo exporta v_csv_productos cuando toma
+  // el empaque guardado; antes no encajaba y el producto quedaba en 1.
+  const mUnidades = texto.match(/([\d.,]+)\s*(tab|tabletas?|c[aá]p(?:sulas?)?|comp(?:rimidos?)?|amp(?:ollas?)?|sobres?|unidad(?:es)?|u)\b/i);
   const porTexto = mUnidades ? aNumero(mUnidades[1]) : null;
   const porCampo = aNumero(unidosis);
   const cantidad = porTexto ?? porCampo;
