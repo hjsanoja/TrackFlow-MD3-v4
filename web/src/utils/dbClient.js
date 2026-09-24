@@ -472,12 +472,23 @@ export async function dbUpsertProducto(data, cache = null) {
       if (data.activo !== undefined && data.activo !== null) {
         dimPayload.activo = cleanData.activo;
       }
+      // Igual que activo: si no viene (CSV sin la columna) se conserva.
+      if (data.market_type) {
+        dimPayload.tipo_mercado = String(data.market_type).toUpperCase().includes('MARCA') ? 'MARCA' : 'GENERICO';
+      }
 
-      const { data: dimProd, error: dimErr } = await supabase
+      const upsertDim = payload => supabase
         .from('dim_productos')
-        .upsert(dimPayload, { onConflict: 'id_interno' })
+        .upsert(payload, { onConflict: 'id_interno' })
         .select('id')
         .maybeSingle();
+
+      let { data: dimProd, error: dimErr } = await upsertDim(dimPayload);
+      // Sin la fase 18 la columna no existe: se guarda todo lo demas.
+      if (dimErr && 'tipo_mercado' in dimPayload && /tipo_mercado/.test(dimErr.message || '')) {
+        const { tipo_mercado: _omitido, ...sinTipo } = dimPayload;
+        ({ data: dimProd, error: dimErr } = await upsertDim(sinTipo));
+      }
 
       // 3. Ficha tecnica: molecula y dosis a producto_principios.
       // Sin esto el panel no tiene de donde sacar la concentracion y la unica

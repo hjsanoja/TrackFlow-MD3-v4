@@ -182,14 +182,15 @@ function formatearConcentracion(filas) {
 async function fetchDimProductos() {
   if (!isSupabaseActive() || !supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from('dim_productos')
-      .select(`
+    // tipo_mercado lo crea fase18_tipo_mercado.sql. Si todavia no se corrio,
+    // pedirlo haria fallar la consulta entera y el catalogo saldria vacio:
+    // se reintenta sin esa columna y se calcula como antes.
+    const columnas = (conTipo) => `
         id,
         id_interno,
         codigo_barra,
         nombre,
-        activo,
+        activo,${conTipo ? '\n        tipo_mercado,' : ''}
         cantidad_contenido,
         unidad_contenido,
         laboratorio_id,
@@ -206,7 +207,11 @@ async function fetchDimProductos() {
           dim_principios_activos ( nombre )
         ),
         pvp_propio ( pvp_usd, vigente_desde, vigente_hasta )
-      `);
+      `;
+    let { data, error } = await supabase.from('dim_productos').select(columnas(true));
+    if (error && /tipo_mercado/.test(error.message || '')) {
+      ({ data, error } = await supabase.from('dim_productos').select(columnas(false)));
+    }
 
     if (!error && Array.isArray(data) && data.length > 0) {
       // Desde la Fase 2, dim_productos contiene TAMBIÉN los productos de la
@@ -251,7 +256,8 @@ async function fetchDimProductos() {
           unidosis: d.cantidad_contenido ? Number(d.cantidad_contenido) : null,
           pvp_propio_usd: pvpUsd,
           activo: d.activo !== false,
-          market_type: (unNombre.toLowerCase().includes('pharmetique') || labNombre.toLowerCase().includes('pharmetique')) ? 'MARCA' : 'GENERICO'
+          market_type: d.tipo_mercado
+            || ((unNombre.toLowerCase().includes('pharmetique') || labNombre.toLowerCase().includes('pharmetique')) ? 'MARCA' : 'GENERICO')
         };
       });
     }
