@@ -133,6 +133,7 @@ export default function Productos() {
         codigo_barra: (data.codigo_barra || '').trim(),
         principio_activo: (data.principio_activo || '').trim(),
         concentracion: (data.concentracion || '').trim(),
+        forma_farmaceutica: (data.forma_farmaceutica || '').trim(),
         tamano: (data.tamano || '').trim(),
         laboratorio: (data.laboratorio || '').trim() || 'La Sante',
         categoria: data.categoria || 'Otros',
@@ -278,6 +279,7 @@ export default function Productos() {
           const principio_activo = getRowValue(row, 'principio_activo', 'Principio Activo', 'molecula', 'molécula', 'Molecula', 'sustancia_activa');
           const concentracion = getRowValue(row, 'concentracion', 'Concentración', 'Concentracion', 'dosis', 'concentracion_mg', 'conc');
           const tamano = getRowValue(row, 'tamano', 'Tamaño', 'Tamano', 'tamano_empaque', 'presentacion', 'Presentación', 'Presentacion', 'empaque');
+          const forma_farmaceutica = getRowValue(row, 'forma_farmaceutica', 'Forma Farmacéutica', 'Forma Farmaceutica', 'forma', 'Forma');
           const laboratorio = getRowValue(row, 'laboratorio', 'Laboratorio', 'lab', 'Lab', 'fabricante');
           const catRaw = getRowValue(row, 'categoria', 'Categoría', 'Categoria', 'linea', 'grupo');
           const categoria = CATEGORIAS.includes(catRaw) ? catRaw : 'Otros';
@@ -311,6 +313,7 @@ export default function Productos() {
             codigo_barra,
             principio_activo,
             concentracion,
+            forma_farmaceutica,
             tamano,
             presentacion,
             laboratorio: laboratorio || 'La Sante',
@@ -420,7 +423,7 @@ export default function Productos() {
   };
 
   const downloadCsvPlantilla = () => {
-    const headers = ['id_interno', 'nombre', 'codigo_barra', 'principio_activo', 'concentracion', 'tamano', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio'].join(',') + '\n';
+    const headers = ['id_interno', 'nombre', 'codigo_barra', 'principio_activo', 'concentracion', 'tamano', 'forma_farmaceutica', 'laboratorio', 'categoria', 'market_type', 'unidad_negocio'].join(',') + '\n';
 
     let content = '\ufeff' + headers; // UTF-8 BOM for Excel compatibility
 
@@ -433,6 +436,7 @@ export default function Productos() {
           p.principio_activo || '',
           p.concentracion || '',
           p.tamano || '',
+          p.forma_farmaceutica || '',
           p.laboratorio || '',
           p.categoria || '',
           p.market_type || 'GENERICO',
@@ -474,6 +478,7 @@ export default function Productos() {
       { label: 'Principio Activo', key: 'principio_activo' },
       { label: 'Concentración', key: 'concentracion' },
       { label: 'Presentación/Tamaño', key: 'tamano_empaque' },
+      { label: 'Forma Farmacéutica', key: 'forma_farmaceutica' },
       { label: 'Tipo', key: 'market_type' },
       { label: 'Unidad de Negocio', key: 'unidad_negocio' },
       { label: 'Laboratorio', key: 'laboratorio' },
@@ -731,6 +736,9 @@ export default function Productos() {
                             </span>
                           )}
                         </div>
+                        {p.forma_farmaceutica && (
+                          <div className="text-label-md text-on-surface-variant mt-0.5 m3-cell-clamp">{p.forma_farmaceutica}</div>
+                        )}
                       </td>
                       <td>
                         <span className={`px-2.5 py-0.5 text-label-sm rounded font-mono font-bold tracking-wider ${
@@ -905,7 +913,7 @@ export default function Productos() {
               <div>nombre <span className="text-on-surface-variant font-sans font-medium">(Obligatorio)</span></div>
               <div>codigo_barra <span className="text-on-surface-variant font-sans font-medium">(Opcional / EAN / GTIN)</span></div>
               <div>principio_activo <span className="text-on-surface-variant font-sans font-medium">(Molécula)</span></div>
-              <div>concentracion, tamano, laboratorio, categoria</div>
+              <div>concentracion, tamano, forma_farmaceutica, laboratorio, categoria</div>
               <div>market_type, unidad_negocio</div>
             </div>
             <div className="flex justify-between items-center pt-1">
@@ -1007,6 +1015,7 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
     principio_activo: producto?.principio_activo || '',
     concentracion: producto?.concentracion || '',
     tamano: producto?.tamano || '',
+    forma_farmaceutica: producto?.forma_farmaceutica || '',
     unidosis: producto?.unidosis || '',
     presentacion: producto?.presentacion || '',
     categoria: producto?.categoria || '',
@@ -1110,6 +1119,16 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
               onChange={e => handleChange('tamano', e.target.value)}
               placeholder="10 tabletas"
               className="m3-input" />
+          </Field>
+
+          <Field label="Forma Farmacéutica" hint="Ej: Tabletas, Jarabe">
+            <input type="text" list="dim-formas" value={form.forma_farmaceutica}
+              onChange={e => handleChange('forma_farmaceutica', e.target.value)}
+              placeholder="Tabletas"
+              className="m3-input" />
+            <datalist id="dim-formas">
+              {dimensiones.formasFarmaceuticas.map(n => <option key={n} value={n} />)}
+            </datalist>
           </Field>
         </div>
 
