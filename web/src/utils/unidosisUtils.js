@@ -21,7 +21,7 @@ export function parseUnidosisCount(tamanoStr = '', nombreStr = '', explicitCount
   }
 
   // 1. Look for count followed by DISCRETE unit words ONLY (strictly excluding volume/weight like ml, g, gr, mg, mcg, %)
-  const matchUnit = str.match(/(\d+)\s*(?:tab|tabletas?|caps?|capsulas?|comprimidos?|comp|sobres?|ampollas?|amps?|viales?|unid|unidades|grageas?|pildoras?|supositorios?)\b/i);
+  const matchUnit = str.match(/(\d+)\s*(?:tab|tabletas?|caps?|capsulas?|comprimidos?|comp|sobres?|ampollas?|amps?|viales?|unid|unidad(?:es)?|grageas?|pildoras?|supositorios?)\b/i);
   if (matchUnit && Number(matchUnit[1]) > 0) {
     return Number(matchUnit[1]);
   }
