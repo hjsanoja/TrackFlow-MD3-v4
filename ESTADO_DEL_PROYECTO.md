@@ -115,23 +115,38 @@ el empaque siguen fuera.
 
 ### Dónde está eso ahora
 
-Arreglado y fusionado (PR #18): el guardado escribe `producto_principios`, la
-lectura lo pide, `parsearFicha.js` convierte el texto libre en filas atómicas,
-y el PVP ya no se descarta en silencio al reimportar.
+Todo el código está fusionado en `main` (PR #18, #19 y #20). El guardado
+escribe `producto_principios` y `forma_farmaceutica_id`, la lectura los pide,
+`parsearFicha.js` convierte el texto libre en filas atómicas, y el PVP ya no
+se descarta en silencio al reimportar.
 
-Pendiente de fusionar: **PR #19** (fase 16) y **PR #20** (fase 17).
+### ⏭️ EL SIGUIENTE PASO, Y ESTÁ SIN HACER
 
-**El siguiente paso concreto** es que Hernando fusione esas dos, corra los dos
-SQL y haga la recarga del catálogo:
+**Falta correr `fase16_limpieza_catalogo.sql` y `fase17_forma_farmaceutica.sql`
+en el SQL Editor de Supabase, en ese orden.** Ninguno cambia datos: solo crean
+funciones y vistas. Hasta que se corran, `v_csv_productos` no existe en la base
+y la recarga del catálogo no se puede hacer.
 
-1. `SELECT * FROM v_csv_productos WHERE zz_revisar IS NOT NULL;` — revisar lo
-   dudoso (eran 17 filas de ~215, y la fase 17 debería bajarlas a ~10).
-2. Descargar el CSV sin las columnas `zz_*`.
+Después, la recarga:
+
+1. `SELECT id_interno, zz_nombre_original, nombre, concentracion,
+   forma_farmaceutica, tamano, zz_empaque_guardado, zz_revisar
+   FROM v_csv_productos WHERE zz_revisar IS NOT NULL;`
+   Revisar lo dudoso. Con la fase 16 eran 17 filas de ~215; la fase 17 lee las
+   abreviaturas `CJAX30` y `FCOX15ML`, así que deberían bajar a unas 10.
+2. Descargar el CSV, sin las columnas `zz_*`:
+   `SELECT id_interno, nombre, codigo_barra, principio_activo, concentracion,
+   tamano, forma_farmaceutica, laboratorio, categoria, market_type,
+   unidad_negocio FROM v_csv_productos;`
 3. Rellenar `principio_activo`, que sale vacía a propósito: de `ESOZ` no se
    puede deducir "Esomeprazol" sin inventar.
 4. Subirlo por **Productos → Importar CSV**.
 5. `SELECT count(*) FROM v_productos_sin_ficha WHERE es_propio;` debería bajar
    de ~200 a casi cero.
+
+Un dato a confirmar en el paso 1: `CIPROFLOXACINA 500 MG TAB CJAX10 VEN` dice
+10 en el nombre y tiene 12 guardados. La vista lo marca como `el nombre y lo
+guardado no coinciden: gana el nombre`.
 
 **Recargar no pierde historial**: el alta es un upsert por `id_interno` y no
 toca `publicaciones` ni `fact_precios`. La plantilla tampoco lleva columna de
