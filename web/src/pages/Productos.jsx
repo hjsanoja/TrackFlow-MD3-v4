@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { validarCsv, resolverUnidadNegocio } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
+import FichaProducto, { competidorMasBarato, precioEnlaceUsd } from '../components/FichaProducto';
+import ProductDetailModal from '../components/ProductDetailModal';
+import { useBcvRate } from '../hooks/useBcvRate';
 import { useDimensiones } from '../hooks/useDimensiones';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
@@ -116,6 +119,9 @@ export default function Productos() {
   } = useData();
 
   const [editing, setEditing] = useState(null);
+  const [fichaId, setFichaId] = useState(null);
+  const [analisis, setAnalisis] = useState(null); // { producto, competencia }
+  const bcv = useBcvRate();
   const [search, setSearch] = useState('');
   const [filtroActivo, setFiltroActivo] = useState('todos');
   const [filtroUrls, setFiltroUrls] = useState('todos'); // todos | con_urls | sin_urls
@@ -220,7 +226,20 @@ export default function Productos() {
   }, [productos, urlsPorProducto]);
 
   const [paginaActual, setPaginaActual] = useState(1);
-  const itemsPorPagina = 20;
+  // Se recuerda en este navegador. 10 por defecto.
+  const [itemsPorPagina, setItemsPorPagina] = useState(() => {
+    try {
+      const guardado = Number(localStorage.getItem('productos.filasPorPagina'));
+      return [10, 25, 50, 100].includes(guardado) ? guardado : 10;
+    } catch {
+      return 10;
+    }
+  });
+  const cambiarFilasPorPagina = (n) => {
+    setItemsPorPagina(n);
+    setPaginaActual(1);
+    try { localStorage.setItem('productos.filasPorPagina', String(n)); } catch { /* sin almacenamiento */ }
+  };
 
   useEffect(() => {
     setPaginaActual(1);
@@ -230,7 +249,7 @@ export default function Productos() {
   const productosPaginados = useMemo(() => {
     const inicio = (paginaActual - 1) * itemsPorPagina;
     return filtrados.slice(inicio, inicio + itemsPorPagina);
-  }, [filtrados, paginaActual]);
+  }, [filtrados, paginaActual, itemsPorPagina]);
 
   const handleSave = async (data, isNew) => {
     try {
@@ -833,6 +852,7 @@ export default function Productos() {
                 <col className="w-[17%]" />
                 <col className="w-[12%]" />
                 <col className="w-[15%]" />
+                <col className="w-[112px]" />
                 <col className="w-[88px]" />
                 <col className="w-[104px]" />
                 <col className="w-[136px]" />
@@ -849,6 +869,7 @@ export default function Productos() {
                   <th>Presentación</th>
                   <th>Línea</th>
                   <th>Laboratorio</th>
+                  <th className="text-right" title="PVP propio y precio más bajo de la competencia">PVP</th>
                   <th className="text-center">Enlaces</th>
                   <th>Estado</th>
                   <th className="m3-sticky-actions"><span className="sr-only">Acciones</span></th>
@@ -856,7 +877,10 @@ export default function Productos() {
               </thead>
               <tbody>
                 {productosPaginados.map(p => {
-                  const enlaces = (urlsPorProducto.get(p.id_interno) || []).length;
+                  const enlacesProducto = urlsPorProducto.get(p.id_interno) || [];
+                  const enlaces = enlacesProducto.length;
+                  const masBarato = competidorMasBarato(enlacesProducto);
+                  const pvp = Number(p.pvp_propio_usd) || 0;
                   const seleccionado = seleccion.has(p.id);
                   return (
                     <tr key={p.id} className={seleccionado ? 'm3-row-selected' : ''}>
@@ -866,7 +890,7 @@ export default function Productos() {
                           aria-label={`Seleccionar ${p.nombre}`} className="m3-checkbox" />
                       </td>
                       <td>
-                        <button type="button" onClick={() => setEditing(p.id)} className="m3-cell-link" title="Abrir la ficha del producto">
+                        <button type="button" onClick={() => setFichaId(p.id)} className="m3-cell-link" title="Abrir la ficha del producto">
                           <span className="m3-cell-primary">{p.nombre}</span>
                         </button>
                         <div className="m3-cell-secondary" title={`${p.id_interno} · ${p.principio_activo || 'sin molécula'}`}>
@@ -885,6 +909,13 @@ export default function Productos() {
                       <td>
                         <div className="m3-cell-primary">{p.laboratorio || '—'}</div>
                         <div className="m3-cell-secondary">{p.categoria || 'Sin categoría'}</div>
+                      </td>
+                      <td className="text-right">
+                        <div className="m3-cell-primary tabular-nums">{pvp > 0 ? `$${pvp.toFixed(2)}` : '—'}</div>
+                        <div className={`m3-cell-secondary tabular-nums ${masBarato && pvp > precioEnlaceUsd(masBarato) ? 'text-error' : ''}`}
+                          title={masBarato ? `Competencia más baja: ${masBarato.cadena}` : 'Sin precios de la competencia'}>
+                          {masBarato ? `comp. $${precioEnlaceUsd(masBarato).toFixed(2)}` : 'sin comp.'}
+                        </div>
                       </td>
                       <td className="text-center">
                         {enlaces === 0 ? (
@@ -925,7 +956,13 @@ export default function Productos() {
 
         {filtrados.length > 0 && (
           <footer className="m3-data-table-footer">
-            <span className="m3-body-medium text-on-surface-variant">
+            <label className="flex items-center gap-2 m3-body-medium text-on-surface-variant">
+              Filas por página
+              <select value={itemsPorPagina} onChange={e => cambiarFilasPorPagina(Number(e.target.value))} className="m3-rows-select">
+                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <span className="m3-body-medium text-on-surface-variant sm:ml-auto">
               {Math.min(filtrados.length, (paginaActual - 1) * itemsPorPagina + 1)}–{Math.min(filtrados.length, paginaActual * itemsPorPagina)} de {filtrados.length}
             </span>
             {totalPaginas > 1 && (
@@ -944,6 +981,33 @@ export default function Productos() {
           </footer>
         )}
       </section>
+
+      {fichaId && (() => {
+        const producto = productos.find(p => p.id === fichaId);
+        if (!producto) return null;
+        const enlaces = urlsPorProducto.get(producto.id_interno) || [];
+        return (
+          <FichaProducto
+            producto={producto}
+            enlaces={enlaces}
+            presentacion={describirPresentacion(producto)}
+            onClose={() => setFichaId(null)}
+            onEditar={() => { setFichaId(null); setEditing(producto.id); }}
+            onAnalisis={() => { setFichaId(null); setAnalisis({ producto, competencia: enlaces }); }}
+            onAlternarActivo={() => handleToggleActivo(producto)}
+          />
+        );
+      })()}
+
+      {analisis && (
+        <ProductDetailModal
+          producto={analisis.producto}
+          competencia={analisis.competencia}
+          currency="usd"
+          bcvRate={bcv.rate}
+          onClose={() => setAnalisis(null)}
+        />
+      )}
 
       {/* Create/Edit Product Modal */}
       {editing && (
