@@ -1095,6 +1095,180 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 .m3-menu-item .material-symbols-outlined { font-size: 20px; }
 .m3-menu-item-danger { color: var(--md-sys-color-error); }
 
+/* ---------------------------------------------------------------------------
+   Formularios (M3): secciones con titulo, etiquetas en frase normal, campos
+   de 48 px, texto de apoyo que se vuelve error en rojo.
+   --------------------------------------------------------------------------- */
+.m3-form-section {
+  padding: 16px 20px 20px;
+  border-radius: 20px;
+  background-color: var(--md-sys-color-surface-container-low);
+  border: 0;
+  min-width: 0;
+}
+.m3-form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  float: left;
+  width: 100%;
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  color: var(--md-sys-color-primary);
+}
+.m3-form-section-title + * { clear: both; }
+.m3-form-section-title .material-symbols-outlined { font-size: 20px; }
+.m3-form-section .m3-input {
+  height: 48px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+}
+.m3-form-section .m3-input:focus { box-shadow: inset 0 0 0 1px var(--md-sys-color-primary); }
+.m3-form-section .m3-input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.m3-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.m3-field-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.m3-field-support {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.m3-field-warning { color: #b45309; }
+[data-theme="dark"] .m3-field-warning, .dark .m3-field-warning { color: #fbbf24; }
+.m3-field.has-error .m3-input { border-color: var(--md-sys-color-error); }
+.m3-field.has-error .m3-field-support { color: var(--md-sys-color-error); }
+
+.m3-form-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+  font-size: 0.875rem;
+}
+.m3-form-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.8125rem;
+}
+.m3-form-preview strong { color: var(--md-sys-color-on-surface); font-weight: 600; }
+.m3-form-preview .material-symbols-outlined { font-size: 18px; }
+
+/* Chips de eleccion unica (radio). */
+.m3-choice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.m3-choice-chip:hover { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, var(--md-sys-color-surface-container-lowest)); }
+.m3-choice-chip:focus-within { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.m3-choice-chip.is-selected {
+  border-color: transparent;
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.m3-choice-chip .material-symbols-outlined { font-size: 18px; }
+.m3-field.has-error .m3-choice-chip { border-color: var(--md-sys-color-error); }
+
+/* Lista desplegable del ComboField. */
+.m3-combo-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.m3-combo-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px 0;
+  border-radius: 12px;
+  background-color: var(--md-sys-color-surface-container);
+  box-shadow: var(--md-sys-elevation-2);
+}
+.m3-combo-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+}
+.m3-combo-option:hover,
+.m3-combo-option.is-active { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.m3-combo-option.is-selected { font-weight: 600; color: var(--md-sys-color-primary); }
+.m3-combo-option .material-symbols-outlined { font-size: 18px; }
+.m3-combo-empty { padding: 10px 16px; font-size: 0.8125rem; color: var(--md-sys-color-on-surface-variant); }
+
+/* Interruptor M3 sobre un checkbox nativo. */
+.m3-switch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+}
+.m3-switch {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 32px;
+  border-radius: 9999px;
+  border: 2px solid var(--md-sys-color-outline);
+  background-color: var(--md-sys-color-surface-container-highest);
+  cursor: pointer;
+  transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.m3-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background-color: var(--md-sys-color-outline);
+  transform: translateY(-50%);
+  transition: left 200ms cubic-bezier(0.2, 0, 0, 1), width 200ms, height 200ms, background-color 150ms;
+}
+.m3-switch:checked { background-color: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
+.m3-switch:checked::after { left: 22px; width: 24px; height: 24px; background-color: var(--md-sys-color-on-primary); }
+.m3-switch:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+
 /* Side sheet modal (ficha de producto). */
 .m3-sheet-scrim { justify-content: flex-end; align-items: stretch; padding: 0; }
 .m3-side-sheet {

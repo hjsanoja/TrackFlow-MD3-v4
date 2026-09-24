@@ -60,7 +60,8 @@ export function useDimensiones() {
     return () => { vigente = false; };
   }, []);
 
-  return dimensiones;
+  // `cargado` distingue "todavia no llego" de "llego vacio".
+  return { ...dimensiones, cargado: Boolean(cache) };
 }
 
 // Permite refrescar tras crear una dimensión nueva desde otra pantalla.
