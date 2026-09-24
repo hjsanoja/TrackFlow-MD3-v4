@@ -199,7 +199,7 @@ export default function Layout({ user, userDoc, children }) {
 
         {/* User profile footer - MD3 Style */}
         <div className="space-y-4">
-          <div className={`bg-surface-container-low rounded-2xl border border-outline-variant/40 ${menuColapsado ? 'p-2' : 'p-4'}`}>
+          <div className={`m3-card-outlined ${menuColapsado ? 'p-2' : 'p-4'}`}>
             <div className={`flex items-center ${menuColapsado ? 'justify-center' : 'gap-3'}`}>
               {(() => {
                 const displayName = userDoc?.nombre || user?.email?.split('@')[0] || 'Usuario';

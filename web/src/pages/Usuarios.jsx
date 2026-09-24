@@ -383,15 +383,15 @@ export default function Usuarios({ userDoc }) {
       </div>
 
       {/* GitHub Integration Card (Solo Administradores) */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-[#e1e2ec] shadow-sm p-6 space-y-4">
+      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant shadow-sm p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 rounded-2xl">
               <span className="material-symbols-outlined text-2xl">smart_toy</span>
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#040d53] font-display">Integración Robot Extractor (GitHub Actions)</h3>
-              <p className="text-xs text-[#464650] font-sans">
+              <h3 className="text-base font-bold text-primary font-display">Integración Robot Extractor (GitHub Actions)</h3>
+              <p className="text-xs text-on-surface-variant font-sans">
                 {githubInfo
                   ? `Conectado al repositorio ${githubInfo.repo_owner}/${githubInfo.repo_name}`
                   : 'Aún no se han configurado credenciales de conexión a GitHub.'}

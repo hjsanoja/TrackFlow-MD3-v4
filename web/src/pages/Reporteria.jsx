@@ -449,31 +449,31 @@ export default function Reporteria({ user, userDoc }) {
 
       {/* KPI Cards del Reporte */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
+        <div className="m3-card-outlined p-3.5">
           <div className="text-label-md font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Registros</div>
           <div className="text-xl font-bold font-display text-on-surface mt-1">{metricas.totalRegistros}</div>
           <div className="text-label-sm text-on-surface-variant mt-0.5">Mapeos activos por SKU</div>
         </div>
 
-        <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
+        <div className="m3-card-outlined p-3.5">
           <div className="text-label-md font-mono font-semibold text-on-surface-variant uppercase tracking-wider">Tasa BCV</div>
           <div className="text-xl font-bold font-display text-primary mt-1">{currentBcvRate.toFixed(2)}</div>
           <div className="text-label-sm text-on-surface-variant mt-0.5">Bs / USD Oficial</div>
         </div>
 
-        <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
+        <div className="m3-card-outlined p-3.5">
           <div className="text-label-md font-mono font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">Competidor Más Caro</div>
           <div className="text-xl font-bold font-display text-rose-700 dark:text-rose-400 mt-1">{metricas.masCaros}</div>
           <div className="text-label-sm text-on-surface-variant mt-0.5">Tu marca tiene ventaja de precio</div>
         </div>
 
-        <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
+        <div className="m3-card-outlined p-3.5">
           <div className="text-label-md font-mono font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Competidor Más Barato</div>
           <div className="text-xl font-bold font-display text-emerald-700 dark:text-emerald-400 mt-1">{metricas.masBaratos}</div>
           <div className="text-label-sm text-on-surface-variant mt-0.5">El competidor tiene ventaja</div>
         </div>
 
-        <div className="bg-surface-container-lowest p-3.5 rounded-2xl border border-outline-variant/60 shadow-xs">
+        <div className="m3-card-outlined p-3.5">
           <div className="text-label-md font-mono font-semibold text-sky-700 dark:text-sky-400 uppercase tracking-wider">En Paridad</div>
           <div className="text-xl font-bold font-display text-sky-700 dark:text-sky-400 mt-1">{metricas.enParidad}</div>
           <div className="text-label-sm text-on-surface-variant mt-0.5">Diferencia dentro de ±3%</div>
@@ -481,7 +481,7 @@ export default function Reporteria({ user, userDoc }) {
       </div>
 
       {/* Barra de Filtros y Configuración del Reporte */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/60 p-5 shadow-xs space-y-4">
+      <div className="m3-card-outlined p-5 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-outline-variant/40">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-xl">tune</span>
@@ -658,7 +658,7 @@ export default function Reporteria({ user, userDoc }) {
       </div>
 
       {/* Tabla Principal del Reporte con Diseño Material 3 */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/60 overflow-hidden shadow-xs">
+      <div className="m3-card-outlined overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>

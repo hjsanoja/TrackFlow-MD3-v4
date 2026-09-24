@@ -875,7 +875,7 @@ export default function Productos() {
             <p className="text-xs text-on-surface-variant font-sans">
               El archivo puede estar delimitado por comas, punto y coma o tabulaciones.
             </p>
-            <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 space-y-1.5 font-mono text-xs">
+            <div className="m3-card-outlined p-4 space-y-1.5 font-mono text-xs">
               <div className="font-bold text-primary border-b border-outline-variant/60 pb-1 mb-1 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm">lists</span>
                 Columnas del CSV:

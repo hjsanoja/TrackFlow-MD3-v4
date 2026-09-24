@@ -263,7 +263,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
             </div>
 
             {/* Time Range Selector Buttons */}
-            <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-xl border border-outline-variant/60">
+            <div className="flex items-center gap-1 m3-card-outlined p-1">
               {[
                 { id: '7d', label: '7 Días' },
                 { id: '30d', label: '30 Días' },
@@ -300,11 +300,11 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                 >
                   <defs>
                     <linearGradient id="modalBcvGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#040d53" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#040d53" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e1e2ec" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant)" />
                   <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: '#464650' }} />
                   <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#464650' }} />
                   <Tooltip 
@@ -335,7 +335,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
                   <Area 
                     type="monotone" 
                     dataKey="valor" 
-                    stroke="#040d53" 
+                    stroke="var(--md-sys-color-primary)" 
                     strokeWidth={2.5} 
                     fillOpacity={1} 
                     fill="url(#modalBcvGradient)" 
@@ -366,7 +366,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
             <div className="flex items-center gap-2">
               {/* Search Box */}
               <div className="relative">
-                <span className="material-symbols-outlined text-[16px] text-on-surface-variant absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none select-none">search</span>
+                <span className="material-symbols-outlined text-body-lg text-on-surface-variant absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none select-none">search</span>
                 <input
                   type="text"
                   placeholder="Buscar fecha o tasa..."

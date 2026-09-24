@@ -397,7 +397,7 @@ export default function Hallazgos({ user, userDoc }) {
             <button
               onClick={() => setAnalisisMode('empaque')}
               className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1 ${
-                analisisMode === 'empaque' ? 'bg-[#040d53] text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
+                analisisMode === 'empaque' ? 'bg-primary text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
               }`}
             >
               <span className="material-symbols-outlined text-body-md">inventory_2</span>
@@ -406,7 +406,7 @@ export default function Hallazgos({ user, userDoc }) {
             <button
               onClick={() => setAnalisisMode('unidosis')}
               className={`px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1 ${
-                analisisMode === 'unidosis' ? 'bg-[#040d53] text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
+                analisisMode === 'unidosis' ? 'bg-primary text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
               }`}
               title="Analizar hallazgos con precios normalizados por 1 unidad/tableta/dosis"
             >
@@ -419,7 +419,7 @@ export default function Hallazgos({ user, userDoc }) {
             <button
               onClick={() => setCurrency('usd')}
               className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                currency === 'usd' ? 'bg-[#040d53] text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
+                currency === 'usd' ? 'bg-primary text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
               }`}
             >
               USD
@@ -427,7 +427,7 @@ export default function Hallazgos({ user, userDoc }) {
             <button
               onClick={() => setCurrency('bs')}
               className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1 ${
-                currency === 'bs' ? 'bg-[#040d53] text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
+                currency === 'bs' ? 'bg-primary text-white shadow-sm' : 'text-on-surface hover:bg-on-surface/5'
               }`}
             >
               VES
@@ -437,7 +437,7 @@ export default function Hallazgos({ user, userDoc }) {
 
           <button
             onClick={handleExportInsights}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#040d53] text-white font-bold rounded-full hover:bg-opacity-90 transition-all text-sm shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-full hover:bg-opacity-90 transition-all text-sm shadow-sm"
           >
             <span className="material-symbols-outlined text-lg">download</span>
             <span>Exportar Hallazgos</span>
@@ -513,7 +513,7 @@ export default function Hallazgos({ user, userDoc }) {
       </div>
 
       {/* Advanced search and filtering bar */}
-      <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 shadow-sm space-y-4">
+      <div className="m3-card-outlined p-5 shadow-sm space-y-4">
         <div className="flex items-center gap-2 border-b pb-3 mb-1">
           <span className="material-symbols-outlined text-primary text-xl">filter_alt</span>
           <h2 className="font-display font-extrabold text-sm text-on-background uppercase tracking-wide">
@@ -614,7 +614,7 @@ export default function Hallazgos({ user, userDoc }) {
       {/* Main product audit list */}
       <div className="space-y-4">
         {paginatedProducts.length === 0 ? (
-          <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-10 text-center space-y-3">
+          <div className="m3-card-outlined p-10 text-center space-y-3">
             <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 animate-pulse">fact_check</span>
             <h3 className="font-display font-extrabold text-base text-on-background">Ningún producto cumple con los criterios</h3>
             <p className="text-xs text-on-surface-variant max-w-md mx-auto">

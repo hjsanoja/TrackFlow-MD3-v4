@@ -33,7 +33,7 @@ function InfoTooltip({ text, align = 'center' }) {
         className="p-0 bg-transparent border-0 inline-flex items-center justify-center cursor-pointer focus:outline-none"
         aria-label="Información"
       >
-        <span className="material-symbols-outlined text-body-md text-[#464650] hover:text-[#040d53] transition-colors select-none">
+        <span className="material-symbols-outlined text-body-md text-on-surface-variant hover:text-primary transition-colors select-none">
           info
         </span>
       </button>
@@ -632,14 +632,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-[#f8f9fa] z-50 flex flex-col overflow-hidden animate-fade-in text-[#1c1b1f]">
+    <div className="fixed inset-0 bg-[#f8f9fa] z-50 flex flex-col overflow-hidden animate-fade-in text-on-surface">
       {/* Header Navigation Bar */}
-      <div className="bg-surface-container-lowest border-b border-[#e1e2ec] px-4 md:px-8 py-3 flex items-center justify-between gap-4 shrink-0 shadow-sm z-30">
+      <div className="bg-surface-container-lowest border-b border-outline-variant px-4 md:px-8 py-3 flex items-center justify-between gap-4 shrink-0 shadow-sm z-30">
         {/* Left: Regresar / Volver button */}
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
-            className="flex items-center gap-2 px-3.5 py-2 bg-surface-container-lowest border border-[#e1e2ec] hover:bg-[#f3f4f9] text-[#040d53] text-xs font-bold rounded-xl transition-all shadow-xs group"
+            className="flex items-center gap-2 px-3.5 py-2 bg-surface-container-lowest border border-outline-variant hover:bg-surface-container text-primary text-xs font-bold rounded-xl transition-all shadow-xs group"
             title="Regresar a la pantalla principal"
           >
             <span className="material-symbols-outlined text-base group-hover:-translate-x-0.5 transition-transform">
@@ -647,35 +647,35 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             </span>
             <span className="hidden sm:inline">Volver</span>
           </button>
-          <div className="h-6 w-[1px] bg-[#e1e2ec] hidden sm:block"></div>
+          <div className="h-6 w-[1px] bg-surface-container-high hidden sm:block"></div>
         </div>
 
         {/* Center: Searchable Product Selector Dropdown */}
         <div className="flex-1 max-w-2xl relative">
           <button
             onClick={() => setDropdownOpen(prev => !prev)}
-            className="w-full bg-[#f3f4f9] hover:bg-[#e8eaef] border border-[#e1e2ec] rounded-2xl px-3.5 py-2 flex items-center justify-between transition-all shadow-xs text-left group"
+            className="w-full bg-surface-container hover:bg-[#e8eaef] border border-outline-variant rounded-2xl px-3.5 py-2 flex items-center justify-between transition-all shadow-xs text-left group"
           >
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-xl bg-[#040d53] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs font-mono">
+              <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs font-mono">
                 {activeProduct.id_interno || 'P'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-sm text-[#040d53] truncate">{activeProduct.nombre}</span>
+                  <span className="font-extrabold text-sm text-primary truncate">{activeProduct.nombre}</span>
                   {activeProduct.categoria && (
-                    <span className="hidden sm:inline-block px-2 py-0.5 bg-[#e1e2ec] text-[#040d53] text-label-sm font-bold rounded-md font-mono shrink-0">
+                    <span className="hidden sm:inline-block px-2 py-0.5 bg-surface-container-high text-primary text-label-sm font-bold rounded-md font-mono shrink-0">
                       {activeProduct.categoria}
                     </span>
                   )}
                 </div>
-                <p className="text-label-md text-[#464650] truncate leading-tight">
+                <p className="text-label-md text-on-surface-variant truncate leading-tight">
                   {activeProduct.principio_activo || 'Sin principio activo'} · {activeProduct.concentracion || ''} {activeProduct.presentacion || ''}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 text-[#040d53] font-bold text-xs shrink-0 pl-2">
-              <span className="hidden md:inline text-label-md font-mono text-[#464650]">Cambiar producto</span>
+            <div className="flex items-center gap-1.5 text-primary font-bold text-xs shrink-0 pl-2">
+              <span className="hidden md:inline text-label-md font-mono text-on-surface-variant">Cambiar producto</span>
               <span className="material-symbols-outlined text-lg group-hover:translate-y-0.5 transition-transform">
                 {dropdownOpen ? 'expand_less' : 'unfold_more'}
               </span>
@@ -686,22 +686,22 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           {dropdownOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setDropdownOpen(false)}></div>
-              <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container-lowest rounded-2xl border border-[#e1e2ec] shadow-2xl z-40 p-3 space-y-2.5 animate-fade-in max-w-2xl w-full">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-2xl z-40 p-3 space-y-2.5 animate-fade-in max-w-2xl w-full">
                 {/* Search Bar */}
                 <div className="relative flex items-center">
-                  <span className="material-symbols-outlined absolute left-3 text-[18px] text-[#464650] pointer-events-none select-none">search</span>
+                  <span className="material-symbols-outlined absolute left-3 text-[18px] text-on-surface-variant pointer-events-none select-none">search</span>
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Buscar por nombre, id, principio activo o categoría..."
-                    className="w-full pl-10 pr-8 py-2 bg-[#f3f4f9] border border-[#e1e2ec] focus:border-[#040d53] focus:bg-surface-container-lowest rounded-xl text-xs font-medium text-[#1c1b1f] placeholder-[#464650]/60 outline-none transition-all"
+                    className="w-full pl-10 pr-8 py-2 bg-surface-container border border-outline-variant focus:border-primary focus:bg-surface-container-lowest rounded-xl text-xs font-medium text-on-surface placeholder-[#464650]/60 outline-none transition-all"
                     autoFocus
                   />
                   {searchTerm && (
                     <button
                       onClick={() => setSearchTerm('')}
-                      className="absolute right-2.5 text-[#464650] hover:text-black w-5 h-5 flex items-center justify-center rounded-full"
+                      className="absolute right-2.5 text-on-surface-variant hover:text-black w-5 h-5 flex items-center justify-center rounded-full"
                     >
                       <span className="material-symbols-outlined text-sm">close</span>
                     </button>
@@ -717,8 +717,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                         onClick={() => setCategoryFilter(cat)}
                         className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold whitespace-nowrap transition-all ${
                           categoryFilter === cat
-                            ? 'bg-[#040d53] text-white shadow-xs'
-                            : 'bg-[#f3f4f9] text-[#464650] hover:bg-[#e1e2ec]'
+                            ? 'bg-primary text-white shadow-xs'
+                            : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
                         }`}
                       >
                         {cat}
@@ -728,7 +728,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 )}
 
                 {/* Counter */}
-                <div className="flex items-center justify-between text-label-md font-mono text-[#464650] px-1 border-b border-[#f3f4f9] pb-1.5">
+                <div className="flex items-center justify-between text-label-md font-mono text-on-surface-variant px-1 border-b border-[#f3f4f9] pb-1.5">
                   <span>{filteredProducts.length} productos coincidentes</span>
                   <span>{productos.length} total</span>
                 </div>
@@ -736,7 +736,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 {/* Product List */}
                 <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
                   {filteredProducts.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-[#464650] italic">
+                    <div className="p-4 text-center text-xs text-on-surface-variant italic">
                       No se encontraron productos que coincidan con "{searchTerm}"
                     </div>
                   ) : (
@@ -754,18 +754,18 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                           }}
                           className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between gap-3 ${
                             isSelected
-                              ? 'bg-[#040d53]/5 border border-[#040d53]/20 text-[#040d53]'
-                              : 'hover:bg-[#f3f4f9] border border-transparent text-[#1c1b1f]'
+                              ? 'bg-primary/5 border border-primary/20 text-primary'
+                              : 'hover:bg-surface-container border border-transparent text-on-surface'
                           }`}
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-extrabold text-xs truncate">{p.nombre}</span>
-                              <span className="px-1.5 py-0.2 bg-[#f3f4f9] text-[#040d53] text-[9.5px] font-mono font-bold rounded">
+                              <span className="px-1.5 py-0.2 bg-surface-container text-primary text-[9.5px] font-mono font-bold rounded">
                                 {p.id_interno}
                               </span>
                             </div>
-                            <p className="text-label-md text-[#464650] truncate mt-0.5">
+                            <p className="text-label-md text-on-surface-variant truncate mt-0.5">
                               {p.principio_activo || '—'} {p.concentracion || ''} · {p.presentacion || ''}
                             </p>
                           </div>
@@ -774,7 +774,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                               {compCount} comp.
                             </span>
                             {isSelected && (
-                              <span className="material-symbols-outlined text-base text-[#040d53] font-bold">check_circle</span>
+                              <span className="material-symbols-outlined text-base text-primary font-bold">check_circle</span>
                             )}
                           </div>
                         </button>
@@ -800,7 +800,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           </button>
           <button
             onClick={onClose}
-            className="p-2 text-[#464650] hover:text-black hover:bg-[#e1e2ec]/50 rounded-xl transition-colors"
+            className="p-2 text-on-surface-variant hover:text-black hover:bg-surface-container-high/50 rounded-xl transition-colors"
             title="Cerrar vista"
           >
             <span className="material-symbols-outlined text-2xl">close</span>
@@ -811,21 +811,21 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       {/* Main Content Scrollable Container */}
       <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
           {/* Price and Currency Switch Controls */}
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-[#f3f4f9] p-4 rounded-2xl border border-[#e1e2ec] animate-fade-in">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-surface-container p-4 rounded-2xl border border-outline-variant animate-fade-in">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 flex-1">
               {/* Unidosis vs Empaque Switcher */}
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-[#464650]">
-                  <span className="material-symbols-outlined text-[16px]">medication</span>
+                <div className="flex items-center gap-1.5 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-body-lg">medication</span>
                   <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Modo:</span>
                 </div>
-                <div className="bg-[#e1e2ec] p-1 rounded-xl flex gap-1 h-[34px] items-center">
+                <div className="bg-surface-container-high p-1 rounded-xl flex gap-1 h-[34px] items-center">
                   <button
                     onClick={() => setAnalisisMode('empaque')}
                     className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       analisisMode === 'empaque' 
-                        ? 'bg-[#040d53] text-white shadow-sm' 
-                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                        ? 'bg-primary text-white shadow-sm' 
+                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Empaque
@@ -834,8 +834,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     onClick={() => setAnalisisMode('unidosis')}
                     className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       analisisMode === 'unidosis' 
-                        ? 'bg-[#040d53] text-white shadow-sm' 
-                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                        ? 'bg-primary text-white shadow-sm' 
+                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                     }`}
                     title="Analizar precios normalizados por 1 unidad/tableta/dosis"
                   >
@@ -846,17 +846,17 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
               {/* Modo de Comparacion Selector */}
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-[#464650]">
-                  <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+                <div className="flex items-center gap-1.5 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-body-lg">receipt_long</span>
                   <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Comparación:</span>
                 </div>
-                <div className="bg-[#e1e2ec] p-1 rounded-xl flex gap-1 h-[34px] items-center">
+                <div className="bg-surface-container-high p-1 rounded-xl flex gap-1 h-[34px] items-center">
                   <button
                     onClick={() => setPriceMode('descuento')}
                     className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       priceMode === 'descuento' 
-                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
+                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Oferta
@@ -865,8 +865,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     onClick={() => setPriceMode('lista')}
                     className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       priceMode === 'lista' 
-                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
+                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Lista
@@ -876,17 +876,17 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
               {/* Moneda Selector */}
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-[#464650]">
-                  <span className="material-symbols-outlined text-[16px]">monetization_on</span>
+                <div className="flex items-center gap-1.5 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-body-lg">monetization_on</span>
                   <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Moneda:</span>
                 </div>
-                <div className="bg-[#e1e2ec] p-1 rounded-xl flex gap-1 h-[34px] items-center">
+                <div className="bg-surface-container-high p-1 rounded-xl flex gap-1 h-[34px] items-center">
                   <button
                     onClick={() => setModalCurrency('usd')}
                     className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all ${
                       modalCurrency === 'usd' 
-                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
+                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     USD ($)
@@ -895,8 +895,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     onClick={() => setModalCurrency('bs')}
                     className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all ${
                       modalCurrency === 'bs' 
-                        ? 'bg-surface-container-lowest text-[#040d53] shadow-sm' 
-                        : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
+                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                     }`}
                   >
                     Bs
@@ -906,14 +906,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
               {/* Relación Selector */}
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-[#464650]">
-                  <span className="material-symbols-outlined text-[16px]">groups</span>
+                <div className="flex items-center gap-1.5 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-body-lg">groups</span>
                   <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Relación Marca:</span>
                 </div>
                 <select
                   value={filterRelacion}
                   onChange={(e) => setFilterRelacion(e.target.value)}
-                  className="bg-surface-container-lowest border border-[#e1e2ec] rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-[#040d53] text-[#464650] h-[34px] w-full"
+                  className="bg-surface-container-lowest border border-outline-variant rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-primary text-on-surface-variant h-[34px] w-full"
                 >
                   <option value="todos">Todos</option>
                   <option value="propio">Mi Marca</option>
@@ -923,14 +923,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
               {/* Cadena Selector */}
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-[#464650]">
-                  <span className="material-symbols-outlined text-[16px]">storefront</span>
+                <div className="flex items-center gap-1.5 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-body-lg">storefront</span>
                   <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Cadena:</span>
                 </div>
                 <select
                   value={filterCadena}
                   onChange={(e) => setFilterCadena(e.target.value)}
-                  className="bg-surface-container-lowest border border-[#e1e2ec] rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-[#040d53] text-[#464650] h-[34px] w-full"
+                  className="bg-surface-container-lowest border border-outline-variant rounded-xl px-2.5 py-1 text-label-md font-bold focus:outline-none focus:border-primary text-on-surface-variant h-[34px] w-full"
                 >
                   <option value="todas">Todas</option>
                   {cadenasDisponibles.map(c => (
@@ -942,9 +942,9 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
             {/* BCV Rate Badge */}
             {bcvRate && (
-              <div className="flex items-center gap-2 bg-surface-container-lowest/60 border border-[#e1e2ec] px-3 py-2 rounded-xl text-label-md font-mono text-[#464650] self-start xl:self-auto min-w-[110px] justify-center h-[34px] mt-auto">
-                <span className="text-label-sm uppercase font-bold text-[#464650]/70">Tasa BCV:</span>
-                <span className="font-extrabold text-[#040d53]">Bs {bcvRate.toFixed(2)}</span>
+              <div className="flex items-center gap-2 bg-surface-container-lowest/60 border border-outline-variant px-3 py-2 rounded-xl text-label-md font-mono text-on-surface-variant self-start xl:self-auto min-w-[110px] justify-center h-[34px] mt-auto">
+                <span className="text-label-sm uppercase font-bold text-on-surface-variant/70">Tasa BCV:</span>
+                <span className="font-extrabold text-primary">Bs {bcvRate.toFixed(2)}</span>
               </div>
             )}
           </div>
@@ -1057,7 +1057,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           {/* Current Competitor Prices Table */}
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h3 className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm">payments</span>
                 Precios Actuales por Cadena Farmacéutica {analisisMode === 'unidosis' ? '(Por Unidosis / Dosis)' : ''}
               </h3>
@@ -1225,18 +1225,18 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
           {/* Chart Section Header with Tab Switch */}
           <div className="space-y-4 pt-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container-lowest p-3 rounded-2xl border border-[#e1e2ec] shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container-lowest p-3 rounded-2xl border border-outline-variant shadow-sm">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-lg text-[#040d53]">analytics</span>
-                <span className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider">Análisis Gráfico</span>
+                <span className="material-symbols-outlined text-lg text-primary">analytics</span>
+                <span className="text-xs font-bold text-primary uppercase font-mono tracking-wider">Análisis Gráfico</span>
               </div>
-              <div className="bg-[#f3f4f9] p-1 rounded-xl flex gap-1 border border-[#e1e2ec]">
+              <div className="bg-surface-container p-1 rounded-xl flex gap-1 border border-outline-variant">
                 <button
                   onClick={() => setActiveGraphTab('tendencia')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeGraphTab === 'tendencia'
-                      ? 'bg-[#040d53] text-white shadow-sm'
-                      : 'text-[#464650] hover:bg-surface-container-lowest/60'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-on-surface-variant hover:bg-surface-container-lowest/60'
                   }`}
                 >
                   <span className="material-symbols-outlined text-body-md">show_chart</span>
@@ -1246,8 +1246,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   onClick={() => setActiveGraphTab('barras')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeGraphTab === 'barras'
-                      ? 'bg-[#040d53] text-white shadow-sm'
-                      : 'text-[#464650] hover:bg-surface-container-lowest/60'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-on-surface-variant hover:bg-surface-container-lowest/60'
                   }`}
                 >
                   <span className="material-symbols-outlined text-body-md">bar_chart</span>
@@ -1257,8 +1257,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   onClick={() => setActiveGraphTab('ambos')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     activeGraphTab === 'ambos'
-                      ? 'bg-[#040d53] text-white shadow-sm'
-                      : 'text-[#464650] hover:bg-surface-container-lowest/60'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-on-surface-variant hover:bg-surface-container-lowest/60'
                   }`}
                 >
                   <span className="material-symbols-outlined text-body-md">grid_view</span>
@@ -1271,35 +1271,35 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             {(activeGraphTab === 'tendencia' || activeGraphTab === 'ambos') && (
               <div className="space-y-2 animate-fade-in">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider flex items-center gap-1.5">
+                  <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-sm">show_chart</span>
                     Historial de Tendencia de Precios ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
                   </h3>
                   {historico.length > 0 && (
                     <button
                       onClick={() => setShowClearConfirm(true)}
-                      className="text-label-sm font-bold text-[#ba1a1a] hover:bg-red-50 px-3 py-1 rounded-full border border-red-200 transition-all flex items-center gap-1"
+                      className="text-label-sm font-bold text-error hover:bg-red-50 px-3 py-1 rounded-full border border-red-200 transition-all flex items-center gap-1"
                     >
                       <span className="material-symbols-outlined text-body-sm">delete</span>
                       Borrar histórico
                     </button>
                   )}
                 </div>
-                <div className="bg-surface-container-lowest rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-4 shadow-sm space-y-4">
                   {/* Selector de tipo de gráfico */}
                   {historico.length > 0 && !loading && !error && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#e1e2ec] animate-fade-in">
-                      <div className="flex items-center gap-1.5 text-[#464650]">
-                        <span className="material-symbols-outlined text-[16px]">insights</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-outline-variant animate-fade-in">
+                      <div className="flex items-center gap-1.5 text-on-surface-variant">
+                        <span className="material-symbols-outlined text-body-lg">insights</span>
                         <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Modo del Gráfico:</span>
                       </div>
-                      <div className="bg-[#f3f4f9] p-0.5 rounded-xl flex gap-1 self-start sm:self-auto border border-[#e1e2ec]">
+                      <div className="bg-surface-container p-0.5 rounded-xl flex gap-1 self-start sm:self-auto border border-outline-variant">
                         <button
                           onClick={() => setChartViewType('individual')}
                           className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             chartViewType === 'individual'
-                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                              ? 'bg-surface-container-lowest text-primary shadow-sm'
+                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                           }`}
                         >
                           <span className="material-symbols-outlined text-body-md">medication</span>
@@ -1309,8 +1309,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                           onClick={() => setChartViewType('chainAverage')}
                           className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             chartViewType === 'chainAverage'
-                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                              ? 'bg-surface-container-lowest text-primary shadow-sm'
+                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                           }`}
                         >
                           <span className="material-symbols-outlined text-body-md">corporate_fare</span>
@@ -1321,14 +1321,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   )}
 
                   {loading ? (
-                    <div className="h-64 flex flex-col items-center justify-center text-xs text-[#464650] font-semibold gap-1.5 animate-pulse">
-                      <span className="material-symbols-outlined animate-spin text-2xl text-[#040d53]">autorenew</span>
+                    <div className="h-64 flex flex-col items-center justify-center text-xs text-on-surface-variant font-semibold gap-1.5 animate-pulse">
+                      <span className="material-symbols-outlined animate-spin text-2xl text-primary">autorenew</span>
                       Cargando tendencia histórica...
                     </div>
                   ) : error ? (
-                    <div className="h-64 flex items-center justify-center text-[#ba1a1a] text-xs font-mono font-bold">{error}</div>
+                    <div className="h-64 flex items-center justify-center text-error text-xs font-mono font-bold">{error}</div>
                   ) : chartData[chartViewType].data.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-[#464650] text-xs italic text-center px-4">
+                    <div className="h-64 flex items-center justify-center text-on-surface-variant text-xs italic text-center px-4">
                       No hay suficiente historial que coincida con los filtros seleccionados (relación / cadena) para este gráfico.
                     </div>
                   ) : (
@@ -1415,7 +1415,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                               type="monotone"
                               dataKey="Promedio"
                               name="Promedio Mercado"
-                              stroke="#ea580c"
+                              stroke="var(--md-sys-color-tertiary)"
                               strokeWidth={3}
                               strokeDasharray="6 4"
                               dot={{ r: 4 }}
@@ -1438,25 +1438,25 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             {(activeGraphTab === 'barras' || activeGraphTab === 'ambos') && (
               <div className="space-y-2 animate-fade-in">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-[#040d53] uppercase font-mono tracking-wider flex items-center gap-1.5">
+                  <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-sm">bar_chart</span>
                     Precios por Laboratorio por Cadena ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
                   </h3>
                 </div>
-                <div className="bg-surface-container-lowest rounded-2xl border border-[#e1e2ec] p-4 shadow-sm space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#e1e2ec]">
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-4 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-outline-variant">
                     <div className="flex items-center gap-3 flex-wrap">
-                      <div className="flex items-center gap-1.5 text-[#464650]">
-                        <span className="material-symbols-outlined text-[16px]">tune</span>
+                      <div className="flex items-center gap-1.5 text-on-surface-variant">
+                        <span className="material-symbols-outlined text-body-lg">tune</span>
                         <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Agrupar Eje X Por:</span>
                       </div>
-                      <div className="bg-[#f3f4f9] p-0.5 rounded-xl flex gap-1 border border-[#e1e2ec]">
+                      <div className="bg-surface-container p-0.5 rounded-xl flex gap-1 border border-outline-variant">
                         <button
                           onClick={() => setBarGroupMode('laboratorio')}
                           className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             barGroupMode === 'laboratorio'
-                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                              ? 'bg-surface-container-lowest text-primary shadow-sm'
+                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                           }`}
                         >
                           <span className="material-symbols-outlined text-body-md">science</span>
@@ -1466,8 +1466,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                           onClick={() => setBarGroupMode('cadena')}
                           className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
                             barGroupMode === 'cadena'
-                              ? 'bg-surface-container-lowest text-[#040d53] shadow-sm'
-                              : 'text-[#464650] hover:bg-surface-container-lowest/50'
+                              ? 'bg-surface-container-lowest text-primary shadow-sm'
+                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
                           }`}
                         >
                           <span className="material-symbols-outlined text-body-md">storefront</span>
@@ -1477,7 +1477,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     </div>
 
                     {overallBarAverage !== null && (
-                      <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-[#ea580c] px-3 py-1 rounded-xl text-label-md font-bold font-mono self-start sm:self-auto shadow-xs">
+                      <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-tertiary px-3 py-1 rounded-xl text-label-md font-bold font-mono self-start sm:self-auto shadow-xs">
                         <span className="material-symbols-outlined text-body-md">show_chart</span>
                         <span>Promedio General: {modalCurrency === 'usd' ? '$' : 'Bs '}{overallBarAverage.toLocaleString(modalCurrency === 'usd' ? 'en-US' : 'es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
@@ -1485,7 +1485,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   </div>
 
                   {barChartData.data.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-[#464650] text-xs italic text-center px-4">
+                    <div className="h-64 flex items-center justify-center text-on-surface-variant text-xs italic text-center px-4">
                       No hay productos registrados para mostrar en este gráfico.
                     </div>
                   ) : (
@@ -1504,7 +1504,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                           {overallBarAverage !== null && (
                             <ReferenceLine
                               y={overallBarAverage}
-                              stroke="#ea580c"
+                              stroke="var(--md-sys-color-tertiary)"
                               strokeDasharray="4 4"
                               strokeWidth={1.5}
                               strokeOpacity={0.7}
@@ -1553,14 +1553,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                                           height={pillHeight}
                                           rx={3}
                                           fill="#ffffff"
-                                          stroke="#e1e2ec"
+                                          stroke="var(--md-sys-color-outline-variant)"
                                           strokeWidth={1}
                                           opacity={0.95}
                                         />
                                         <text
                                           x={cx}
                                           y={cy + 0.5}
-                                          fill="#040d53"
+                                          fill="var(--md-sys-color-primary)"
                                           textAnchor="middle"
                                           dominantBaseline="middle"
                                           fontSize="8.5px"

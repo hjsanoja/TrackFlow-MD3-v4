@@ -83,21 +83,170 @@ body {
    ========================================================================== */
 
 /* M3 Expressive Elevated Card & Neural Card Compatibility */
-.m3-card, .neural-card {
-  background-color: var(--md-sys-color-surface-container-lowest);
-  border-radius: var(--md-sys-shape-extra-large);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  box-shadow: var(--md-sys-elevation-1);
-  transition: transform var(--spring-duration-spatial-fast) var(--spring-curve-spatial-fast, var(--spring-fallback-spatial-fast)),
-              box-shadow var(--spring-duration-effects-default) var(--spring-curve-effects-default),
-              border-color var(--spring-duration-effects-default) var(--spring-curve-effects-default);
-  will-change: transform, box-shadow;
+/* ===========================================================================
+   TARJETAS: LAS TRES VARIANTES DE MATERIAL DESIGN 3
+   ===========================================================================
+   M3 define tres variantes EXCLUYENTES, y mezclarlas es lo que hacía que dos
+   tarjetas de la misma fila se vieran distintas:
+
+     Elevated  fondo surface-container-low + sombra nivel 1, SIN borde
+     Filled    fondo surface-container-highest, SIN borde NI sombra
+     Outlined  fondo surface + borde 1px outline-variant, SIN sombra
+
+   La .m3-card anterior tenía fondo, borde Y sombra a la vez, y al pasar el
+   ratón teñía el borde de color primario, que no es un estado M3.
+
+   Las curvas son las oficiales: entrada con Emphasized Decelerate.
+   -------------------------------------------------------------------------*/
+:root {
+  --md-motion-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-motion-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-motion-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-motion-duration-short: 150ms;
+  --md-motion-duration-medium: 300ms;
+  --md-motion-duration-long: 500ms;
 }
 
-.m3-card:hover, .neural-card:hover {
+.m3-card-base {
+  border-radius: var(--md-sys-shape-extra-large);
+  /* Sin esto, los contenidos con ancho propio se salen de la tarjeta: es lo
+     que hacía que algunos iconos y etiquetas quedaran fuera del recuadro. */
+  overflow: hidden;
+  min-width: 0;
+  transition:
+    box-shadow var(--md-motion-duration-medium) var(--md-motion-emphasized-decelerate),
+    transform var(--md-motion-duration-medium) var(--md-motion-emphasized-decelerate),
+    background-color var(--md-motion-duration-short) var(--md-motion-standard);
+}
+
+/* Variante por defecto: la que llevan las tarjetas de contenido. */
+.m3-card, .neural-card, .m3-card-elevated {
+  @apply m3-card-base;
+  background-color: var(--md-sys-color-surface-container-low);
+  border: none;
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.m3-card:hover, .neural-card:hover, .m3-card-elevated:hover {
   box-shadow: var(--md-sys-elevation-2);
-  border-color: var(--md-sys-color-primary);
   transform: translateY(-2px);
+}
+
+.m3-card-filled {
+  @apply m3-card-base;
+  background-color: var(--md-sys-color-surface-container-highest);
+  border: none;
+  box-shadow: none;
+}
+
+.m3-card-outlined {
+  @apply m3-card-base;
+  background-color: var(--md-sys-color-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------------------
+   TARJETA DE INDICADOR (KPI)
+   ---------------------------------------------------------------------------
+   Todas las filas de indicadores del panel usaban contenedores distintos: una
+   con borde oscuro, otra con sombra y sin borde, otra rellena con un tinte.
+   Esta clase las unifica. El tono semántico se aplica con un modificador, no
+   cambiando la variante de tarjeta.
+   -------------------------------------------------------------------------*/
+.m3-stat {
+  @apply m3-card-base;
+  background-color: var(--md-sys-color-surface-container-low);
+  box-shadow: var(--md-sys-elevation-1);
+  border: none;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 7rem;
+}
+
+.m3-stat:hover {
+  box-shadow: var(--md-sys-elevation-2);
+  transform: translateY(-2px);
+}
+
+/* El texto nunca empuja al icono fuera de la tarjeta. */
+.m3-stat-body { min-width: 0; flex: 1 1 auto; }
+.m3-stat-label {
+  color: var(--md-sys-color-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.1px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.m3-stat-value {
+  color: var(--md-sys-color-on-surface);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.25px;
+  font-variant-numeric: tabular-nums;
+}
+.m3-stat-hint {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Icono: círculo de 48px, el mínimo táctil de M3, y nunca se encoge. */
+.m3-stat-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Tonos semánticos. Solo cambian el color, nunca la forma ni la elevación. */
+.m3-stat-primary  .m3-stat-value { color: var(--md-sys-color-primary); }
+.m3-stat-primary  .m3-stat-icon  { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.m3-stat-positive .m3-stat-value { color: var(--md-sys-color-data-positive); }
+.m3-stat-positive .m3-stat-icon  { background-color: color-mix(in srgb, var(--md-sys-color-data-positive) 14%, transparent); color: var(--md-sys-color-data-positive); }
+.m3-stat-negative .m3-stat-value { color: var(--md-sys-color-error); }
+.m3-stat-negative .m3-stat-icon  { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+.m3-stat-warning  .m3-stat-value { color: var(--md-sys-color-tertiary); }
+.m3-stat-warning  .m3-stat-icon  { background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+
+/* ---------------------------------------------------------------------------
+   CAPAS DE ESTADO E INDICADOR DE FOCO
+   -------------------------------------------------------------------------*/
+.m3-interactive {
+  position: relative;
+  transition: background-color var(--md-motion-duration-short) var(--md-motion-standard);
+}
+.m3-interactive:hover   { background-color: color-mix(in srgb, currentColor 8%, transparent); }
+.m3-interactive:active  { background-color: color-mix(in srgb, currentColor 12%, transparent); }
+
+:where(button, a, select, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m3-card-base, .m3-stat, .m3-interactive {
+    transition: none;
+  }
+  .m3-card:hover, .neural-card:hover, .m3-card-elevated:hover, .m3-stat:hover {
+    transform: none;
+  }
 }
 
 .neural-glow {

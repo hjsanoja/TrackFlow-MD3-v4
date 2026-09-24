@@ -1194,7 +1194,7 @@ export default function Competencia({ user, userDoc }) {
           }
         >
           <div className="space-y-4 text-sm text-on-surface">
-            <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 space-y-1.5 font-mono text-xs">
+            <div className="m3-card-outlined p-4 space-y-1.5 font-mono text-xs">
               <div className="font-bold text-primary border-b border-outline-variant/60 pb-1 mb-1 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm">lists</span>
                 Columnas Obligatorias del CSV:

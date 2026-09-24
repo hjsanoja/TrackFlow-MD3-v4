@@ -1037,7 +1037,7 @@ export default function Dashboard({ user, userDoc }) {
       {/* Visual Analytics Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Leadership Bar Chart */}
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between">
+        <div className="m3-card-outlined p-5 shadow-sm flex flex-col justify-between">
           <div>
             <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider mb-1 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-base">bar_chart</span>
@@ -1078,7 +1078,7 @@ export default function Dashboard({ user, userDoc }) {
         {/* Historical BCV rate chart */}
         <div 
           onClick={() => setShowBcvModal(true)}
-          className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 shadow-sm flex flex-col justify-between hover:border-primary/60 transition-all hover:shadow-md cursor-pointer group relative"
+          className="m3-card-outlined p-5 shadow-sm flex flex-col justify-between hover:border-primary/60 transition-all hover:shadow-md cursor-pointer group relative"
         >
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -1181,7 +1181,7 @@ export default function Dashboard({ user, userDoc }) {
 
       {/* Versión 1.2: Gráfico "Análisis de Paridad de Escala Farmacéutica" ocultado temporalmente por solicitud del usuario. Descomentar para Reactivar.
       {analisisMoleculaParidad.length > 0 && (
-        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-6 shadow-sm space-y-4">
+        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
           <div>
             <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
               <span className="material-symbols-outlined text-xl text-primary">balance</span>
