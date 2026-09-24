@@ -266,18 +266,37 @@ export default function Dashboard({ user, userDoc }) {
           const hList = historyGrouped[k] || [];
           const currentHist = hList[0];
 
-          // La lista viene ordenada por fecha descendente, así que el precio
-          // de referencia es la primera captura con al menos `ventanaVariacion`
-          // días de antigüedad respecto de la más reciente. Si no hay ninguna
-          // tan vieja, no hay con qué comparar y no se dibuja flecha.
+          // La lista viene ordenada por fecha descendente. El precio de
+          // referencia es la primera captura de hace `ventanaVariacion` días
+          // o más, comparando por DÍA DE CALENDARIO y no por milisegundos.
+          //
+          // Comparar milisegundos rompía la ventana de 24 h: el scraper corre
+          // por cron con precisión de minutos, así que la captura de ayer
+          // suele quedar a 23 h 58 m de la de hoy. No llegaba a las 24 h
+          // exactas y se descartaba, dejando la variación diaria siempre
+          // vacía mientras 7 y 15 días sí funcionaban.
           let previousHist = null;
-          if (currentHist?.scraped_at) {
-            const fechaActual = new Date(currentHist.scraped_at).getTime();
-            const corte = fechaActual - (ventanaVariacion * 24 * 60 * 60 * 1000);
-            previousHist = hList.find(x => {
-              if (!x.scraped_at) return false;
-              return new Date(x.scraped_at).getTime() <= corte;
-            }) || null;
+          if (currentHist) {
+            const diaDe = (h) => {
+              // La vista historico_precios ya expone fecha_local (calendario
+              // de Caracas). Si falta, se deriva de scraped_at.
+              if (h.fecha_local) return h.fecha_local;
+              if (!h.scraped_at) return null;
+              const d = new Date(h.scraped_at);
+              return isNaN(d) ? null : d.toISOString().slice(0, 10);
+            };
+
+            const diaActual = diaDe(currentHist);
+            if (diaActual) {
+              const corte = new Date(`${diaActual}T00:00:00Z`);
+              corte.setUTCDate(corte.getUTCDate() - ventanaVariacion);
+              const diaCorte = corte.toISOString().slice(0, 10);
+
+              previousHist = hList.find(x => {
+                const d = diaDe(x);
+                return d && d <= diaCorte;
+              }) || null;
+            }
           }
           
           const currentVal = currentHist ? (dashboardPriceMode === 'descuento' ? (currentHist.precio_desc_bs || currentHist.precio_full_bs) : currentHist.precio_full_bs) : null;
