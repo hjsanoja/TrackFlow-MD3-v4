@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useDimensiones } from '../hooks/useDimensiones';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
 import { useToast } from '../context/ToastContext';
@@ -963,6 +964,9 @@ export default function Productos() {
 }
 
 function ProductoModal({ producto, sugerirId, onSave, onClose }) {
+  // Catálogos reales para sugerir en los campos y evitar duplicados por tipeo
+  // ("Calox" / "CALOX" / "Calox " acababan como tres laboratorios distintos).
+  const dimensiones = useDimensiones();
   const isNew = !producto;
   const [form, setForm] = useState({
     id_interno: producto?.id_interno || sugerirId(),
@@ -1057,7 +1061,10 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
             <input type="text" value={form.principio_activo}
               onChange={e => handleChange('principio_activo', e.target.value)}
               placeholder="Acetaminofén"
-              className="m3-input" />
+              list="dim-principios" className="m3-input" />
+            <datalist id="dim-principios">
+              {dimensiones.principiosActivos.map(n => <option key={n} value={n} />)}
+            </datalist>
           </Field>
 
           <Field label="Concentración" hint="Ej: 500 mg, 10%">
@@ -1076,19 +1083,28 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Laboratorio">
+          <Field label="Laboratorio" hint="Elige uno existente o escribe uno nuevo">
             <input type="text" value={form.laboratorio}
               onChange={e => handleChange('laboratorio', e.target.value)}
+              list="dim-laboratorios"
               placeholder="La Santé"
               className="m3-input" />
+            <datalist id="dim-laboratorios">
+              {dimensiones.laboratorios.map(n => <option key={n} value={n} />)}
+            </datalist>
           </Field>
 
-          <Field label="Categoría">
-            <select value={form.categoria} onChange={e => handleChange('categoria', e.target.value)}
-              className="m3-input bg-surface-container-lowest">
-              <option value="">— Selecciona —</option>
-              {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+          <Field label="Categoría" hint="Elige una existente o escribe una nueva">
+            <input type="text" value={form.categoria}
+              onChange={e => handleChange('categoria', e.target.value)}
+              list="dim-categorias"
+              placeholder="Analgésicos"
+              className="m3-input" />
+            {/* El catálogo real manda; CATEGORIAS era una lista fija en el
+                código que se desincronizaba de dim_categorias. */}
+            <datalist id="dim-categorias">
+              {(dimensiones.categorias.length ? dimensiones.categorias : CATEGORIAS).map(c => <option key={c} value={c} />)}
+            </datalist>
           </Field>
 
           <Field label="Market Type (Tipo)">
@@ -1099,13 +1115,15 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
             </select>
           </Field>
 
-          <Field label="Unidad de Negocio (UN)">
-            <select value={form.unidad_negocio} onChange={e => handleChange('unidad_negocio', e.target.value)}
-              className="m3-input bg-surface-container-lowest font-bold text-secondary">
-              <option value="La Sante">La Santé</option>
-              <option value="Pharmetique">Pharmetique</option>
-              <option value="OTC">OTC</option>
-            </select>
+          <Field label="Unidad de Negocio" hint="Elige una existente o escribe una nueva">
+            <input type="text" value={form.unidad_negocio}
+              onChange={e => handleChange('unidad_negocio', e.target.value)}
+              list="dim-unidades-negocio"
+              placeholder="La Sante"
+              className="m3-input font-bold text-secondary" />
+            <datalist id="dim-unidades-negocio">
+              {(dimensiones.unidadesNegocio.length ? dimensiones.unidadesNegocio : ['La Sante', 'Pharmetique', 'OTC']).map(u => <option key={u} value={u} />)}
+            </datalist>
           </Field>
         </div>
 

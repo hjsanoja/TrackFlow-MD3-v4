@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useDimensiones } from '../hooks/useDimensiones';
 import { useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
@@ -1370,6 +1371,7 @@ export default function Competencia({ user, userDoc }) {
 }
 
 function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas, onSave, onClose }) {
+  const dimensiones = useDimensiones();
   const isNew = !item;
   const productosActivos = productos.filter(p => p.activo);
   const cadenasActivas = cadenas.filter(c => c.activo);
@@ -1537,6 +1539,9 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
               onChange={e => handleChange('laboratorio', e.target.value)}
               placeholder="Ej. Genven"
               className="m3-input text-on-surface" />
+            <datalist id="dim-laboratorios-comp">
+              {dimensiones.laboratorios.map(n => <option key={n} value={n} />)}
+            </datalist>
           </Field>
         </div>
 

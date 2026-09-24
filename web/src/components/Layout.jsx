@@ -105,31 +105,64 @@ export default function Layout({ user, userDoc, children }) {
     setSearchQuery('');
   };
 
+  // Colapsado = patrón "navigation rail" de MD3: solo iconos, 80 px de ancho.
+  // Se recuerda la preferencia para no tener que colapsarlo en cada visita.
+  const [menuColapsado, setMenuColapsado] = useState(() => {
+    try {
+      return localStorage.getItem('trackflow_menu_colapsado') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('trackflow_menu_colapsado', menuColapsado ? '1' : '0');
+    } catch (_) {}
+  }, [menuColapsado]);
+
   return (
     <div className="min-h-screen bg-surface flex font-sans text-on-surface">
       {/* Sidebar - Material Design 3 Navigation Drawer (Desktop / Tablet) */}
-      <aside className="hidden md:flex w-64 lg:w-72 bg-surface-container-lowest border-r border-outline-variant/60 flex-col justify-between py-6 px-4 shrink-0 shadow-xs">
+      <aside className={`hidden md:flex bg-surface-container-lowest border-r border-outline-variant/60 flex-col justify-between py-6 shrink-0 shadow-xs transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${
+        menuColapsado ? 'w-20 px-2' : 'w-64 lg:w-72 px-4'
+      }`}>
         <div>
           {/* Logo & Brand */}
-          <div className="px-4 mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center text-on-primary shadow-elevation-1">
+          <div className={`mb-8 flex items-center ${menuColapsado ? 'flex-col gap-3 px-0' : 'justify-between px-4'}`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center text-on-primary shadow-elevation-1 shrink-0">
                 <span className="material-symbols-outlined select-none text-2xl font-bold">monitoring</span>
               </div>
-              <div>
-                <h1 className="text-xl font-display font-bold tracking-tight text-on-surface flex items-center gap-0.5">
-                  Track<span className="text-secondary font-display font-bold">Flow</span>
-                </h1>
-                <p className="text-[10px] text-on-surface-variant font-mono tracking-wider uppercase font-semibold">Monitor de Precios</p>
-              </div>
+              {!menuColapsado && (
+                <div className="min-w-0">
+                  <h1 className="text-xl font-display font-bold tracking-tight text-on-surface flex items-center gap-0.5">
+                    Track<span className="text-secondary font-display font-bold">Flow</span>
+                  </h1>
+                  <p className="text-[10px] text-on-surface-variant font-mono tracking-wider uppercase font-semibold truncate">Monitor de Precios</p>
+                </div>
+              )}
             </div>
+
+            <button
+              onClick={() => setMenuColapsado(v => !v)}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors shrink-0 cursor-pointer"
+              title={menuColapsado ? 'Expandir menú' : 'Colapsar menú para ganar espacio'}
+              aria-label={menuColapsado ? 'Expandir menú' : 'Colapsar menú'}
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {menuColapsado ? 'chevron_right' : 'chevron_left'}
+              </span>
+            </button>
           </div>
 
           {/* Navigation Links */}
           <nav className="space-y-1">
-            <div className="px-4 py-2 text-[11px] font-mono font-bold tracking-wider text-on-surface-variant uppercase">
-              Menú Principal
-            </div>
+            {!menuColapsado && (
+              <div className="px-4 py-2 text-[11px] font-mono font-bold tracking-wider text-on-surface-variant uppercase">
+                Menú Principal
+              </div>
+            )}
             {navItems
               .filter(isNavVisible)
               .map(item => (
@@ -137,21 +170,24 @@ export default function Layout({ user, userDoc, children }) {
                   key={item.to}
                   to={item.to}
                   end={item.to === '/'}
+                  title={menuColapsado ? item.label : undefined}
                   className={({ isActive }) =>
-                    `flex items-center justify-between px-4 py-3 rounded-full text-sm font-medium transition-all duration-150 ${
+                    `flex items-center rounded-full text-sm font-medium transition-all duration-150 ${
+                      menuColapsado ? 'justify-center px-0 py-3' : 'justify-between px-4 py-3'
+                    } ${
                       isActive
                         ? 'bg-primary-container text-on-primary-container font-bold shadow-elevation-1'
                         : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                     }`
                   }
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <div className={`flex items-center min-w-0 ${menuColapsado ? 'gap-0' : 'gap-3.5'}`}>
                     <span className="material-symbols-outlined select-none text-[22px] leading-none shrink-0">
                       {item.icon}
                     </span>
-                    <span className="truncate">{item.label}</span>
+                    {!menuColapsado && <span className="truncate">{item.label}</span>}
                   </div>
-                  {item.badge && (
+                  {!menuColapsado && item.badge && (
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
                       {item.badge}
                     </span>
@@ -163,15 +199,19 @@ export default function Layout({ user, userDoc, children }) {
 
         {/* User profile footer - MD3 Style */}
         <div className="space-y-4">
-          <div className="bg-surface-container-low rounded-2xl p-4 border border-outline-variant/40">
-            <div className="flex items-center gap-3">
+          <div className={`bg-surface-container-low rounded-2xl border border-outline-variant/40 ${menuColapsado ? 'p-2' : 'p-4'}`}>
+            <div className={`flex items-center ${menuColapsado ? 'justify-center' : 'gap-3'}`}>
               {(() => {
                 const displayName = userDoc?.nombre || user?.email?.split('@')[0] || 'Usuario';
                 return (
                   <>
-                    <div className="w-10 h-10 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-sm font-display shadow-elevation-1">
+                    <div
+                      className="w-10 h-10 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-sm font-display shadow-elevation-1 shrink-0"
+                      title={menuColapsado ? displayName : undefined}
+                    >
                       {displayName.charAt(0).toUpperCase()}
                     </div>
+                    {!menuColapsado && (
                     <div className="truncate flex-1">
                       <div className="text-sm font-bold text-on-surface truncate font-display">{displayName}</div>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -181,6 +221,7 @@ export default function Layout({ user, userDoc, children }) {
                         </span>
                       </div>
                     </div>
+                    )}
                   </>
                 );
               })()}
@@ -189,14 +230,15 @@ export default function Layout({ user, userDoc, children }) {
 
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-error bg-error-container hover:bg-error-container/85 border border-error/20 rounded-full transition-all active:scale-98"
+            title={menuColapsado ? 'Cerrar Sesión' : undefined}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 text-xs font-bold text-error bg-error-container hover:bg-error-container/85 border border-error/20 rounded-full transition-all active:scale-98 ${menuColapsado ? 'px-0' : 'px-4'}`}
           >
             <span className="material-symbols-outlined select-none text-base">logout</span>
-            <span>Cerrar Sesión</span>
+            {!menuColapsado && <span>Cerrar Sesión</span>}
           </button>
 
           {/* Version Footer */}
-          <div className="pt-3 text-center border-t border-outline-variant/40 flex flex-col items-center gap-1">
+          <div className={`pt-3 text-center border-t border-outline-variant/40 flex-col items-center gap-1 ${menuColapsado ? 'hidden' : 'flex'}`}>
             <span className="text-[10px] text-on-surface-variant font-mono tracking-wide">
               Sistema de Inteligencia Competitiva
             </span>
