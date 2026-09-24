@@ -221,7 +221,9 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
       // Categoria y unidad de negocio no se crean al importar (son catalogos
       // cerrados): si el nombre no existe, el producto conserva la que tenia
       // o, si es nuevo, queda sin ella. Antes pasaba sin avisar.
-      const existe = (lista, valor) => lista.some(n => n.trim().toLowerCase() === valor.toLowerCase());
+      // Misma comparacion que al guardar: sin mayusculas, tildes ni signos.
+      const clave = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+      const existe = (lista, valor) => lista.some(n => clave(n) === clave(valor));
       if (contexto.categorias) {
         const cat = getRowValue(fila, 'categoria', 'categoría', 'linea', 'grupo').trim();
         if (cat && !existe(contexto.categorias, cat)) {
