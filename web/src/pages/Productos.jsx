@@ -51,6 +51,7 @@ export default function Productos() {
   const [filtroUn, setFiltroUn] = useState('todos'); // todos | lasante | pharmetique | otc
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
+  const [progresoCsv, setProgresoCsv] = useState(null);
   const [csvSummary, setCsvSummary] = useState(null);
   // Informe de validación pendiente de confirmación
   const [previewCsv, setPreviewCsv] = useState(null);
@@ -390,7 +391,11 @@ export default function Productos() {
         }
 
         if (prodsToUpsert.length > 0) {
-          await dbUpsertProductosBulk(prodsToUpsert);
+          setProgresoCsv({ hechos: 0, total: prodsToUpsert.length });
+          const resultado = await dbUpsertProductosBulk(
+            prodsToUpsert,
+            (hechos, total) => setProgresoCsv({ hechos, total })
+          );
 
           if (compToUpsert.length > 0) {
             await dbUpsertCompetenciaBulk(compToUpsert);
@@ -406,11 +411,17 @@ export default function Productos() {
           refreshProductos();
 
           const msgComp = compToUpsert.length > 0 ? ` y ${compToUpsert.length} enlaces de competencia.` : '.';
-          addToast(`Importación exitosa: ${prodsToUpsert.length} productos registrados${msgComp}`, 'success');
+          if (resultado.errores.length > 0) {
+            const detalle = resultado.errores.slice(0, 5).map(e => `${e.id}: ${e.mensaje}`).join(' · ');
+            addToast(`${resultado.errores.length} productos no se guardaron. ${detalle}`, 'error');
+          }
+          if (resultado.ok > 0) {
+            addToast(`Importación exitosa: ${resultado.ok} productos registrados${msgComp}`, 'success');
+          }
 
           setCsvSummary({
             totalRows: rows.length,
-            successCount: prodsToUpsert.length,
+            successCount: resultado.ok,
             compCount: compToUpsert.length,
             skippedCount
           });
@@ -421,6 +432,7 @@ export default function Productos() {
         addToast('Error procesando CSV: ' + (err.message || String(err)), 'error');
       } finally {
         setIsUploadingCsv(false);
+        setProgresoCsv(null);
         setPreviewCsv(null);
       }
     };
@@ -969,6 +981,7 @@ export default function Productos() {
           informe={previewCsv.informe}
           nombreArchivo={previewCsv.nombre}
           importando={isUploadingCsv}
+          progreso={progresoCsv}
           onConfirmar={confirmarImportacion}
           onCancelar={() => setPreviewCsv(null)}
         />
