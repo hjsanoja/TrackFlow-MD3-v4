@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
 import { useToast } from '../context/ToastContext';
 import StatCard from '../components/StatCard';
+import Select from '../components/Select';
 
 /**
  * Separa la devaluación de la subida real de precio.
@@ -83,11 +84,11 @@ export default function DevaluacionReal() {
             </button>
           ))}
         </div>
-        <select value={lectura} onChange={e => setLectura(e.target.value)}
+        <Select value={lectura} onChange={e => setLectura(e.target.value)}
           className="m3-select m3-select-dense max-w-[260px]">
           <option value="todos">Todos los movimientos</option>
           {Object.entries(LECTURAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        </Select>
         <button onClick={cargar} className="m3-btn-outline h-9 px-4 text-label-lg ml-auto">
           <span className="material-symbols-outlined text-[18px] mr-1">refresh</span>
           Actualizar

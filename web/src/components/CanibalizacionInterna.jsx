@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import StatCard from './StatCard';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
+import Select from './Select';
 
 export default function CanibalizacionInterna({ user, userDoc }) {
   const { productos = [], productosCompetencia = [], ultimosPreciosValidos = [] } = useData();
@@ -390,7 +391,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
           </div>
 
           {/* Filtro Categoría */}
-          <select
+          <Select
             value={filtroCategoria}
             onChange={e => setFiltroCategoria(e.target.value)}
             className="m3-select m3-select-dense"
@@ -399,10 +400,10 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             {categorias.map(cat => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
-          </select>
+          </Select>
 
           {/* Filtro Cadena */}
-          <select
+          <Select
             value={cadenaFiltro}
             onChange={e => setCadenaFiltro(e.target.value)}
             className="m3-select m3-select-dense"
@@ -411,10 +412,10 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             {cadenas.map(cad => (
               <option key={cad} value={cad}>{cad}</option>
             ))}
-          </select>
+          </Select>
 
           {/* Filtro Nivel de Alerta */}
-          <select
+          <Select
             value={filtroNivelAlerta}
             onChange={e => setFiltroNivelAlerta(e.target.value)}
             className="m3-select m3-select-dense"
@@ -423,7 +424,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             <option value="critico">🚨 Solo Críticos ({conteoCriticos})</option>
             <option value="moderado">⚠️ Brecha Estrecha ({conteoModerados})</option>
             <option value="saludable">✅ Saludables ({conteoSaludables})</option>
-          </select>
+          </Select>
         </div>
 
         <div className="text-xs text-on-surface-variant font-mono">

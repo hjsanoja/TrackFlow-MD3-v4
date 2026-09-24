@@ -4,6 +4,7 @@ import { useBcvRate } from '../hooks/useBcvRate';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
+import Select from '../components/Select';
 
 export default function Hallazgos({ user, userDoc }) {
   const { productos, productosCompetencia, historicoPrecios, loadingInitial: loading } = useData();
@@ -509,7 +510,7 @@ export default function Hallazgos({ user, userDoc }) {
 
           {/* SBU / UN Filter */}
           <div>
-            <select
+            <Select
               value={unSeleccionada}
               onChange={(e) => setUnSeleccionada(e.target.value)}
               className="m3-select m3-select-dense w-full"
@@ -518,12 +519,12 @@ export default function Hallazgos({ user, userDoc }) {
               <option value="La Sante">La Santé</option>
               <option value="Pharmetique">Pharmetique</option>
               <option value="OTC">OTC</option>
-            </select>
+            </Select>
           </div>
 
           {/* Market Type Filter */}
           <div>
-            <select
+            <Select
               value={tipoMercadoSeleccionado}
               onChange={(e) => setTipoMercadoSeleccionado(e.target.value)}
               className="m3-select m3-select-dense w-full"
@@ -531,12 +532,12 @@ export default function Hallazgos({ user, userDoc }) {
               <option value="Todos">Todos los Mercados</option>
               <option value="GENERICO">Genérico</option>
               <option value="MARCA">Marca</option>
-            </select>
+            </Select>
           </div>
 
           {/* Category Filter */}
           <div>
-            <select
+            <Select
               value={categoriaSeleccionada}
               onChange={(e) => setCategoriaSeleccionada(e.target.value)}
               className="m3-select m3-select-dense w-full"
@@ -544,12 +545,12 @@ export default function Hallazgos({ user, userDoc }) {
               {categorias.map(cat => (
                 <option key={cat} value={cat}>{cat === 'Todas' ? 'Todas las Categorías' : cat}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Severity Filter */}
           <div>
-            <select
+            <Select
               value={severidadSeleccionada}
               onChange={(e) => setSeveridadSeleccionada(e.target.value)}
               className="m3-select m3-select-dense w-full"
@@ -559,7 +560,7 @@ export default function Hallazgos({ user, userDoc }) {
               <option value="alerta">Alerta (Sobreprecios / Brechas)</option>
               <option value="oportunidad">Oportunidad (Márgenes de alza)</option>
               <option value="mercado">Mercado (Dispersión / Arbitrajes)</option>
-            </select>
+            </Select>
           </div>
         </div>
 

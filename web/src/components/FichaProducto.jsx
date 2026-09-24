@@ -41,7 +41,7 @@ function Dato({ etiqueta, valor }) {
   );
 }
 
-export default function FichaProducto({ producto: p, enlaces = [], presentacion, onClose, onEditar, onAnalisis, onAlternarActivo }) {
+export default function FichaProducto({ producto: p, enlaces = [], presentacion, onClose, onEditar, onDuplicar, onAnalisis, onAlternarActivo, esCaido = () => false }) {
   // Esc cierra, como cualquier dialogo.
   useEffect(() => {
     const alPulsar = (e) => { if (e.key === 'Escape') onClose(); };
@@ -141,6 +141,7 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
                           <span className="m3-cell-primary">{e.cadena || '—'}</span>
                           {propio && <span className="m3-chip-propio">Propio</span>}
                           {e.tiene_descuento && <span className="m3-chip-oferta">Oferta</span>}
+                          {esCaido(e) && <span className="m3-chip-caido" title="Más de 7 días sin precio: puede que la tienda haya cambiado o retirado la URL">Sin precio reciente</span>}
                         </div>
                         <div className="m3-cell-secondary" title={e.ultimo_nombre || e.marca || ''}>
                           {e.ultimo_nombre || e.marca || 'Sin nombre capturado'}
@@ -169,6 +170,10 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
           <button type="button" onClick={onAlternarActivo} className="m3-btn-text mr-auto">
             <span className="material-symbols-outlined">{p.activo ? 'archive' : 'unarchive'}</span>
             {p.activo ? 'Dar de baja' : 'Reactivar'}
+          </button>
+          <button type="button" onClick={onDuplicar} className="m3-btn-text" title="Crear otra presentación a partir de esta ficha">
+            <span className="material-symbols-outlined">content_copy</span>
+            Duplicar
           </button>
           <button type="button" onClick={onAnalisis} className="m3-btn-tonal" disabled={enlaces.length === 0}>
             <span className="material-symbols-outlined">monitoring</span>

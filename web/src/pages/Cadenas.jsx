@@ -4,6 +4,7 @@ import ModalWrapper from '../components/ModalWrapper';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { dbUpsertCadena, dbDeleteCadena } from '../utils/dbClient';
+import Select from '../components/Select';
 
 // Scrapers disponibles en el código actual
 const SCRAPERS_DISPONIBLES = [
@@ -319,13 +320,13 @@ function CadenaModal({ cadena, onSave, onClose }) {
         </Field>
 
         <Field label="Módulo de Scraping" hint="Módulo Python de scraping asociado en backend">
-          <select required value={form.modulo_scraper}
+          <Select required value={form.modulo_scraper}
             onChange={e => handleChange('modulo_scraper', e.target.value)}
             className="m3-select w-full">
             {SCRAPERS_DISPONIBLES.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Estado Monitoreo">

@@ -49,6 +49,14 @@ Una fila por producto propio.
   producto conserva la que ya tenía.
 - `activo` admite `si` o `no`. Si el archivo no trae la columna, el estado
   guardado no se toca.
+- **Una celda vacía no cambia nada** en un producto que ya existe. Para
+  actualizar basta el `id_interno` y las columnas que cambian: un archivo con
+  solo `id_interno,pvp_propio_usd` actualiza los PVP. El `nombre` solo es
+  obligatorio en productos nuevos.
+- Antes de importar, la revisión muestra **qué va a cambiar** en cada
+  producto (antes → después) y cuáles son nuevos.
+- Los archivos guardados con Excel (Windows-1252, o con los acentos ya rotos
+  como `SuspensiÃ³n`) se leen y se corrigen solos.
 - Los dos CSV que descarga la pantalla **Productos** tienen estas mismas
   columnas, en este orden, y se pueden volver a subir tal cual:
   `productos_plantilla_carga_AAAA-MM-DD.csv` (todo el catálogo, para editarlo)

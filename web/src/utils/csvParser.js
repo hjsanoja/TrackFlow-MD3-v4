@@ -140,9 +140,12 @@ export function getRowValue(row, ...aliases) {
   for (const alias of aliases) {
     const targetNorm = norm(alias);
     if (!targetNorm || targetNorm.length < 3) continue;
+    // Al reves (la columna contenida en el alias) solo como prefijo y con al
+    // menos 5 letras: con "contenida en cualquier parte", una columna
+    // `activo` respondia por `principio_activo` y la molecula salia "si".
     const foundKey = rowKeys.find(rk => {
       const rkNorm = norm(rk);
-      return rkNorm.includes(targetNorm) || targetNorm.includes(rkNorm);
+      return rkNorm.includes(targetNorm) || (rkNorm.length >= 5 && targetNorm.startsWith(rkNorm));
     });
     if (foundKey && row[foundKey] !== undefined && String(row[foundKey]).trim() !== '') {
       return String(row[foundKey]).trim();
@@ -150,4 +153,49 @@ export function getRowValue(row, ...aliases) {
   }
 
   return '';
+}
+
+// ---------------------------------------------------------------------------
+// Lectura del archivo con la codificacion correcta.
+//
+// Excel guarda los CSV en Windows-1252 y, si se abre un CSV UTF-8 y se vuelve
+// a guardar, deja los acentos convertidos en "SuspensiÃ³n". Asi entraban en
+// la base formas farmaceuticas duplicadas. Aqui se prueba UTF-8, si no encaja
+// se lee como Windows-1252, y luego se reparan las secuencias rotas.
+// ---------------------------------------------------------------------------
+
+// Caracteres que Windows-1252 pone en 0x80-0x9F, para devolverlos a su byte.
+const CP1252_A_BYTE = {
+  '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87,
+  'ˆ': 0x88, '‰': 0x89, 'Š': 0x8a, '‹': 0x8b, 'Œ': 0x8c, 'Ž': 0x8e, '‘': 0x91,
+  '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '˜': 0x98,
+  '™': 0x99, 'š': 0x9a, '›': 0x9b, 'œ': 0x9c, 'ž': 0x9e, 'Ÿ': 0x9f,
+};
+const CONT = `[\\u0080-\\u00BF${Object.keys(CP1252_A_BYTE).join('')}]`;
+const RE_MOJIBAKE = new RegExp(`(?:[\\u00C2-\\u00DF]${CONT}|[\\u00E0-\\u00EF]${CONT}{2})+`, 'g');
+
+export function repararMojibake(texto) {
+  if (!/[ÂÃ]/.test(texto)) return texto;
+  return texto.replace(RE_MOJIBAKE, (trozo) => {
+    const bytes = Uint8Array.from([...trozo].map(c => CP1252_A_BYTE[c] ?? c.charCodeAt(0)));
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      return trozo;
+    }
+  });
+}
+
+export async function leerArchivoCsv(file) {
+  const buffer = await file.arrayBuffer();
+  let texto;
+  let codificacion = 'UTF-8';
+  try {
+    texto = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    texto = new TextDecoder('windows-1252').decode(buffer);
+    codificacion = 'Windows-1252';
+  }
+  const reparado = repararMojibake(texto);
+  return { texto: reparado, codificacion, acentosReparados: reparado !== texto };
 }

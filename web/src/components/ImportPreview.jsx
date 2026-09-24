@@ -8,7 +8,7 @@ import ModalWrapper from './ModalWrapper';
  * por qué. Aquí se ve el recuento, cada problema con su número de fila y su
  * motivo, y solo entonces se decide si continuar.
  */
-export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onCancelar, importando, progreso = null }) {
+export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onCancelar, importando, progreso = null, cambios = null, nota = null }) {
   if (!informe) return null;
 
   const { errores, avisos, filasValidas, total } = informe;
@@ -45,6 +45,13 @@ export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onC
           <span className="font-mono font-bold text-on-surface">{nombreArchivo}</span>
         </p>
 
+        {nota && (
+          <div className="m3-banner">
+            <span className="material-symbols-outlined" aria-hidden="true">auto_fix_high</span>
+            <span className="m3-body-medium">{nota}</span>
+          </div>
+        )}
+
         {/* Recuento */}
         <div className="grid grid-cols-3 gap-3">
           <div className="m3-card-filled p-3 text-center">
@@ -64,6 +71,8 @@ export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onC
             <div className="text-label-sm text-on-surface-variant">Con error</div>
           </div>
         </div>
+
+        {cambios && <ResumenCambios cambios={cambios} />}
 
         {hayBloqueantes && (
           <Lista
@@ -130,6 +139,57 @@ function Lista({ titulo, icono, tono, items }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Que va a pasar con cada producto antes de confirmar: nuevos, cambios campo
+// por campo (antes -> despues) y los que quedan igual.
+function ResumenCambios({ cambios }) {
+  const { nuevos, conCambios, sinCambios } = cambios;
+  const visibles = conCambios.slice(0, 50);
+  return (
+    <div className="m3-card-outlined">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 border-b border-outline-variant">
+        <span className="text-label-lg font-bold text-on-surface">Qué va a cambiar</span>
+        <span className="text-body-sm text-on-surface-variant">
+          {nuevos.length} {nuevos.length === 1 ? 'nuevo' : 'nuevos'} · {conCambios.length} con cambios · {sinCambios} sin cambios
+        </span>
+      </div>
+      <div className="max-h-64 overflow-auto divide-y divide-outline-variant/40">
+        {visibles.map(p => (
+          <div key={p.id} className="px-4 py-2 text-body-sm">
+            <div className="font-semibold text-on-surface">
+              <span className="font-mono text-on-surface-variant">{p.id}</span> {p.nombre}
+            </div>
+            <ul className="mt-0.5 space-y-0.5">
+              {p.cambios.map((c, i) => (
+                <li key={i} className="text-on-surface-variant">
+                  {c.etiqueta}: <span className="line-through">{c.antes}</span>
+                  <span aria-hidden="true"> → </span>
+                  <span className="text-on-surface font-medium">{c.despues}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {conCambios.length > visibles.length && (
+          <div className="px-4 py-2 text-label-md text-on-surface-variant">y {conCambios.length - visibles.length} productos más con cambios…</div>
+        )}
+        {nuevos.length > 0 && (
+          <div className="px-4 py-2 text-body-sm text-on-surface-variant">
+            <span className="font-semibold text-on-surface">Nuevos: </span>
+            {nuevos.slice(0, 20).map(n => `${n.id} ${n.nombre || ''}`.trim()).join(' · ')}
+            {nuevos.length > 20 ? ` y ${nuevos.length - 20} más` : ''}
+          </div>
+        )}
+        {conCambios.length === 0 && nuevos.length === 0 && (
+          <div className="px-4 py-3 text-body-sm text-on-surface-variant">El archivo no cambia nada del catálogo.</div>
+        )}
+      </div>
+      <p className="px-4 py-2 border-t border-outline-variant text-label-md text-on-surface-variant">
+        Una celda vacía no cambia nada: se conserva lo guardado.
+      </p>
     </div>
   );
 }

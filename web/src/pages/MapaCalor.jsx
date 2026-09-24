@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import ProductDetailModal from '../components/ProductDetailModal';
+import Select from '../components/Select';
 
 export default function MapaCalor({ user, userDoc }) {
   const {
@@ -434,7 +435,7 @@ export default function MapaCalor({ user, userDoc }) {
 
           {/* Chain Filter */}
           <div className="space-y-1">
-            <select
+            <Select
               value={cadenaSeleccionada}
               onChange={(e) => setCadenaSeleccionada(e.target.value)}
               className="m3-select m3-select-dense"
@@ -443,12 +444,12 @@ export default function MapaCalor({ user, userDoc }) {
               {cadenas.filter(c => c !== 'Todas').map(cad => (
                 <option key={cad} value={cad}>{cad}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* UN Filter */}
           <div className="space-y-1">
-            <select
+            <Select
               value={unSeleccionada}
               onChange={(e) => setUnSeleccionada(e.target.value)}
               className="m3-select m3-select-dense"
@@ -457,12 +458,12 @@ export default function MapaCalor({ user, userDoc }) {
               {unidadesNegocio.filter(u => u !== 'Todas').map(un => (
                 <option key={un} value={un}>{un}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Position Filter */}
           <div className="space-y-1">
-            <select
+            <Select
               value={filtroPosicionamiento}
               onChange={(e) => setFiltroPosicionamiento(e.target.value)}
               className="m3-select m3-select-dense"
@@ -472,7 +473,7 @@ export default function MapaCalor({ user, userDoc }) {
               <option value="En Paridad">En Paridad</option>
               <option value="Sobre Promedio">Sobre el Promedio</option>
               <option value="Sin Precio Propio">Sin Precio Propio</option>
-            </select>
+            </Select>
           </div>
         </div>
 

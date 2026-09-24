@@ -19,7 +19,9 @@ export const ESQUEMAS = {
     columnas: [
       { campo: 'id_interno', etiqueta: 'ID Interno', obligatorio: true,
         alias: ['id', 'codigo', 'código', 'sku', 'clave', 'identificador'] },
-      { campo: 'nombre', etiqueta: 'Nombre del Producto', obligatorio: true,
+      // Solo obligatorio en productos nuevos: para actualizar uno que ya
+      // existe basta el id y las columnas que cambian (p. ej. solo el PVP).
+      { campo: 'nombre', etiqueta: 'Nombre del Producto', obligatorio: true, soloNuevos: true,
         alias: ['producto', 'descripcion', 'descripción'] },
       { campo: 'laboratorio', etiqueta: 'Laboratorio', obligatorio: false,
         alias: ['fabricante'] },
@@ -102,7 +104,7 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
   //    parseCSV ya normalizó los encabezados.
   const primera = filas[0] || {};
   const faltantes = esquema.columnas
-    .filter(c => c.obligatorio)
+    .filter(c => c.obligatorio && !(c.soloNuevos && contexto.idsExistentes))
     .filter(c => !getRowValue(primera, c.campo, ...(c.alias || [])) &&
                  !Object.keys(primera).some(k =>
                    k.toLowerCase().replace(/[^a-z0-9]/g, '') ===
@@ -133,6 +135,13 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
         ? String(fila[Object.keys(fila).find(k => k.trim().toLowerCase() === col.campo)] ?? '').trim()
         : getRowValue(fila, col.campo, ...(col.alias || [])).trim();
 
+      if (col.obligatorio && !valor && col.soloNuevos && contexto.idsExistentes) {
+        const idFila = getRowValue(fila, 'id_interno', 'id', 'codigo', 'sku').trim();
+        if (contexto.idsExistentes.has(idFila)) continue;
+        errores.push({ fila: numero, campo: col.etiqueta, mensaje: 'Obligatorio en un producto nuevo' });
+        filaOk = false;
+        continue;
+      }
       if (col.obligatorio && !valor) {
         errores.push({ fila: numero, campo: col.etiqueta, mensaje: 'Campo obligatorio vacío' });
         filaOk = false;

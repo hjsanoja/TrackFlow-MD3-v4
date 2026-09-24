@@ -5,14 +5,16 @@ const ToastContext = createContext(null);
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((message, type = 'info') => {
+  // opciones.accion = { texto, onClick }: un boton en el aviso, p. ej.
+  // "Deshacer". Con accion el aviso dura mas (8 s) para dar tiempo a usarlo.
+  const addToast = useCallback((message, type = 'info', opciones = {}) => {
     const id = Date.now() + Math.random().toString(36).substr(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    
-    // Auto remove after 4 seconds
+    const { accion = null, duracion = accion ? 8000 : 4000 } = opciones;
+    setToasts((prev) => [...prev, { id, message, type, accion }]);
+
     setTimeout(() => {
       removeToast(id);
-    }, 4000);
+    }, duracion);
   }, []);
 
   const removeToast = useCallback((id) => {
@@ -60,6 +62,15 @@ export function ToastProvider({ children }) {
               <div className="flex-1 text-xs font-semibold leading-relaxed">
                 {t.message}
               </div>
+              {t.accion && (
+                <button
+                  type="button"
+                  onClick={() => { removeToast(t.id); t.accion.onClick(); }}
+                  className="shrink-0 text-xs font-bold uppercase tracking-wide text-primary hover:underline"
+                >
+                  {t.accion.texto}
+                </button>
+              )}
               <button
                 onClick={() => removeToast(t.id)}
                 className="text-on-surface-variant/60 hover:text-on-surface transition-colors shrink-0"

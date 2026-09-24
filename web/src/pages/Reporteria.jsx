@@ -4,6 +4,7 @@ import { useBcvRate } from '../hooks/useBcvRate';
 import { exportToCSV, copyTextToClipboard } from '../utils/exportUtils';
 import { getChainColor, getLabColor, getBrandBgTint } from '../utils/brandColors';
 import { useToast } from '../context/ToastContext';
+import Select from '../components/Select';
 
 export default function Reporteria({ user, userDoc }) {
   const { productos = [], productosCompetencia = [], cadenas = [], loadingInitial } = useData();
@@ -545,7 +546,7 @@ export default function Reporteria({ user, userDoc }) {
 
           {/* Cadena */}
           <div>
-            <select
+            <Select
               value={filtroCadena}
               onChange={e => { setFiltroCadena(e.target.value); setCurrentPage(1); }}
               className="m3-select m3-select-dense"
@@ -554,12 +555,12 @@ export default function Reporteria({ user, userDoc }) {
               {cadenas.map(c => (
                 <option key={c.id || c.nombre} value={c.nombre}>{c.nombre}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Categoría */}
           <div>
-            <select
+            <Select
               value={filtroCategoria}
               onChange={e => { setFiltroCategoria(e.target.value); setCurrentPage(1); }}
               className="m3-select m3-select-dense"
@@ -569,12 +570,12 @@ export default function Reporteria({ user, userDoc }) {
                   {cat === 'todas' ? 'Todas las categorías' : cat}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Laboratorio (de la tabla Competencias) */}
           <div>
-            <select
+            <Select
               value={filtroLaboratorio}
               onChange={e => { setFiltroLaboratorio(e.target.value); setCurrentPage(1); }}
               className="m3-select m3-select-dense"
@@ -584,12 +585,12 @@ export default function Reporteria({ user, userDoc }) {
                   {lab === 'todos' ? 'Todos los laboratorios / fabricantes' : lab}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Estado de Brecha */}
           <div>
-            <select
+            <Select
               value={filtroBrecha}
               onChange={e => { setFiltroBrecha(e.target.value); setCurrentPage(1); }}
               className="m3-select m3-select-dense"
@@ -598,7 +599,7 @@ export default function Reporteria({ user, userDoc }) {
               <option value="mas_caro">Competidores más caros (+)</option>
               <option value="mas_barato">Competidores más baratos (-) / Ventaja</option>
               <option value="paridad">En paridad (±3%)</option>
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -880,7 +881,7 @@ export default function Reporteria({ user, userDoc }) {
         <div className="px-5 py-3.5 bg-surface-container-low border-t border-outline-variant/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 text-on-surface-variant">
             <span>Filas por página:</span>
-            <select
+            <Select
               value={itemsPerPage}
               onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
               className="m3-select m3-select-dense"
@@ -890,7 +891,7 @@ export default function Reporteria({ user, userDoc }) {
               <option value={50}>50</option>
               <option value={100}>100</option>
               <option value={500}>500 (Todos)</option>
-            </select>
+            </Select>
             <span className="ml-2 font-mono">
               Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, rowsFiltradas.length)} - {Math.min(currentPage * itemsPerPage, rowsFiltradas.length)} de {rowsFiltradas.length}
             </span>

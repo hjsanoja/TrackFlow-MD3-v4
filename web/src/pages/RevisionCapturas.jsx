@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
 import { useToast } from '../context/ToastContext';
 import StatCard from '../components/StatCard';
+import Select from '../components/Select';
 
 /**
  * Bandeja de revisión de capturas sospechosas.
@@ -131,7 +132,7 @@ export default function RevisionCapturas() {
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-label-lg text-on-surface-variant">Motivo:</label>
-        <select
+        <Select
           value={filtroMotivo}
           onChange={e => setFiltroMotivo(e.target.value)}
           className="m3-select m3-select-dense max-w-[280px]"
@@ -141,7 +142,7 @@ export default function RevisionCapturas() {
             const n = capturas.filter(c => c.motivo_sospecha === k).length;
             return n > 0 ? <option key={k} value={k}>{v} ({n})</option> : null;
           })}
-        </select>
+        </Select>
         <button onClick={cargar} className="m3-btn-outline h-9 px-4 text-label-lg ml-auto">
           <span className="material-symbols-outlined text-[18px] mr-1">refresh</span>
           Actualizar
