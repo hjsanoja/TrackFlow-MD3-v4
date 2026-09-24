@@ -15,7 +15,14 @@ const TABLAS_CONFIG = {
       { key: 'nombre', label: 'Laboratorio', type: 'text', required: true },
       { key: 'es_propio', label: '¿Es Marca Propia?', type: 'boolean', defaultValue: false }
     ],
-    pk: 'id'
+    pk: 'id',
+    // Tablas que apuntan aquí. Sirve para contar los dependientes ANTES de
+    // intentar el borrado y decir exactamente qué lo bloquea, en vez de
+    // devolver el error crudo de Postgres.
+    dependencias: [
+      { tabla: 'dim_productos', columna: 'laboratorio_id', etiqueta: 'productos' },
+      { tabla: 'dim_marcas', columna: 'laboratorio_id', etiqueta: 'marcas' }
+    ]
   },
   dim_categorias: {
     nombre: 'Categorías Terapéuticas',
@@ -26,7 +33,10 @@ const TABLAS_CONFIG = {
       { key: 'nombre', label: 'Categoría', type: 'text', required: true },
       { key: 'descripcion', label: 'Descripción', type: 'text' }
     ],
-    pk: 'id'
+    pk: 'id',
+    dependencias: [
+      { tabla: 'dim_productos', columna: 'categoria_id', etiqueta: 'productos' }
+    ]
   },
   dim_unidades_negocio: {
     nombre: 'Unidades de Negocio',
@@ -37,7 +47,10 @@ const TABLAS_CONFIG = {
       { key: 'nombre', label: 'Nombre Unidad', type: 'text', required: true },
       { key: 'codigo', label: 'Código / Siglas', type: 'text' }
     ],
-    pk: 'id'
+    pk: 'id',
+    dependencias: [
+      { tabla: 'dim_productos', columna: 'unidad_negocio_id', etiqueta: 'productos' }
+    ]
   },
   dim_formas_farmaceuticas: {
     nombre: 'Formas Farmacéuticas',
@@ -47,7 +60,10 @@ const TABLAS_CONFIG = {
       { key: 'id', label: 'ID', type: 'number', readOnly: true },
       { key: 'nombre', label: 'Forma Farmacéutica', type: 'text', required: true }
     ],
-    pk: 'id'
+    pk: 'id',
+    dependencias: [
+      { tabla: 'dim_productos', columna: 'forma_farmaceutica_id', etiqueta: 'productos' }
+    ]
   },
   dim_cadenas: {
     nombre: 'Cadenas',
@@ -59,7 +75,11 @@ const TABLAS_CONFIG = {
       { key: 'color_hex', label: 'Color de la Cadena', type: 'color', defaultValue: '#040d53' },
       { key: 'activo', label: '¿Activo en Monitoreo?', type: 'boolean', defaultValue: true }
     ],
-    pk: 'id'
+    pk: 'id',
+    dependencias: [
+      { tabla: 'publicaciones', columna: 'cadena_id', etiqueta: 'enlaces monitoreados' },
+      { tabla: 'scrape_runs', columna: 'cadena_id', etiqueta: 'corridas del scraper' }
+    ]
   },
   dim_tasa_bcv: {
     nombre: 'Histórico Tasas BCV',
@@ -97,6 +117,9 @@ export default function Dimensiones() {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  // Conteo de filas que impiden el borrado, para explicarlo antes de intentarlo.
+  const [bloqueantes, setBloqueantes] = useState(null);
+  const [revisandoDeps, setRevisandoDeps] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetType, setResetType] = useState('all'); // 'all' | 'scrapes' | 'products'
@@ -311,6 +334,37 @@ export default function Dimensiones() {
     }
   };
 
+  // Cuenta los dependientes ANTES de abrir el modal. Todas las FK del esquema
+  // son ON DELETE RESTRICT, así que Postgres rechaza el borrado con el error
+  // 23503 y un detalle tipo: Key is still referenced from table "dim_productos".
+  // Ese mensaje no le dice nada a quien usa el panel; esto sí.
+  const solicitarBorrado = async (row) => {
+    setConfirmDelete(row);
+    setBloqueantes(null);
+
+    if (!config.dependencias || !isSupabaseActive()) return;
+
+    setRevisandoDeps(true);
+    try {
+      const pkVal = row[config.pk];
+      const conteos = await Promise.all(
+        config.dependencias.map(async (dep) => {
+          const { count, error } = await supabase
+            .from(dep.tabla)
+            .select('*', { count: 'exact', head: true })
+            .eq(dep.columna, pkVal);
+          return error ? null : { ...dep, total: count || 0 };
+        })
+      );
+      setBloqueantes(conteos.filter(c => c && c.total > 0));
+    } catch (err) {
+      console.warn('No se pudieron contar los dependientes:', err);
+      setBloqueantes(null);
+    } finally {
+      setRevisandoDeps(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirmDelete) return;
     setDeleting(true);
@@ -512,7 +566,7 @@ export default function Dimensiones() {
                             <span className="material-symbols-outlined text-base">edit</span>
                           </button>
                           <button
-                            onClick={() => setConfirmDelete(row)}
+                            onClick={() => solicitarBorrado(row)}
                             className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error-container/30 rounded-lg transition-colors cursor-pointer"
                             title="Eliminar fila"
                           >
@@ -609,11 +663,27 @@ export default function Dimensiones() {
         <ConfirmModal
           isOpen={true}
           title={`Eliminar Registro de ${config.nombre}`}
-          message={`¿Estás seguro de que deseas eliminar este registro (${confirmDelete[config.pk] || confirmDelete.nombre || 'ID'})? Esta acción no se puede deshacer y puede fallar si existen productos relacionados.`}
-          confirmText={deleting ? 'Eliminando...' : 'Eliminar Registro'}
-          isDanger={true}
-          onConfirm={handleDelete}
-          onCancel={() => setConfirmDelete(null)}
+          message={
+            revisandoDeps
+              ? 'Revisando si algo depende de este registro...'
+              : (bloqueantes && bloqueantes.length > 0)
+                ? `No se puede eliminar "${confirmDelete.nombre || confirmDelete[config.pk]}" porque otros registros dependen de él:\n\n` +
+                  bloqueantes.map(b => `  • ${b.total} ${b.etiqueta}`).join('\n') +
+                  `\n\nElimina o reasigna esos registros primero. Nada se ha borrado.`
+                : `¿Eliminar "${confirmDelete.nombre || confirmDelete[config.pk]}" de ${config.nombre}?\n\nNada depende de este registro, así que la eliminación es segura. La acción no se puede deshacer.`
+          }
+          confirmText={
+            deleting ? 'Eliminando...'
+              : (bloqueantes && bloqueantes.length > 0) ? 'Entendido'
+              : 'Eliminar Registro'
+          }
+          isDanger={!(bloqueantes && bloqueantes.length > 0)}
+          onConfirm={
+            (bloqueantes && bloqueantes.length > 0)
+              ? () => { setConfirmDelete(null); setBloqueantes(null); }
+              : handleDelete
+          }
+          onCancel={() => { setConfirmDelete(null); setBloqueantes(null); }}
         />
       )}
 
