@@ -6,6 +6,7 @@ import { getChainColor, getLabColor } from '../utils/brandColors';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip
 } from 'recharts';
+import Select from '../components/Select';
 
 export default function Analisis() {
   const { productos, productosCompetencia } = useData();
@@ -246,7 +247,7 @@ export default function Analisis() {
 
           <div className="flex items-center gap-2">
             <span className="text-label-md font-mono font-bold text-on-surface-variant uppercase">Categoría:</span>
-            <select
+            <Select
               value={selectedCategoria}
               onChange={e => setSelectedCategoria(e.target.value)}
               className="m3-select m3-select-dense"
@@ -256,7 +257,7 @@ export default function Analisis() {
                   {cat === 'todas' ? 'Todas las categorías' : cat}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 

@@ -24,6 +24,7 @@ import {
   dbNombresDimensionesCerradas,
   dbCambiarActivoProductos
 } from '../utils/dbClient';
+import Select from '../components/Select';
 
 // Un solo formato de CSV de productos para exportar, para la plantilla y para
 // importar: mismos encabezados, mismo orden, en minusculas y sin acentos, que
@@ -90,13 +91,10 @@ const ORDENES = {
 function FiltroChip({ etiqueta, icono, valor, onChange, opciones }) {
   const activo = valor !== 'todos';
   return (
-    <label className={`m3-filter-chip ${activo ? 'is-active' : ''}`}>
-      <span className="material-symbols-outlined" aria-hidden="true">{activo ? 'check' : icono}</span>
-      <select value={valor} onChange={e => onChange(e.target.value)} aria-label={etiqueta}>
-        {opciones.map(([v, texto]) => <option key={v} value={v}>{texto}</option>)}
-      </select>
-      <span className="material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
-    </label>
+    <Select value={valor} onChange={e => onChange(e.target.value)} aria-label={etiqueta}
+      className={`m3-filter-chip ${activo ? 'is-active' : ''}`} leadingIcon={activo ? 'check' : icono}>
+      {opciones.map(([v, texto]) => <option key={v} value={v}>{texto}</option>)}
+    </Select>
   );
 }
 
@@ -155,6 +153,19 @@ export default function Productos() {
   const [filtroFicha, setFiltroFicha] = useState('todos'); // todos | incompletos | completos
   const [orden, setOrden] = useState({ campo: null, dir: 'asc' });
   const [duplicarDe, setDuplicarDe] = useState(null); // producto a copiar en un alta
+  // Productos borrados que aun se pueden deshacer: fuera de la tabla, pero
+  // todavia en la base.
+  const [ocultos, setOcultos] = useState(() => new Set());
+  const borradosPendientes = useRef(new Map());
+  useEffect(() => {
+    const avisar = (e) => {
+      if (borradosPendientes.current.size === 0) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, []);
 
   // Seleccion multiple (por id). Se vacia al cambiar la busqueda o los
   // filtros, para no borrar o dar de baja productos que ya no se ven.
@@ -190,6 +201,7 @@ export default function Productos() {
   const filtrados = useMemo(() => {
     const term = search.toLowerCase().trim();
     const lista = productos.filter(p => {
+      if (ocultos.has(p.id)) return false;
       if (filtroActivo === 'activos' && !p.activo) return false;
       if (filtroActivo === 'inactivos' && p.activo) return false;
 
@@ -230,7 +242,7 @@ export default function Productos() {
       if (va > vb) return signo;
       return (a.id_interno || '').localeCompare(b.id_interno || '');
     });
-  }, [productos, search, filtroActivo, filtroUrls, filtroTipo, filtroUn, filtroFicha, orden, urlsPorProducto]);
+  }, [productos, search, filtroActivo, filtroUrls, filtroTipo, filtroUn, filtroFicha, orden, urlsPorProducto, ocultos]);
 
   // Primer clic ascendente, segundo descendente, tercero sin orden.
   const alternarOrden = (campo) => {
@@ -361,19 +373,55 @@ export default function Productos() {
     setConfirmDelete(producto);
   };
 
-  const handleConfirmDelete = async () => {
+  // Borrado con margen para arrepentirse: los productos desaparecen de la
+  // tabla al instante, pero el borrado real (que se lleva el historial) se
+  // hace a los 8 segundos. Hasta entonces el aviso ofrece "Deshacer".
+  const programarBorrado = (lista) => {
+    const ids = lista.map(p => p.id);
+    const clave = ids.join('|');
+    setOcultos(prev => new Set([...prev, ...ids]));
+
+    const ejecutar = async () => {
+      borradosPendientes.current.delete(clave);
+      const errores = [];
+      for (const p of lista) {
+        try {
+          await dbDeleteProducto(p.id, urlsPorProducto.get(p.id_interno) || []);
+        } catch (err) {
+          errores.push(`${p.id_interno}: ${err.message || String(err)}`);
+        }
+      }
+      if (errores.length > 0) {
+        addToast(`${errores.length} productos no se eliminaron. ${errores.slice(0, 3).join(' · ')}`, 'error');
+      }
+      await cargar(true);
+      setOcultos(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+    };
+    borradosPendientes.current.set(clave, setTimeout(ejecutar, 8000));
+
+    addToast(
+      lista.length === 1 ? `"${lista[0].nombre}" eliminado.` : `${lista.length} productos eliminados.`,
+      'success',
+      {
+        duracion: 8000,
+        accion: {
+          texto: 'Deshacer',
+          onClick: () => {
+            clearTimeout(borradosPendientes.current.get(clave));
+            borradosPendientes.current.delete(clave);
+            setOcultos(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+            addToast(lista.length === 1 ? 'Producto restaurado.' : `${lista.length} productos restaurados.`, 'info');
+          },
+        },
+      }
+    );
+  };
+
+  const handleConfirmDelete = () => {
     if (!confirmDelete) return;
     const producto = confirmDelete;
-    const links = urlsPorProducto.get(producto.id_interno) || [];
     setConfirmDelete(null);
-
-    try {
-      await dbDeleteProducto(producto.id, links);
-      addToast('Producto y sus enlaces de competencia eliminados con éxito.', 'success');
-      await cargar(true);
-    } catch (err) {
-      addToast('Error al eliminar: ' + err.message, 'error');
-    }
+    programarBorrado([producto]);
   };
 
   const alternarSeleccion = (id) => {
@@ -436,29 +484,11 @@ export default function Productos() {
 
   // Borrado masivo: uno por uno, porque cada producto arrastra sus
   // publicaciones, capturas y equivalencias en un orden fijo (FK RESTRICT).
-  const handleConfirmBorrarSeleccion = async () => {
+  const handleConfirmBorrarSeleccion = () => {
     const lista = seleccionados;
     setConfirmBorrarSel(false);
-    setProcesandoSel({ hechos: 0, total: lista.length });
-    const errores = [];
-    for (let i = 0; i < lista.length; i++) {
-      const p = lista[i];
-      try {
-        await dbDeleteProducto(p.id, urlsPorProducto.get(p.id_interno) || []);
-      } catch (err) {
-        errores.push(`${p.id_interno}: ${err.message || String(err)}`);
-      }
-      setProcesandoSel({ hechos: i + 1, total: lista.length });
-    }
-    if (errores.length > 0) {
-      addToast(`${errores.length} productos no se eliminaron. ${errores.slice(0, 3).join(' · ')}`, 'error');
-    }
-    if (errores.length < lista.length) {
-      addToast(`${lista.length - errores.length} productos eliminados.`, 'success');
-    }
     setSeleccion(new Set());
-    setProcesandoSel(null);
-    await cargar(true);
+    programarBorrado(lista);
   };
 
   const handleConfirmDeleteAll = async () => {
@@ -1065,9 +1095,9 @@ export default function Productos() {
           <footer className="m3-data-table-footer">
             <label className="flex items-center gap-2 m3-body-medium text-on-surface-variant">
               Filas por página
-              <select value={itemsPorPagina} onChange={e => cambiarFilasPorPagina(Number(e.target.value))} className="m3-rows-select">
+              <Select value={itemsPorPagina} onChange={e => cambiarFilasPorPagina(Number(e.target.value))} className="m3-rows-select">
                 {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              </Select>
             </label>
             <span className="m3-body-medium text-on-surface-variant sm:ml-auto">
               {Math.min(filtrados.length, (paginaActual - 1) * itemsPorPagina + 1)}–{Math.min(filtrados.length, paginaActual * itemsPorPagina)} de {filtrados.length}
@@ -1141,7 +1171,7 @@ export default function Productos() {
                 (urlsPorProducto.get(confirmDelete.id_interno) || []).length > 0 
                   ? `\n\nATENCIÓN: este producto tiene ${(urlsPorProducto.get(confirmDelete.id_interno) || []).length} URL(s) de competencia activa(s) que también se eliminarán.`
                   : ''
-              }\n\nEsta acción no se puede deshacer.`
+              }\n\nTendrás 8 segundos para deshacerlo; después se borra con todo su historial de precios.`
             : ''
         }
         confirmText="Eliminar"
@@ -1156,7 +1186,7 @@ export default function Productos() {
         title={`¿Eliminar ${seleccionados.length} productos?`}
         message={`Se eliminarán ${seleccionados.length} productos junto con TODO su historial de precios${
           urlsSeleccionadas > 0 ? ` y ${urlsSeleccionadas} URL(s) de competencia` : ''
-        }.\n\nEsta acción no se puede deshacer. Si solo quieres dejar de verlos o de vigilarlos, usa "Dar de baja": conserva el historial y se pueden reactivar.`}
+        }.\n\nTendrás 8 segundos para deshacerlo; después no hay vuelta atrás. Si solo quieres dejar de verlos o de vigilarlos, usa "Dar de baja": conserva el historial y se pueden reactivar.`}
         confirmText={`Eliminar ${seleccionados.length}`}
         cancelText="Cancelar"
         isDanger={true}

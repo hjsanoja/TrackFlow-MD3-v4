@@ -13,6 +13,7 @@ import {
   Legend,
   ReferenceLine
 } from 'recharts';
+import Select from './Select';
 
 export default function BrechaHistoricaUsd({ user, userDoc }) {
   const { productos = [], productosCompetencia = [], historicoPrecios = [], bcvRates = [] } = useData();
@@ -356,7 +357,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
                 onChange={e => setBusquedaProd(e.target.value)}
                 className="w-1/3 px-3 py-2 text-xs rounded-xl bg-surface-container-lowest border border-outline-variant text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
               />
-              <select
+              <Select
                 value={prodActivo?.id_interno || prodActivo?.id || ''}
                 onChange={e => setProductoSeleccionadoId(e.target.value)}
                 className="m3-select m3-select-dense flex-1"
@@ -366,7 +367,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
                     {p.nombre} ({p.laboratorio || 'La Santé'})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -375,7 +376,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
             <label className="text-xs font-semibold text-on-surface block">
               Cadena:
             </label>
-            <select
+            <Select
               value={cadenaSeleccionada}
               onChange={e => setCadenaSeleccionada(e.target.value)}
               className="m3-select m3-select-dense w-full"
@@ -384,7 +385,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
               {cadenasDisponibles.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Rango de Días */}

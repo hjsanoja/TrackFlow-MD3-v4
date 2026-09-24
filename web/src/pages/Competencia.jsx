@@ -22,6 +22,7 @@ import {
   dbUpsertProductosBulk
 } from '../utils/dbClient';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
+import Select from '../components/Select';
 
 const TIPOS = [
   { value: 'propio', label: 'Mi Marca' },
@@ -857,32 +858,32 @@ export default function Competencia({ user, userDoc }) {
           )}
         </div>
         
-        <select
+        <Select
           value={filtroProducto}
           onChange={(e) => setFiltroProducto(e.target.value)}
           className="m3-select max-w-[220px]"
         >
           <option value="todos">Todos los productos</option>
           {productos.map(p => <option key={p.id} value={p.id_interno}>{p.nombre}</option>)}
-        </select>
+        </Select>
 
-        <select
+        <Select
           value={filtroCadena}
           onChange={(e) => setFiltroCadena(e.target.value)}
           className="m3-select max-w-[180px]"
         >
           <option value="todas">Todas las cadenas</option>
           {cadenas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-        </select>
+        </Select>
 
-        <select
+        <Select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
           className="m3-select max-w-[160px]"
         >
           <option value="todos">Todos los tipos</option>
           {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+        </Select>
 
         {(search || filtroCadena !== 'todas' || filtroProducto !== 'todos' || filtroTipo !== 'todos') && (
           <button onClick={limpiarFiltros} className="text-xs font-bold text-rose-600 hover:underline uppercase font-mono px-2">
@@ -1496,7 +1497,7 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
         )}
 
         <Field label="Producto en Catálogo Interno *">
-          <select required value={form.id_producto_propio}
+          <Select required value={form.id_producto_propio}
             onChange={e => handleProductSelect(e.target.value)}
             disabled={!isNew}
             className="m3-input bg-surface-container-lowest text-on-surface">
@@ -1504,25 +1505,25 @@ function CompetenciaModal({ item, productoIdPreseleccionado, productos, cadenas,
             {productosActivos.map(p => (
               <option key={p.id} value={p.id_interno}>{p.id_interno} · {p.nombre}</option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Cadena *">
-            <select required value={form.cadena}
+            <Select required value={form.cadena}
               onChange={e => handleChange('cadena', e.target.value)}
               disabled={!isNew}
               className="m3-input bg-surface-container-lowest text-on-surface">
               <option value="">— Seleccionar —</option>
               {cadenasActivas.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-            </select>
+            </Select>
           </Field>
           
           <Field label="Tipo de Relación *">
-            <select required value={form.tipo} onChange={e => handleTipoSelect(e.target.value)}
+            <Select required value={form.tipo} onChange={e => handleTipoSelect(e.target.value)}
               className="m3-input bg-surface-container-lowest text-on-surface">
               {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+            </Select>
           </Field>
         </div>
 

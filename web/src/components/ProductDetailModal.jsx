@@ -7,6 +7,7 @@ import { dbClearHistoricoPrecioForProduct } from '../utils/dbClient';
 import {
   LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine
 } from 'recharts';
+import Select from './Select';
 
 const COLORS = ['#040d53', '#70C145', '#ba1a1a', '#004ecb', '#002f6c', '#0891b2', '#db2777'];
 
@@ -910,7 +911,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <span className="material-symbols-outlined text-body-lg">groups</span>
                   <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Relación Marca:</span>
                 </div>
-                <select
+                <Select
                   value={filterRelacion}
                   onChange={(e) => setFilterRelacion(e.target.value)}
                   className="m3-select m3-select-dense w-full"
@@ -918,7 +919,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <option value="todos">Todos</option>
                   <option value="propio">Mi Marca</option>
                   <option value="competencia">Competidores</option>
-                </select>
+                </Select>
               </div>
 
               {/* Cadena Selector */}
@@ -927,7 +928,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <span className="material-symbols-outlined text-body-lg">storefront</span>
                   <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Cadena:</span>
                 </div>
-                <select
+                <Select
                   value={filterCadena}
                   onChange={(e) => setFilterCadena(e.target.value)}
                   className="m3-select m3-select-dense w-full"
@@ -936,7 +937,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   {cadenasDisponibles.map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
 

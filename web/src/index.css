@@ -1315,6 +1315,77 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 .m3-switch:checked::after { left: 22px; width: 24px; height: 24px; background-color: var(--md-sys-color-on-primary); }
 .m3-switch:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
 
+/* ---------------------------------------------------------------------------
+   Desplegable M3 (components/Select.jsx). El boton conserva el aspecto del
+   campo (m3-select, m3-input, chip...) y el menu es el mismo en toda la app.
+   --------------------------------------------------------------------------- */
+.m3-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background-image: none !important;
+  overflow: hidden;
+}
+.m3-select.m3-select-trigger, .m3-input.m3-select-trigger { display: flex; padding-right: 0.5rem; }
+.m3-select-value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m3-select-value.is-placeholder { color: var(--md-sys-color-on-surface-variant); }
+.m3-select-lead { font-size: 18px; }
+.m3-select-arrow {
+  flex-shrink: 0;
+  font-size: 22px;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: transform 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.m3-select-trigger.is-open .m3-select-arrow { transform: rotate(180deg); }
+.m3-select-trigger.is-open:is(.m3-select, .m3-input) { border-color: var(--md-sys-color-primary); }
+.m3-select-trigger:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.m3-select-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
+.m3-filter-chip.m3-select-trigger .m3-select-value,
+.m3-rows-select.m3-select-trigger .m3-select-value { flex: 0 1 auto; }
+.m3-select-required { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.m3-menu-list {
+  position: fixed;
+  z-index: 100002;
+  max-height: 320px;
+  max-width: min(420px, calc(100vw - 16px));
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: 16px;
+  background-color: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-2);
+  animation: m3-menu-in 150ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+}
+@keyframes m3-menu-in { from { opacity: 0; transform: scaleY(0.92); } to { opacity: 1; transform: none; } }
+.m3-menu-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px 0 12px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+.m3-menu-option.is-active { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.m3-menu-option.is-selected {
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-weight: 600;
+}
+.m3-menu-option.is-selected.is-active {
+  background-color: color-mix(in srgb, var(--md-sys-color-on-secondary-container) 8%, var(--md-sys-color-secondary-container));
+}
+.m3-menu-option.is-disabled { opacity: 0.38; cursor: not-allowed; }
+.m3-menu-check { width: 20px; flex-shrink: 0; font-size: 20px; }
+
+/* La lista del ComboField (formularios) con el mismo aspecto que el menu. */
+.m3-combo-list { padding: 4px; border-radius: 16px; }
+.m3-combo-option { border-radius: 12px; min-height: 48px; }
+
 /* Side sheet modal (ficha de producto). */
 .m3-sheet-scrim { justify-content: flex-end; align-items: stretch; padding: 0; }
 .m3-side-sheet {
@@ -1383,6 +1454,7 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 .m3-rows-select:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .m3-selection-bar, .m3-side-sheet { animation: none; }
+  .m3-selection-bar, .m3-side-sheet, .m3-menu-list { animation: none; }
+  .m3-select-arrow { transition: none; }
   .m3-linear-progress > div, .m3-filter-chip, .m3-icon-btn, .m3-btn-tonal, .m3-btn-text, .m3-search-field { transition: none; }
 }
