@@ -1,15 +1,20 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Experimental from './pages/Experimental';
-import MapaCalor from './pages/MapaCalor';
-import Productos from './pages/Productos';
-import Competencia from './pages/Competencia';
-import Cadenas from './pages/Cadenas';
-import Usuarios from './pages/Usuarios';
-import Dimensiones from './pages/Dimensiones';
+
+// Carga bajo demanda: cada pantalla viaja en su propio archivo y solo se
+// descarga al entrar en ella. Antes todo el panel iba en un unico bundle de
+// 1,79 MB que habia que bajar entero para ver el Dashboard.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Experimental = lazy(() => import('./pages/Experimental'));
+const MapaCalor = lazy(() => import('./pages/MapaCalor'));
+const Productos = lazy(() => import('./pages/Productos'));
+const Competencia = lazy(() => import('./pages/Competencia'));
+const Cadenas = lazy(() => import('./pages/Cadenas'));
+const Usuarios = lazy(() => import('./pages/Usuarios'));
+const Dimensiones = lazy(() => import('./pages/Dimensiones'));
+
 import Layout from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './context/ToastContext';
@@ -205,6 +210,11 @@ function AppContent() {
   return (
     <DataProvider user={user}>
       <Layout user={user} userDoc={userDoc}>
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-24">
+            <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+          </div>
+        }>
         <Routes>
           <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
@@ -221,6 +231,7 @@ function AppContent() {
           <Route path="/login" element={<Navigate to={fallbackPath} replace />} />
           <Route path="*" element={<Navigate to={fallbackPath} replace />} />
         </Routes>
+        </Suspense>
       </Layout>
     </DataProvider>
   );

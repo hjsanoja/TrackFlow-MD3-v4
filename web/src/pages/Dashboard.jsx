@@ -23,6 +23,7 @@ export default function Dashboard({ user, userDoc }) {
     productosCompetencia,
     bcvRates: bcvHistorico,
     historicoPrecios,
+    variaciones,
     ultimaCorrida: globalUltimaCorrida,
     loadingInitial: loading,
     refreshData,
@@ -228,6 +229,14 @@ export default function Dashboard({ user, userDoc }) {
   // Main calculations for products and competitors
   const analizados = useMemo(() => {
     // Group history by normalized key
+    // Índice O(1) de la vista v_variacion. Postgres ya resolvió, por cada
+    // enlace, el precio actual y los de hace 1, 7 y 15 días, así que no hay
+    // que recorrer el histórico completo en el navegador.
+    const mapaVariacion = new Map();
+    (variaciones || []).forEach(v => {
+      if (v.publicacion_id != null) mapaVariacion.set(v.publicacion_id, v);
+    });
+
     const historyGrouped = {};
     historicoPrecios.forEach(h => {
       if (!h.id_producto_propio || !h.cadena || !h.marca) return;
@@ -299,8 +308,29 @@ export default function Dashboard({ user, userDoc }) {
             }
           }
           
-          const currentVal = currentHist ? (dashboardPriceMode === 'descuento' ? (currentHist.precio_desc_bs || currentHist.precio_full_bs) : currentHist.precio_full_bs) : null;
-          const prevVal = previousHist ? (dashboardPriceMode === 'descuento' ? (previousHist.precio_desc_bs || previousHist.precio_full_bs) : previousHist.precio_full_bs) : null;
+          // La vista manda: llega ya calculada y no depende de que el histórico
+          // completo haya terminado de cargarse en segundo plano.
+          const filaVar = c.publicacion_id != null ? mapaVariacion.get(c.publicacion_id) : null;
+
+          let currentVal = null;
+          let prevVal = null;
+
+          if (filaVar) {
+            const suf = ventanaVariacion === 1 ? '1d' : ventanaVariacion === 7 ? '7d' : '15d';
+            currentVal = dashboardPriceMode === 'descuento'
+              ? (filaVar.precio_actual_desc_bs ?? filaVar.precio_actual_full_bs)
+              : filaVar.precio_actual_full_bs;
+            prevVal = dashboardPriceMode === 'descuento'
+              ? (filaVar[`precio_${suf}_desc_bs`] ?? filaVar[`precio_${suf}_full_bs`])
+              : filaVar[`precio_${suf}_full_bs`];
+          } else {
+            // Respaldo para enlaces sin publicacion_id (datos legacy).
+            currentVal = currentHist ? (dashboardPriceMode === 'descuento' ? (currentHist.precio_desc_bs || currentHist.precio_full_bs) : currentHist.precio_full_bs) : null;
+            prevVal = previousHist ? (dashboardPriceMode === 'descuento' ? (previousHist.precio_desc_bs || previousHist.precio_full_bs) : previousHist.precio_full_bs) : null;
+          }
+
+          currentVal = currentVal != null ? Number(currentVal) : null;
+          prevVal = prevVal != null ? Number(prevVal) : null;
           
           const valNow = currentVal !== null ? currentVal / cUnitFactor : priceBs;
           const valPrevAdjusted = prevVal !== null ? prevVal / cUnitFactor : null;
@@ -392,7 +422,7 @@ export default function Dashboard({ user, userDoc }) {
           pUnidosisCount,
         };
       });
-  }, [productos, productosCompetencia, bcv.rate, dashboardPriceMode, historicoPrecios, analisisMode, ventanaVariacion]);
+  }, [productos, productosCompetencia, bcv.rate, dashboardPriceMode, historicoPrecios, analisisMode, ventanaVariacion, variaciones]);
 
   // Count products with no price in any chain
   const sinPreciosCount = useMemo(() => {
