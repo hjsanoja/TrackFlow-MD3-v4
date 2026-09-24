@@ -1264,7 +1264,9 @@ export default function Dashboard({ user, userDoc }) {
       )} */}
 
       {/* Heatmap Matrix Section */}
-      <div className="neural-card overflow-hidden">
+      {/* Sin overflow-hidden: recortaba el posicionamiento sticky de la barra
+          de filtros que va dentro. */}
+      <div className="neural-card">
         <div className="px-5 py-4 border-b border-surface-variant flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="font-display font-extrabold text-lg text-on-background">Matriz Comparativa & Heatmap de Precios</h2>
@@ -1366,8 +1368,12 @@ export default function Dashboard({ user, userDoc }) {
           </div>
         </div>
 
-        {/* Search & Categories Bar */}
-        <div className="px-5 py-3.5 bg-surface-low/50 border-b border-surface-variant flex flex-col md:flex-row md:items-center justify-between gap-3">
+        {/* Barra de búsqueda y categorías.
+            `sticky` para que quede fija al desplazar la matriz: antes había que
+            subir hasta arriba para cambiar un filtro y volver a bajar a la
+            tabla. El z-30 la mantiene por encima del encabezado de la tabla,
+            que también es sticky. */}
+        <div className="sticky top-0 z-30 px-5 py-3.5 bg-surface-container-lowest border-b border-surface-variant flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
             <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
             <input
@@ -1384,13 +1390,13 @@ export default function Dashboard({ user, userDoc }) {
 
           {/* Categorías */}
           <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase mr-1">Categoría:</span>
+            <span className="text-[11px] font-mono font-bold text-on-surface-variant uppercase mr-1 shrink-0">Categoría:</span>
             {categorias.map(cat => (
               <button key={cat} onClick={() => setCategoriaSeleccionada(cat)}
                 className={`h-9 px-3.5 text-xs font-semibold rounded-full border transition-all inline-flex items-center justify-center ${
                   categoriaSeleccionada === cat 
                     ? 'bg-primary border-primary text-on-primary font-bold shadow-xs' 
-                    : 'bg-white border-outline-variant/60 text-on-background hover:bg-surface-variant'
+                    : 'bg-surface-container border-outline-variant/60 text-on-surface hover:bg-surface-container-high'
                 }`}>
                 {cat}
               </button>
@@ -1399,7 +1405,7 @@ export default function Dashboard({ user, userDoc }) {
         </div>
 
         {/* Heatmap Grid Table */}
-        <div className="overflow-x-auto max-h-[750px] relative">
+        <div className="overflow-auto max-h-[750px] relative">
           <table className="m3-table">
             <thead className="m3-sticky-header">
               <tr>

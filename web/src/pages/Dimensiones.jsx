@@ -65,22 +65,9 @@ const TABLAS_CONFIG = {
       { tabla: 'dim_productos', columna: 'forma_farmaceutica_id', etiqueta: 'productos' }
     ]
   },
-  dim_cadenas: {
-    nombre: 'Cadenas',
-    icono: 'storefront',
-    descripcion: 'Cadenas monitoreadas para el web scraping (Farmatodo, Locatel, Farmacias SAAS, etc.)',
-    columnas: [
-      { key: 'id', label: 'ID de la Cadena', type: 'text', required: true },
-      { key: 'nombre', label: 'Nombre de la Cadena', type: 'text', required: true },
-      { key: 'color_hex', label: 'Color de la Cadena', type: 'color', defaultValue: '#040d53' },
-      { key: 'activo', label: '¿Activo en Monitoreo?', type: 'boolean', defaultValue: true }
-    ],
-    pk: 'id',
-    dependencias: [
-      { tabla: 'publicaciones', columna: 'cadena_id', etiqueta: 'enlaces monitoreados' },
-      { tabla: 'scrape_runs', columna: 'cadena_id', etiqueta: 'corridas del scraper' }
-    ]
-  },
+  // dim_cadenas se gestiona en su propia pantalla (menú → Cadenas), que
+  // además valida el módulo de scraping y muestra cuántas URLs activas tiene
+  // cada cadena. Tenerlo también aquí duplicaba la funcionalidad.
   dim_tasa_bcv: {
     nombre: 'Histórico Tasas BCV',
     icono: 'currency_exchange',
