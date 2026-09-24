@@ -393,7 +393,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
           <select
             value={filtroCategoria}
             onChange={e => setFiltroCategoria(e.target.value)}
-            className="px-3 py-1.5 text-xs rounded-xl bg-surface-container-lowest border border-outline-variant text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+            className="m3-select m3-select-dense"
           >
             <option value="todas">Todas las categorías ({categorias.length})</option>
             {categorias.map(cat => (
@@ -405,7 +405,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
           <select
             value={cadenaFiltro}
             onChange={e => setCadenaFiltro(e.target.value)}
-            className="px-3 py-1.5 text-xs rounded-xl bg-surface-container-lowest border border-outline-variant text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+            className="m3-select m3-select-dense"
           >
             <option value="todas">Todas las cadenas</option>
             {cadenas.map(cad => (
@@ -417,7 +417,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
           <select
             value={filtroNivelAlerta}
             onChange={e => setFiltroNivelAlerta(e.target.value)}
-            className="px-3 py-1.5 text-xs rounded-xl bg-surface-container-lowest border border-outline-variant text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+            className="m3-select m3-select-dense"
           >
             <option value="todos">Todos los niveles</option>
             <option value="critico">🚨 Solo Críticos ({conteoCriticos})</option>

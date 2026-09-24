@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import StatCard from '../components/StatCard';
 import { useDimensiones } from '../hooks/useDimensiones';
 import { useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseActive } from '../supabase';
@@ -783,59 +784,29 @@ export default function Competencia({ user, userDoc }) {
       {/* KPIs de Competencia Bento Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* KPI 1: Tasa de Salud Técnica */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Salud del Catálogo</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-display font-extrabold text-primary">{kpis.tasaSalud}%</span>
-              <span className="text-label-sm font-semibold text-on-surface-variant">Enlaces OK</span>
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              {kpis.exitososCount} de {kpis.activosCount} activos sin fallos de lectura.
-            </p>
-          </div>
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${kpis.tasaSalud > 90 ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-700'}`}>
-            <span className="material-symbols-outlined text-2xl">{kpis.tasaSalud > 90 ? 'health_and_safety' : 'sync_problem'}</span>
-          </div>
-        </div>
+        <StatCard
+          label="Salud del Catálogo"
+          value={<>{kpis.tasaSalud}% <span className="text-label-sm font-semibold text-on-surface-variant">Enlaces OK</span></>}
+          hint={`${kpis.exitososCount} de ${kpis.activosCount} activos sin fallos de lectura.`}
+          icon={kpis.tasaSalud > 90 ? 'health_and_safety' : 'sync_problem'}
+          tono={kpis.tasaSalud > 90 ? 'positive' : 'negative'}
+        />
 
-        {/* KPI 2: Frescura de Datos */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Frescura de Precios</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-display font-extrabold text-primary">
-                {kpis.desactualizados}
-              </span>
-              <span className="text-label-sm font-semibold text-on-surface-variant">Vencidos</span>
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              Enlaces que requieren actualización (&gt; 24h).
-            </p>
-          </div>
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${kpis.desactualizados === 0 ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
-            <span className="material-symbols-outlined text-2xl">{kpis.desactualizados === 0 ? 'schedule' : 'history_toggle_off'}</span>
-          </div>
-        </div>
+        <StatCard
+          label="Frescura de Precios"
+          value={<>{kpis.desactualizados} <span className="text-label-sm font-semibold text-on-surface-variant">Vencidos</span></>}
+          hint="Enlaces que requieren actualización (más de 24 h)."
+          icon={kpis.desactualizados === 0 ? 'schedule' : 'history_toggle_off'}
+          tono={kpis.desactualizados === 0 ? 'positive' : 'warning'}
+        />
 
-        {/* KPI 3: Liderazgo de Mercado */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Liderazgo en Precios</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-display font-extrabold text-primary">
-                {kpis.totalComparables > 0 ? `${Math.round((kpis.propiosMasBaratos / kpis.totalComparables) * 100)}%` : '—'}
-              </span>
-              <span className="text-label-sm font-semibold text-on-surface-variant">Líder</span>
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              {kpis.propiosMasBaratos} de {kpis.totalComparables} comparables más económicos.
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-2xl">leaderboard</span>
-          </div>
-        </div>
+        <StatCard
+          label="Liderazgo en Precios"
+          value={<>{kpis.totalComparables > 0 ? `${Math.round((kpis.propiosMasBaratos / kpis.totalComparables) * 100)}%` : '—'} <span className="text-label-sm font-semibold text-on-surface-variant">Líder</span></>}
+          hint={`${kpis.propiosMasBaratos} de ${kpis.totalComparables} comparables más económicos.`}
+          icon="leaderboard"
+          tono="primary"
+        />
       </div>
 
       {/* Filter and Query Section */}

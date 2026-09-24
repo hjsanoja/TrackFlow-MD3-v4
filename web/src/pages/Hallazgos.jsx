@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import StatCard from '../components/StatCard';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
@@ -448,68 +449,40 @@ export default function Hallazgos({ user, userDoc }) {
       {/* Summary KPI grid widgets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total scan */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-on-surface-variant uppercase tracking-wider block">Productos Escaneados</span>
-            <div className="text-2xl font-display font-extrabold text-primary">
-              {productos.filter(p => p.activo).length}
-            </div>
-            <p className="text-label-md text-on-surface-variant font-sans">
-              Catálogo de marcas activas
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">medication</span>
-          </div>
-        </div>
+        <StatCard
+            label="Productos Escaneados"
+            value={<>{productos.filter(p => p.activo).length}</>}
+            hint="Catálogo de marcas activas"
+            icon="medication"
+            tono="primary"
+          />
 
         {/* Critical Alerts */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-error uppercase tracking-wider block">Alertas Críticas</span>
-            <div className="text-2xl font-display font-extrabold text-error">
-              {totalConAlertasCriticas}
-            </div>
-            <p className="text-label-md text-error/80 font-sans">
-              Inversión de precios urgentes
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-error shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">gavel</span>
-          </div>
-        </div>
+        <StatCard
+            label="Alertas Críticas"
+            value={<>{totalConAlertasCriticas}</>}
+            hint="Inversión de precios urgentes"
+            icon="gavel"
+            tono="negative"
+          />
 
         {/* Moderated Alerts */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-amber-700 uppercase tracking-wider block">Alertas de Portafolio</span>
-            <div className="text-2xl font-display font-extrabold text-amber-700">
-              {totalConAlertasModeradas}
-            </div>
-            <p className="text-label-md text-amber-600 font-sans">
-              Canibalización o sobreprecio
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">warning</span>
-          </div>
-        </div>
+        <StatCard
+            label="Alertas de Portafolio"
+            value={<>{totalConAlertasModeradas}</>}
+            hint="Canibalización o sobreprecio"
+            icon="warning"
+            tono="warning"
+          />
 
         {/* EBITDA Opportunities */}
-        <div className="neural-card p-5 flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-label-sm font-mono font-bold text-emerald-700 uppercase tracking-wider block">Brechas de EBITDA</span>
-            <div className="text-2xl font-display font-extrabold text-emerald-700">
-              {totalOportunidadesEbitda}
-            </div>
-            <p className="text-label-md text-emerald-600 font-sans">
-              Oportunidades de alza de precio
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 ml-4">
-            <span className="material-symbols-outlined text-2xl select-none">payments</span>
-          </div>
-        </div>
+        <StatCard
+            label="Brechas de EBITDA"
+            value={<>{totalOportunidadesEbitda}</>}
+            hint="Oportunidades de alza de precio"
+            icon="payments"
+            tono="positive"
+          />
       </div>
 
       {/* Advanced search and filtering bar */}
@@ -539,7 +512,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={unSeleccionada}
               onChange={(e) => setUnSeleccionada(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="m3-select m3-select-dense w-full"
             >
               <option value="Todas">Todas las Unidades (UN)</option>
               <option value="La Sante">La Santé</option>
@@ -553,7 +526,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={tipoMercadoSeleccionado}
               onChange={(e) => setTipoMercadoSeleccionado(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="m3-select m3-select-dense w-full"
             >
               <option value="Todos">Todos los Mercados</option>
               <option value="GENERICO">Genérico</option>
@@ -566,7 +539,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={categoriaSeleccionada}
               onChange={(e) => setCategoriaSeleccionada(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="m3-select m3-select-dense w-full"
             >
               {categorias.map(cat => (
                 <option key={cat} value={cat}>{cat === 'Todas' ? 'Todas las Categorías' : cat}</option>
@@ -579,7 +552,7 @@ export default function Hallazgos({ user, userDoc }) {
             <select
               value={severidadSeleccionada}
               onChange={(e) => setSeveridadSeleccionada(e.target.value)}
-              className="w-full text-xs px-4 py-2.5 rounded-full border border-outline bg-surface-container-lowest hover:border-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-on-surface font-sans"
+              className="m3-select m3-select-dense w-full"
             >
               <option value="Todos">Cualquier Gravedad</option>
               <option value="critico">Crítico (Inversiones de precio)</option>

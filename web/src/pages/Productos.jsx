@@ -1109,7 +1109,7 @@ function ProductoModal({ producto, sugerirId, onSave, onClose }) {
 
           <Field label="Market Type (Tipo)">
             <select value={form.market_type} onChange={e => handleChange('market_type', e.target.value)}
-              className="m3-input bg-surface-container-lowest font-bold text-primary">
+              className="m3-select">
               <option value="GENERICO">GENÉRICO</option>
               <option value="MARCA">MARCA</option>
             </select>

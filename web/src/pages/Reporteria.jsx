@@ -548,7 +548,7 @@ export default function Reporteria({ user, userDoc }) {
             <select
               value={filtroCadena}
               onChange={e => { setFiltroCadena(e.target.value); setCurrentPage(1); }}
-              className="m3-select text-xs"
+              className="m3-select m3-select-dense"
             >
               <option value="todas">Todas las cadenas ({cadenas.length})</option>
               {cadenas.map(c => (
@@ -562,7 +562,7 @@ export default function Reporteria({ user, userDoc }) {
             <select
               value={filtroCategoria}
               onChange={e => { setFiltroCategoria(e.target.value); setCurrentPage(1); }}
-              className="m3-select text-xs"
+              className="m3-select m3-select-dense"
             >
               {categorias.map(cat => (
                 <option key={cat} value={cat}>
@@ -577,7 +577,7 @@ export default function Reporteria({ user, userDoc }) {
             <select
               value={filtroLaboratorio}
               onChange={e => { setFiltroLaboratorio(e.target.value); setCurrentPage(1); }}
-              className="m3-select text-xs"
+              className="m3-select m3-select-dense"
             >
               {laboratoriosCompetencia.map(lab => (
                 <option key={lab} value={lab}>
@@ -592,7 +592,7 @@ export default function Reporteria({ user, userDoc }) {
             <select
               value={filtroBrecha}
               onChange={e => { setFiltroBrecha(e.target.value); setCurrentPage(1); }}
-              className="m3-select text-xs"
+              className="m3-select m3-select-dense"
             >
               <option value="todos">Cualquier brecha</option>
               <option value="mas_caro">Competidores más caros (+)</option>
@@ -883,7 +883,7 @@ export default function Reporteria({ user, userDoc }) {
             <select
               value={itemsPerPage}
               onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-surface-container-lowest border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface font-semibold"
+              className="m3-select m3-select-dense"
             >
               <option value={15}>15</option>
               <option value={25}>25</option>

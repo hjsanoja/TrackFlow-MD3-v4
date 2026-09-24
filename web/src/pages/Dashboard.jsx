@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import StatCard from '../components/StatCard';
 import { tokensGrafico, paletaSeries } from '../utils/chartTokens';
 import { useBcvRate } from '../hooks/useBcvRate';
 import ProductDetailModal from '../components/ProductDetailModal';
@@ -1668,19 +1669,18 @@ export default function Dashboard({ user, userDoc }) {
   );
 }
 
-function KpiCard({ label, value, sub, icon, color = 'text-primary', iconBg = 'bg-primary/10 border-primary/20 text-primary' }) {
-  return (
-    <div className="neural-card p-5 flex items-center justify-between">
-      <div className="space-y-1">
-        <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant block">{label}</span>
-        <div className={`text-2xl font-display font-extrabold ${color}`}>{value}</div>
-        <p className="text-label-md text-on-surface-variant font-sans">{sub}</p>
-      </div>
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ml-4 ${iconBg}`}>
-        <span className="material-symbols-outlined text-2xl select-none">{icon}</span>
-      </div>
-    </div>
-  );
+// Se conserva la firma antigua para no tocar los sitios donde se usa, pero
+// por dentro es el StatCard unico del panel. Las clases de color que recibia
+// (text-emerald-600, bg-red-500/10...) se traducen al tono semantico M3.
+function KpiCard({ label, value, sub, icon, color = 'text-primary', iconBg = '' }) {
+  const pista = `${color} ${iconBg}`;
+  const tono =
+    /emerald|green|positive/.test(pista) ? 'positive' :
+    /red|rose|error|negative/.test(pista) ? 'negative' :
+    /amber|orange|yellow|tertiary/.test(pista) ? 'warning' :
+    /primary|sky|blue/.test(pista) ? 'primary' : 'neutral';
+
+  return <StatCard label={label} value={value} hint={sub} icon={icon} tono={tono} />;
 }
 
 function formatDateTime(date) {
