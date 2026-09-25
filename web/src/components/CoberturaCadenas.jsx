@@ -1,3 +1,4 @@
+import CadenaBadge from './CadenaBadge';
 import { useMemo, useState } from 'react';
 import ModalWrapper from './ModalWrapper';
 import { normalizar } from './formulario';
@@ -80,7 +81,7 @@ export default function CoberturaCadenas({ productos, cadenas, enlaces, idCadena
                 <th className="m3-cobertura-producto">Producto</th>
                 {cadenasActivas.map(c => (
                   <th key={c.id} className="text-center">
-                    <div>{c.nombre}</div>
+                    <div className="inline-flex items-center gap-1.5"><CadenaBadge cadena={c.id} tamano="xs" title="" />{c.nombre}</div>
                     <div className="m3-cell-secondary font-normal">{cubiertos(c)} de {propios.length}</div>
                   </th>
                 ))}

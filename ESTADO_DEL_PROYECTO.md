@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 25 fases de SQL
+## Las 26 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -106,9 +106,11 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
 | 23 | Vista `v_enlaces_fallidos`: lecturas fallidas seguidas por publicación (el panel marca "Revisar URL" desde 3) |
 | 24 | Un color único por cadena en `dim_cadenas.color_hex` (marcas conocidas + paleta) e índice único `uq_dim_cadenas_color` |
+| 26 | `dim_cadenas.sigla` (FT, LC, SA… e iniciales para el resto) |
 | 25 | **Seguridad:** `usuarios` con RLS (cada quien su fila, el admin todas), políticas abiertas → solo usuarios activos (`fn_usuario_activo`, `fn_es_admin`), sin permisos para `anon`; tabla `accesos`, `fn_registrar_acceso`, `fn_actualizar_mi_cuenta`, `fn_eliminar_usuario` |
 
-**Corridas en Supabase de la 1 a la 24. La 25 está pendiente** (PR #43). La 22
+**Corridas en Supabase de la 1 a la 25** (la 25 dejó `usuarios` y `accesos`
+con RLS y sin permisos públicos). **La 26 está pendiente** (PR #44). La 22
 dio 0 y 0; la 23, 0 enlaces para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
@@ -120,17 +122,18 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #42, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 24** (la 25 en el PR #43) |
+| Código en `main` | PR #43, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 25** (la 26 en el PR #44) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
-| Módulo Cadenas | Color único por cadena (#42, fase 24); diagnóstico hecho, rediseño pendiente |
-| Módulo Usuarios | Seguridad, recuperar contraseña, Mi cuenta, accesos, eliminar de verdad y rediseño (#43, fase 25). Faltan los correos de alertas y resumen |
+| Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
+| Módulo Usuarios | Seguridad, recuperar contraseña, Mi cuenta, accesos, eliminar de verdad y rediseño (#43, fase 25). **Aparcado por Hernando:** Brevo/SMTP y los correos de alertas y resumen |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
-Lo siguiente: correr la fase 25 y configurar el correo (SMTP, ver "Usuarios
-y acceso"); después los correos de alertas y resumen (punto 4) y las 5
-mejoras de Cadenas.
+Lo siguiente lo decide Hernando. Aparcado: el correo (Brevo/SMTP, sin él
+tampoco llegan los de recuperar contraseña a otras personas) y los correos de
+alertas y resumen; la recarga del catálogo; el filtro "más caro que la
+competencia" para el Dashboard.
 
 ---
 
@@ -155,6 +158,7 @@ mejoras de Cadenas.
 | #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
 | #38 | Fase 22: PVP falsos de competidores y los 20 `COMP_` sin URL |
 | #39 | Competencia: columna ID para ordenar por bloques, interruptor $/Bs, CSV con los nombres de Productos |
+| #44 | Cadenas: rediseño, sigla (fase 26), estado del robot y "Leer esta cadena", lector probado/sin probar, enlaces de otra web |
 | #43 | Usuarios: seguridad (fase 25), recuperar contraseña, Mi cuenta, registro de accesos, eliminar de verdad, rediseño |
 | #42 | Cadenas: color único por cadena en todo el panel (fase 24); guarda en `dim_cadenas` y muestra los errores |
 | #41 | Formulario de enlace: muestra los enlaces que ya tiene el producto y avisa de URL o competidor repetidos antes de guardar |
@@ -405,8 +409,24 @@ verificar el correo remitente). Pasos:
   (`dbGuardarCadena`, `dbCambiarActivoCadena`, `dbEliminarCadena`) y avisa
   si algo falla. Eliminar solo se permite sin enlaces. El contador de URL
   buscaba por nombre y SAAS salía con 0.
-- **Pendiente:** la tabla y el formulario todavía tienen el diseño viejo
-  (ver el diagnóstico en el chat del 2026-09-25).
+- **Rediseño (PR #44, fase 26)** con la estructura de Productos:
+  - Insignia de cadena (`components/CadenaBadge.jsx`): círculo con su color
+    y su **sigla** (`dim_cadenas.sigla`; `siglaCadena` en `brandColors.js`
+    con la misma regla del SQL si falta). Sale en Cadenas, en la columna
+    Cadena de Competencia, en Cobertura y en las fichas de producto y enlace.
+  - **Robot por cadena:** última lectura desde `scrape_runs` (N de M bien,
+    cuántas fallaron), historial de las 10 últimas en la ficha y botón "Leer
+    esta cadena" (usa `useRobot`; el aviso de avance es
+    `components/AvisoRobot.jsx`, compartido con Competencia).
+  - **Lector:** "Lector probado" (Farmatodo, Locatel, SAAS: el robot tiene
+    reglas propias) o "Sin probar" (lector genérico). `utils/cadenas.js`
+    (`LECTORES`, `lectorDe`). El campo `modulo_scraper` no lo usa el robot:
+    es informativo.
+  - **Enlaces de otra web:** URL cuyo dominio no es el de la web de su
+    cadena (`esDeOtraWeb`). Aviso "Para revisar", filtro, lista en la ficha y
+    enlace a Competencia con `?cadena=<id>&revisar=otra_web` (nueva opción
+    "URL de otra web" del chip Revisar).
+  - El nombre de una cadena ya se puede cambiar (el id no cambia).
 
 ## La recarga del catálogo (aparcada)
 
