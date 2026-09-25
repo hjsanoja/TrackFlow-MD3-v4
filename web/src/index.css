@@ -1129,6 +1129,30 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 /* Enlaces del aviso "Para revisar", separados por puntos. */
 .m3-banner-links { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 
+/* Formulario de enlace: lo que ya tiene vinculado el producto elegido. */
+.m3-existentes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+.m3-existentes ul { max-height: 176px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.m3-existentes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 4px 0 8px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface);
+}
+.m3-existentes li.is-match { background-color: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent); }
+.m3-existentes-cadena { flex: 0 0 auto; width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+
 /* Cobertura por cadena: primera columna fija al desplazar a la derecha. */
 .m3-table-cobertura { min-width: 640px; }
 .m3-table-cobertura td { height: 56px; padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }

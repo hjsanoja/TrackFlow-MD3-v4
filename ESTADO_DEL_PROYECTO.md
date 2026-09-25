@@ -106,9 +106,8 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
 | 23 | Vista `v_enlaces_fallidos`: lecturas fallidas seguidas por publicación (el panel marca "Revisar URL" desde 3) |
 
-**Corridas en Supabase de la 1 a la 22** (la 22 dio 0 y 0). **La 23 está
-pendiente de correr** (PR #40); sin ella el panel funciona, solo no marca las
-URL que fallan. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
+**Corridas en Supabase de la 1 a la 23.** La 22 dio 0 y 0; la 23, 0 enlaces
+para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
 o unidad de negocio; un competidor no tiene PVP propio.
@@ -120,7 +119,7 @@ o unidad de negocio; un competidor no tiene PVP propio.
 | | |
 |---|---|
 | Código en `main` | PR #36, desplegado (GitHub Pages sale solo de `main`); etapa B de Competencia en el PR #37 |
-| SQL corrido en Supabase | **Hasta la fase 22** (la 23 en el PR #40) |
+| SQL corrido en Supabase | **Hasta la fase 23** |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Etapas A (#36) y B (#37), limpieza (#38), ajustes (#39) y funciones de revisión, robot y cobertura (#40)** |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
@@ -151,6 +150,7 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
 | #38 | Fase 22: PVP falsos de competidores y los 20 `COMP_` sin URL |
 | #39 | Competencia: columna ID para ordenar por bloques, interruptor $/Bs, CSV con los nombres de Productos |
+| #41 | Formulario de enlace: muestra los enlaces que ya tiene el producto y avisa de URL o competidor repetidos antes de guardar |
 | #40 | Competencia: URL que fallan (fase 23), posibles duplicados, filtro por laboratorio, robot para los seleccionados con avance, cobertura por cadena; "Vincular enlace" desde la ficha de Productos; columna ID en Productos. El robot ahora sí lee solo los enlaces pedidos |
 | #34 | Menús desplegables M3 en toda la app (`components/Select.jsx`, 31 `<select>`), deshacer al eliminar (borrado diferido 8 s), ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
 
@@ -285,6 +285,12 @@ nombres de campo donde son el mismo dato.
 - **Desde Productos**: la ficha del producto tiene "Vincular enlace", que abre
   Competencia con `?producto=<id>&vincular=1`.
 - **Columna ID** también en Productos (ordenable, como número).
+- **Formulario "Vincular enlace"** (PR #41): al elegir el producto lista sus
+  enlaces actuales (cadena, "Mi producto" o competidor · laboratorio, abrir
+  URL) y resalta los de la cadena elegida. Avisa, sin bloquear, si tu
+  producto ya tiene enlace en esa cadena, si el competidor ya está (mismo
+  nombre sin mayúsculas ni signos) o si la URL ya está vinculada en la cadena
+  (la misma regla que al guardar, que sí bloquea).
 
 **Los 20 competidores `COMP_` sin URL que dejó la fase 21.** El diagnóstico
 dio que los 20 tenían PVP (`tiene_pvp`), ninguno era producto propio en una
@@ -446,12 +452,12 @@ capturas y devaluación vs subida real. Faltan:
 - Alertas por correo
 - Reporte semanal
 
-**Competencia**: correr la fase 23. Quedan pendientes de decidir: el filtro
-"más caro que la competencia" (Hernando lo quiere en otro menú, no en
-Competencia), el historial de precios en la ficha del enlace, el "Nombre en
-la tienda" de la ficha (la vista pone el nombre del competidor, no el que lee
-el robot: `fact_precios.nombre_capturado`) y mostrar los enlaces actuales del
-producto al vincular uno nuevo.
+**Competencia**, para luego: el historial de precios en la ficha del enlace y
+el "Nombre en la tienda" de la ficha (la vista pone el nombre del competidor,
+no el que lee el robot: `fact_precios.nombre_capturado`; es un SQL pequeño).
+
+**Dashboard**, cuando se ajuste ese menú: el filtro "más caro que la
+competencia" (decisión de Hernando: va ahí, no en Competencia ni Productos).
 
 **Limpieza del repo**: mover los `fase*.sql` (ya son 22) a `sql/`, borrar
 `debug/`, y borrar `recarga/` cuando termine la recarga.
