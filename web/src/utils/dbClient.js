@@ -1331,6 +1331,42 @@ export async function dbDeleteCadena(id) {
 
 }
 
+// --- USUARIOS (con errores visibles) ---
+// Desde la fase 25 la tabla usuarios tiene RLS: solo un administrador cambia
+// filas ajenas. Cada escritura pide .select() para notar si no se guardo.
+export async function dbGuardarUsuario(data) {
+  if (!isSupabaseActive()) return;
+  const { id, ...campos } = data;
+  const { data: filas, error } = await supabase.from('usuarios').update(campos).eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  if (!filas || filas.length === 0) throw new Error('La base de datos no aceptó el cambio (permisos). No se guardó nada.');
+}
+
+export async function dbCambiarActivoUsuario(id, activo) {
+  return dbGuardarUsuario({ id, activo });
+}
+
+// Borra la fila y la cuenta de acceso (fn_eliminar_usuario, fase 25).
+export async function dbEliminarUsuarioCompleto(email) {
+  if (!isSupabaseActive()) return;
+  const { error } = await supabase.rpc('fn_eliminar_usuario', { p_email: email });
+  if (error) {
+    if (error.code === 'PGRST202' || /Could not find the function/i.test(error.message || '')) {
+      throw new Error('Falta correr la fase 25 en Supabase para poder eliminar usuarios.');
+    }
+    throw new Error(error.message);
+  }
+}
+
+// Accesos de todos (solo lo ve un administrador por RLS).
+export async function dbAccesos(limite = 1000) {
+  if (!isSupabaseActive()) return [];
+  const { data, error } = await supabase.from('accesos').select('email, evento, fecha, agente')
+    .order('fecha', { ascending: false }).limit(limite);
+  if (error) return [];
+  return data || [];
+}
+
 // --- USUARIOS ---
 export async function dbUpsertUsuario(data) {
   if (isSupabaseActive()) {

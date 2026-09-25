@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { registrarAcceso } from '../utils/accesos';
 import { useData } from '../context/DataContext';
 
 export default function Layout({ user, userDoc, children }) {
@@ -35,6 +36,7 @@ export default function Layout({ user, userDoc, children }) {
 
   const handleLogout = async () => {
     try {
+      await registrarAcceso('salida');
       await supabase.auth.signOut();
     } catch (e) {
       console.warn('Error durante el cierre de sesión en Supabase:', e);
@@ -199,7 +201,8 @@ export default function Layout({ user, userDoc, children }) {
 
         {/* User profile footer - MD3 Style */}
         <div className="space-y-4">
-          <div className={`m3-card-outlined ${menuColapsado ? 'p-2' : 'p-4'}`}>
+          <NavLink to="/mi-cuenta" title="Mi cuenta"
+            className={({ isActive }) => `block m3-card-outlined transition-colors hover:bg-surface-container ${isActive ? 'ring-2 ring-primary' : ''} ${menuColapsado ? 'p-2' : 'p-4'}`}>
             <div className={`flex items-center ${menuColapsado ? 'justify-center' : 'gap-3'}`}>
               {(() => {
                 const displayName = userDoc?.nombre || user?.email?.split('@')[0] || 'Usuario';
@@ -219,6 +222,7 @@ export default function Layout({ user, userDoc, children }) {
                         <span className="text-label-sm text-on-surface-variant uppercase font-mono font-semibold tracking-wider">
                           {isAdmin ? 'ADMINISTRADOR' : 'USUARIO CONSULTA'}
                         </span>
+                        <span className="material-symbols-outlined text-[16px] text-on-surface-variant ml-auto" aria-hidden="true">manage_accounts</span>
                       </div>
                     </div>
                     )}
@@ -226,7 +230,7 @@ export default function Layout({ user, userDoc, children }) {
                 );
               })()}
             </div>
-          </div>
+          </NavLink>
 
           <button
             onClick={handleLogout}
