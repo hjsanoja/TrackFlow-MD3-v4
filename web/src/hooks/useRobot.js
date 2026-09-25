@@ -86,7 +86,8 @@ export function useRobot({ onTerminado, onError }) {
 
   // enlaces: los que se quieren leer, o null para todos los activos.
   // total: cuantos son (para todos, los activos).
-  const lanzar = useCallback(async (enlaces, todosActivos) => {
+  // etiqueta: texto opcional para el aviso (p. ej. el nombre de la cadena).
+  const lanzar = useCallback(async (enlaces, todosActivos, etiqueta = '') => {
     const lista = enlaces ? enlaces.filter(e => e.activo !== false) : todosActivos;
     if (lista.length === 0) {
       callbacks.current.onError?.('Ninguno de esos enlaces está activo: el robot solo lee los activos.');
@@ -113,6 +114,7 @@ export function useRobot({ onTerminado, onError }) {
       estimado: estimarMinutos(lista),
       estadoGitHub: null,
       urlGitHub: null,
+      etiqueta,
     });
     return true;
   }, [actualizar]);

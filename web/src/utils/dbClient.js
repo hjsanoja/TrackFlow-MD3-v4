@@ -1284,15 +1284,18 @@ export async function dbGuardarCadena(data, { nueva = false } = {}) {
     modulo_scraper: data.modulo_scraper || null,
     activo: data.activo !== false,
     color_hex: data.color_hex ? String(data.color_hex).toUpperCase() : null,
+    sigla: data.sigla ? String(data.sigla).toUpperCase().slice(0, 4) : null,
   };
   const escribir = (f) => (nueva
     ? supabase.from('dim_cadenas').insert({ id: data.id, ...f }).select('id')
     : supabase.from('dim_cadenas').update(f).eq('id', data.id).select('id'));
   let { data: filas, error } = await escribir(fila);
-  // Sin la columna color_hex (base muy vieja) se guarda lo demas.
-  if (error && /color_hex/.test(error.message || '')) {
-    const { color_hex: _sinColor, ...resto } = fila;
-    ({ data: filas, error } = await escribir(resto));
+  // Sin las columnas color_hex o sigla (fases 24 y 26 sin correr) se guarda lo demas.
+  for (const col of ['sigla', 'color_hex']) {
+    if (error && new RegExp(col).test(error.message || '')) {
+      delete fila[col];
+      ({ data: filas, error } = await escribir(fila));
+    }
   }
   if (error) {
     if (error.code === '23505' && /color/i.test(error.message || '')) throw new Error('Ese color ya lo usa otra cadena. Elige otro.');

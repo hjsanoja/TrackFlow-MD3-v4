@@ -1129,8 +1129,9 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 /* Enlaces del aviso "Para revisar", separados por puntos. */
 .m3-banner-links { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 
-/* Usuarios: 6 columnas, cabe en menos ancho que Productos. */
+/* Usuarios y Cadenas: 6 columnas, caben en menos ancho que Productos. */
 .m3-table-usuarios { min-width: 820px; }
+.m3-table-cadenas { min-width: 880px; }
 /* Menu permitido (Usuarios, Mi cuenta). */
 .m3-chip-menu {
   display: inline-flex;
@@ -1145,6 +1146,24 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
   font-size: 0.8125rem;
 }
 .m3-chip-menu .material-symbols-outlined { font-size: 16px; color: var(--md-sys-color-primary); }
+
+/* Insignia de cadena: color + sigla (components/CadenaBadge). */
+.m3-cadena-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  user-select: none;
+}
+.m3-cadena-badge.is-xs { width: 18px; height: 18px; font-size: 8px; }
+.m3-cadena-badge.is-sm { width: 24px; height: 24px; font-size: 10px; }
+.m3-cadena-badge.is-md { width: 32px; height: 32px; font-size: 12px; }
+.m3-cadena-badge.is-lg { width: 48px; height: 48px; font-size: 16px; }
 
 /* Muestras de color (menu Cadenas). */
 .m3-swatch {

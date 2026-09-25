@@ -9,6 +9,8 @@ import ModalWrapper from '../components/ModalWrapper';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import FichaEnlace from '../components/FichaEnlace';
 import CoberturaCadenas from '../components/CoberturaCadenas';
+import AvisoRobot from '../components/AvisoRobot';
+import CadenaBadge from '../components/CadenaBadge';
 import { useRobot, estimarMinutos } from '../hooks/useRobot';
 import FiltroChip from '../components/FiltroChip';
 import Select from '../components/Select';
@@ -18,6 +20,7 @@ import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
 import { parseCSV, getRowValue, leerArchivoCsv } from '../utils/csvParser';
 import { DIAS_ENLACE_CAIDO, enlaceCaido, describirPresentacion } from '../utils/presentacion';
+import { esDeOtraWeb } from '../utils/cadenas';
 import {
   dbUpsertProductoCompetencia,
   dbDeleteProductoCompetencia,
@@ -131,6 +134,11 @@ export default function Competencia() {
   useEffect(() => {
     const productoParam = searchParams.get('producto');
     if (productoParam) setFiltroProducto(productoParam);
+    // Desde Cadenas: ?cadena=Saas&revisar=otra_web
+    const cadenaParam = searchParams.get('cadena');
+    if (cadenaParam) setFiltroCadena(cadenaParam);
+    const revisarParam = searchParams.get('revisar');
+    if (revisarParam) setFiltroRevisar(revisarParam);
     if (productoParam && searchParams.get('vincular') === '1') {
       setPreseleccion({ producto: productoParam, cadena: '' });
       setEditing('new');
@@ -254,6 +262,7 @@ export default function Competencia() {
       if (filtroRevisar === 'fallos' && !revisarUrl(it)) return false;
       if (filtroRevisar === 'duplicados' && !duplicados.has(it.id)) return false;
       if (filtroRevisar === 'viejo' && !(it.activo && enlaceCaido(it))) return false;
+      if (filtroRevisar === 'otra_web' && !esDeOtraWeb(it.url, cadenaPorClave.get(String(it.cadena || '').toLowerCase())?.website)) return false;
       if (!term) return true;
       const p = productoPorId.get(String(it.id_producto_propio).trim());
       return [p?.nombre, it.id_producto_propio, it.marca, it.laboratorio, it.url, nombreCadena(it.cadena), it.ultimo_nombre]
@@ -751,27 +760,7 @@ export default function Competencia() {
         </div>
       </div>
 
-      {robot.corrida && (
-        <div className="m3-banner m3-banner-info" role="status" aria-live="polite">
-          <span className="material-symbols-outlined animate-spin" aria-hidden="true">sync</span>
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <div className="m3-body-medium">
-              <strong>El robot está leyendo {robot.corrida.ids ? `${robot.corrida.total} ${robot.corrida.total === 1 ? 'enlace' : 'enlaces'}` : `los ${robot.corrida.total} enlaces activos`}</strong>
-              {' · '}{robot.corrida.estadoGitHub === 'queued' ? 'en cola en GitHub' : robot.minutos < 1 ? 'arrancando' : `${robot.minutos} de unos ${robot.corrida.estimado} min`}
-              <span className="text-on-surface-variant"> · puedes seguir usando el panel</span>
-            </div>
-            <div className="m3-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(robot.avance)}>
-              <div style={{ width: `${Math.max(4, robot.avance)}%` }} />
-            </div>
-          </div>
-          {robot.corrida.urlGitHub && (
-            <a href={robot.corrida.urlGitHub} target="_blank" rel="noopener noreferrer" className="m3-btn-text">Ver en GitHub</a>
-          )}
-          <button type="button" onClick={robot.ocultar} className="m3-icon-btn" title="Dejar de seguir (el robot sigue trabajando)" aria-label="Dejar de seguir el robot">
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      )}
+      <AvisoRobot robot={robot} />
 
       {productoFiltradoSinEnlaces ? (
         <div className="m3-banner" role="status">
@@ -894,7 +883,7 @@ export default function Competencia() {
                 <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
                   opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
                 <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
-                  opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`]]} />
+                  opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web']]} />
                 {hayFiltros && <button type="button" onClick={limpiarFiltros} className="m3-btn-text">Limpiar filtros</button>}
               </div>
             </div>
@@ -1017,8 +1006,11 @@ export default function Competencia() {
                           </div>
                         </td>
                         <td>
-                          <div className="m3-cell-primary">{nombreCadena(it.cadena)}</div>
-                          <div className="m3-cell-secondary">{propio ? 'Propio' : 'Competidor'}</div>
+                          <div className="m3-cell-primary" title={nombreCadena(it.cadena)}>{nombreCadena(it.cadena)}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0 m3-body-small text-on-surface-variant">
+                            <CadenaBadge cadena={idCadena(it.cadena)} tamano="xs" title="" />
+                            {propio && <span className="truncate">propio</span>}
+                          </div>
                         </td>
                         <td>{celdaCaptura(it)}</td>
                         <td className="text-right">{celdaPrecio(it)}</td>

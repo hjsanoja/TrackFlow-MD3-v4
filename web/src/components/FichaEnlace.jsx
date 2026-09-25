@@ -1,3 +1,4 @@
+import CadenaBadge from './CadenaBadge';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase, isSupabaseActive } from '../supabase';
@@ -75,7 +76,7 @@ export default function FichaEnlace({
               {propio ? (producto?.nombre || e.marca) : (e.marca || 'Competidor')}
             </h2>
             <div className="m3-body-medium text-on-surface-variant mt-1 flex flex-wrap items-center gap-x-2">
-              <span>{nombreCadena(e.cadena)}</span>
+              <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={e.cadena} tamano="xs" title="" />{nombreCadena(e.cadena)}</span>
               <span aria-hidden="true">·</span>
               <span>{propio ? 'Mi producto' : 'Competidor'}</span>
               <span aria-hidden="true">·</span>

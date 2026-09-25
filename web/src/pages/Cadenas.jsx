@@ -1,368 +1,624 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
+import FiltroChip from '../components/FiltroChip';
+import Select from '../components/Select';
+import CadenaBadge from '../components/CadenaBadge';
+import AvisoRobot from '../components/AvisoRobot';
+import GitHubConfigModal from '../components/GitHubConfigModal';
+import { FormSection, Field, normalizar } from '../components/formulario';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
+import { useRobot } from '../hooks/useRobot';
+import { supabase, isSupabaseActive } from '../supabase';
 import { dbGuardarCadena, dbCambiarActivoCadena, dbEliminarCadena } from '../utils/dbClient';
-import Select from '../components/Select';
-import { FormSection, Field as CampoForm } from '../components/formulario';
-import { PALETA_CADENAS, getChainColor } from '../utils/brandColors';
+import { PALETA_CADENAS, siglaCadena } from '../utils/brandColors';
+import { LECTORES, lectorDe, dominio, esDeOtraWeb } from '../utils/cadenas';
+import { haceCuanto, fechaHora } from '../utils/usuarios';
 
-// Scrapers disponibles en el código actual
-const SCRAPERS_DISPONIBLES = [
-  { value: 'farmatodo', label: 'Farmatodo' },
-  { value: 'locatel', label: 'Locatel' },
-  { value: 'farmaciasaas', label: 'Farmacias SAAS' },
-  { value: 'farmadon', label: 'FarmaDON (pendiente)' },
-  { value: 'grupo_san_ignacio', label: 'Grupo San Ignacio (pendiente)' },
-  { value: 'xana', label: 'Farmacias Xana (pendiente)' },
-  { value: 'farmago', label: 'FarmaGo (pendiente)' },
-];
-
-const SCRAPERS_IMPLEMENTADOS = new Set(['farmatodo', 'locatel', 'farmaciasaas', 'saas']);
-
+// Cadenas con la misma estructura que Productos y Competencia: cada cadena
+// con su color y sigla, su lector del robot, sus enlaces y su ultima lectura.
 export default function Cadenas() {
-  const {
-    cadenas,
-    productosCompetencia: competencia,
-    loadingInitial: loading,
-    refreshData: cargar
-  } = useData();
+  const { cadenas, productosCompetencia: enlaces, loadingInitial: loading, refreshData: cargar } = useData();
+  const { addToast } = useToast();
+  const navigate = useNavigate();
 
   const [editing, setEditing] = useState(null);
+  const [fichaId, setFichaId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [showGithubModal, setShowGithubModal] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [filtroRobot, setFiltroRobot] = useState('todos');
+  const [filtroRevisar, setFiltroRevisar] = useState('todos');
 
-  const { addToast } = useToast();
+  // Lecturas del robot por cadena (scrape_runs: una fila por cadena y corrida).
+  const [corridas, setCorridas] = useState([]);
+  const cargarCorridas = useCallback(async () => {
+    if (!isSupabaseActive()) return;
+    const { data, error } = await supabase.from('scrape_runs')
+      .select('cadena_id, started_at, finished_at, total_urls, exitosos, fallidos, estado, tipo_trigger')
+      .order('started_at', { ascending: false }).limit(400);
+    if (!error) setCorridas(data || []);
+  }, []);
+  useEffect(() => { cargarCorridas(); }, [cargarCorridas]);
 
-  // URLs activas por cadena. Los enlaces traen el id de la cadena ('Saas'),
-  // no su nombre ('Farmacias SAAS'): antes se buscaba por nombre y SAAS
-  // salia siempre con 0.
-  const urlsPorCadena = useMemo(() => {
-    const map = new Map();
-    for (const c of competencia) {
-      if (c.activo) {
-        const clave = String(c.cadena || '').toLowerCase();
-        map.set(clave, (map.get(clave) || 0) + 1);
-      }
-    }
-    return map;
-  }, [competencia]);
-  const urlsDe = (c) => (urlsPorCadena.get(String(c.id).toLowerCase()) || 0) +
-    (String(c.id).toLowerCase() !== String(c.nombre).toLowerCase() ? (urlsPorCadena.get(String(c.nombre).toLowerCase()) || 0) : 0);
-
-  const handleSave = async (data, isNew, original) => {
-    try {
-      // Al editar se usa el id que ya tiene (p. ej. 'Saas' para "Farmacias
-      // SAAS"). Antes se recalculaba desde el nombre y el cambio no se guardaba.
-      const docId = isNew ? data.nombre.trim().replace(/\s+/g, '_') : original.id;
-      if (!docId) throw new Error('El nombre es obligatorio');
-      if (isNew && cadenas.some(c => c.id.toLowerCase() === docId.toLowerCase() || c.nombre.toLowerCase() === data.nombre.trim().toLowerCase())) {
-        throw new Error('Ya existe una cadena con ese nombre');
-      }
-      const colorEnUso = cadenas.find(c => c.id !== docId && (c.color_hex || '').toUpperCase() === (data.color_hex || '').toUpperCase());
-      if (data.color_hex && colorEnUso) throw new Error(`Ese color ya lo usa ${colorEnUso.nombre}. Elige otro.`);
-
-      await dbGuardarCadena({
-        id: docId,
-        nombre: data.nombre.trim(),
-        website: data.website.trim(),
-        modulo_scraper: data.modulo_scraper,
-        activo: data.activo,
-        color_hex: data.color_hex,
-      }, { nueva: isNew });
-
-      addToast(isNew ? 'Cadena creada con éxito' : 'Cambios guardados con éxito', 'success');
-      setEditing(null);
+  const robot = useRobot({
+    onTerminado: async ({ corrida, leidos }) => {
       await cargar(true);
-    } catch (err) {
-      addToast(err.message, 'error');
+      cargarCorridas();
+      addToast(`Robot terminado${corrida.etiqueta ? ` en ${corrida.etiqueta}` : ''}: ${leidos} de ${corrida.total} enlaces leídos.`, 'success');
+    },
+    onError: (mensaje, { faltaConfig } = {}) => {
+      if (faltaConfig) setShowGithubModal(true);
+      addToast(mensaje, faltaConfig ? 'info' : 'error');
+    },
+  });
+
+  // Enlaces por cadena (los enlaces traen el id de la cadena; algunos viejos, el nombre).
+  const enlacesDe = useCallback((c) => {
+    const claves = new Set([String(c.id).toLowerCase(), String(c.nombre).toLowerCase()]);
+    return (enlaces || []).filter(e => claves.has(String(e.cadena || '').toLowerCase()));
+  }, [enlaces]);
+
+  const resumen = useMemo(() => {
+    const m = new Map();
+    for (const c of cadenas || []) {
+      const propios = enlacesDe(c);
+      const activos = propios.filter(e => e.activo !== false);
+      const otraWeb = activos.filter(e => esDeOtraWeb(e.url, c.website));
+      const runs = corridas.filter(r => String(r.cadena_id).toLowerCase() === String(c.id).toLowerCase());
+      m.set(c.id, { activos, deBaja: propios.length - activos.length, otraWeb, runs, ultima: runs[0] || null });
     }
+    return m;
+  }, [cadenas, enlacesDe, corridas]);
+
+  const conFallos = (c) => {
+    const u = resumen.get(c.id)?.ultima;
+    return Boolean(u && (u.fallidos || 0) > 0);
   };
 
-  const handleDelete = (cadena) => {
-    setConfirmDelete(cadena);
+  const filtradas = useMemo(() => {
+    const term = normalizar(search);
+    return [...(cadenas || [])].filter(c => {
+      const r = resumen.get(c.id);
+      if (filtroEstado === 'activas' && !c.activo) return false;
+      if (filtroEstado === 'baja' && c.activo) return false;
+      if (filtroRobot === 'probado' && !lectorDe(c.modulo_scraper).probado) return false;
+      if (filtroRobot === 'sin_probar' && lectorDe(c.modulo_scraper).probado) return false;
+      if (filtroRevisar === 'otra_web' && !(r?.otraWeb.length > 0)) return false;
+      if (filtroRevisar === 'fallos' && !conFallos(c)) return false;
+      if (filtroRevisar === 'sin_enlaces' && !(c.activo && r?.activos.length === 0)) return false;
+      return !term || normalizar(`${c.nombre} ${c.id} ${c.website} ${siglaCadena(c.id)}`).includes(term);
+    }).sort((a, b) => (b.activo ? 1 : 0) - (a.activo ? 1 : 0) || a.nombre.localeCompare(b.nombre));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cadenas, resumen, search, filtroEstado, filtroRobot, filtroRevisar]);
+  const hayFiltros = filtroEstado !== 'todos' || filtroRobot !== 'todos' || filtroRevisar !== 'todos';
+
+  const totalOtraWeb = useMemo(() => [...resumen.values()].reduce((n, r) => n + r.otraWeb.length, 0), [resumen]);
+  const cadenasConFallos = (cadenas || []).filter(c => c.activo && conFallos(c)).length;
+  const activasSinEnlaces = (cadenas || []).filter(c => c.activo && resumen.get(c.id)?.activos.length === 0).length;
+
+  // ------------------------------------------------------------ acciones
+  const handleSave = async (data, isNew, original) => {
+    const nombre = data.nombre.trim();
+    const docId = isNew ? nombre.replace(/\s+/g, '_') : original.id;
+    if (!nombre) throw new Error('El nombre es obligatorio.');
+    const otra = (cadenas || []).find(c => c.id !== original?.id &&
+      (c.id.toLowerCase() === docId.toLowerCase() || c.nombre.toLowerCase() === nombre.toLowerCase()));
+    if (otra) throw new Error(`Ya existe la cadena ${otra.nombre}.`);
+    const colorEnUso = (cadenas || []).find(c => c.id !== original?.id && data.color_hex &&
+      (c.color_hex || '').toUpperCase() === data.color_hex.toUpperCase());
+    if (colorEnUso) throw new Error(`Ese color ya lo usa ${colorEnUso.nombre}. Elige otro.`);
+    await dbGuardarCadena({
+      id: docId, nombre, website: data.website.trim(), modulo_scraper: data.modulo_scraper,
+      activo: data.activo, color_hex: data.color_hex, sigla: data.sigla.trim().toUpperCase(),
+    }, { nueva: isNew });
+    addToast(isNew ? `Cadena ${nombre} creada.` : 'Cambios guardados.', 'success');
+    setEditing(null);
+    await cargar(true);
   };
 
-  const handleConfirmDelete = async () => {
-    if (!confirmDelete) return;
-    const cadena = confirmDelete;
+  const alternarActivo = async (c) => {
+    try {
+      await dbCambiarActivoCadena(c.id, !c.activo);
+      addToast(c.activo ? `${c.nombre} dada de baja: el robot deja de leerla.` : `${c.nombre} reactivada.`, 'success', c.activo ? {
+        accion: { texto: 'Deshacer', onClick: async () => { try { await dbCambiarActivoCadena(c.id, true); await cargar(true); } catch (e) { addToast(e.message, 'error'); } } },
+      } : {});
+      await cargar(true);
+    } catch (err) { addToast(err.message, 'error'); }
+  };
+
+  const eliminar = async () => {
+    const c = confirmDelete;
     setConfirmDelete(null);
     try {
-      await dbEliminarCadena(cadena.id);
-      addToast('Cadena eliminada con éxito', 'success');
+      await dbEliminarCadena(c.id);
+      addToast(`${c.nombre} eliminada.`, 'success');
+      setFichaId(null);
       await cargar(true);
-    } catch (err) {
-      addToast('Error al eliminar: ' + err.message, 'error');
-    }
+    } catch (err) { addToast(err.message, 'error'); }
   };
 
-  const handleToggleActivo = async (cadena) => {
-    try {
-      await dbCambiarActivoCadena(cadena.id, !cadena.activo);
-      await cargar(true);
-    } catch (err) {
-      addToast(err.message, 'error');
-    }
+  const leerCadena = async (c) => {
+    const activos = resumen.get(c.id)?.activos || [];
+    if (!c.activo) { addToast(`${c.nombre} está de baja: reactívala para leerla.`, 'info'); return; }
+    if (activos.length === 0) { addToast(`${c.nombre} no tiene enlaces activos.`, 'info'); return; }
+    const ok = await robot.lanzar(activos, activos, c.nombre);
+    if (ok) addToast(`Robot lanzado para los ${activos.length} enlaces de ${c.nombre}.`, 'info');
+  };
+
+  const verOtraWeb = (c) => navigate(`/competencia?cadena=${encodeURIComponent(c.id)}&revisar=otra_web`);
+
+  const ficha = fichaId ? (cadenas || []).find(c => c.id === fichaId) : null;
+
+  // ---------------------------------------------------------------- celdas
+  const celdaLectura = (c) => {
+    const u = resumen.get(c.id)?.ultima;
+    if (!u) return <><div className="m3-cell-primary">Sin lecturas</div><div className="m3-cell-secondary">el robot aún no la leyó</div></>;
+    const fallos = (u.fallidos || 0) > 0;
+    return (
+      <>
+        <div className="m3-cell-primary" title={fechaHora(u.finished_at || u.started_at)}>{haceCuanto(u.finished_at || u.started_at)}</div>
+        <div className={`m3-cell-secondary ${fallos ? (u.exitosos ? 'm3-count-stale' : 'text-error') : ''}`}>
+          {u.exitosos || 0} de {u.total_urls || 0} bien{fallos ? ` · ${u.fallidos} fallaron` : ''}
+        </div>
+      </>
+    );
   };
 
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
-      {/* Title Header Block */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="material-symbols-outlined text-primary text-3xl">store</span>
-            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
-              Cadenas de Monitoreo
-            </h1>
+            <span className="material-symbols-outlined text-primary text-3xl">storefront</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Cadenas</h1>
           </div>
-          <p className="text-xs text-on-surface-variant font-sans">
-            Administra las cadenas de farmacias registradas en el robot de extracción.
-          </p>
+          <p className="text-xs text-on-surface-variant">Las farmacias que vigila el robot: su color, su lector, sus enlaces y cómo le fue en la última lectura.</p>
         </div>
-        <button
-          onClick={() => setEditing('new')}
-          className="m3-btn-primary"
-        >
-          <span className="material-symbols-outlined text-base">add</span>
-          <span>Agregar Cadena</span>
+        <button onClick={() => setEditing('new')} className="m3-btn-primary self-start lg:self-auto">
+          <span className="material-symbols-outlined text-base">add_business</span>
+          <span>Nueva cadena</span>
         </button>
       </div>
 
-      <div className="bg-primary/5 border border-primary/20 rounded-2xl px-5 py-4 text-xs text-on-background space-y-1.5 shadow-xs">
-        <div className="flex items-center gap-2 font-mono font-bold text-sm text-primary">
-          <span className="material-symbols-outlined text-lg leading-none">info</span>
-          <span>Información Técnica del Scraper</span>
-        </div>
-        <p className="font-sans text-xs text-on-surface-variant">
-          La inserción de una cadena en esta sección registra la marca comercial en el catálogo de competencia. Recuerda que la ejecución diaria depende de que el robot Python respectivo esté programado en el motor de extracción backend para la descarga directa de datos.
-        </p>
-      </div>
+      <AvisoRobot robot={robot} />
 
-      {/* Main Grid View */}
-      <div className="neural-card overflow-hidden">
-        {loading ? (
-          <div className="overflow-x-auto animate-pulse">
-            <table className="m3-table">
-              <thead>
-                <tr>
-                  <th>Nombre Cadena</th>
-                  <th>Color</th>
-                  <th>Portal Website</th>
-                  <th>Módulo de Scraping</th>
-                  <th className="text-center">URLs Activas Scrapeadas</th>
-                  <th className="text-center">Estado</th>
-                  <th className="text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant">
-                {[1, 2, 3].map((n) => (
-                  <tr key={n}>
-                    <td><div className="h-4 bg-gray-200 rounded w-2/3"></div></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-8"></div></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-3/4"></div></td>
-                    <td><div className="h-4 bg-gray-200 rounded w-1/2"></div></td>
-                    <td className="text-center"><div className="h-4 bg-gray-200 rounded w-12 mx-auto"></div></td>
-                    <td className="text-center"><div className="h-6 bg-gray-200 rounded-full w-14 mx-auto"></div></td>
-                    <td className="text-right"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {(totalOtraWeb > 0 || cadenasConFallos > 0 || activasSinEnlaces > 0) && filtroRevisar === 'todos' && (
+        <div className="m3-banner" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">rule</span>
+          <span className="m3-body-medium flex-1 min-w-0">
+            <strong>Para revisar:</strong>{' '}
+            <span className="m3-banner-links">
+              {cadenasConFallos > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('fallos')} className="text-primary font-medium hover:underline">
+                  {cadenasConFallos} {cadenasConFallos === 1 ? 'cadena' : 'cadenas'} con fallos en la última lectura
+                </button>
+              )}
+              {totalOtraWeb > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('otra_web')} className="text-primary font-medium hover:underline"
+                  title="Enlaces cuya dirección es de otra web que la de su cadena">
+                  {totalOtraWeb} {totalOtraWeb === 1 ? 'enlace' : 'enlaces'} de otra web
+                </button>
+              )}
+              {activasSinEnlaces > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('sin_enlaces')} className="text-primary font-medium hover:underline">
+                  {activasSinEnlaces} {activasSinEnlaces === 1 ? 'cadena activa' : 'cadenas activas'} sin enlaces
+                </button>
+              )}
+            </span>
+          </span>
+        </div>
+      )}
+
+      <section className="m3-data-table" aria-label="Cadenas">
+        <div className="m3-data-table-toolbar">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <label className="m3-search-field">
+                <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, sigla o web" aria-label="Buscar cadenas" />
+                {search && (
+                  <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                )}
+              </label>
+              <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
+                {filtradas.length === (cadenas || []).length ? `${filtradas.length} cadenas` : `${filtradas.length} de ${(cadenas || []).length} cadenas`}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroEstado} onChange={setFiltroEstado}
+                opciones={[['todos', 'Estado: todas'], ['activas', 'Activas'], ['baja', 'De baja']]} />
+              <FiltroChip etiqueta="Robot" icono="smart_toy" valor={filtroRobot} onChange={setFiltroRobot}
+                opciones={[['todos', 'Robot: todos'], ['probado', 'Lector probado'], ['sin_probar', 'Sin probar']]} />
+              <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
+                opciones={[['todos', 'Revisar: todas'], ['fallos', 'Fallos en la última lectura'], ['otra_web', 'Con enlaces de otra web'], ['sin_enlaces', 'Activas sin enlaces']]} />
+              {hayFiltros && (
+                <button type="button" onClick={() => { setFiltroEstado('todos'); setFiltroRobot('todos'); setFiltroRevisar('todos'); }} className="m3-btn-text">
+                  Limpiar filtros
+                </button>
+              )}
+            </div>
           </div>
-        ) : cadenas.length === 0 ? (
-          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant">
-              <span className="material-symbols-outlined text-2xl">storefront</span>
-            </div>
-            <div>
-              <div className="font-bold text-on-surface font-display text-base">Aún no hay cadenas registradas</div>
-              <div className="text-xs text-on-surface-variant mt-0.5">Registra una cadena farmacéutica para habilitar el scraping de precios.</div>
-            </div>
-            <button onClick={() => setEditing('new')} className="m3-btn-primary h-8 px-4 text-xs mt-1">
-              + Registrar Primera Cadena
-            </button>
+        </div>
+
+        {loading ? (
+          <div className="p-4 space-y-3" aria-busy="true">
+            {[1, 2, 3].map(n => <div key={n} className="h-14 rounded-xl m3-skeleton" />)}
+          </div>
+        ) : filtradas.length === 0 ? (
+          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center gap-3">
+            <span className="material-symbols-outlined text-3xl">store</span>
+            <div className="m3-title-medium text-on-surface">{(cadenas || []).length ? 'Ninguna cadena coincide' : 'Aún no hay cadenas'}</div>
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-[750px] relative">
-            <table className="m3-table">
-              <thead className="m3-sticky-header">
-                <tr>
-                  <th>Nombre Cadena</th>
-                  <th>Color</th>
-                  <th>Portal Website</th>
-                  <th>Módulo de Scraping</th>
-                  <th className="text-center">URLs Activas Scrapeadas</th>
-                  <th className="text-center">Estado</th>
-                  <th className="text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-variant">
-                {cadenas.map(c => {
-                  const implementado = SCRAPERS_IMPLEMENTADOS.has(c.modulo_scraper);
-                  const count = urlsDe(c);
-                  return (
-                    <tr key={c.id} className="hover:bg-surface-low transition-colors">
-                      <td className="font-bold text-on-surface font-display text-sm">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: getChainColor(c.id) }} aria-hidden="true" />
-                          {c.nombre}
-                        </span>
-                      </td>
-                      <td>
-                        {c.color_hex ? (
-                          <span className="inline-flex items-center gap-2 font-mono text-xs text-on-surface-variant">
-                            <span className="w-6 h-6 rounded-lg border border-outline-variant" style={{ backgroundColor: c.color_hex }} />
-                            {c.color_hex.toUpperCase()}
-                          </span>
-                        ) : (
-                          <button type="button" onClick={() => setEditing(c.id)} className="text-xs text-primary font-bold hover:underline">Elegir color</button>
-                        )}
-                      </td>
-                      <td>
-                        {c.website ? (
-                          <a href={c.website} target="_blank" rel="noopener noreferrer"
-                            className="text-xs font-mono text-primary hover:underline flex items-center gap-0.5">
-                            <span>{c.website.replace(/^https?:\/\/(www\.)?/, '')}</span>
-                            <span className="material-symbols-outlined text-label-md leading-none">open_in_new</span>
-                          </a>
-                        ) : (
-                          <span className="text-on-surface-variant/40 font-mono select-none">—</span>
-                        )}
-                      </td>
-                      <td className="font-mono text-xs text-on-surface">
-                        <code className="bg-surface-low border border-outline-variant px-2.5 py-1 rounded-md font-bold">{c.modulo_scraper}</code>
-                        {!implementado && (
-                          <span className="ml-2 font-bold uppercase tracking-wider text-label-sm text-error bg-error-container border border-error/20 px-2 py-0.5 rounded-full">Pendiente</span>
-                        )}
-                      </td>
-                      <td className="text-center font-mono">
-                        <span className={`inline-flex px-3 py-1 text-xs rounded-full font-bold ${
-                          count === 0 ? 'bg-surface-low text-on-surface-variant border border-outline-variant' : 'bg-primary-container text-on-primary-container'
-                        }`}>
-                          {count} URLs
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <button onClick={() => handleToggleActivo(c)}
-                          className={`text-label-sm uppercase font-mono font-bold px-3 py-1 rounded-full transition-all ${
-                            c.activo ? 'bg-secondary/15 text-secondary border border-secondary/30 shadow-xs' : 'bg-surface-low text-on-surface-variant border border-outline-variant/40'
-                          }`}>
-                          {c.activo ? 'Activo' : 'Inactivo'}
-                        </button>
-                      </td>
-                      <td className="text-right whitespace-nowrap">
-                        <button onClick={() => setEditing(c.id)}
-                          className="text-xs text-primary hover:text-primary/80 font-bold mr-4 inline-flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">edit</span>
-                          Editar
-                        </button>
-                        <button onClick={() => handleDelete(c)}
-                          className="text-xs text-error hover:text-error/80 font-bold inline-flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <ul className="md:hidden divide-y divide-outline-variant" aria-label="Cadenas">
+              {filtradas.map(c => {
+                const r = resumen.get(c.id);
+                return (
+                  <li key={c.id} className="m3-product-card">
+                    <CadenaBadge cadena={c.id} tamano="md" title="" />
+                    <button type="button" onClick={() => setFichaId(c.id)} className="flex-1 min-w-0 text-left">
+                      <span className="m3-cell-primary">{c.nombre}</span>
+                      <div className="m3-cell-secondary">{r?.activos.length || 0} enlaces · {lectorDe(c.modulo_scraper).probado ? 'lector probado' : 'sin probar'}</div>
+                      <div className="mt-1"><span className={`m3-status ${c.activo ? 'is-on' : ''}`}>{c.activo ? 'Activa' : 'De baja'}</span></div>
+                    </button>
+                    <button type="button" onClick={() => setEditing(c.id)} className="m3-icon-btn" aria-label={`Editar ${c.nombre}`}>
+                      <span className="material-symbols-outlined">edit</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="hidden md:block overflow-x-auto">
+              <table className="m3-table m3-table-productos m3-table-cadenas">
+                <colgroup>
+                  <col />
+                  <col className="w-[150px]" />
+                  <col className="w-[150px]" />
+                  <col className="w-[170px]" />
+                  <col className="w-[104px]" />
+                  <col className="w-[180px]" />
+                </colgroup>
+                <thead className="m3-sticky-header">
+                  <tr>
+                    <th>Cadena</th>
+                    <th>Robot</th>
+                    <th>Enlaces</th>
+                    <th>Última lectura</th>
+                    <th>Estado</th>
+                    <th className="m3-sticky-actions"><span className="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtradas.map(c => {
+                    const r = resumen.get(c.id);
+                    const lector = lectorDe(c.modulo_scraper);
+                    const leyendo = Boolean(robot.corrida?.etiqueta === c.nombre);
+                    return (
+                      <tr key={c.id}>
+                        <td>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <CadenaBadge cadena={c.id} tamano="md" title="" />
+                            <div className="min-w-0">
+                              <button type="button" onClick={() => setFichaId(c.id)} className="m3-cell-link min-w-0" title="Abrir la ficha de la cadena">
+                                <span className="m3-cell-primary">{c.nombre}</span>
+                              </button>
+                              <div className="m3-cell-secondary">
+                                {c.website ? (
+                                  <a href={c.website} target="_blank" rel="noopener noreferrer" className="hover:underline">{dominio(c.website)}</a>
+                                ) : 'sin web'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className={`m3-cell-primary ${lector.probado ? '' : 'm3-count-stale'}`}
+                            title={lector.probado ? 'El robot tiene reglas propias para esta tienda' : 'El robot la intenta con el lector genérico: puede fallar'}>
+                            {lector.probado ? 'Lector probado' : 'Sin probar'}
+                          </div>
+                          <div className="m3-cell-secondary">{lector.label}</div>
+                        </td>
+                        <td>
+                          <div className="m3-cell-primary">{r?.activos.length || 0} activos</div>
+                          <div className="m3-cell-secondary">
+                            {r?.otraWeb.length ? (
+                              <button type="button" onClick={() => verOtraWeb(c)} className="m3-count-stale hover:underline"
+                                title="Ver en Competencia los enlaces de otra web">
+                                {r.otraWeb.length} de otra web
+                              </button>
+                            ) : r?.deBaja ? `${r.deBaja} de baja` : '—'}
+                          </div>
+                        </td>
+                        <td>{leyendo ? <div className="m3-cell-primary text-primary font-medium">Leyendo…</div> : celdaLectura(c)}</td>
+                        <td><span className={`m3-status ${c.activo ? 'is-on' : ''}`}>{c.activo ? 'Activa' : 'De baja'}</span></td>
+                        <td className="m3-sticky-actions">
+                          <div className="flex justify-end gap-1">
+                            <button type="button" onClick={() => leerCadena(c)} disabled={Boolean(robot.corrida) || !c.activo} className="m3-icon-btn"
+                              title={robot.corrida ? 'Ya hay una lectura en curso' : `Leer ahora los enlaces de ${c.nombre}`} aria-label={`Leer ${c.nombre}`}>
+                              <span className={`material-symbols-outlined ${leyendo ? 'animate-spin' : ''}`}>{leyendo ? 'sync' : 'smart_toy'}</span>
+                            </button>
+                            <button type="button" onClick={() => setEditing(c.id)} className="m3-icon-btn" title="Editar" aria-label={`Editar ${c.nombre}`}>
+                              <span className="material-symbols-outlined">edit</span>
+                            </button>
+                            <button type="button" onClick={() => alternarActivo(c)} className="m3-icon-btn"
+                              title={c.activo ? 'Dar de baja: el robot deja de leerla' : 'Reactivar'} aria-label={`${c.activo ? 'Dar de baja' : 'Reactivar'} ${c.nombre}`}>
+                              <span className="material-symbols-outlined">{c.activo ? 'archive' : 'unarchive'}</span>
+                            </button>
+                            <button type="button" onClick={() => setConfirmDelete(c)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label={`Eliminar ${c.nombre}`}>
+                              <span className="material-symbols-outlined">delete</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
-      </div>
+      </section>
+
+      {ficha && (
+        <FichaCadena
+          cadena={ficha}
+          resumen={resumen.get(ficha.id)}
+          robotOcupado={Boolean(robot.corrida)}
+          onClose={() => setFichaId(null)}
+          onEditar={() => { setFichaId(null); setEditing(ficha.id); }}
+          onLeer={() => leerCadena(ficha)}
+          onVerOtraWeb={() => verOtraWeb(ficha)}
+        />
+      )}
 
       {editing && (
         <CadenaModal
-          cadena={editing === 'new' ? null : cadenas.find(c => c.id === editing)}
-          cadenas={cadenas}
+          cadena={editing === 'new' ? null : (cadenas || []).find(c => c.id === editing)}
+          cadenas={cadenas || []}
           onSave={handleSave}
           onClose={() => setEditing(null)}
         />
       )}
 
-      {/* Custom Confirmation Dialog */}
       <ConfirmModal
         isOpen={!!confirmDelete}
-        title="¿Eliminar Cadena de Monitoreo?"
-        message={
-          confirmDelete 
-            ? `¿Estás seguro de que deseas eliminar la cadena de monitoreo "${confirmDelete.nombre}"?${
-                urlsDe(confirmDelete) > 0
-                  ? `\n\nTiene ${urlsDe(confirmDelete)} enlaces activos: no se podrá eliminar. Dala de baja en su lugar (el robot deja de leerla y se conserva el historial).`
-                  : ''
-              }\n\nEsta acción no se puede deshacer.`
-            : ''
-        }
+        title="¿Eliminar cadena?"
+        message={confirmDelete
+          ? (resumen.get(confirmDelete.id)?.activos.length || 0) + (resumen.get(confirmDelete.id)?.deBaja || 0) > 0
+            ? `${confirmDelete.nombre} tiene enlaces: no se puede eliminar sin perder su historial de precios. Dala de baja (el robot deja de leerla y se conserva todo).`
+            : `Se eliminará ${confirmDelete.nombre}. No tiene enlaces.`
+          : ''}
         confirmText="Eliminar"
         cancelText="Cancelar"
-        isDanger={true}
-        onConfirm={handleConfirmDelete}
+        isDanger
+        onConfirm={eliminar}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      <GitHubConfigModal isOpen={showGithubModal} onClose={() => setShowGithubModal(false)} />
     </div>
   );
 }
 
-function CadenaModal({ cadena, cadenas = [], onSave, onClose }) {
+// ---------------------------------------------------------------------------
+// Ficha lateral: lecturas del robot y enlaces de otra web.
+// ---------------------------------------------------------------------------
+function FichaCadena({ cadena: c, resumen: r, robotOcupado, onClose, onEditar, onLeer, onVerOtraWeb }) {
+  useEffect(() => {
+    const alPulsar = (ev) => { if (ev.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', alPulsar);
+    return () => window.removeEventListener('keydown', alPulsar);
+  }, [onClose]);
+  const lector = lectorDe(c.modulo_scraper);
+  const u = r?.ultima;
+
+  return createPortal(
+    <div className="m3-modal-scrim m3-sheet-scrim" onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
+      <aside className="m3-side-sheet" role="dialog" aria-modal="true" aria-labelledby="ficha-cadena-titulo">
+        <header className="flex items-start gap-3 px-6 pt-6 pb-4">
+          <CadenaBadge cadena={c.id} tamano="lg" title="" />
+          <div className="min-w-0 flex-1">
+            <h2 id="ficha-cadena-titulo" className="m3-headline-small text-on-surface break-words">{c.nombre}</h2>
+            <div className="m3-body-medium text-on-surface-variant mt-1 flex flex-wrap items-center gap-x-2">
+              {c.website ? <a href={c.website} target="_blank" rel="noopener noreferrer" className="hover:underline">{dominio(c.website)}</a> : <span>sin web</span>}
+              <span aria-hidden="true">·</span>
+              <span className={`m3-status ${c.activo ? 'is-on' : ''}`}>{c.activo ? 'Activa' : 'De baja'}</span>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="m3-icon-btn" aria-label="Cerrar ficha">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+          <section>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="m3-ficha-kpi">
+                <span className="m3-label-medium text-on-surface-variant">Enlaces activos</span>
+                <span className="m3-title-large text-on-surface">{r?.activos.length || 0}</span>
+                {r?.deBaja ? <span className="m3-body-small text-on-surface-variant">{r.deBaja} de baja</span> : null}
+              </div>
+              <div className="m3-ficha-kpi">
+                <span className="m3-label-medium text-on-surface-variant">Última lectura</span>
+                <span className="m3-title-large text-on-surface">{u ? `${u.exitosos || 0}/${u.total_urls || 0}` : '—'}</span>
+                <span className="m3-body-small text-on-surface-variant">{u ? haceCuanto(u.finished_at || u.started_at) : 'nunca'}</span>
+              </div>
+              <div className="m3-ficha-kpi">
+                <span className="m3-label-medium text-on-surface-variant">Lector</span>
+                <span className={`m3-title-medium ${lector.probado ? 'text-on-surface' : 'm3-count-stale'}`}>{lector.probado ? 'Probado' : 'Sin probar'}</span>
+                <span className="m3-body-small text-on-surface-variant truncate">{lector.label}</span>
+              </div>
+            </div>
+            {!lector.probado && (
+              <p className="m3-body-small text-on-surface-variant mt-2">
+                El robot no tiene reglas propias para esta tienda: la lee con el lector genérico, que busca el precio en la página y puede fallar.
+              </p>
+            )}
+          </section>
+
+          {r?.otraWeb.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="m3-title-small text-on-surface-variant">Enlaces de otra web ({r.otraWeb.length})</h3>
+                <button type="button" onClick={onVerOtraWeb} className="m3-btn-text">Ver en Competencia</button>
+              </div>
+              <ul className="space-y-1">
+                {r.otraWeb.slice(0, 8).map(e => (
+                  <li key={e.id} className="m3-ficha-enlace">
+                    <div className="min-w-0 flex-1">
+                      <div className="m3-cell-primary">{e.marca || e.id_producto_propio}</div>
+                      <div className="m3-cell-secondary m3-count-stale">{dominio(e.url)} (esperado {dominio(c.website)})</div>
+                    </div>
+                    <a href={e.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn" aria-label="Abrir la URL">
+                      <span className="material-symbols-outlined">open_in_new</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section>
+            <h3 className="m3-title-small text-on-surface-variant mb-2">Últimas lecturas del robot</h3>
+            {!r?.runs.length ? (
+              <p className="m3-body-medium text-on-surface-variant">El robot todavía no leyó esta cadena.</p>
+            ) : (
+              <ul className="divide-y divide-outline-variant">
+                {r.runs.slice(0, 10).map((run, i) => {
+                  const fallos = (run.fallidos || 0) > 0;
+                  return (
+                    <li key={i} className="flex items-center gap-3 py-2 m3-body-medium">
+                      <span className={`material-symbols-outlined ${fallos ? (run.exitosos ? 'm3-count-stale' : 'text-error') : 'text-primary'}`} aria-hidden="true">
+                        {fallos ? (run.exitosos ? 'error' : 'cancel') : 'check_circle'}
+                      </span>
+                      <span className="flex-1">{run.exitosos || 0} de {run.total_urls || 0} bien{fallos ? ` · ${run.fallidos} fallaron` : ''}</span>
+                      <span className="text-on-surface-variant tabular-nums">{fechaHora(run.finished_at || run.started_at)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-outline-variant">
+          <button type="button" onClick={onLeer} disabled={robotOcupado || !c.activo} className="m3-btn-tonal mr-auto">
+            <span className="material-symbols-outlined">smart_toy</span>
+            Leer esta cadena
+          </button>
+          <button type="button" onClick={onEditar} className="m3-btn-primary h-10">
+            <span className="material-symbols-outlined text-base">edit</span>
+            Editar
+          </button>
+        </footer>
+      </aside>
+    </div>,
+    document.body
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Formulario: misma estructura que los demas.
+// ---------------------------------------------------------------------------
+function CadenaModal({ cadena, cadenas, onSave, onClose }) {
   const isNew = !cadena;
   // Colores que ya usan las demas cadenas: no se pueden repetir.
   const usados = new Map(cadenas.filter(c => c.id !== cadena?.id && c.color_hex).map(c => [c.color_hex.toUpperCase(), c.nombre]));
   const primeroLibre = PALETA_CADENAS.find(col => !usados.has(col)) || '';
   const [form, setForm] = useState({
     nombre: cadena?.nombre || '',
+    sigla: cadena?.sigla || '',
     website: cadena?.website || '',
-    modulo_scraper: cadena?.modulo_scraper || 'farmatodo',
+    modulo_scraper: cadena?.modulo_scraper || 'generico',
     activo: cadena?.activo ?? true,
     color_hex: (cadena?.color_hex || (isNew ? primeroLibre : '')).toUpperCase(),
   });
+  const [errores, setErrores] = useState({});
+  const [errorGeneral, setErrorGeneral] = useState(null);
   const [saving, setSaving] = useState(false);
+  const cambiar = (k, v) => { setErrorGeneral(null); setErrores(e => ({ ...e, [k]: undefined })); setForm(f => ({ ...f, [k]: v })); };
+  const siglaVista = (form.sigla.trim() || siglaCadena(form.nombre || 'Cadena')).toUpperCase();
+  const siglaRepetida = form.sigla.trim() && cadenas.find(c => c.id !== cadena?.id && (c.sigla || '').toUpperCase() === form.sigla.trim().toUpperCase());
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const err = {};
+    if (!form.nombre.trim()) err.nombre = 'Obligatorio';
+    if (form.website.trim() && !dominio(form.website)) err.website = 'Escribe una dirección válida';
+    setErrores(err);
+    if (Object.keys(err).length) return;
     setSaving(true);
-    await onSave(form, isNew, cadena);
+    try { await onSave({ ...form, sigla: form.sigla.trim() || siglaVista }, isNew, cadena); } catch (ex) { setErrorGeneral(ex.message); }
     setSaving(false);
   };
-  const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
   return (
     <ModalWrapper
-      isOpen={true}
+      isOpen
       onClose={onClose}
-      title={isNew ? 'Registrar Cadena' : 'Editar Cadena'}
-      subtitle={isNew ? 'Añade una nueva cadena de farmacias para monitoreo' : `Editando datos de ${form.nombre}`}
-      icon="store"
-      maxWidth="max-w-lg"
+      title={isNew ? 'Nueva cadena' : 'Editar cadena'}
+      subtitle={isNew ? 'Los campos con * son obligatorios.' : cadena.nombre}
+      icon={isNew ? 'add_business' : 'edit'}
+      maxWidth="max-w-2xl"
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+          <label className="m3-switch-label">
+            <input type="checkbox" role="switch" checked={form.activo} onChange={e => cambiar('activo', e.target.checked)} className="m3-switch" />
+            <span>{form.activo ? 'Activa: el robot la lee' : 'De baja'}</span>
+          </label>
+          <div className="flex gap-2 ml-auto">
+            <button type="button" onClick={onClose} className="m3-btn-text">Cancelar</button>
+            <button type="submit" form="cadena-form" disabled={saving} className="m3-btn-primary h-10 px-6">
+              {saving ? 'Guardando…' : isNew ? 'Crear cadena' : 'Guardar cambios'}
+            </button>
+          </div>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <Field label="Nombre de la Cadena *" hint="Ej. Locatel, Farmatodo, FarmaDON">
-          <input type="text" required value={form.nombre}
-            onChange={e => handleChange('nombre', e.target.value)}
-            disabled={!isNew}
-            placeholder="Nombre comercial de la cadena"
-            className="m3-input disabled:bg-surface-container-low" />
-        </Field>
+      <form id="cadena-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        {errorGeneral && (
+          <div className="m3-form-alert" role="alert">
+            <span className="material-symbols-outlined" aria-hidden="true">error</span>
+            <span className="flex-1">{errorGeneral}</span>
+          </div>
+        )}
 
-        <Field label="Website Principal" hint="Sitio web de e-commerce de la cadena">
-          <input type="url" value={form.website}
-            onChange={e => handleChange('website', e.target.value)}
-            placeholder="https://www.ejemplo.com.ve"
-            className="m3-input" />
-        </Field>
+        <FormSection titulo="Datos" icono="storefront">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-4">
+            <Field label="Nombre" requerido error={errores.nombre} hint="Como se muestra en todo el panel.">
+              <input type="text" value={form.nombre} onChange={e => cambiar('nombre', e.target.value)} className="m3-input" placeholder="Ej. Farmatodo" />
+            </Field>
+            <Field label="Sigla" hint={form.sigla.trim() ? undefined : `Vacía: ${siglaVista}`}
+              aviso={siglaRepetida ? `También la usa ${siglaRepetida.nombre}` : null}>
+              <input type="text" value={form.sigla} maxLength={4} onChange={e => cambiar('sigla', e.target.value.toUpperCase().replace(/[^A-Z0-9ÁÉÍÓÚÑ]/g, ''))}
+                className="m3-input uppercase" placeholder={siglaVista} />
+            </Field>
+          </div>
+          <Field label="Web" error={errores.website} hint="La página de la tienda. Sirve para avisar de enlaces de otra web.">
+            <input type="url" value={form.website} onChange={e => cambiar('website', e.target.value)} className="m3-input" placeholder="https://www.ejemplo.com.ve" />
+          </Field>
+        </FormSection>
 
-        <Field label="Módulo de Scraping" hint="Módulo Python de scraping asociado en backend">
-          <Select required value={form.modulo_scraper}
-            onChange={e => handleChange('modulo_scraper', e.target.value)}
-            className="m3-select w-full">
-            {SCRAPERS_DISPONIBLES.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </Select>
-        </Field>
+        <FormSection titulo="Robot" icono="smart_toy">
+          <Field label="Lector" hint={lectorDe(form.modulo_scraper).probado
+            ? 'El robot tiene reglas propias para esta tienda.'
+            : 'Sin reglas propias: el robot la intenta con el lector genérico y puede fallar.'}>
+            <Select value={form.modulo_scraper} onChange={e => cambiar('modulo_scraper', e.target.value)} className="m3-select w-full">
+              {LECTORES.map(l => <option key={l.value} value={l.value}>{`${l.label} · ${l.probado ? 'probado' : 'sin probar'}`}</option>)}
+            </Select>
+          </Field>
+        </FormSection>
 
-        <FormSection titulo="Color en gráficos y tarjetas" icono="palette">
-          <CampoForm label="Color de la cadena" hint="Único por cadena: se usa en todos los gráficos, tarjetas y leyendas del panel."
+        <FormSection titulo="Color e insignia" icono="palette">
+          <Field label="Color de la cadena" hint="Único por cadena: se usa en todos los gráficos, tarjetas y leyendas del panel."
             aviso={form.color_hex && usados.has(form.color_hex) ? `Ya lo usa ${usados.get(form.color_hex)}.` : null}>
             <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color de la cadena">
               {PALETA_CADENAS.map(col => {
@@ -370,8 +626,7 @@ function CadenaModal({ cadena, cadenas = [], onSave, onClose }) {
                 const elegido = form.color_hex === col;
                 return (
                   <button key={col} type="button" role="radio" aria-checked={elegido} disabled={Boolean(ocupadoPor)}
-                    onClick={() => handleChange('color_hex', col)}
-                    title={ocupadoPor ? `${col} · lo usa ${ocupadoPor}` : col}
+                    onClick={() => cambiar('color_hex', col)} title={ocupadoPor ? `${col} · lo usa ${ocupadoPor}` : col}
                     className={`m3-swatch ${elegido ? 'is-selected' : ''}`} style={{ backgroundColor: col }}>
                     {elegido && <span className="material-symbols-outlined" aria-hidden="true">check</span>}
                     {ocupadoPor && <span className="material-symbols-outlined" aria-hidden="true">block</span>}
@@ -380,50 +635,22 @@ function CadenaModal({ cadena, cadenas = [], onSave, onClose }) {
               })}
               <label className="m3-swatch m3-swatch-libre" title="Otro color">
                 <input type="color" value={/^#[0-9A-F]{6}$/i.test(form.color_hex) ? form.color_hex : '#475569'}
-                  onChange={e => handleChange('color_hex', e.target.value.toUpperCase())} aria-label="Elegir otro color" />
+                  onChange={e => cambiar('color_hex', e.target.value.toUpperCase())} aria-label="Elegir otro color" />
                 <span className="material-symbols-outlined" aria-hidden="true">colorize</span>
               </label>
             </div>
-          </CampoForm>
-          <div className="flex items-center gap-3 m3-body-medium">
+          </Field>
+          <div className="flex flex-wrap items-center gap-3 m3-body-medium">
             <span className="m3-label-medium text-on-surface-variant">Vista previa</span>
+            <span className="m3-cadena-badge is-md" style={{ backgroundColor: form.color_hex || '#475569' }}>{siglaVista}</span>
             <span className="inline-flex items-center gap-2 px-3 h-8 rounded-full border border-outline-variant">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: form.color_hex || '#475569' }} />
+              <span className="m3-cadena-badge is-xs" style={{ backgroundColor: form.color_hex || '#475569' }}>{siglaVista}</span>
               {form.nombre || 'Cadena'}
             </span>
             <span className="h-3 w-16 rounded-full" style={{ backgroundColor: form.color_hex || '#475569' }} aria-hidden="true" />
-            <span className="font-mono text-xs text-on-surface-variant">{form.color_hex || 'sin color'}</span>
           </div>
         </FormSection>
-
-        <Field label="Estado Monitoreo">
-          <label className="flex items-center gap-3 px-4 py-3 border border-outline-variant/60 rounded-2xl cursor-pointer font-bold text-xs text-primary bg-surface-container-low select-none hover:bg-surface-container transition-colors">
-            <input type="checkbox" checked={form.activo}
-              onChange={e => handleChange('activo', e.target.checked)}
-              className="rounded text-primary focus:ring-primary h-4 w-4" />
-            <span>ACTIVAR ROBOTS DE EXTRACCIÓN DIARIA</span>
-          </label>
-        </Field>
-
-        <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/60">
-          <button type="button" onClick={onClose}
-            className="m3-btn-outline h-9 px-4 text-xs">Cancelar</button>
-          <button type="submit" disabled={saving}
-            className="m3-btn-primary h-9 px-5 text-xs">
-            {saving ? 'Guardando...' : isNew ? 'Registrar' : 'Guardar Cambios'}
-          </button>
-        </div>
       </form>
     </ModalWrapper>
-  );
-}
-
-function Field({ label, hint, children }) {
-  return (
-    <div className="space-y-1">
-      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">{label}</label>
-      {children}
-      {hint && <p className="text-label-sm text-on-surface-variant font-mono">{hint}</p>}
-    </div>
   );
 }

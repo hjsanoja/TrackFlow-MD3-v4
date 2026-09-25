@@ -56,11 +56,18 @@ export const PALETA_CADENAS = [
 // DataContext los registra al cargar las cadenas; se buscan por id ('Saas')
 // y por nombre ('Farmacias SAAS'), porque los datos traen uno u otro.
 const coloresRegistrados = new Map();
+const siglasRegistradas = new Map();
 
 /** Guarda los colores de las cadenas para que todos los graficos usen los mismos. */
 export function registrarColoresCadenas(cadenas) {
   coloresRegistrados.clear();
+  siglasRegistradas.clear();
   for (const c of cadenas || []) {
+    const sigla = String(c.sigla || '').trim().toUpperCase();
+    if (sigla) {
+      if (c.id) siglasRegistradas.set(String(c.id).toLowerCase().trim(), sigla);
+      if (c.nombre) siglasRegistradas.set(String(c.nombre).toLowerCase().trim(), sigla);
+    }
     if (!/^#[0-9a-f]{6}$/i.test(c.color_hex || '')) continue;
     if (c.id) coloresRegistrados.set(String(c.id).toLowerCase().trim(), c.color_hex);
     if (c.nombre) coloresRegistrados.set(String(c.nombre).toLowerCase().trim(), c.color_hex);
@@ -106,4 +113,26 @@ export function getLabColor(labName) {
 export function getBrandBgTint(hexOrHsl) {
   if (!hexOrHsl) return 'rgba(1, 104, 116, 0.08)';
   return `${hexOrHsl}15`; // ~8% opacity
+}
+
+/**
+ * Sigla de una cadena (fase 26): la guardada en el menu Cadenas o, si no hay,
+ * la misma regla del SQL: iniciales de las palabras sin "Farmacia(s)" ni
+ * "Grupo"; con una sola palabra, la primera letra y su primera mayuscula
+ * interna (FarmaDON -> FD).
+ */
+export function siglaCadena(chainName) {
+  if (!chainName) return '?';
+  const guardada = siglasRegistradas.get(String(chainName).toLowerCase().trim());
+  if (guardada) return guardada;
+  const norm = String(chainName).toLowerCase();
+  if (norm.includes('farmatodo')) return 'FT';
+  if (norm.includes('locatel')) return 'LC';
+  if (norm.includes('saas')) return 'SA';
+  const palabras = String(chainName).replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ ]/g, ' ').trim().split(/\s+/)
+    .filter(p => !['farmacias', 'farmacia', 'grupo'].includes(p.toLowerCase()));
+  if (palabras.length >= 2) return (palabras[0][0] + palabras[1][0]).toUpperCase();
+  const w = palabras[0] || String(chainName);
+  const mayus = w.slice(1).match(/[A-ZÁÉÍÓÚÑ]/);
+  return (w[0] + (mayus ? mayus[0] : (w[1] || ''))).toUpperCase();
 }

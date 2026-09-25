@@ -1,3 +1,4 @@
+import CadenaBadge from './CadenaBadge';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -146,6 +147,7 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
                     <li key={e.id || i} className="m3-ficha-enlace">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
+                          <CadenaBadge cadena={e.cadena} tamano="xs" title="" />
                           <span className="m3-cell-primary">{e.cadena || '—'}</span>
                           {propio && <span className="m3-chip-propio">Propio</span>}
                           {e.tiene_descuento && <span className="m3-chip-oferta">Oferta</span>}
