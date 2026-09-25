@@ -1099,6 +1099,7 @@ export default function Competencia() {
           tipoPreseleccionado={preseleccion?.tipo || ''}
           productos={productos}
           cadenas={cadenas}
+          enlaces={items}
           onSave={handleSave}
           onClose={() => { setEditing(null); setPreseleccion(null); }}
         />
@@ -1234,7 +1235,7 @@ export default function Competencia() {
 // ---------------------------------------------------------------------------
 // Formulario de enlace: misma estructura que el de producto.
 // ---------------------------------------------------------------------------
-function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = '', tipoPreseleccionado = '', productos, cadenas, onSave, onClose }) {
+function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = '', tipoPreseleccionado = '', productos, cadenas, enlaces = [], onSave, onClose }) {
   const dimensiones = useDimensiones();
   const isNew = !item;
   const cadenasActivas = (cadenas || []).filter(c => c.activo !== false);
@@ -1270,6 +1271,31 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
 
   const cambiar = (k, v) => { setErrorGeneral(null); setErrores(e => ({ ...e, [k]: undefined })); setForm(f => ({ ...f, [k]: v })); };
   const producto = productoDesdeTexto(productoTexto);
+
+  // Enlaces que ya tiene el producto elegido: se ven antes de guardar, para
+  // no vincular dos veces lo mismo.
+  const cadenaDe = (v) => cadenasActivas.find(c => String(c.id).toLowerCase() === String(v || '').toLowerCase() ||
+    String(c.nombre).toLowerCase() === String(v || '').toLowerCase()) || null;
+  const existentes = useMemo(() => {
+    if (!producto) return [];
+    return (enlaces || [])
+      .filter(e => e.id !== item?.id && String(e.id_producto_propio).trim() === String(producto.id_interno))
+      .sort((a, b) => (esPropio(b) ? 1 : 0) - (esPropio(a) ? 1 : 0) ||
+        String(cadenaDe(a.cadena)?.nombre || a.cadena).localeCompare(String(cadenaDe(b.cadena)?.nombre || b.cadena)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [producto?.id_interno, enlaces, item?.id]);
+  const enEstaCadena = existentes.filter(e => (cadenaDe(e.cadena)?.id || e.cadena) === form.cadena);
+  const avisoTipo = form.tipo === 'propio' && enEstaCadena.some(esPropio)
+    ? `Tu producto ya tiene enlace en ${cadenaDe(form.cadena)?.nombre || form.cadena}.` : null;
+  const avisoMarca = form.tipo !== 'propio' && form.marca.trim() &&
+    enEstaCadena.some(e => !esPropio(e) && claveTexto(e.marca) === claveTexto(form.marca))
+    ? `Ya hay un enlace de "${form.marca.trim()}" en ${cadenaDe(form.cadena)?.nombre || form.cadena} para este producto.` : null;
+  const urlRepetida = useMemo(() => {
+    if (!form.url.trim() || !form.cadena) return null;
+    return (enlaces || []).find(e => e.id !== item?.id && (cadenaDe(e.cadena)?.id || e.cadena) === form.cadena &&
+      normalizarUrl(e.url || '') === normalizarUrl(/^https?:\/\//.test(form.url) ? form.url.trim() : `https://${form.url.trim()}`)) || null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.url, form.cadena, enlaces, item?.id]);
 
   // Aviso si la URL es de otra web que la de la cadena elegida.
   const avisoUrl = useMemo(() => {
@@ -1352,18 +1378,49 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
             <ComboField value={productoTexto} onChange={v => { setProductoTexto(v); setErrores(e => ({ ...e, producto: undefined })); }}
               opciones={opcionesProducto} placeholder="140216 · ACETAMINOFEN 500 mg" />
           </Field>
+          {producto && (
+            <div className="m3-existentes" aria-label="Enlaces que ya tiene este producto">
+              <div className="m3-label-medium text-on-surface-variant">
+                {existentes.length === 0 ? 'Este producto todavía no tiene enlaces.' : `Ya vinculados (${existentes.length})`}
+              </div>
+              {existentes.length > 0 && (
+                <ul>
+                  {existentes.map(e => {
+                    const propioE = esPropio(e);
+                    const misma = (cadenaDe(e.cadena)?.id || e.cadena) === form.cadena;
+                    return (
+                      <li key={e.id} className={misma ? 'is-match' : ''}>
+                        <span className="m3-existentes-cadena">{cadenaDe(e.cadena)?.nombre || e.cadena}</span>
+                        <span className="min-w-0 flex-1 truncate" title={propioE ? 'Tu producto' : `${e.marca}${e.laboratorio ? ` · ${e.laboratorio}` : ''}`}>
+                          {propioE ? <span className="m3-chip-propio">Mi producto</span> : <>{e.marca}{e.laboratorio ? <span className="text-on-surface-variant"> · {e.laboratorio}</span> : ''}</>}
+                        </span>
+                        {!e.activo && <span className="m3-status shrink-0">De baja</span>}
+                        {e.url && (
+                          <a href={e.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn m3-icon-btn-sm shrink-0"
+                            title="Abrir en la tienda" aria-label={`Abrir ${e.marca} en la tienda`}>
+                            <span className="material-symbols-outlined">open_in_new</span>
+                          </a>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
           <Field label="Cadena" requerido error={errores.cadena}>
             <ChoiceChips valor={form.cadena} onChange={v => cambiar('cadena', v)}
               opciones={cadenasActivas.map(c => [c.id, c.nombre])} nombre="cadena" />
           </Field>
-          <Field label="Tipo de enlace" requerido>
+          <Field label="Tipo de enlace" requerido aviso={avisoTipo}>
             <ChoiceChips valor={form.tipo} onChange={v => cambiar('tipo', v)}
               opciones={[['alternativa', 'Competidor'], ['propio', 'Mi producto en esta cadena']]} nombre="tipo" />
           </Field>
         </FormSection>
 
         <FormSection titulo="Enlace" icono="link">
-          <Field label="URL del producto en la tienda" requerido error={errores.url} aviso={avisoUrl}
+          <Field label="URL del producto en la tienda" requerido error={errores.url}
+            aviso={urlRepetida ? `Esta URL ya está vinculada en ${cadenaDe(urlRepetida.cadena)?.nombre || urlRepetida.cadena} (${esPropio(urlRepetida) ? 'tu producto' : urlRepetida.marca}, producto ${urlRepetida.id_producto_propio}).` : avisoUrl}
             hint="Copia la dirección de la página del producto">
             <div className="relative">
               <input type="url" inputMode="url" value={form.url} onChange={e => cambiar('url', e.target.value)}
@@ -1381,7 +1438,7 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
         {form.tipo !== 'propio' && (
           <FormSection titulo="Competidor" icono="groups">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Nombre del competidor" requerido error={errores.marca} hint="Como lo vende la tienda. Ej: Atamel 500 mg x 20">
+              <Field label="Nombre del competidor" requerido error={errores.marca} aviso={avisoMarca} hint="Como lo vende la tienda. Ej: Atamel 500 mg x 20">
                 <input type="text" value={form.marca} onChange={e => cambiar('marca', e.target.value)} className="m3-input" />
               </Field>
               <Field label="Laboratorio" hint="Fabricante del competidor">
