@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 26 fases de SQL
+## Las 27 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -106,11 +106,12 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
 | 23 | Vista `v_enlaces_fallidos`: lecturas fallidas seguidas por publicación (el panel marca "Revisar URL" desde 3) |
 | 24 | Un color único por cadena en `dim_cadenas.color_hex` (marcas conocidas + paleta) e índice único `uq_dim_cadenas_color` |
+| 27 | `sinonimos` en laboratorios, categorías, unidades y formas; vista `v_uso_dimensiones`; `fn_unir_dimension` (une dos elementos: mueve los productos y borra el viejo; solo admin) |
 | 26 | `dim_cadenas.sigla` (FT, LC, SA… e iniciales para el resto) |
 | 25 | **Seguridad:** `usuarios` con RLS (cada quien su fila, el admin todas), políticas abiertas → solo usuarios activos (`fn_usuario_activo`, `fn_es_admin`), sin permisos para `anon`; tabla `accesos`, `fn_registrar_acceso`, `fn_actualizar_mi_cuenta`, `fn_eliminar_usuario` |
 
-**Corridas en Supabase de la 1 a la 25** (la 25 dejó `usuarios` y `accesos`
-con RLS y sin permisos públicos). **La 26 está pendiente** (PR #44). La 22
+**Corridas en Supabase de la 1 a la 26** (la 25 dejó `usuarios` y `accesos`
+con RLS y sin permisos públicos). **La 27 está pendiente** (PR #45). La 22
 dio 0 y 0; la 23, 0 enlaces para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
@@ -122,12 +123,13 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #43, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 25** (la 26 en el PR #44) |
+| Código en `main` | PR #44, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 26** (la 27 en el PR #45) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
 | Módulo Usuarios | Seguridad, recuperar contraseña, Mi cuenta, accesos, eliminar de verdad y rediseño (#43, fase 25). **Aparcado por Hernando:** Brevo/SMTP y los correos de alertas y resumen |
+| Módulo Dimensiones | Rediseño, columna "En uso", **Unir** en vez de borrar lo que está en uso, sinónimos, pestaña Moléculas (#45, fase 27) |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
 Lo siguiente lo decide Hernando. Aparcado: el correo (Brevo/SMTP, sin él
@@ -158,6 +160,7 @@ competencia" para el Dashboard.
 | #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
 | #38 | Fase 22: PVP falsos de competidores y los 20 `COMP_` sin URL |
 | #39 | Competencia: columna ID para ordenar por bloques, interruptor $/Bs, CSV con los nombres de Productos |
+| #45 | Dimensiones: rediseño, En uso, Unir (fase 27), sinónimos, Moléculas |
 | #44 | Cadenas: rediseño, sigla (fase 26), estado del robot y "Leer esta cadena", lector probado/sin probar, enlaces de otra web |
 | #43 | Usuarios: seguridad (fase 25), recuperar contraseña, Mi cuenta, registro de accesos, eliminar de verdad, rediseño |
 | #42 | Cadenas: color único por cadena en todo el panel (fase 24); guarda en `dim_cadenas` y muestra los errores |
@@ -427,6 +430,27 @@ verificar el correo remitente). Pasos:
     enlace a Competencia con `?cadena=<id>&revisar=otra_web` (nueva opción
     "URL de otra web" del chip Revisar).
   - El nombre de una cadena ya se puede cambiar (el id no cambia).
+
+## Dimensiones (PR #45, fase 27)
+
+**Por qué no se podía eliminar un laboratorio:** tenía permiso, pero la base
+no deja borrar algo que usan productos (todas las FK son `ON DELETE
+RESTRICT`), y casi todos los laboratorios los usan competidores. La pantalla
+solo decía que no se podía. Ahora:
+- Columna **En uso** (`v_uso_dimensiones`: productos propios y competidores)
+  y aviso de los que no usa nadie (esos sí se eliminan).
+- **Unir** (`fn_unir_dimension`, solo admin): los productos del elemento
+  pasan a otro y el viejo se borra; su nombre queda en `sinonimos` del que
+  queda, así `resolverDimension` (dbClient) lo reconoce en cargas futuras y
+  no lo vuelve a crear. En laboratorios también mueve las marcas
+  (`dim_marcas`) sin romper el trigger `fn_validar_laboratorio_marca`; en
+  moléculas conserva la principal. Eliminar algo en uso abre Unir.
+- Pestañas: Laboratorios, Categorías, Unidades de negocio, Formas
+  farmacéuticas, **Moléculas** (nueva), Tasas BCV e Historial de PVP (solo
+  lectura, con el producto; el PVP se cambia en Productos).
+- Formulario por secciones con sinónimos; nombres repetidos (sin mayúsculas
+  ni tildes) se rechazan sugiriendo Unir. Las moléculas se guardan sin tildes.
+- "Limpiar datos de prueba" pasó al menú ⋮ y pide escribir BORRAR.
 
 ## La recarga del catálogo (aparcada)
 
