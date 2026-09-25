@@ -979,9 +979,6 @@ body {
 
 /* Celdas de la tabla de productos: dos lineas como maximo, misma altura. */
 .m3-table-productos { table-layout: fixed; min-width: 1040px; }
-/* Enlaces: Captura y Cadena son cortas, asi que cabe en menos ancho sin
-   scroll horizontal con el menu lateral abierto. */
-.m3-table-enlaces { min-width: 960px; }
 .m3-table-productos th { text-transform: none; letter-spacing: 0.1px; font-size: 0.8125rem; }
 .m3-table-productos td { height: 64px; padding-top: 8px; padding-bottom: 8px; vertical-align: middle; }
 .m3-cell-primary,

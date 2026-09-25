@@ -39,15 +39,16 @@ export const ESQUEMAS = {
   competencia: {
     nombre: 'Enlaces de competencia',
     columnas: [
-      { campo: 'id_producto_propio', etiqueta: 'ID del Producto Propio', obligatorio: true,
-        alias: ['id_interno', 'producto_propio', 'sku_propio'] },
+      { campo: 'id_interno', etiqueta: 'ID del producto (id_interno)', obligatorio: true,
+        alias: ['id_producto_propio', 'producto_propio', 'sku_propio'] },
       { campo: 'cadena', etiqueta: 'Cadena', obligatorio: true },
       { campo: 'url', etiqueta: 'URL del Producto', obligatorio: true, tipo: 'url' },
       { campo: 'tipo', etiqueta: 'Tipo de Enlace', obligatorio: false,
         tipo: 'lista', valores: ['propio', 'alternativa', 'competidor'] },
       { campo: 'marca', etiqueta: 'Competidor', obligatorio: false,
         alias: ['competidor', 'marca_competencia'] },
-      { campo: 'laboratorio', etiqueta: 'Laboratorio', obligatorio: false, alias: ['fabricante'] },
+      { campo: 'laboratorio_competidor', etiqueta: 'Laboratorio del competidor', obligatorio: false,
+        alias: ['laboratorio', 'fabricante'] },
       { campo: 'activo', etiqueta: 'Activo', obligatorio: false, tipo: 'booleano', exacto: true },
     ],
   },
@@ -168,14 +169,14 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
 
     // 3. Validaciones propias de cada plantilla
     if (tipoEsquema === 'competencia') {
-      const idPropio = getRowValue(fila, 'id_producto_propio', 'id_interno').trim();
+      const idPropio = getRowValue(fila, 'id_interno', 'id_producto_propio').trim();
       const url = getRowValue(fila, 'url').trim();
       const cadena = getRowValue(fila, 'cadena').trim();
 
       // El producto propio debe existir: es lo que construye la equivalencia.
       if (idPropio && contexto.idsExistentes && !contexto.idsExistentes.has(idPropio)) {
         errores.push({
-          fila: numero, campo: 'ID del Producto Propio',
+          fila: numero, campo: 'ID del producto (id_interno)',
           mensaje: `"${idPropio}" no existe en tu catálogo. Cárgalo antes que sus enlaces.`,
         });
         filaOk = false;
@@ -194,11 +195,11 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
       }
 
       const tipo = getRowValue(fila, 'tipo').toLowerCase().trim();
-      const lab = getRowValue(fila, 'laboratorio', 'fabricante').trim();
+      const lab = getRowValue(fila, 'laboratorio_competidor', 'laboratorio', 'fabricante').trim();
       if (tipo !== 'propio' && !lab) {
         avisos.push({
           fila: numero, campo: 'Laboratorio',
-          mensaje: 'Sin laboratorio: el competidor se creará como "OTRO"',
+          mensaje: 'Sin laboratorio: si el enlace es nuevo, el competidor queda como "OTRO"; si ya existe, se conserva el que tiene',
         });
       }
     }

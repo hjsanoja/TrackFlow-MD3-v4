@@ -105,8 +105,7 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 21 | Competencia: borra competidores `COMP_` sin URL (huérfanos) y crea `fn_registrar_precio_manual` (SECURITY DEFINER: el panel no puede insertar en `fact_precios`) |
 | 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
 
-**Corridas en Supabase de la 1 a la 21. La 22 está pendiente de correr**
-(PR #38). Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
+**Corridas en Supabase de la 1 a la 22.** La comprobación de la 22 dio 0 y 0. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
 o unidad de negocio; un competidor no tiene PVP propio.
@@ -118,9 +117,9 @@ o unidad de negocio; un competidor no tiene PVP propio.
 | | |
 |---|---|
 | Código en `main` | PR #36, desplegado (GitHub Pages sale solo de `main`); etapa B de Competencia en el PR #37 |
-| SQL corrido en Supabase | **Hasta la fase 21** (la 22 en el PR #38) |
+| SQL corrido en Supabase | **Hasta la fase 22** |
 | Módulo Productos | **Terminado** (ver abajo) |
-| Módulo Competencia | **Etapa A (#36) y B (#37) hechas**; los 20 huérfanos, en la fase 22 |
+| Módulo Competencia | **Etapas A (#36) y B (#37), limpieza (#38, fase 22) y ajustes (#39)** |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
 Lo siguiente lo decide Hernando. Candidatos, en el orden en que salieron:
@@ -147,6 +146,8 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #36 | Competencia, etapa A: editar/activar un enlace ya no crea competidores nuevos, un 2.º competidor en la misma cadena no pisa al primero, precio manual que sí se guarda (fase 21), filtro de cadena por id, KPI "Enlaces con precio" |
 | #35 | Fase 20 (moléculas duplicadas) y comparación de nombres sin tildes al guardar |
 | #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
+| #38 | Fase 22: PVP falsos de competidores y los 20 `COMP_` sin URL |
+| #39 | Competencia: columna ID para ordenar por bloques, interruptor $/Bs, CSV con los nombres de Productos |
 | #34 | Menús desplegables M3 en toda la app (`components/Select.jsx`, 31 `<select>`), deshacer al eliminar (borrado diferido 8 s), ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
 
 ### Cómo queda la pantalla
@@ -231,13 +232,16 @@ nombres de campo donde son el mismo dato.
 - **Barra:** buscador con `/` y contador; chips de Producto, Cadena, Tipo
   (Competidores / Mis productos), Precio (con precio / sin captura / sin
   precio +7 días) y Estado.
-- **Tabla** (`m3-table-productos m3-table-enlaces`, mín. 960 px para no tener
-  scroll con el menú lateral abierto): Producto (nombre / ID · dosis ·
-  empaque) · Competidor (nombre + abrir URL / laboratorio; "Mi producto" si es
+- **Tabla** (`m3-table-productos`, mín. 1040 px como Productos): ID (aparte,
+  para ordenar: tu producto y sus competidores quedan juntos) · Producto
+  (nombre / dosis · empaque) · Competidor (nombre + abrir URL / laboratorio; "Mi producto" si es
   propio) · Cadena (nombre / Propio o Competidor) · Captura (Hoy, Ayer, N días
-  / fecha; naranja si pasa de 7 días) · Precio (USD / Bs) · Dif. (PVP propio
+  / fecha; naranja si pasa de 7 días) · Precio (en $ o en Bs según el
+  interruptor de la barra, `competencia.moneda`; el precio normal tachado si
+  hay oferta) · Dif. (PVP propio
   frente a ese precio) · Estado · acciones fijas (editar, baja, eliminar).
-  Ordenable por columna; sin orden, por producto con tu enlace primero. 10
+  Ordenable por columna; sin orden (o por ID), por ID con tu enlace primero y
+  luego las cadenas; en cualquier otro orden, los empates siguen ese bloque. 10
   filas por página, ajustable (`competencia.filasPorPagina`). Tarjetas en
   celular.
 - **Selección múltiple:** dar de baja / reactivar (con deshacer) y eliminar
@@ -411,7 +415,7 @@ capturas y devaluación vs subida real. Faltan:
 - Alertas por correo
 - Reporte semanal
 
-**Competencia**: correr la fase 22; opcional, una vista agrupada por producto.
+**Competencia**: ver la lista de propuestas del 2026-09-25 en el chat (PR #39).
 
 **Limpieza del repo**: mover los `fase*.sql` (ya son 22) a `sql/`, borrar
 `debug/`, y borrar `recarga/` cuando termine la recarga.

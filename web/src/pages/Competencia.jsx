@@ -29,14 +29,31 @@ import {
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
 // Un solo formato de CSV de enlaces para exportar, para la plantilla y para
-// importar (igual que en Productos). Las columnas de precio y captura son
-// informativas: al importar se ignoran.
+// importar (igual que en Productos). Donde el dato es el mismo que en el CSV
+// de productos, la columna se llama igual (id_interno, nombre, activo,
+// pvp_propio_usd). El laboratorio es el del competidor, no el tuyo, y por eso
+// va aparte. Nombre, PVP, precios y captura son informativos: al importar se
+// ignoran.
 const COLUMNAS_CSV_ENLACES = [
-  'id_producto_propio', 'producto', 'cadena', 'tipo', 'competidor', 'laboratorio', 'url', 'activo',
-  'precio_bs', 'precio_oferta_bs', 'precio_usd', 'ultima_captura',
+  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio_competidor', 'url', 'activo',
+  'pvp_propio_usd', 'precio_usd', 'precio_bs', 'precio_oferta_bs', 'ultima_captura',
 ].map(key => ({ label: key, key }));
+const ARCHIVO_REPORTE = 'competencia_enlaces_reporte';
+const ARCHIVO_PLANTILLA = 'competencia_enlaces_plantilla_carga';
 
 const esPropio = (it) => String(it.tipo || '').toLowerCase() === 'propio';
+
+// Valor de la primera de estas columnas que exista, comparando el nombre
+// entero (sin mayusculas ni signos), no por partes.
+const celdaExacta = (row, ...nombres) => {
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const nombre of nombres) {
+    const clave = Object.keys(row).find(k => norm(k) === norm(nombre));
+    const valor = clave ? String(row[clave] ?? '').trim() : '';
+    if (valor) return valor;
+  }
+  return '';
+};
 
 export default function Competencia() {
   const {
@@ -69,6 +86,14 @@ export default function Competencia() {
   const [filtroPrecio, setFiltroPrecio] = useState('todos');
   const [filtroActivo, setFiltroActivo] = useState('todos');
   const [orden, setOrden] = useState({ campo: null, dir: 'asc' });
+  // Moneda de la columna Precio. Se recuerda en el navegador.
+  const [enBs, setEnBs] = useState(() => {
+    try { return localStorage.getItem('competencia.moneda') === 'bs'; } catch { return false; }
+  });
+  const cambiarMoneda = (bs) => {
+    setEnBs(bs);
+    try { localStorage.setItem('competencia.moneda', bs ? 'bs' : 'usd'); } catch { /* sin almacenamiento */ }
+  };
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -185,19 +210,21 @@ export default function Competencia() {
       return [p?.nombre, it.id_producto_propio, it.marca, it.laboratorio, it.url, nombreCadena(it.cadena), it.ultimo_nombre]
         .some(v => normalizar(v).includes(term));
     });
-    if (!orden.campo) {
-      return [...lista].sort((a, b) =>
-        String(a.id_producto_propio || '').localeCompare(String(b.id_producto_propio || '')) ||
-        (esPropio(b) ? 1 : 0) - (esPropio(a) ? 1 : 0) ||
-        nombreCadena(a.cadena).localeCompare(nombreCadena(b.cadena)));
-    }
-    const valor = ORDENES[orden.campo];
+    // Orden base: por ID, y dentro de cada producto tu enlace primero y luego
+    // las cadenas. Asi tu producto y sus competidores quedan juntos.
+    const porBloque = (a, b, signoId = 1) =>
+      signoId * String(a.id_producto_propio || '').localeCompare(String(b.id_producto_propio || ''), undefined, { numeric: true }) ||
+      (esPropio(b) ? 1 : 0) - (esPropio(a) ? 1 : 0) ||
+      nombreCadena(a.cadena).localeCompare(nombreCadena(b.cadena));
+    if (!orden.campo) return [...lista].sort((a, b) => porBloque(a, b));
     const signo = orden.dir === 'asc' ? 1 : -1;
+    if (orden.campo === 'id') return [...lista].sort((a, b) => porBloque(a, b, signo));
+    const valor = ORDENES[orden.campo];
     return [...lista].sort((a, b) => {
       const va = valor(a); const vb = valor(b);
       if (va < vb) return -signo;
       if (va > vb) return signo;
-      return 0;
+      return porBloque(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
@@ -451,24 +478,26 @@ export default function Competencia() {
     const full = Number(it.ultimo_precio_full_bs) || 0;
     const desc = Number(it.ultimo_precio_desc_bs) || 0;
     const usd = precioUsd(it);
+    const pvp = Number(p?.pvp_propio_usd) || 0;
     return {
-      id_producto_propio: it.id_producto_propio || '',
-      producto: p?.nombre || '',
+      id_interno: it.id_producto_propio || '',
+      nombre: p?.nombre || '',
       cadena: nombreCadena(it.cadena),
       tipo: esPropio(it) ? 'propio' : 'competidor',
       competidor: esPropio(it) ? '' : (it.marca || ''),
-      laboratorio: it.laboratorio || '',
+      laboratorio_competidor: esPropio(it) ? '' : (it.laboratorio || ''),
       url: it.url || '',
       activo: it.activo === false ? 'no' : 'si',
+      pvp_propio_usd: pvp ? pvp.toFixed(2) : '',
+      precio_usd: usd ? usd.toFixed(2) : '',
       precio_bs: full ? full.toFixed(2) : '',
       precio_oferta_bs: desc && desc !== full ? desc.toFixed(2) : '',
-      precio_usd: usd ? usd.toFixed(2) : '',
       ultima_captura: it.ultimo_scrape ? String(it.ultimo_scrape).slice(0, 10) : '',
     };
   };
 
   const handleExportar = () => {
-    exportToCSV('enlaces_reporte', COLUMNAS_CSV_ENLACES, filtrados.map(filaCsvEnlace));
+    exportToCSV(ARCHIVO_REPORTE, COLUMNAS_CSV_ENLACES, filtrados.map(filaCsvEnlace));
     addToast(`Exportados ${filtrados.length} enlaces a CSV.`, 'success');
   };
 
@@ -476,10 +505,10 @@ export default function Competencia() {
     const filas = items.length > 0
       ? items.map(filaCsvEnlace)
       : [
-          { id_producto_propio: '140216', producto: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', laboratorio: 'LA SANTE', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
-          { id_producto_propio: '140216', producto: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel 500 mg x 20', laboratorio: 'CALOX', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', laboratorio_competidor: '', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel 500 mg x 20', laboratorio_competidor: 'CALOX', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
         ];
-    exportToCSV(items.length > 0 ? 'enlaces_plantilla_carga' : 'enlaces_plantilla_carga_ejemplo', COLUMNAS_CSV_ENLACES, filas);
+    exportToCSV(items.length > 0 ? ARCHIVO_PLANTILLA : `${ARCHIVO_PLANTILLA}_ejemplo`, COLUMNAS_CSV_ENLACES, filas);
   };
 
   // Paso 1: leer y validar. No se escribe nada todavia.
@@ -525,7 +554,7 @@ export default function Competencia() {
       const vistas = new Set();
       let duplicados = 0;
       rows.forEach((row) => {
-        const id_producto = getRowValue(row, 'id_producto_propio', 'id_producto', 'id_interno', 'sku').trim();
+        const id_producto = getRowValue(row, 'id_interno', 'id_producto_propio', 'id_producto', 'sku').trim();
         const url = getRowValue(row, 'url', 'enlace', 'link', 'url_competencia').trim();
         if (!url || !id_producto) return;
         const cadena = idCadena(getRowValue(row, 'cadena', 'cadena_farmacia', 'farmacia').trim());
@@ -538,8 +567,10 @@ export default function Competencia() {
         const claveActivo = Object.keys(row).find(k => k.trim().toLowerCase() === 'activo');
         const activoRaw = claveActivo ? String(row[claveActivo] ?? '').trim().toLowerCase() : '';
         const existente = items.find(it => `${String(idCadena(it.cadena)).toLowerCase()}|${normalizarUrl(it.url || '')}` === clave);
-        const marca = getRowValue(row, 'competidor', 'marca', 'marca_competencia').trim();
-        const laboratorio = getRowValue(row, 'laboratorio', 'fabricante', 'lab').trim();
+        // Por nombre exacto: con getRowValue una celda 'competidor' vacia
+        // tomaba el valor de 'laboratorio_competidor', que la contiene.
+        const marca = celdaExacta(row, 'competidor', 'marca', 'marca_competencia');
+        const laboratorio = getRowValue(row, 'laboratorio_competidor', 'laboratorio', 'fabricante').trim();
         const urlSlug = normalizarUrl(url).replace(/[^a-z0-9]/gi, '_');
 
         lista.push({
@@ -578,16 +609,27 @@ export default function Competencia() {
       .map(p => [String(p.id_interno), `${p.nombre}${p.concentracion ? ` ${p.concentracion}` : ''} · ${p.id_interno}`]),
   ], [productos]);
 
+  // Un solo precio por celda, en la moneda elegida: con los dos no cabia el
+  // de Bs. Si hay oferta, debajo va el precio normal.
+  const formatoBs = (v) => v.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const precioEnMoneda = (it) => {
+    const fullBs = Number(it.ultimo_precio_full_bs) || 0;
+    const descBs = Number(it.ultimo_precio_desc_bs) || 0;
+    const hoy = enBs ? (descBs || fullBs) : precioUsd(it);
+    const oferta = descBs > 0 && fullBs > descBs;
+    const normal = !oferta ? 0 : enBs ? fullBs
+      : (Number(it.ultimo_precio_full_usd) || (tasaBcv ? fullBs / tasaBcv : 0));
+    const fmt = (v) => (enBs ? formatoBs(v) : `$${v.toFixed(2)}`);
+    return { texto: hoy > 0 ? fmt(hoy) : null, normal: normal > 0 ? fmt(normal) : null };
+  };
   const celdaPrecio = (it) => {
-    const usd = precioUsd(it);
-    const enBs = Number(it.ultimo_precio_desc_bs) || Number(it.ultimo_precio_full_bs) || 0;
+    const { texto, normal } = precioEnMoneda(it);
     return (
       <>
-        <div className="m3-cell-primary tabular-nums">{usd > 0 ? `$${usd.toFixed(2)}` : '—'}</div>
-        <div className="m3-cell-secondary tabular-nums">
-          {enBs ? `Bs ${enBs.toLocaleString('es-VE', { maximumFractionDigits: 2 })}` : 'sin precio'}
-          {it.tiene_descuento ? ' · oferta' : ''}
-        </div>
+        <div className="m3-cell-primary tabular-nums">{texto || '—'}</div>
+        {normal ? (
+          <div className="m3-cell-secondary tabular-nums line-through" title={`En oferta. Precio normal: ${normal}`}>{normal}</div>
+        ) : !texto && <div className="m3-cell-secondary">sin precio</div>}
       </>
     );
   };
@@ -601,7 +643,7 @@ export default function Competencia() {
         <div className={`m3-cell-primary ${caido && it.activo ? 'm3-count-stale' : ''}`}
           title={caido ? `Sin precio hace más de ${DIAS_ENLACE_CAIDO} días` : undefined}>{texto}</div>
         <div className="m3-cell-secondary">
-          {fecha ? fecha.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' }) : 'pendiente'}
+          {fecha ? fecha.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' }) : '—'}
         </div>
       </>
     );
@@ -733,8 +775,16 @@ export default function Competencia() {
                     <kbd className="m3-kbd hidden md:inline-flex" title="Pulsa / para buscar">/</kbd>
                   )}
                 </label>
-                <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
-                  {filtrados.length === items.length ? `${items.length} enlaces` : `${filtrados.length} de ${items.length} enlaces`}
+                <div className="flex items-center gap-4 md:ml-auto">
+                  <label className="m3-switch-label whitespace-nowrap" title="Moneda de la columna Precio">
+                    <span className={enBs ? 'text-on-surface-variant' : 'font-medium'}>$</span>
+                    <input type="checkbox" role="switch" checked={enBs} onChange={e => cambiarMoneda(e.target.checked)}
+                      className="m3-switch" aria-label="Ver los precios en bolívares" />
+                    <span className={enBs ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
+                  </label>
+                  <div className="m3-label-large text-on-surface-variant whitespace-nowrap" aria-live="polite">
+                    {filtrados.length === items.length ? `${items.length} enlaces` : `${filtrados.length} de ${items.length} enlaces`}
+                  </div>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -786,9 +836,9 @@ export default function Competencia() {
                       aria-label={`Seleccionar ${it.marca}`} className="m3-checkbox mt-1" />
                     <button type="button" onClick={() => setFichaId(it.id)} className="flex-1 min-w-0 text-left">
                       <span className="m3-cell-primary">{p?.nombre || it.id_producto_propio}</span>
-                      <div className="m3-cell-secondary">{esPropio(it) ? 'Mi producto' : it.marca} · {nombreCadena(it.cadena)}</div>
+                      <div className="m3-cell-secondary"><span className="font-mono">{it.id_producto_propio}</span> · {esPropio(it) ? 'Mi producto' : it.marca} · {nombreCadena(it.cadena)}</div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                        <span className="m3-cell-primary tabular-nums">{precioUsd(it) > 0 ? `$${precioUsd(it).toFixed(2)}` : 'Sin precio'}</span>
+                        <span className="m3-cell-primary tabular-nums">{precioEnMoneda(it).texto || 'Sin precio'}{enBs && precioEnMoneda(it).texto ? ' Bs' : ''}</span>
                         {celdaDif(it)}
                         <span className={`m3-status ${it.activo ? 'is-on' : ''}`}>{it.activo ? 'Activo' : 'De baja'}</span>
                       </div>
@@ -803,15 +853,16 @@ export default function Competencia() {
 
             {/* Misma geometria de columnas que la tabla de Productos. */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="m3-table m3-table-productos m3-table-enlaces">
+              <table className="m3-table m3-table-productos">
                 <colgroup>
                   <col className="w-12" />
+                  <col className="w-[84px]" />
                   <col />
-                  <col className="w-[16%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[96px]" />
-                  <col className="w-[112px]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[11%]" />
                   <col className="w-[88px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[72px]" />
                   <col className="w-[104px]" />
                   <col className="w-[136px]" />
                 </colgroup>
@@ -822,11 +873,12 @@ export default function Competencia() {
                         disabled={!!procesandoSel} title={`Seleccionar los ${filtrados.length} enlaces de esta lista`}
                         aria-label="Seleccionar todos los enlaces de esta lista" className="m3-checkbox" />
                     </th>
+                    {encabezado('id', 'ID')}
                     {encabezado('producto', 'Producto')}
                     {encabezado('competidor', 'Competidor')}
                     {encabezado('cadena', 'Cadena')}
                     {encabezado('captura', 'Captura')}
-                    {encabezado('precio', 'Precio', 'text-right')}
+                    {encabezado('precio', enBs ? 'Precio Bs' : 'Precio $', 'text-right')}
                     {encabezado('dif', 'Dif.', 'text-center')}
                     {encabezado('estado', 'Estado')}
                     <th className="m3-sticky-actions"><span className="sr-only">Acciones</span></th>
@@ -843,13 +895,13 @@ export default function Competencia() {
                           <input type="checkbox" checked={sel} onChange={() => alternarSeleccion(it.id)} disabled={!!procesandoSel}
                             aria-label={`Seleccionar ${it.marca}`} className="m3-checkbox" />
                         </td>
+                        <td><span className="m3-cell-primary font-mono tabular-nums">{it.id_producto_propio}</span></td>
                         <td>
                           <button type="button" onClick={() => setFichaId(it.id)} className="m3-cell-link min-w-0" title="Abrir la ficha del enlace">
                             <span className="m3-cell-primary">{p?.nombre || it.id_producto_propio}</span>
                           </button>
-                          <div className="m3-cell-secondary" title={p ? `${p.id_interno} · ${p.concentracion || ''} · ${describirPresentacion(p)}` : ''}>
-                            <span className="font-mono">{it.id_producto_propio}</span>
-                            {p ? ` · ${[p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ')}` : ''}
+                          <div className="m3-cell-secondary" title={p ? [p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ') : ''}>
+                            {p ? [p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ') || '—' : 'no está en el catálogo'}
                           </div>
                         </td>
                         <td>
@@ -975,11 +1027,12 @@ export default function Competencia() {
                 <span className="material-symbols-outlined text-sm">lists</span>
                 Columnas del CSV
               </div>
-              <div>id_producto_propio, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
-              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio</div>
+              <div>id_interno, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
+              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio_competidor</div>
               <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
               <div className="font-sans font-medium text-on-surface-variant pt-1">
-                producto y las columnas de precio y captura son informativas: al importar se ignoran. Una celda vacía no cambia nada.
+                nombre, pvp_propio_usd y las columnas de precio y captura son informativas: al importar se ignoran. Una celda vacía no cambia nada.
+                Los archivos viejos (id_producto_propio, laboratorio) se siguen aceptando.
               </div>
             </div>
             <button type="button" onClick={descargarPlantilla} className="m3-btn-text px-0">
