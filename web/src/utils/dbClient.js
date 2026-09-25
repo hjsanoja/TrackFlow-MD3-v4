@@ -1273,6 +1273,53 @@ export async function dbUpsertCadena(data) {
 
 }
 
+// Cadenas: se escribe en dim_cadenas, no en la vista 'cadenas' (no tiene
+// color_hex y los errores se perdian). Cada escritura pide .select() para
+// notar si RLS la bloqueo sin decir nada.
+export async function dbGuardarCadena(data, { nueva = false } = {}) {
+  if (!isSupabaseActive()) return;
+  const fila = {
+    nombre: data.nombre,
+    website: data.website || null,
+    modulo_scraper: data.modulo_scraper || null,
+    activo: data.activo !== false,
+    color_hex: data.color_hex ? String(data.color_hex).toUpperCase() : null,
+  };
+  const escribir = (f) => (nueva
+    ? supabase.from('dim_cadenas').insert({ id: data.id, ...f }).select('id')
+    : supabase.from('dim_cadenas').update(f).eq('id', data.id).select('id'));
+  let { data: filas, error } = await escribir(fila);
+  // Sin la columna color_hex (base muy vieja) se guarda lo demas.
+  if (error && /color_hex/.test(error.message || '')) {
+    const { color_hex: _sinColor, ...resto } = fila;
+    ({ data: filas, error } = await escribir(resto));
+  }
+  if (error) {
+    if (error.code === '23505' && /color/i.test(error.message || '')) throw new Error('Ese color ya lo usa otra cadena. Elige otro.');
+    if (error.code === '23505') throw new Error('Ya existe una cadena con ese nombre.');
+    throw new Error(error.message);
+  }
+  if (!filas || filas.length === 0) throw new Error('La base de datos no aceptó el cambio (permisos). No se guardó nada.');
+}
+
+export async function dbCambiarActivoCadena(id, activo) {
+  if (!isSupabaseActive()) return;
+  const { data, error } = await supabase.from('dim_cadenas').update({ activo }).eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error('La base de datos no aceptó el cambio (permisos).');
+}
+
+// Solo se borra una cadena sin enlaces; con enlaces se da de baja.
+export async function dbEliminarCadena(id) {
+  if (!isSupabaseActive()) return;
+  const { count, error: errCount } = await supabase.from('publicaciones').select('id', { count: 'exact', head: true }).eq('cadena_id', id);
+  if (errCount) throw new Error(errCount.message);
+  if (count > 0) throw new Error(`Tiene ${count} enlaces: no se puede eliminar sin perder su historial. Dala de baja.`);
+  const { data, error } = await supabase.from('dim_cadenas').delete().eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error('La base de datos no permite eliminar cadenas (permisos). Dala de baja en su lugar.');
+}
+
 export async function dbDeleteCadena(id) {
   if (isSupabaseActive()) {
     try {

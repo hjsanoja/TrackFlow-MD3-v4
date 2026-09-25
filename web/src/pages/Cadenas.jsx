@@ -3,8 +3,10 @@ import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
-import { dbUpsertCadena, dbDeleteCadena } from '../utils/dbClient';
+import { dbGuardarCadena, dbCambiarActivoCadena, dbEliminarCadena } from '../utils/dbClient';
 import Select from '../components/Select';
+import { FormSection, Field as CampoForm } from '../components/formulario';
+import { PALETA_CADENAS, getChainColor } from '../utils/brandColors';
 
 // Scrapers disponibles en el código actual
 const SCRAPERS_DISPONIBLES = [
@@ -32,32 +34,42 @@ export default function Cadenas() {
 
   const { addToast } = useToast();
 
-  // Cuenta URLs activas por cadena
+  // URLs activas por cadena. Los enlaces traen el id de la cadena ('Saas'),
+  // no su nombre ('Farmacias SAAS'): antes se buscaba por nombre y SAAS
+  // salia siempre con 0.
   const urlsPorCadena = useMemo(() => {
     const map = new Map();
     for (const c of competencia) {
       if (c.activo) {
-        map.set(c.cadena, (map.get(c.cadena) || 0) + 1);
+        const clave = String(c.cadena || '').toLowerCase();
+        map.set(clave, (map.get(clave) || 0) + 1);
       }
     }
     return map;
   }, [competencia]);
+  const urlsDe = (c) => (urlsPorCadena.get(String(c.id).toLowerCase()) || 0) +
+    (String(c.id).toLowerCase() !== String(c.nombre).toLowerCase() ? (urlsPorCadena.get(String(c.nombre).toLowerCase()) || 0) : 0);
 
-  const handleSave = async (data, isNew) => {
+  const handleSave = async (data, isNew, original) => {
     try {
-      const docId = data.nombre.trim().replace(/\s+/g, '_');
+      // Al editar se usa el id que ya tiene (p. ej. 'Saas' para "Farmacias
+      // SAAS"). Antes se recalculaba desde el nombre y el cambio no se guardaba.
+      const docId = isNew ? data.nombre.trim().replace(/\s+/g, '_') : original.id;
       if (!docId) throw new Error('El nombre es obligatorio');
-      if (isNew && cadenas.some(c => c.id === docId)) {
+      if (isNew && cadenas.some(c => c.id.toLowerCase() === docId.toLowerCase() || c.nombre.toLowerCase() === data.nombre.trim().toLowerCase())) {
         throw new Error('Ya existe una cadena con ese nombre');
       }
+      const colorEnUso = cadenas.find(c => c.id !== docId && (c.color_hex || '').toUpperCase() === (data.color_hex || '').toUpperCase());
+      if (data.color_hex && colorEnUso) throw new Error(`Ese color ya lo usa ${colorEnUso.nombre}. Elige otro.`);
 
-      await dbUpsertCadena({
+      await dbGuardarCadena({
         id: docId,
         nombre: data.nombre.trim(),
         website: data.website.trim(),
         modulo_scraper: data.modulo_scraper,
         activo: data.activo,
-      });
+        color_hex: data.color_hex,
+      }, { nueva: isNew });
 
       addToast(isNew ? 'Cadena creada con éxito' : 'Cambios guardados con éxito', 'success');
       setEditing(null);
@@ -76,7 +88,7 @@ export default function Cadenas() {
     const cadena = confirmDelete;
     setConfirmDelete(null);
     try {
-      await dbDeleteCadena(cadena.id);
+      await dbEliminarCadena(cadena.id);
       addToast('Cadena eliminada con éxito', 'success');
       await cargar(true);
     } catch (err) {
@@ -86,10 +98,7 @@ export default function Cadenas() {
 
   const handleToggleActivo = async (cadena) => {
     try {
-      await dbUpsertCadena({
-        ...cadena,
-        activo: !cadena.activo,
-      });
+      await dbCambiarActivoCadena(cadena.id, !cadena.activo);
       await cargar(true);
     } catch (err) {
       addToast(err.message, 'error');
@@ -138,6 +147,7 @@ export default function Cadenas() {
               <thead>
                 <tr>
                   <th>Nombre Cadena</th>
+                  <th>Color</th>
                   <th>Portal Website</th>
                   <th>Módulo de Scraping</th>
                   <th className="text-center">URLs Activas Scrapeadas</th>
@@ -149,6 +159,7 @@ export default function Cadenas() {
                 {[1, 2, 3].map((n) => (
                   <tr key={n}>
                     <td><div className="h-4 bg-gray-200 rounded w-2/3"></div></td>
+                    <td><div className="h-4 bg-gray-200 rounded w-8"></div></td>
                     <td><div className="h-4 bg-gray-200 rounded w-3/4"></div></td>
                     <td><div className="h-4 bg-gray-200 rounded w-1/2"></div></td>
                     <td className="text-center"><div className="h-4 bg-gray-200 rounded w-12 mx-auto"></div></td>
@@ -178,6 +189,7 @@ export default function Cadenas() {
               <thead className="m3-sticky-header">
                 <tr>
                   <th>Nombre Cadena</th>
+                  <th>Color</th>
                   <th>Portal Website</th>
                   <th>Módulo de Scraping</th>
                   <th className="text-center">URLs Activas Scrapeadas</th>
@@ -188,10 +200,25 @@ export default function Cadenas() {
               <tbody className="divide-y divide-surface-variant">
                 {cadenas.map(c => {
                   const implementado = SCRAPERS_IMPLEMENTADOS.has(c.modulo_scraper);
-                  const count = urlsPorCadena.get(c.nombre) || 0;
+                  const count = urlsDe(c);
                   return (
                     <tr key={c.id} className="hover:bg-surface-low transition-colors">
-                      <td className="font-bold text-on-surface font-display text-sm">{c.nombre}</td>
+                      <td className="font-bold text-on-surface font-display text-sm">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: getChainColor(c.id) }} aria-hidden="true" />
+                          {c.nombre}
+                        </span>
+                      </td>
+                      <td>
+                        {c.color_hex ? (
+                          <span className="inline-flex items-center gap-2 font-mono text-xs text-on-surface-variant">
+                            <span className="w-6 h-6 rounded-lg border border-outline-variant" style={{ backgroundColor: c.color_hex }} />
+                            {c.color_hex.toUpperCase()}
+                          </span>
+                        ) : (
+                          <button type="button" onClick={() => setEditing(c.id)} className="text-xs text-primary font-bold hover:underline">Elegir color</button>
+                        )}
+                      </td>
                       <td>
                         {c.website ? (
                           <a href={c.website} target="_blank" rel="noopener noreferrer"
@@ -248,6 +275,7 @@ export default function Cadenas() {
       {editing && (
         <CadenaModal
           cadena={editing === 'new' ? null : cadenas.find(c => c.id === editing)}
+          cadenas={cadenas}
           onSave={handleSave}
           onClose={() => setEditing(null)}
         />
@@ -260,8 +288,8 @@ export default function Cadenas() {
         message={
           confirmDelete 
             ? `¿Estás seguro de que deseas eliminar la cadena de monitoreo "${confirmDelete.nombre}"?${
-                (urlsPorCadena.get(confirmDelete.nombre) || 0) > 0 
-                  ? `\n\nATENCIÓN: hay ${urlsPorCadena.get(confirmDelete.nombre)} URL(s) activa(s) asignadas a esta cadena. Esas URLs quedarán huérfanas pero no se eliminan automáticamente.`
+                urlsDe(confirmDelete) > 0
+                  ? `\n\nTiene ${urlsDe(confirmDelete)} enlaces activos: no se podrá eliminar. Dala de baja en su lugar (el robot deja de leerla y se conserva el historial).`
                   : ''
               }\n\nEsta acción no se puede deshacer.`
             : ''
@@ -276,20 +304,24 @@ export default function Cadenas() {
   );
 }
 
-function CadenaModal({ cadena, onSave, onClose }) {
+function CadenaModal({ cadena, cadenas = [], onSave, onClose }) {
   const isNew = !cadena;
+  // Colores que ya usan las demas cadenas: no se pueden repetir.
+  const usados = new Map(cadenas.filter(c => c.id !== cadena?.id && c.color_hex).map(c => [c.color_hex.toUpperCase(), c.nombre]));
+  const primeroLibre = PALETA_CADENAS.find(col => !usados.has(col)) || '';
   const [form, setForm] = useState({
     nombre: cadena?.nombre || '',
     website: cadena?.website || '',
     modulo_scraper: cadena?.modulo_scraper || 'farmatodo',
     activo: cadena?.activo ?? true,
+    color_hex: (cadena?.color_hex || (isNew ? primeroLibre : '')).toUpperCase(),
   });
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await onSave(form, isNew);
+    await onSave(form, isNew, cadena);
     setSaving(false);
   };
   const handleChange = (key, value) => setForm(f => ({ ...f, [key]: value }));
@@ -328,6 +360,41 @@ function CadenaModal({ cadena, onSave, onClose }) {
             ))}
           </Select>
         </Field>
+
+        <FormSection titulo="Color en gráficos y tarjetas" icono="palette">
+          <CampoForm label="Color de la cadena" hint="Único por cadena: se usa en todos los gráficos, tarjetas y leyendas del panel."
+            aviso={form.color_hex && usados.has(form.color_hex) ? `Ya lo usa ${usados.get(form.color_hex)}.` : null}>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color de la cadena">
+              {PALETA_CADENAS.map(col => {
+                const ocupadoPor = usados.get(col);
+                const elegido = form.color_hex === col;
+                return (
+                  <button key={col} type="button" role="radio" aria-checked={elegido} disabled={Boolean(ocupadoPor)}
+                    onClick={() => handleChange('color_hex', col)}
+                    title={ocupadoPor ? `${col} · lo usa ${ocupadoPor}` : col}
+                    className={`m3-swatch ${elegido ? 'is-selected' : ''}`} style={{ backgroundColor: col }}>
+                    {elegido && <span className="material-symbols-outlined" aria-hidden="true">check</span>}
+                    {ocupadoPor && <span className="material-symbols-outlined" aria-hidden="true">block</span>}
+                  </button>
+                );
+              })}
+              <label className="m3-swatch m3-swatch-libre" title="Otro color">
+                <input type="color" value={/^#[0-9A-F]{6}$/i.test(form.color_hex) ? form.color_hex : '#475569'}
+                  onChange={e => handleChange('color_hex', e.target.value.toUpperCase())} aria-label="Elegir otro color" />
+                <span className="material-symbols-outlined" aria-hidden="true">colorize</span>
+              </label>
+            </div>
+          </CampoForm>
+          <div className="flex items-center gap-3 m3-body-medium">
+            <span className="m3-label-medium text-on-surface-variant">Vista previa</span>
+            <span className="inline-flex items-center gap-2 px-3 h-8 rounded-full border border-outline-variant">
+              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: form.color_hex || '#475569' }} />
+              {form.nombre || 'Cadena'}
+            </span>
+            <span className="h-3 w-16 rounded-full" style={{ backgroundColor: form.color_hex || '#475569' }} aria-hidden="true" />
+            <span className="font-mono text-xs text-on-surface-variant">{form.color_hex || 'sin color'}</span>
+          </div>
+        </FormSection>
 
         <Field label="Estado Monitoreo">
           <label className="flex items-center gap-3 px-4 py-3 border border-outline-variant/60 rounded-2xl cursor-pointer font-bold text-xs text-primary bg-surface-container-low select-none hover:bg-surface-container transition-colors">

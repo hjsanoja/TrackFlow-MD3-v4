@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
+import { registrarColoresCadenas } from '../utils/brandColors';
 
 const DataContext = createContext(null);
 
@@ -287,6 +288,9 @@ export function DataProvider({ children, user }) {
   const [bcvRates, setBcvRates] = useState([]);
   const [ultimaCorrida, setUltimaCorrida] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
+  // Los colores de las cadenas se registran durante el render (no en un
+  // efecto) para que los graficos hijos ya los encuentren al pintarse.
+  useMemo(() => registrarColoresCadenas(cadenas), [cadenas]);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadedOnce, setIsLoadedOnce] = useState(false);
@@ -455,7 +459,7 @@ export function DataProvider({ children, user }) {
             id: c.id,
             nombre: c.nombre || c.id,
             website: c.website || '',
-            color_hex: c.color_hex || '#002855',
+            color_hex: c.color_hex || '',
             modulo_scraper: c.modulo_scraper || c.scraper_modulo || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
@@ -658,7 +662,7 @@ export function DataProvider({ children, user }) {
             id: c.id,
             nombre: c.nombre || c.id,
             website: c.website || '',
-            color_hex: c.color_hex || '#002855',
+            color_hex: c.color_hex || '',
             modulo_scraper: c.modulo_scraper || c.scraper_modulo || '',
             activo: c.activo !== false
           })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));

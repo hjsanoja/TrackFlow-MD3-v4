@@ -1129,6 +1129,31 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 /* Enlaces del aviso "Para revisar", separados por puntos. */
 .m3-banner-links { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 
+/* Muestras de color (menu Cadenas). */
+.m3-swatch {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), border-radius 120ms;
+}
+.m3-swatch .material-symbols-outlined { font-size: 20px; }
+.m3-swatch:hover:not(:disabled) { transform: scale(1.08); }
+.m3-swatch.is-selected { border-radius: 9999px; outline: 2px solid var(--md-sys-color-on-surface); outline-offset: 2px; }
+.m3-swatch:disabled { opacity: 0.35; cursor: not-allowed; }
+.m3-swatch:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.m3-swatch-libre {
+  background: conic-gradient(#e30613, #ea580c, #ca8a04, #0d9488, #0369a1, #7c3aed, #db2777, #e30613);
+  overflow: hidden;
+}
+.m3-swatch-libre input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
 /* Formulario de enlace: lo que ya tiene vinculado el producto elegido. */
 .m3-existentes {
   display: flex;
