@@ -1147,6 +1147,46 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 }
 .m3-chip-menu .material-symbols-outlined { font-size: 16px; color: var(--md-sys-color-primary); }
 
+/* Pestanas M3 (Dimensiones): texto con indicador inferior. */
+.m3-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  scrollbar-width: none;
+}
+.m3-tabs::-webkit-scrollbar { display: none; }
+.m3-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 16px;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  border-radius: 12px 12px 0 0;
+  transition: background-color 150ms, color 150ms;
+}
+.m3-tab .material-symbols-outlined { font-size: 20px; }
+.m3-tab:hover { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, transparent); }
+.m3-tab.is-active { color: var(--md-sys-color-primary); }
+.m3-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background-color: var(--md-sys-color-primary);
+}
+.m3-tab:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -2px; }
+.m3-table-dimensiones td { height: 56px; vertical-align: middle; }
+.m3-table-dimensiones th { text-transform: none; letter-spacing: 0.1px; font-size: 0.8125rem; }
+
 /* Insignia de cadena: color + sigla (components/CadenaBadge). */
 .m3-cadena-badge {
   display: inline-flex;
