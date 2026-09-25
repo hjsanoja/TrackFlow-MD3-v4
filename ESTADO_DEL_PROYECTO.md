@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 27 fases de SQL
+## Las 28 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -108,10 +108,11 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 24 | Un color único por cadena en `dim_cadenas.color_hex` (marcas conocidas + paleta) e índice único `uq_dim_cadenas_color` |
 | 27 | `sinonimos` en laboratorios, categorías, unidades y formas; vista `v_uso_dimensiones`; `fn_unir_dimension` (une dos elementos: mueve los productos y borra el viejo; solo admin) |
 | 26 | `dim_cadenas.sigla` (FT, LC, SA… e iniciales para el resto) |
+| 28 | `fn_posicion_productos` / `fn_tendencia_posicion` (tu precio vs mínimo y promedio, día a día, en dólares a la tasa de cada día), `fn_cambios_desde` (cambios de precio desde una fecha, en dólares) y `productos_competencia` suma `unidades_empaque` y `unidad_contenido` (conserva sus opciones de seguridad) |
 | 25 | **Seguridad:** `usuarios` con RLS (cada quien su fila, el admin todas), políticas abiertas → solo usuarios activos (`fn_usuario_activo`, `fn_es_admin`), sin permisos para `anon`; tabla `accesos`, `fn_registrar_acceso`, `fn_actualizar_mi_cuenta`, `fn_eliminar_usuario` |
 
-**Corridas en Supabase de la 1 a la 26** (la 25 dejó `usuarios` y `accesos`
-con RLS y sin permisos públicos). **La 27 está pendiente** (PR #45). La 22
+**Corridas en Supabase de la 1 a la 27** (la 25 dejó `usuarios` y `accesos`
+con RLS y sin permisos públicos). **La 28 está pendiente** (PR #47). La 22
 dio 0 y 0; la 23, 0 enlaces para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
@@ -123,14 +124,18 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #45, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 27** |
+| Código en `main` | PR #46, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 27** (la 28 en el PR #47) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
 | Módulo Usuarios | Seguridad, recuperar contraseña, Mi cuenta, accesos, eliminar de verdad y rediseño (#43, fase 25). **Aparcado por Hernando:** Brevo/SMTP y los correos de alertas y resumen |
 | Módulo Dimensiones | Rediseño, columna "En uso", **Unir** en vez de borrar lo que está en uso, sinónimos, pestaña Moléculas (#45, fase 27) |
-| Dashboard | Rediseño: indicadores que abren su detalle, gráficos nuevos, filtros unificados, tabla "Precios por cadena" y "Más caros que el mínimo" (PR #46, sin SQL) |
+| Dashboard | Rediseño (#46) y, en el #47: tendencia de tu posición, cambios desde tu última visita, meta (promedio ± X %), comparar contra una cadena y vista por molécula (fase 28) |
+| Ficha del producto | Rehecha (#47): precios de hoy, indicadores, historia solo de ese producto, modo oscuro |
+| Mapa de Calor | Rehecho (#47): productos × cadenas coloreado, y rango de precios |
+| Experimental | Sin lo que ya está en el Dashboard (#47): quedan Revisión, Devaluación, Canibalización, Brechas USD y Simulador |
+| Rendimiento | #47: una sola carga al entrar (antes dos), sin el histórico completo, copia local para pintar al instante, tasa BCV compartida |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
 Lo siguiente lo decide Hernando. Aparcado: el correo (Brevo/SMTP, sin él
@@ -487,6 +492,71 @@ incluían tu propio enlace, y "frente al mínimo" daba 0 cuando eras el más
 barato). Se quitaron el gráfico grande de la tasa, el bloque de paridad
 marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 
+## Dashboard, parte 2 (PR #47, fase 28)
+
+- **Tendencia de tu posición** (`components/dashboard/TendenciaPosicion.jsx`):
+  la mediana de "frente al promedio" día a día (30/90/180 días), calculada
+  por `fn_tendencia_posicion`. Tocar un día abre cada producto ese día
+  (`fn_posicion_productos`). Arrastra el último precio de cada enlace hasta
+  7 días si un día no hubo lectura. Sin la fase 28 dice que falta correrla.
+- **Desde tu última visita** (`hooks/useCambiosDesdeVisita.js`): la fecha de
+  la visita anterior se guarda en el navegador por usuario (una visita nueva
+  cuenta tras 30 min) y `fn_cambios_desde` devuelve solo los enlaces que
+  cambiaron más de 0,5 % **en dólares**.
+- **Meta** (ajuste "Meta: el promedio / X % bajo / X % sobre"): columna
+  "Para la meta" (subir o bajar $ para quedar en la meta), filtro "Deben
+  bajar / Pueden subir", en el indicador Frente al promedio, en la ficha, en
+  la línea de la tendencia y en el CSV.
+- **Comparar contra una cadena** (filtro "Competencia"): mínimo, promedio,
+  indicadores, tendencia y tabla usan solo esa cadena.
+- **Por molécula** (pestaña de la tabla, `VistaMolecula.jsx`): agrupa por
+  molécula + concentración y compara **siempre por unidad** (tableta, cápsula,
+  ml). Una fila abre todas las ofertas ordenadas por precio por unidad.
+- **Los cambios de precio se miden en dólares** (cada precio a la tasa de su
+  día, columnas `tasa_*` de `v_variacion`): la subida del bolívar ya no cuenta
+  como cambio. Umbral 0,5 %.
+- El cálculo por producto vive en `hooks/useAnalisisPrecios.js` (lo usan
+  Dashboard y Mapa de Calor). Unidades del empaque: `unidades_empaque` de la
+  vista (fase 28) si es mayor que 1; si no, tu enlace usa las de tu producto
+  y el de un competidor las del nombre ("x 20 tabletas") o las tuyas.
+- Encabezado: la última corrida completa del robot (todas las cadenas de
+  `scrape_runs`: "21 de 24 enlaces leídos · 3 fallaron").
+
+## Rendimiento (PR #47)
+
+Por qué tardaba: (1) `cargarTodo` dependía de `isLoadedOnce`; al terminar la
+primera carga cambiaba y el efecto la lanzaba **otra vez** (todo se bajaba
+dos veces); (2) al entrar se bajaban 180 días de histórico (~90 peticiones
+seguidas) que solo usan la ficha y dos pantallas de Experimental; (3) la
+copia en `sessionStorage` no servía (la segunda carga ponía el spinner) y no
+duraba entre pestañas; (4) cada pantalla consultaba la tasa BCV (y a veces
+dos páginas externas) y calculaba con 744,23 mientras tanto.
+
+Ahora: una sola carga; el histórico se pide con `cargarHistorico()` solo
+donde hace falta (Brechas USD, Simulador) y la ficha baja solo el de su
+producto; copia local en `localStorage` por usuario (`utils/cacheDatos.js`,
+máx. 3 días, se borra al cerrar sesión) que pinta al instante mientras llegan
+los datos nuevos; tasa BCV compartida con una consulta cada 10 min y la
+última conocida guardada.
+
+## Ficha del producto, Mapa de Calor y Experimental (PR #47)
+
+- **Ficha** (`ProductDetailModal.jsx`, de 1.600 a ~500 líneas): pantalla
+  completa con barra superior (anterior/siguiente, cambiar producto, ⋮ borrar
+  historia), ajustes, 4 indicadores (tu precio, mínimo, frente al mínimo,
+  frente al promedio con la meta), "Precios de hoy" (barras por oferta con
+  color de la cadena + tabla con unidades, precio por unidad, "Tú frente a
+  esta", cambio 7 días, enlace) e "Historia de precios" (tuyo/mínimo/promedio
+  o cada oferta, colores categóricos validados `--md-sys-color-data-cat-*`).
+- **Mapa de Calor**: pestaña "Por cadena" (celda = tu precio frente al más
+  bajo de la competencia en esa cadena, colores divergentes del Dashboard,
+  con signo y precio) y "Rango de precios" (mínimo–máximo, raya en el
+  promedio, punto con tu precio). Indicadores clicables, filtros estándar,
+  paginación. Quitó el degradado rojo-verde-rojo.
+- **Experimental**: se borraron Reportería, Análisis y Hallazgos (ya están en
+  el Dashboard: tabla + Exportar, indicadores, "Más caros que el mínimo",
+  vista por molécula). Las rutas viejas llevan al Dashboard.
+
 ## La recarga del catálogo (aparcada)
 
 **Objetivo:** que dosis, forma y empaque salgan del nombre y vivan en sus
@@ -643,14 +713,12 @@ capturas y devaluación vs subida real. Faltan:
 el "Nombre en la tienda" de la ficha (la vista pone el nombre del competidor,
 no el que lee el robot: `fact_precios.nombre_capturado`; es un SQL pequeño).
 
-**Dashboard**, ideas propuestas (PR #46): cambios desde tu última visita,
-tendencia de tu posición frente al promedio, "precio para igualar" en Más
-caros que el mínimo, comparar contra una sola cadena y vista por molécula.
-Mejoras: rediseñar la ficha del producto (`ProductDetailModal`, 1.600 líneas,
-fondo claro fijo), unir Mapa de Calor y Experimental con el Dashboard, usar
-las unidades por empaque de la ficha en vez de adivinarlas del nombre, leer
-toda la última corrida de `scrape_runs` (hoy se lee una fila) y no bajar el
-histórico completo al abrir el panel.
+**Unidades por empaque de los competidores** (para comparar por unidad):
+tras la fase 28 salen de la ficha del producto competidor
+(`cantidad_contenido`). Al crear un competidor desde un enlace se guarda 1
+si no se sabe, y el panel toma ese 1 como "no se sabe": lee las unidades del
+nombre ("x 20 tabletas") o asume las de tu producto. Falta una forma de
+cargar el contenido real de cada competidor (idea para Competencia).
 
 **Limpieza del repo**: mover los `fase*.sql` (ya son 22) a `sql/`, borrar
 `debug/`, y borrar `recarga/` cuando termine la recarga.

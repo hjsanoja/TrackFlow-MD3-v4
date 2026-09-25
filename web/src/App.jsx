@@ -27,6 +27,7 @@ import Layout from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { DataProvider } from './context/DataContext';
+import { limpiarCacheDatos } from './utils/cacheDatos';
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -151,6 +152,7 @@ function AppContent() {
       const { data, error } = await supabase.from('usuarios').select('*').eq('email', user.email.toLowerCase()).maybeSingle();
       if (!vigente || error) return;
       if (!esActivo(data)) {
+        limpiarCacheDatos();
         await supabase.auth.signOut();
         setUser(null);
         setUserDoc(null);
@@ -267,11 +269,11 @@ function AppContent() {
         <Routes>
           <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
-          <Route path="/reporteria" element={<Navigate to="/experimental?tab=reporteria" replace />} />
+          <Route path="/reporteria" element={<Navigate to="/" replace />} />
           <Route path="/experimental" element={isAllowed('/experimental') ? <Experimental user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
-          <Route path="/analisis" element={<Navigate to="/experimental?tab=analisis" replace />} />
+          <Route path="/analisis" element={<Navigate to="/" replace />} />
           <Route path="/simulador" element={<Navigate to="/experimental?tab=simulador" replace />} />
-          <Route path="/hallazgos" element={<Navigate to="/experimental?tab=hallazgos" replace />} />
+          <Route path="/hallazgos" element={<Navigate to="/" replace />} />
           <Route path="/productos" element={isAllowed('/productos') ? <Productos /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/competencia" element={isAllowed('/competencia') ? <Competencia user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/cadenas" element={isAllowed('/cadenas') ? <Cadenas /> : <Navigate to={fallbackPath} replace />} />

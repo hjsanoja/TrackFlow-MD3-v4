@@ -1,686 +1,451 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
+import FiltroChip from '../components/FiltroChip';
+import Select from '../components/Select';
+import CadenaBadge from '../components/CadenaBadge';
+import DetalleLista from '../components/DetalleLista';
+import ProductDetailModal from '../components/ProductDetailModal';
+import { normalizar } from '../components/formulario';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
-import { parseUnidosisCount } from '../utils/unidosisUtils';
-import ProductDetailModal from '../components/ProductDetailModal';
-import Select from '../components/Select';
+import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
+import { exportToCSV } from '../utils/exportUtils';
+import { crearFormato, Diferencia, pct, usePreferencia, GRUPOS, grupoDe } from '../components/dashboard/comun';
 
-export default function MapaCalor({ user, userDoc }) {
-  const {
-    productos,
-    productosCompetencia,
-    loadingInitial: loading
-  } = useData();
+// Mapa de calor: en que cadenas eres mas caro o mas barato. Cada celda compara
+// tu precio con el precio mas bajo de la competencia EN ESA CADENA, con los
+// mismos colores que "¿Donde esta tu precio?" del Dashboard: azul si eres mas
+// barato, gris si estas parejo (±5 %), rojo si eres mas caro.
+// La vista "Rango de precios" muestra tu precio entre el minimo y el maximo.
 
+const POSICIONES = [
+  ['todos', 'Posición: todas'],
+  ['barato', 'Más baratos que el promedio'],
+  ['parejo', 'Parejos (±5 %)'],
+  ['caro', 'Más caros que el promedio'],
+  ['sin_comparar', 'Sin comparar'],
+];
+const posicionDe = (x) => (!x.comparable || x.difProm == null ? 'sin_comparar' : x.difProm < -5 ? 'barato' : x.difProm > 5 ? 'caro' : 'parejo');
+
+export default function MapaCalor() {
+  const { productos = [], productosCompetencia = [], cadenas = [], variaciones = [], loadingInitial: loading } = useData();
   const bcv = useBcvRate();
 
-  // Selected state controllers
-  const [currency, setCurrency] = useState('usd');
-  const [analisisMode, setAnalisisMode] = useState('empaque'); // 'empaque' or 'unidosis'
+  const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs']);
+  const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis']);
+  const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento']);
+  const [vista, setVista] = usePreferencia('mapa.vista', 'cadenas', ['cadenas', 'rango']);
+  const [filtroUnidad, setFiltroUnidad] = useState('todos');
+  const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  const [filtroPosicion, setFiltroPosicion] = useState('todos');
   const [search, setSearch] = useState('');
-  const [cadenaSeleccionada, setCadenaSeleccionada] = useState('Todas');
-  const [tipoMercadoSeleccionado, setTipoMercadoSeleccionado] = useState('Todos');
-  const [unSeleccionada, setUnSeleccionada] = useState('Todas');
-  const [sortField, setSortField] = useState('nombre'); // 'nombre', 'deviation'
-  const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
-  const [filtroPosicionamiento, setFiltroPosicionamiento] = useState('Todos'); // 'Todos', 'Bajo Promedio', 'En Paridad', 'Sobre Promedio'
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [orden, setOrden] = useState({ campo: 'nombre', dir: 'asc' });
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [itemsPorPagina, setItemsPorPagina] = usePreferencia('mapa.filas', 25, [10, 25, 50, 100]);
+  const [detalle, setDetalle] = useState(null);
+  const [ficha, setFicha] = useState(null);
+  const [volverA, setVolverA] = useState(null);
 
-  // Chains for filters (Point 7 requirement)
-  const cadenas = useMemo(() => {
-    const list = new Set(productosCompetencia.map(pc => pc.cadena).filter(Boolean));
-    return ['Todas', ...Array.from(list).sort()];
-  }, [productosCompetencia]);
+  const { analizados, nombreCadena } = useAnalisisPrecios({
+    productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis,
+  });
+  const { fmt, fmtUnidad } = crearFormato(moneda, bcv.rate);
+  const fmtModo = modoAnalisis === 'unidosis' ? fmtUnidad : fmt;
 
-  // Business Units for filters
-  const unidadesNegocio = useMemo(() => {
-    const list = new Set(productos.map(p => p.unidad_negocio).filter(Boolean));
-    return ['Todas', ...Array.from(list).sort()];
+  const claveUnidad = (p) => (p.unidad_negocio || 'La Sante').toLowerCase().replace(/\s/g, '');
+  const unidades = useMemo(() => {
+    const m = new Map();
+    productos.forEach(p => m.set(claveUnidad(p), p.unidad_negocio || 'La Sante'));
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [productos]);
+  const categorias = useMemo(() => [...new Set(productos.map(p => p.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [productos]);
 
-  // Clean and normalize strings (Point 12 requirement - stripping accents and case differences)
-  const cleanStr = (str) => {
-    return (str || '')
-      .toUpperCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-  };
+  // Productos con algun precio (tuyo o de la competencia), segun los filtros.
+  const base = useMemo(() => analizados.filter(({ producto: p, sinPrecio }) =>
+    !sinPrecio &&
+    (filtroUnidad === 'todos' || claveUnidad(p) === filtroUnidad) &&
+    (filtroTipo === 'todos' || (p.market_type || 'GENERICO').toLowerCase() === filtroTipo) &&
+    (filtroCategoria === 'todos' || p.categoria === filtroCategoria)
+  ), [analizados, filtroUnidad, filtroTipo, filtroCategoria]);
+  const hayFiltros = filtroUnidad !== 'todos' || filtroTipo !== 'todos' || filtroCategoria !== 'todos' || filtroPosicion !== 'todos';
 
-  // Main data processor to match products with competitor prices and calculate scale positioning
-  const heatmapData = useMemo(() => {
-    return productos
-      .filter(p => p.activo)
-      .map(p => {
-        // Find competitor items for this product
-        const pId = String(p.id_interno || p.id || '').trim();
-        const compItems = pId 
-          ? productosCompetencia.filter(pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === pId)
-          : [];
-        
-        // Filter competency records by selected chain (Point 7 requirement)
-        const compItemsFiltered = compItems.filter(c => {
-          if (cadenaSeleccionada === 'Todas') return true;
-          return c.cadena.toLowerCase() === cadenaSeleccionada.toLowerCase();
-        });
+  const porPosicion = useMemo(() => {
+    const g = { barato: [], parejo: [], caro: [], sin_comparar: [] };
+    for (const x of base) g[posicionDe(x)].push(x);
+    return g;
+  }, [base]);
 
-        const pUnidosisCount = parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis || p.unidades_empaque);
-        const pUnitFactor = analisisMode === 'unidosis' ? Math.max(pUnidosisCount, 1) : 1;
+  const cadenasTabla = useMemo(() => {
+    const ids = new Map();
+    for (const x of base) for (const c of x.porCadena.keys()) ids.set(c, (ids.get(c) || 0) + 1);
+    return [...ids.entries()].sort((a, b) => nombreCadena(a[0]).localeCompare(nombreCadena(b[0]))).map(([id, n]) => ({ id, n }));
+  }, [base, nombreCadena]);
 
-        const parsePrice = (val) => {
-          if (val == null) return 0;
-          const cleaned = String(val).replace(/\s/g, '').replace(',', '.');
-          const parsed = parseFloat(cleaned);
-          return isNaN(parsed) ? 0 : parsed;
-        };
-
-        // Parse and compile ALL valid prices for this product across selected chains (own brand + alternatives)
-        const allPricesRaw = compItemsFiltered
-          .map(c => {
-            let rawPriceBs = parsePrice(c.ultimo_precio_full_bs);
-            // Fallback to discount price if list price is zero/invalid (Point 4 requirement)
-            if (rawPriceBs <= 0) {
-              rawPriceBs = parsePrice(c.ultimo_precio_desc_bs);
-            }
-            if (rawPriceBs <= 0 || !bcv.rate) return null;
-
-            const cUnidosisCount = parseUnidosisCount(c.tamano, c.marca, c.unidosis || c.unidades_empaque) || pUnidosisCount;
-            const cUnitFactor = analisisMode === 'unidosis' ? Math.max(cUnidosisCount, 1) : 1;
-
-            return {
-              id: c.id,
-              cadena: c.cadena,
-              tipo: c.tipo,
-              marca: c.marca,
-              priceBs: rawPriceBs / cUnitFactor,
-              priceUsd: (rawPriceBs / cUnitFactor) / bcv.rate,
-            };
-          })
-          .filter(v => v !== null && v.priceUsd >= 0.05);
-
-        // Omit products that have no valid prices in the selected chains
-        if (allPricesRaw.length === 0) return null;
-
-        // Extract own brand prices (tipo === 'propio')
-        const propioPricesRaw = allPricesRaw.filter(c => c.tipo === 'propio');
-        // Take minimum own price if multiple exist (Point 3 requirement)
-        const propioPriceUsd = propioPricesRaw.length > 0 ? Math.min(...propioPricesRaw.map(p => p.priceUsd)) : null;
-
-        // Compile all competitor-only prices (just for reference if needed, but the spectrum contains everything)
-        const competitorPricesRaw = allPricesRaw.filter(c => c.tipo !== 'propio');
-
-        // Collect all price numbers to calculate market spectrum extremes (Min, Max, Avg)
-        const allPricesUsd = allPricesRaw.map(p => p.priceUsd);
-
-        // Calculate absolute minimum, maximum, and average across ALL (including ours) (Point 2 and 5 requirements)
-        const absoluteMin = Math.min(...allPricesUsd);
-        const absoluteMax = Math.max(...allPricesUsd);
-        const avgCompUsd = allPricesUsd.reduce((a, b) => a + b, 0) / allPricesUsd.length;
-
-        // Locate our price on the spectrum (0% to 100%) relative to min/max and average (Point 3 requirement)
-        let positionPct = 50;
-        if (propioPriceUsd !== null && absoluteMax > absoluteMin) {
-          if (propioPriceUsd <= avgCompUsd) {
-            const range = avgCompUsd - absoluteMin;
-            const diff = propioPriceUsd - absoluteMin;
-            positionPct = range > 0 ? (diff / range) * 50 : 0;
-          } else {
-            const range = absoluteMax - avgCompUsd;
-            const diff = propioPriceUsd - avgCompUsd;
-            positionPct = range > 0 ? 50 + (diff / range) * 50 : 100;
-          }
-        }
-        positionPct = Math.max(0, Math.min(100, positionPct));
-
-        // Deviation of our price vs market average
-        const diffAvgPercent = (propioPriceUsd !== null && avgCompUsd > 0) ? ((propioPriceUsd - avgCompUsd) / avgCompUsd) * 100 : null;
-
-        // Dynamic status badge color and labeling based on deviation
-        let posicionamientoLabel = 'Sin Precio Propio';
-        let badgeColor = 'bg-slate-100 text-slate-800 border-slate-200';
-        if (propioPriceUsd !== null && diffAvgPercent !== null) {
-          if (diffAvgPercent < -5) {
-            posicionamientoLabel = 'Bajo Promedio';
-            badgeColor = 'bg-sky-100 text-sky-800 border-sky-200';
-          } else if (diffAvgPercent > 5) {
-            posicionamientoLabel = 'Sobre Promedio';
-            badgeColor = 'bg-amber-100 text-amber-800 border-amber-200';
-          } else {
-            posicionamientoLabel = 'En Paridad';
-            badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-200';
-          }
-        }
-
-        return {
-          producto: p,
-          competitors: competitorPricesRaw,
-          competencia: compItems, // Passing complete items list for detail modal support
-          propioPriceUsd,
-          absoluteMin,
-          absoluteMax,
-          avgCompUsd,
-          diffAvgPercent,
-          positionPct,
-          posicionamientoLabel,
-          badgeColor,
-        };
-      })
-      .filter(Boolean);
-  }, [productos, productosCompetencia, bcv.rate, analisisMode, cadenaSeleccionada]);
-
-  // Filtering & Sorting (Default sorted alphabetically by product name - Point 14 requirement)
-  const filteredRows = useMemo(() => {
-    const term = search.toLowerCase().trim();
-    return heatmapData
-      .filter(item => {
-        // Search term filter matching code, active principal, or product name
-        const matchSearch = !term || 
-          item.producto.nombre.toLowerCase().includes(term) ||
-          (item.producto.principio_activo || '').toLowerCase().includes(term) ||
-          item.producto.id_interno.toLowerCase().includes(term);
-        
-        // Market type filter resolved without accents (Point 12 requirement fix)
-        const pTipo = cleanStr(item.producto.market_type || 'GENERICO');
-        const matchTipo = tipoMercadoSeleccionado === 'Todos' || pTipo === cleanStr(tipoMercadoSeleccionado);
-
-        // Business Unit filter
-        const pUn = (item.producto.unidad_negocio || 'La Sante').toUpperCase();
-        const matchUn = unSeleccionada === 'Todas' || pUn === unSeleccionada.toUpperCase();
-
-        // Positioning status filter
-        const matchPos = filtroPosicionamiento === 'Todos' || item.posicionamientoLabel === filtroPosicionamiento;
-
-        return matchSearch && matchTipo && matchUn && matchPos;
-      })
-      .sort((a, b) => {
-        if (sortField === 'nombre') {
-          const nameComp = a.producto.nombre.localeCompare(b.producto.nombre, 'es', { sensitivity: 'base' });
-          if (nameComp !== 0) {
-            return sortOrder === 'asc' ? nameComp : -nameComp;
-          }
-          const unA = a.producto.unidad_negocio || '';
-          const unB = b.producto.unidad_negocio || '';
-          const unComp = unA.localeCompare(unB, 'es', { sensitivity: 'base' });
-          return sortOrder === 'asc' ? unComp : -unComp;
-        } else if (sortField === 'deviation') {
-          const valA = a.diffAvgPercent === null ? 999999 : a.diffAvgPercent;
-          const valB = b.diffAvgPercent === null ? 999999 : b.diffAvgPercent;
-          if (valA !== valB) {
-            return sortOrder === 'asc' ? valA - valB : valB - valA;
-          }
-          const nameComp = a.producto.nombre.localeCompare(b.producto.nombre, 'es', { sensitivity: 'base' });
-          if (nameComp !== 0) {
-            return nameComp;
-          }
-          const unA = a.producto.unidad_negocio || '';
-          const unB = b.producto.unidad_negocio || '';
-          return unA.localeCompare(unB, 'es', { sensitivity: 'base' });
-        }
-        return 0;
-      });
-  }, [heatmapData, search, tipoMercadoSeleccionado, unSeleccionada, filtroPosicionamiento, sortField, sortOrder]);
-
-  // Overall metrics summary cards at top of layout
-  const statsSummary = useMemo(() => {
-    if (heatmapData.length === 0) return { total: 0, bajoPromedio: 0, enParidad: 0, sobrePromedio: 0, avgDeviation: 0 };
-    
-    let total = heatmapData.length;
-    let bajoPromedio = 0;
-    let enParidad = 0;
-    let sobrePromedio = 0;
-    let totalDeviation = 0;
-    let countWithDeviation = 0;
-
-    heatmapData.forEach(item => {
-      if (item.diffAvgPercent !== null) {
-        totalDeviation += item.diffAvgPercent;
-        countWithDeviation++;
-      }
-      if (item.posicionamientoLabel === 'Bajo Promedio') bajoPromedio++;
-      else if (item.posicionamientoLabel === 'En Paridad') enParidad++;
-      else if (item.posicionamientoLabel === 'Sobre Promedio') sobrePromedio++;
+  const filas = useMemo(() => {
+    const term = normalizar(search);
+    const lista = base.filter(x =>
+      (filtroPosicion === 'todos' || posicionDe(x) === filtroPosicion) &&
+      (!term || normalizar(`${x.producto.id_interno} ${x.producto.nombre} ${x.producto.principio_activo || ''}`).includes(term)));
+    const signo = orden.dir === 'asc' ? 1 : -1;
+    return lista.sort((a, b) => {
+      if (orden.campo === 'nombre') return (a.producto.nombre || '').localeCompare(b.producto.nombre || '', 'es', { sensitivity: 'base' }) * signo;
+      const va = orden.campo === 'difProm' ? a.difProm : a.difMin;
+      const vb = orden.campo === 'difProm' ? b.difProm : b.difMin;
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      return (va - vb) * signo;
     });
+  }, [base, search, filtroPosicion, orden]);
 
-    return {
-      total,
-      bajoPromedio,
-      enParidad,
-      sobrePromedio,
-      avgDeviation: countWithDeviation > 0 ? totalDeviation / countWithDeviation : 0,
-    };
-  }, [heatmapData]);
+  useEffect(() => { setPaginaActual(1); }, [search, filtroPosicion, filtroUnidad, filtroTipo, filtroCategoria, orden, itemsPorPagina, vista]);
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / itemsPorPagina));
+  const filasPagina = filas.slice((paginaActual - 1) * itemsPorPagina, paginaActual * itemsPorPagina);
+  const ordenarPor = (campo) => setOrden(o => ({ campo, dir: o.campo === campo && o.dir === 'asc' ? 'desc' : 'asc' }));
 
-  // Format currency helper matching dashboard
-  const fmt = (priceUsd) => {
-    if (priceUsd == null || isNaN(priceUsd)) return '—';
-    if (currency === 'usd') {
-      return `$${priceUsd.toFixed(2)}`;
-    }
-    if (!bcv.rate) return '—';
-    return 'Bs ' + (priceUsd * bcv.rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const abrirFicha = (x, desde = null) => { setVolverA(desde); setDetalle(null); setFicha({ producto: x.producto, competencia: x.competencia }); };
+  const cerrarFicha = () => { setFicha(null); if (volverA) { setDetalle(volverA); setVolverA(null); } };
+  const colProducto = {
+    titulo: 'Producto',
+    celda: x => (
+      <div className="min-w-0">
+        <div className="m3-cell-primary m3-cell-clamp max-w-[18rem]" title={x.producto.nombre}>{x.producto.nombre}</div>
+        <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
+      </div>
+    ),
   };
+  const abrirGrupo = (clave, titulo, icono) => setDetalle({
+    titulo,
+    subtitulo: 'Tu precio frente al promedio de la competencia. Toca un producto para ver su ficha.',
+    icono,
+    filas: [...porPosicion[clave]].sort((a, b) => (a.difProm ?? 0) - (b.difProm ?? 0)),
+    columnas: clave === 'sin_comparar'
+      ? [colProducto, { titulo: 'Qué falta', celda: x => (x.tuPrecio == null ? 'Tu precio' : 'Precio de la competencia') }]
+      : [colProducto,
+        { titulo: 'Tu precio', alinear: 'right', celda: x => fmtModo(x.tuPrecio) },
+        { titulo: 'Promedio', alinear: 'right', celda: x => fmtModo(x.promedio) },
+        { titulo: 'Frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> }],
+    posicion: clave,
+  });
 
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
-  };
-
-  const downloadReport = () => {
-    if (!filteredRows || filteredRows.length === 0) return;
-
-    let csv = 'Código Interno,Producto,Principio Activo,Laboratorio,Unidad de Negocio,Tipo de Mercado,Modo de Análisis,Precio Propio (USD),Precio Propio (Bs),Mínimo Mercado (USD),Mínimo Mercado (Bs),Promedio Mercado (USD),Promedio Mercado (Bs),Máximo Mercado (USD),Máximo Mercado (Bs),Desviación vs Promedio (%),Posicionamiento,Tasa BCV,Fecha Reporte\n';
-
-    filteredRows.forEach(item => {
-      const p = item.producto;
-      const pPropioUsd = item.propioPriceUsd !== null ? item.propioPriceUsd.toFixed(2) : '—';
-      const pPropioBs = (item.propioPriceUsd !== null && bcv.rate) ? (item.propioPriceUsd * bcv.rate).toFixed(2) : '—';
-      const pMinUsd = item.absoluteMin ? item.absoluteMin.toFixed(2) : '—';
-      const pMinBs = (item.absoluteMin && bcv.rate) ? (item.absoluteMin * bcv.rate).toFixed(2) : '—';
-      const pAvgUsd = item.avgCompUsd ? item.avgCompUsd.toFixed(2) : '—';
-      const pAvgBs = (item.avgCompUsd && bcv.rate) ? (item.avgCompUsd * bcv.rate).toFixed(2) : '—';
-      const pMaxUsd = item.absoluteMax ? item.absoluteMax.toFixed(2) : '—';
-      const pMaxBs = (item.absoluteMax && bcv.rate) ? (item.absoluteMax * bcv.rate).toFixed(2) : '—';
-      const devPct = item.diffAvgPercent !== null ? `${item.diffAvgPercent >= 0 ? '+' : ''}${item.diffAvgPercent.toFixed(1)}%` : '—';
-
-      const row = [
-        p.id_interno || p.id || '',
-        p.nombre,
-        p.principio_activo || '—',
-        p.laboratorio || '—',
-        p.unidad_negocio || '—',
-        p.market_type || 'Genérico',
-        analisisMode === 'unidosis' ? 'Por Unidosis' : 'Empaque Completo',
-        pPropioUsd,
-        pPropioBs,
-        pMinUsd,
-        pMinBs,
-        pAvgUsd,
-        pAvgBs,
-        pMaxUsd,
-        pMaxBs,
-        devPct,
-        item.posicionamientoLabel,
-        bcv.rate ? bcv.rate.toFixed(2) : '—',
-        new Date().toLocaleDateString('es-VE')
-      ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',') + '\n';
-      csv += row;
+  const exportar = () => {
+    const suf = moneda === 'usd' ? 'USD' : 'Bs';
+    const valor = (usd) => (usd == null ? '' : moneda === 'usd' ? usd.toFixed(modoAnalisis === 'unidosis' ? 4 : 2) : (usd * (bcv.rate || 0)).toFixed(2));
+    const cols = [
+      { key: 'id', label: 'ID' }, { key: 'producto', label: 'Producto' },
+      { key: 'tu', label: `Tu precio (${suf})` }, { key: 'min', label: `Mínimo competencia (${suf})` },
+      { key: 'prom', label: `Promedio competencia (${suf})` }, { key: 'max', label: `Máximo competencia (${suf})` },
+      { key: 'difProm', label: 'Frente al promedio (%)' },
+      ...cadenasTabla.map(c => ({ key: `c_${c.id}`, label: `Frente a ${nombreCadena(c.id)} (%)` })),
+    ];
+    const datos = filas.map(x => {
+      const precios = [...x.porCadena.values()].map(p => p.priceUsd);
+      return {
+        id: x.producto.id_interno, producto: x.producto.nombre,
+        tu: valor(x.tuPrecio), min: valor(x.minimo), prom: valor(x.promedio), max: valor(precios.length ? Math.max(...precios) : null),
+        difProm: x.difProm == null ? '' : x.difProm.toFixed(1),
+        ...Object.fromEntries(cadenasTabla.map(c => {
+          const p = x.porCadena.get(c.id);
+          return [`c_${c.id}`, p && x.tuPrecio != null ? ((x.tuPrecio / p.priceUsd - 1) * 100).toFixed(1) : ''];
+        })),
+      };
     });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Reporte_Mapa_Calor_${new Date().toISOString().slice(0, 10)}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (datos.length) exportToCSV(`mapa_de_calor_por_cadena${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`, cols, datos);
   };
+
+  if (loading && productos.length === 0) {
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <div className="h-16 rounded-2xl m3-skeleton" />
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">{[1, 2, 3, 4].map(n => <div key={n} className="h-28 rounded-2xl m3-skeleton" />)}</div>
+        <div className="h-96 rounded-2xl m3-skeleton" />
+      </div>
+    );
+  }
+
+  const comparables = base.length - porPosicion.sin_comparar.length;
 
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
-      {/* Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-primary text-3xl">thermostat</span>
-            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
-              Mapa de Calor y Posición Relativa
-            </h1>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Mapa de calor</h1>
           </div>
-          <p className="text-xs text-on-surface-variant max-w-2xl font-sans leading-relaxed">
-            Visualiza el espectro de precios del mercado. Los extremos representan los precios
-            mínimo y máximo, el centro es el promedio y el marcador indica el posicionamiento exacto de tu precio.
-          </p>
+          <p className="text-xs text-on-surface-variant">En qué cadenas eres más caro o más barato. Cada celda compara tu precio con el más bajo de la competencia en esa cadena.</p>
         </div>
+        <button onClick={exportar} className="m3-btn-outline self-start lg:self-auto" title="Descargar en CSV lo que se ve, con los filtros actuales">
+          <span className="material-symbols-outlined text-base">download</span>
+          <span>Exportar</span>
+        </button>
+      </div>
 
-        {/* Unified Mode Toggle, Currency switcher & Export Button */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="m3-segmented">
-            <button
-              onClick={() => setAnalisisMode('empaque')}
-              className={`m3-segmented-item ${analisisMode === 'empaque' ? 'active' : ''}`}
-            >
-              <span className="material-symbols-outlined text-body-md">inventory_2</span>
-              <span>Empaque</span>
+      <section className="m3-dash-filtros" aria-label="Filtros del mapa">
+        <div className="flex flex-wrap items-center gap-2">
+          <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidades]} />
+          <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
+          <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
+          <FiltroChip etiqueta="Posición" icono="balance" valor={filtroPosicion} onChange={setFiltroPosicion} opciones={POSICIONES} />
+          {hayFiltros && (
+            <button type="button" className="m3-btn-text"
+              onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }}>
+              Limpiar filtros
             </button>
-            <button
-              onClick={() => setAnalisisMode('unidosis')}
-              className={`m3-segmented-item ${analisisMode === 'unidosis' ? 'active' : ''}`}
-            >
-              <span className="material-symbols-outlined text-body-md">medication</span>
-              <span>Por Unidosis</span>
-            </button>
-          </div>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
+            <option value="lista">Precio de lista</option>
+            <option value="descuento">Precio con oferta</option>
+          </Select>
+          <Select value={modoAnalisis} onChange={e => setModoAnalisis(e.target.value)} aria-label="Comparar por" className="m3-filter-chip" leadingIcon="medication">
+            <option value="empaque">Por empaque</option>
+            <option value="unidosis">Por unidad (tableta, cápsula…)</option>
+          </Select>
+          <label className="m3-switch-label whitespace-nowrap ml-1">
+            <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
+            <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')} className="m3-switch" aria-label="Ver los precios en bolívares" />
+            <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
+          </label>
+        </div>
+      </section>
 
-          <div className="m3-segmented">
-            <button
-              onClick={() => setCurrency('usd')}
-              className={`m3-segmented-item ${currency === 'usd' ? 'active' : ''}`}
-            >
-              USD ($)
-            </button>
-            <button
-              onClick={() => setCurrency('bs')}
-              className={`m3-segmented-item ${currency === 'bs' ? 'active' : ''}`}
-            >
-              VES (Bs)
-            </button>
-          </div>
+      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Indicadores">
+        <StatCard label="Más baratos que el promedio" value={`${porPosicion.barato.length} de ${comparables}`} icon="south" tono="primary"
+          hint="Tu precio más de 5 % bajo el promedio" onClick={() => abrirGrupo('barato', 'Más baratos que el promedio', 'south')} />
+        <StatCard label="Parejos" value={`${porPosicion.parejo.length} de ${comparables}`} icon="drag_handle" tono="neutral"
+          hint="Tu precio a ±5 % del promedio" onClick={() => abrirGrupo('parejo', 'Parejos con el promedio', 'drag_handle')} />
+        <StatCard label="Más caros que el promedio" value={`${porPosicion.caro.length} de ${comparables}`} icon="north" tono={porPosicion.caro.length ? 'negative' : 'neutral'}
+          hint="Tu precio más de 5 % sobre el promedio" onClick={() => abrirGrupo('caro', 'Más caros que el promedio', 'north')} />
+        <StatCard label="Sin comparar" value={porPosicion.sin_comparar.length} icon="help" tono={porPosicion.sin_comparar.length ? 'warning' : 'neutral'}
+          hint="Falta tu precio o el de la competencia" onClick={() => abrirGrupo('sin_comparar', 'Sin comparar', 'help')} />
+      </section>
 
-          <button
-            onClick={downloadReport}
-            className="m3-btn-outline"
-            title="Exportar reporte de mapa de calor en formato CSV"
-          >
-            <span className="material-symbols-outlined text-base">download</span>
-            <span>Exportar CSV</span>
+      <section className="m3-data-table" aria-label="Mapa de calor">
+        <nav className="m3-tabs px-2" aria-label="Vista del mapa">
+          <button type="button" onClick={() => setVista('cadenas')} className={`m3-tab ${vista === 'cadenas' ? 'is-active' : ''}`} aria-current={vista === 'cadenas' ? 'page' : undefined}>
+            <span className="material-symbols-outlined" aria-hidden="true">grid_on</span>Por cadena
           </button>
-        </div>
-      </div>
-
-      {/* KPI Stats Grid — mismo componente para las cuatro, para que compartan
-          forma, elevación y espaciado. El tono solo cambia el color. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Productos Vigentes"
-          value={statsSummary.total}
-          hint="Con precio o competencia activa"
-          icon="medication"
-          tono="primary"
-        />
-        <StatCard
-          label="Bajo el Promedio"
-          value={statsSummary.bajoPromedio}
-          hint="Precios altamente competitivos"
-          icon="trending_down"
-          tono="positive"
-        />
-        <StatCard
-          label="En Paridad"
-          value={statsSummary.enParidad}
-          hint="Dentro del ±5% del promedio"
-          icon="drag_handle"
-        />
-        <StatCard
-          label="Sobre el Promedio"
-          value={statsSummary.sobrePromedio}
-          hint="Posibles márgenes premium"
-          icon="trending_up"
-          tono="warning"
-        />
-      </div>
-
-      {/* Filter and Search controls */}
-      <div className="neural-card p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          {/* Search Box */}
-          <div className="relative md:col-span-1">
-            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none select-none">search</span>
-            <input
-              type="text"
-              placeholder="Buscar producto o principio..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="m3-input m3-input-search pr-8"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-sm font-bold w-5 h-5 flex items-center justify-center rounded-full hover:bg-surface-container-high">×</button>
-            )}
-          </div>
-
-          {/* Chain Filter */}
-          <div className="space-y-1">
-            <Select
-              value={cadenaSeleccionada}
-              onChange={(e) => setCadenaSeleccionada(e.target.value)}
-              className="m3-select m3-select-dense"
-            >
-              <option value="Todas">Cadena: Todas</option>
-              {cadenas.filter(c => c !== 'Todas').map(cad => (
-                <option key={cad} value={cad}>{cad}</option>
-              ))}
-            </Select>
-          </div>
-
-          {/* UN Filter */}
-          <div className="space-y-1">
-            <Select
-              value={unSeleccionada}
-              onChange={(e) => setUnSeleccionada(e.target.value)}
-              className="m3-select m3-select-dense"
-            >
-              <option value="Todas">Unidad de Negocio: Todas</option>
-              {unidadesNegocio.filter(u => u !== 'Todas').map(un => (
-                <option key={un} value={un}>{un}</option>
-              ))}
-            </Select>
-          </div>
-
-          {/* Position Filter */}
-          <div className="space-y-1">
-            <Select
-              value={filtroPosicionamiento}
-              onChange={(e) => setFiltroPosicionamiento(e.target.value)}
-              className="m3-select m3-select-dense"
-            >
-              <option value="Todos">Posición: Todos</option>
-              <option value="Bajo Promedio">Bajo el Promedio</option>
-              <option value="En Paridad">En Paridad</option>
-              <option value="Sobre Promedio">Sobre el Promedio</option>
-              <option value="Sin Precio Propio">Sin Precio Propio</option>
-            </Select>
-          </div>
-        </div>
-
-        {/* Quick filters / Sort display */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-surface-variant text-xs text-on-surface-variant font-sans">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-semibold text-on-background">Tipo de Mercado:</span>
-            <div className="m3-segmented">
-              {['Todos', 'Marca', 'Genérico'].map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setTipoMercadoSeleccionado(opt)}
-                  className={`m3-segmented-item ${tipoMercadoSeleccionado === opt ? 'active' : ''}`}
-                >
-                  {opt}
-                </button>
-              ))}
+          <button type="button" onClick={() => setVista('rango')} className={`m3-tab ${vista === 'rango' ? 'is-active' : ''}`} aria-current={vista === 'rango' ? 'page' : undefined}>
+            <span className="material-symbols-outlined" aria-hidden="true">linear_scale</span>Rango de precios
+          </button>
+        </nav>
+        <div className="m3-data-table-toolbar">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <p className="m3-body-small text-on-surface-variant flex-1">
+                {vista === 'cadenas'
+                  ? 'Cada celda: cuánto más caro o barato es tu precio que el más bajo de la competencia en esa cadena. Toca una fila para ver la ficha.'
+                  : 'Tu precio (punto) entre el mínimo y el máximo de la competencia; la raya marca el promedio. Toca una fila para ver la ficha.'}
+              </p>
+              <div className="m3-label-large text-on-surface-variant whitespace-nowrap" aria-live="polite">
+                {filas.length === base.length ? `${base.length} productos` : `${filas.length} de ${base.length} productos`}
+              </div>
+            </div>
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <label className="m3-search-field">
+                <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por ID, nombre o molécula" aria-label="Buscar producto" />
+                {search && (
+                  <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                )}
+              </label>
+              <div className="m3-calor-leyenda" aria-label="Leyenda de colores">
+                {GRUPOS.map(g => <span key={g.id}><i className={`m3-calor-${g.id}`} />{g.corto}</span>)}
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-1.5 font-mono text-label-md font-bold">
-            <span className="material-symbols-outlined text-xs text-primary">info</span>
-            <span>Mostrando <span className="font-black text-primary">{filteredRows.length}</span> de <span className="font-bold">{heatmapData.length}</span> productos</span>
+        {filas.length === 0 ? (
+          <div className="p-12 text-center text-on-surface-variant flex flex-col items-center gap-3">
+            <span className="material-symbols-outlined text-3xl">search_off</span>
+            <div className="m3-title-medium text-on-surface">Ningún producto coincide</div>
           </div>
-        </div>
-      </div>
+        ) : (
+          <>
+            <ul className="md:hidden divide-y divide-outline-variant" aria-label="Productos">
+              {filasPagina.map(x => (
+                <li key={x.producto.id_interno}>
+                  <button type="button" onClick={() => abrirFicha(x)} className="w-full text-left px-4 py-3 space-y-2">
+                    <div>
+                      <div className="m3-cell-primary">{x.producto.nombre}</div>
+                      <div className="m3-cell-secondary">Tu precio {fmtModo(x.tuPrecio)} · <Diferencia valor={x.difProm} /> frente al promedio</div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cadenasTabla.filter(c => x.porCadena.has(c.id)).map(c => {
+                        const dif = x.tuPrecio != null ? (x.tuPrecio / x.porCadena.get(c.id).priceUsd - 1) * 100 : null;
+                        return (
+                          <span key={c.id} className={`m3-calor-chip ${dif != null ? `m3-calor-${grupoDe(dif).id}` : ''}`}>
+                            <CadenaBadge cadena={c.id} tamano="xs" title="" />{dif != null ? pct(dif, 0) : fmtModo(x.porCadena.get(c.id).priceUsd)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
 
-      {/* Heatmap Table Grid */}
-      <div className="neural-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="m3-table table-fixed min-w-[800px]">
-            <thead className="m3-sticky-header">
-              <tr>
-                <th className="cursor-pointer hover:bg-surface-variant/50 transition-colors w-[30%]" onClick={() => handleSort('nombre')}>
-                  <div className="flex items-center gap-1">
-                    <span>Producto</span>
-                    {sortField === 'nombre' && (
-                      <span className="material-symbols-outlined text-sm font-bold">{sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}</span>
-                    )}
-                  </div>
-                </th>
-                <th className="text-center w-[70%]">
-                  Espectro de Precios y Posicionamiento de Mi Precio
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-variant">
-              {filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan={2} className="px-6 py-16 text-center text-on-surface-variant italic bg-surface-low/30">
-                    No se encontraron productos activos que coincidan con la selección y tengan precio.
-                  </td>
-                </tr>
-              ) : (
-                filteredRows.map((item) => {
-                  const devVal = item.diffAvgPercent;
-                  const isUnder = devVal !== null && devVal < -5;
-                  const isOver = devVal !== null && devVal > 5;
-
-                  return (
-                    <tr 
-                      key={item.producto.id_interno} 
-                      onClick={() => setSelectedProduct(item)}
-                      className="hover:bg-surface-low transition-colors cursor-pointer"
-                      title="Haz clic para ver detalles comparativos de este producto en Góndola"
-                    >
-                      {/* Product Column */}
-                      <td className="px-6 py-5 align-middle">
-                        <div className="flex flex-col space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-on-surface text-sm font-display leading-tight">{item.producto.nombre}</span>
-                            <span className={`px-1.5 py-0.5 text-label-sm rounded font-mono font-bold tracking-wider uppercase ${
-                              (item.producto.market_type || 'GENERICO').toUpperCase() === 'MARCA'
-                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                : 'bg-green-100 text-green-800 border border-green-200'
-                            }`}>
-                              {(item.producto.market_type || 'GENERICO').toUpperCase()}
-                            </span>
-                          </div>
-                          
-                          <div className="text-xs text-on-surface-variant font-mono space-y-0.5">
-                            <div><strong className="text-on-surface font-semibold">Código:</strong> {item.producto.id_interno}</div>
-                            {item.producto.laboratorio && <div><strong className="text-on-surface font-semibold">Laboratorio:</strong> {item.producto.laboratorio}</div>}
-                            {item.producto.unidad_negocio && <div><strong className="text-on-surface font-semibold">Unidad de Negocio:</strong> {item.producto.unidad_negocio}</div>}
-                          </div>
-
-                          <div className="pt-1">
-                            <span className="text-label-sm text-primary bg-primary/5 border border-primary/15 rounded-lg px-2 py-0.5 font-bold inline-flex items-center gap-1 hover:bg-primary/10 transition-colors">
-                              <span className="material-symbols-outlined text-label-md">visibility</span>
-                              Analizar competencia ↗
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Redesigned Spectrum bar Column */}
-                      <td className="px-8 py-6 align-middle">
-                        <div className="flex flex-col space-y-5 justify-center relative pt-7 pb-1">
-                          {/* Visual Spectrum Bar Container */}
-                          <div className="relative h-3 w-full rounded-full overflow-visible flex bg-surface-low border border-outline-variant/60 shadow-inner">
-                            {/* Double gradient spectrum background */}
-                            <div className="w-full h-full rounded-full bg-gradient-to-r from-red-500 via-amber-400 via-emerald-500 via-amber-400 to-red-500 shadow-[inset_0_1.5px_2px_rgba(0,0,0,0.15)]"></div>
-
-                            {/* Center and bounds markers on track */}
-                            <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-surface-container-lowest/40" title="Mínimo"></div>
-                            <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-surface-container-lowest/60 -translate-x-1/2" title="Promedio"></div>
-                            <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-surface-container-lowest/40" title="Máximo"></div>
-
-                            {/* Floating Marker pointing to our exact pricing position */}
-                            {item.propioPriceUsd !== null ? (
-                              <div 
-                                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 group"
-                                style={{ left: `${item.positionPct}%` }}
-                              >
-                                <div className="relative flex flex-col items-center">
-                                  {/* Permanent Floating Label above spectrum bar */}
-                                  <div className="absolute bottom-6 mb-1.5 bg-primary text-on-primary text-[10.5px] px-2.5 py-1 rounded-xl shadow-lg font-mono font-extrabold whitespace-nowrap flex items-center gap-1.5 border border-white/10 transition-all duration-300 transform group-hover:scale-105 group-hover:-translate-y-1">
-                                    <span className="text-label-sm uppercase tracking-wider text-white/75 font-sans">MI PRECIO:</span>
-                                    <span>{fmt(item.propioPriceUsd)}</span>
-                                    {devVal !== null && (
-                                      <span className={`ml-1 px-1.5 py-0.2 rounded-md text-label-sm font-black ${
-                                        isUnder ? 'bg-sky-500 text-white' : isOver ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
-                                      }`}>
-                                        {devVal > 0 ? '+' : ''}{devVal.toFixed(1)}%
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Custom physical pin with glowing radar aura */}
-                                  <div className="relative flex items-center justify-center">
-                                    <div className="w-5.5 h-5.5 rounded-full bg-surface-container-lowest border-[3.5px] border-primary shadow-md flex items-center justify-center transition-all duration-300 transform group-hover:scale-115">
-                                      <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                                    </div>
-                                    <div className="absolute top-4.5 w-[2px] h-3 bg-primary/80"></div>
-                                    {/* Pulse aura */}
-                                    <div className="absolute w-8 h-8 rounded-full bg-primary/10 animate-ping pointer-events-none"></div>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              /* Subtle label if no own price is active */
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <span className="text-label-sm text-primary font-mono font-bold tracking-wider uppercase bg-surface-container-lowest/85 px-2 py-0.5 rounded-full shadow-sm border border-outline-variant/50">
-                                  COMPETENCIA ÚNICAMENTE (SIN MI PRECIO)
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Direct price tag blocks beneath the spectrum bar */}
-                          <div className="grid grid-cols-3 text-xs font-mono font-bold pt-2.5 border-t border-outline-variant/30">
-                            {/* Left (Min) */}
-                            <div className="text-left flex flex-col">
-                              <span className="text-rose-700 flex items-center gap-1 text-label-sm font-sans">
-                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                                MÍNIMO
-                              </span>
-                              <span className="text-on-surface font-extrabold text-xs mt-1 bg-rose-50/50 rounded-xl py-1 px-2.5 border border-rose-200/50 w-max shadow-xs">
-                                {fmt(item.absoluteMin)}
-                              </span>
-                            </div>
-
-                            {/* Center (Avg) */}
-                            <div className="text-center flex flex-col items-center">
-                              <span className="text-emerald-700 flex items-center gap-1 justify-center text-label-sm font-sans">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                                PROMEDIO
-                              </span>
-                              <span className="text-on-surface font-extrabold text-xs mt-1 bg-emerald-50/50 rounded-xl py-1 px-2.5 border border-emerald-200/50 w-max shadow-xs">
-                                {fmt(item.avgCompUsd)}
-                              </span>
-                            </div>
-
-                            {/* Right (Max) */}
-                            <div className="text-right flex flex-col items-end">
-                              <span className="text-rose-700 flex items-center gap-1 justify-end text-label-sm font-sans">
-                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
-                                MÁXIMO
-                              </span>
-                              <span className="text-on-surface font-extrabold text-xs mt-1 bg-rose-50/50 rounded-xl py-1 px-2.5 border border-rose-200/50 w-max shadow-xs">
-                                {fmt(item.absoluteMax)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
+            <div className="hidden md:block overflow-x-auto">
+              {vista === 'cadenas' ? (
+                <table className="m3-table m3-table-calor">
+                  <thead className="m3-sticky-header">
+                    <tr>
+                      <th className="m3-dash-col-producto"><Orden campo="nombre" orden={orden} onClick={ordenarPor}>Producto</Orden></th>
+                      <th className="text-right">Tu precio</th>
+                      {cadenasTabla.map(c => (
+                        <th key={c.id} className="text-center">
+                          <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={c.id} tamano="xs" title="" />{nombreCadena(c.id)}</span>
+                        </th>
+                      ))}
+                      <th className="text-right m3-dash-col-sep"><Orden campo="difProm" orden={orden} onClick={ordenarPor}>Frente al promedio</Orden></th>
                     </tr>
-                  );
-                })
+                  </thead>
+                  <tbody>
+                    {filasPagina.map(x => (
+                      <tr key={x.producto.id_interno} onClick={() => abrirFicha(x)} className="cursor-pointer" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') abrirFicha(x); }}>
+                        <td className="m3-dash-col-producto">
+                          <div className="m3-cell-primary m3-cell-clamp" title={x.producto.nombre}>{x.producto.nombre}</div>
+                          <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
+                        </td>
+                        <td className="text-right whitespace-nowrap tabular-nums font-medium">{fmtModo(x.tuPrecio)}</td>
+                        {cadenasTabla.map(c => {
+                          const p = x.porCadena.get(c.id);
+                          if (!p) return <td key={c.id} className="text-center text-on-surface-variant">—</td>;
+                          const dif = x.tuPrecio != null ? (x.tuPrecio / p.priceUsd - 1) * 100 : null;
+                          return (
+                            <td key={c.id} className={`m3-calor-celda ${dif != null ? `m3-calor-${grupoDe(dif).id}` : ''}`}
+                              title={`${p.marca} en ${nombreCadena(c.id)}: ${fmtModo(p.priceUsd)}${x.tuPrecio != null ? ` · tu precio ${fmtModo(x.tuPrecio)}` : ''}`}>
+                              <div className="font-medium tabular-nums">{dif != null ? pct(dif, 0) : '—'}</div>
+                              <div className="m3-calor-precio tabular-nums">{fmtModo(p.priceUsd)}</div>
+                            </td>
+                          );
+                        })}
+                        <td className="text-right whitespace-nowrap m3-dash-col-sep"><Diferencia valor={x.difProm} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="m3-table m3-table-dashboard">
+                  <thead className="m3-sticky-header">
+                    <tr>
+                      <th className="m3-dash-col-producto"><Orden campo="nombre" orden={orden} onClick={ordenarPor}>Producto</Orden></th>
+                      <th className="text-right">Tu precio</th>
+                      <th className="w-[36%]">Rango de la competencia</th>
+                      <th className="text-right">Mínimo</th>
+                      <th className="text-right">Promedio</th>
+                      <th className="text-right">Máximo</th>
+                      <th className="text-right"><Orden campo="difProm" orden={orden} onClick={ordenarPor}>Frente al promedio</Orden></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasPagina.map(x => {
+                      const precios = [...x.porCadena.values()].map(p => p.priceUsd);
+                      const max = precios.length ? Math.max(...precios) : null;
+                      return (
+                        <tr key={x.producto.id_interno} onClick={() => abrirFicha(x)} className="cursor-pointer" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') abrirFicha(x); }}>
+                          <td className="m3-dash-col-producto">
+                            <div className="m3-cell-primary m3-cell-clamp" title={x.producto.nombre}>{x.producto.nombre}</div>
+                            <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
+                          </td>
+                          <td className="text-right whitespace-nowrap tabular-nums font-medium">{fmtModo(x.tuPrecio)}</td>
+                          <td><Rango min={x.minimo} max={max} promedio={x.promedio} tuyo={x.tuPrecio} dif={x.difProm} /></td>
+                          <td className="text-right whitespace-nowrap tabular-nums">{fmtModo(x.minimo)}</td>
+                          <td className="text-right whitespace-nowrap tabular-nums">{fmtModo(x.promedio)}</td>
+                          <td className="text-right whitespace-nowrap tabular-nums">{fmtModo(max)}</td>
+                          <td className="text-right whitespace-nowrap"><Diferencia valor={x.difProm} /></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
 
-      {/* Product detail modal view (Point 8 consistency and 10 requirements) */}
-      {selectedProduct && (
-        <ProductDetailModal
-          producto={selectedProduct.producto}
-          competencia={selectedProduct.competencia || []}
-          currency={currency}
-          bcvRate={bcv.rate}
-          onClose={() => setSelectedProduct(null)}
-          initialPriceMode="full"
-          initialAnalisisMode={analisisMode}
+            <footer className="m3-data-table-footer">
+              <label className="flex items-center gap-2 m3-body-medium text-on-surface-variant">
+                Filas por página
+                <Select value={itemsPorPagina} onChange={e => setItemsPorPagina(Number(e.target.value))} className="m3-rows-select">
+                  {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                </Select>
+              </label>
+              <span className="m3-body-medium text-on-surface-variant sm:ml-auto">
+                {Math.min(filas.length, (paginaActual - 1) * itemsPorPagina + 1)}–{Math.min(filas.length, paginaActual * itemsPorPagina)} de {filas.length}
+              </span>
+              {totalPaginas > 1 && (
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => setPaginaActual(p => Math.max(1, p - 1))} disabled={paginaActual === 1} className="m3-icon-btn" aria-label="Página anterior">
+                    <span className="material-symbols-outlined">chevron_left</span>
+                  </button>
+                  <span className="m3-label-large px-2">Página {paginaActual} de {totalPaginas}</span>
+                  <button type="button" onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))} disabled={paginaActual === totalPaginas} className="m3-icon-btn" aria-label="Página siguiente">
+                    <span className="material-symbols-outlined">chevron_right</span>
+                  </button>
+                </div>
+              )}
+            </footer>
+          </>
+        )}
+      </section>
+
+      {detalle && (
+        <DetalleLista
+          titulo={detalle.titulo}
+          subtitulo={detalle.subtitulo}
+          icono={detalle.icono}
+          filas={detalle.filas}
+          columnas={detalle.columnas}
+          claveFila={x => x.producto.id_interno}
+          onFila={x => abrirFicha(x, detalle)}
+          onVerEnTabla={() => { setFiltroPosicion(detalle.posicion); setDetalle(null); }}
+          onClose={() => setDetalle(null)}
         />
       )}
+
+      {ficha && (
+        <ProductDetailModal
+          producto={ficha.producto}
+          competencia={ficha.competencia}
+          currency={moneda}
+          bcvRate={bcv.rate}
+          initialPriceMode={modoPrecio}
+          initialAnalisisMode={modoAnalisis}
+          onClose={cerrarFicha}
+        />
+      )}
+    </div>
+  );
+}
+
+function Orden({ campo, orden, onClick, children }) {
+  const activo = orden.campo === campo;
+  return (
+    <button type="button" onClick={() => onClick(campo)} className={`m3-sort-btn ${activo ? 'is-active' : ''}`}>
+      {children}
+      <span className="material-symbols-outlined" aria-hidden="true">{activo ? (orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}</span>
+    </button>
+  );
+}
+
+// Rango de la competencia: barra gris del minimo al maximo, raya en el
+// promedio y un punto con tu precio (fuera de la barra si estas por fuera).
+function Rango({ min, max, promedio, tuyo, dif }) {
+  if (min == null || max == null) return <span className="text-on-surface-variant m3-body-small">Sin precios de la competencia</span>;
+  const lo = Math.min(min, tuyo ?? min);
+  const hi = Math.max(max, tuyo ?? max);
+  const ancho = hi - lo || 1;
+  const pos = (v) => `${((v - lo) / ancho) * 100}%`;
+  return (
+    <div className="m3-rango" role="img" aria-label={`Tu precio ${dif != null ? pct(dif) : 'sin dato'} frente al promedio`}>
+      <div className="m3-rango-barra" style={{ left: pos(min), width: `${((max - min) / ancho) * 100}%` }} />
+      {promedio != null && <div className="m3-rango-promedio" style={{ left: pos(promedio) }} />}
+      {tuyo != null && <div className={`m3-rango-tuyo m3-calor-${grupoDe(dif ?? 0).id}`} style={{ left: pos(tuyo) }} />}
     </div>
   );
 }

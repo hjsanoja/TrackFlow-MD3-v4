@@ -13,7 +13,9 @@ import {
 } from 'recharts';
 
 export default function Simulador({ user, userDoc }) {
-  const { productos, productosCompetencia, historicoPrecios, loadingInitial: loading } = useData();
+  const { productos, productosCompetencia, historicoPrecios, loadingInitial: loading, cargarHistorico } = useData();
+  // El historico no se baja al abrir el panel: se pide al entrar aqui.
+  useEffect(() => { cargarHistorico?.(); }, [cargarHistorico]);
   const [dashboardPriceMode, setDashboardPriceMode] = useState('lista');
   const [analisisMode, setAnalisisMode] = useState('empaque'); // 'empaque' or 'unidosis'
   const [selectedProduct, setSelectedProduct] = useState(null);
