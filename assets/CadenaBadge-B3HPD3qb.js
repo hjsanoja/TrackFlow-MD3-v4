@@ -1,1 +1,0 @@
-import{g as r,j as n,e as i}from"./index-D0QE8ORC.js";function d({cadena:a,tamano:s="md",title:o}){const e=r(a);return n.jsx("span",{className:`m3-cadena-badge is-${s}`,style:{backgroundColor:e},title:o??a,"aria-hidden":o===""?"true":void 0,children:i(a)})}export{d as C};
