@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { validarCsv, resolverUnidadNegocio } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
 import FichaProducto, { competidorMasBarato, precioEnlaceUsd } from '../components/FichaProducto';
@@ -73,6 +74,7 @@ function faltantesFicha(p, enlaces) {
 
 // Valor por el que se ordena cada columna.
 const ORDENES = {
+  id: p => p.id_interno || '',
   nombre: p => (p.nombre || '').toLowerCase(),
   linea: p => `${(p.unidad_negocio || '').toLowerCase()} ${(p.market_type || '').toLowerCase()}`,
   laboratorio: p => `${(p.laboratorio || '').toLowerCase()} ${(p.categoria || '').toLowerCase()}`,
@@ -82,6 +84,7 @@ const ORDENES = {
 };
 
 export default function Productos() {
+  const navigate = useNavigate();
   const {
     productos,
     productosCompetencia: competencia,
@@ -191,6 +194,10 @@ export default function Productos() {
     if (!orden.campo) return lista;
     const valor = ORDENES[orden.campo];
     const signo = orden.dir === 'asc' ? 1 : -1;
+    // El ID se compara como numero: '99' va antes que '140216'.
+    if (orden.campo === 'id') {
+      return [...lista].sort((a, b) => signo * String(a.id_interno || '').localeCompare(String(b.id_interno || ''), undefined, { numeric: true }));
+    }
     return [...lista].sort((a, b) => {
       const va = valor(a, { urlsPorProducto });
       const vb = valor(b, { urlsPorProducto });
@@ -871,7 +878,7 @@ export default function Productos() {
           </div>
         ) : (
           <>
-          {/* Celular: tarjetas. Una tabla de 8 columnas no cabe en 400 px. */}
+          {/* Celular: tarjetas. Una tabla de 9 columnas no cabe en 400 px. */}
           <ul className="md:hidden divide-y divide-outline-variant" aria-label="Productos">
             {productosPaginados.map(p => {
               const enlacesProducto = urlsPorProducto.get(p.id_interno) || [];
@@ -924,10 +931,11 @@ export default function Productos() {
             <table className="m3-table m3-table-productos">
               <colgroup>
                 <col className="w-12" />
+                <col className="w-[84px]" />
                 <col />
-                <col className="w-[17%]" />
-                <col className="w-[12%]" />
-                <col className="w-[15%]" />
+                <col className="w-[128px]" />
+                <col className="w-[108px]" />
+                <col className="w-[124px]" />
                 <col className="w-[112px]" />
                 <col className="w-[88px]" />
                 <col className="w-[104px]" />
@@ -941,6 +949,7 @@ export default function Productos() {
                       title={`Seleccionar los ${filtrados.length} productos de esta lista`}
                       aria-label="Seleccionar todos los productos de esta lista" className="m3-checkbox" />
                   </th>
+                  {encabezado('id', 'ID')}
                   {encabezado('nombre', 'Producto')}
                   <th>Presentación</th>
                   {encabezado('linea', 'Línea')}
@@ -967,6 +976,7 @@ export default function Productos() {
                           disabled={!!procesandoSel}
                           aria-label={`Seleccionar ${p.nombre}`} className="m3-checkbox" />
                       </td>
+                      <td><span className="m3-cell-primary font-mono tabular-nums">{p.id_interno}</span></td>
                       <td>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <button type="button" onClick={() => setFichaId(p.id)} className="m3-cell-link min-w-0" title="Abrir la ficha del producto">
@@ -979,9 +989,8 @@ export default function Productos() {
                             </span>
                           )}
                         </div>
-                        <div className="m3-cell-secondary" title={`${p.id_interno} · ${p.principio_activo || 'sin molécula'}`}>
-                          <span className="font-mono">{p.id_interno}</span>
-                          {p.principio_activo ? <> · {p.principio_activo}</> : <> · <span className="italic">sin molécula</span></>}
+                        <div className="m3-cell-secondary" title={p.principio_activo || 'sin molécula'}>
+                          {p.principio_activo || <span className="italic">sin molécula</span>}
                         </div>
                       </td>
                       <td>
@@ -1090,6 +1099,7 @@ export default function Productos() {
             esCaido={enlaceCaido}
             onAnalisis={() => { setFichaId(null); setAnalisis({ producto, competencia: enlaces }); }}
             onAlternarActivo={() => handleToggleActivo(producto)}
+            onVincular={() => navigate(`/competencia?producto=${encodeURIComponent(producto.id_interno)}&vincular=1`)}
           />
         );
       })()}

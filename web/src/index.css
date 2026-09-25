@@ -1106,6 +1106,43 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 [data-theme="dark"] .m3-banner > .material-symbols-outlined,
 .dark .m3-banner > .material-symbols-outlined { color: #fbbf24; }
 
+/* Aviso informativo (no es un problema): el robot trabajando. */
+.m3-banner-info {
+  background-color: color-mix(in srgb, var(--md-sys-color-primary) 10%, var(--md-sys-color-surface-container-lowest));
+}
+.m3-banner.m3-banner-info > .material-symbols-outlined,
+[data-theme="dark"] .m3-banner.m3-banner-info > .material-symbols-outlined,
+.dark .m3-banner.m3-banner-info > .material-symbols-outlined { color: var(--md-sys-color-primary); }
+/* Barra de avance en linea (dentro de un aviso). */
+.m3-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent);
+  overflow: hidden;
+}
+.m3-progress > div {
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--md-sys-color-primary);
+  transition: width 600ms cubic-bezier(0.2, 0, 0, 1);
+}
+/* Enlaces del aviso "Para revisar", separados por puntos. */
+.m3-banner-links { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+
+/* Cobertura por cadena: primera columna fija al desplazar a la derecha. */
+.m3-table-cobertura { min-width: 640px; }
+.m3-table-cobertura td { height: 56px; padding-top: 6px; padding-bottom: 6px; vertical-align: middle; }
+.m3-table-cobertura th { text-transform: none; letter-spacing: 0.1px; font-size: 0.8125rem; }
+.m3-cobertura-producto {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 220px;
+  max-width: 280px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+}
+.m3-sticky-header .m3-cobertura-producto { z-index: 11; background-color: var(--md-sys-color-surface-container-low); }
+
 /* Menu desplegable simple sobre <details>. */
 .m3-menu { position: relative; }
 .m3-menu > summary { list-style: none; cursor: pointer; }

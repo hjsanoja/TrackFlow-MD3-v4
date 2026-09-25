@@ -41,7 +41,7 @@ function Dato({ etiqueta, valor }) {
   );
 }
 
-export default function FichaProducto({ producto: p, enlaces = [], presentacion, onClose, onEditar, onDuplicar, onAnalisis, onAlternarActivo, esCaido = () => false }) {
+export default function FichaProducto({ producto: p, enlaces = [], presentacion, onClose, onEditar, onDuplicar, onAnalisis, onAlternarActivo, onVincular, esCaido = () => false }) {
   // Esc cierra, como cualquier dialogo.
   useEffect(() => {
     const alPulsar = (e) => { if (e.key === 'Escape') onClose(); };
@@ -122,13 +122,21 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
           </section>
 
           <section aria-labelledby="ficha-enlaces">
-            <h3 id="ficha-enlaces" className="m3-title-small text-on-surface-variant mb-2">
-              Enlaces que vigila el scraper ({enlaces.length})
-            </h3>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 id="ficha-enlaces" className="m3-title-small text-on-surface-variant">
+                Enlaces que vigila el scraper ({enlaces.length})
+              </h3>
+              {onVincular && (
+                <button type="button" onClick={onVincular} className="m3-btn-text" title="Vincular una URL de este producto o de un competidor">
+                  <span className="material-symbols-outlined">add_link</span>
+                  Vincular enlace
+                </button>
+              )}
+            </div>
             {ordenados.length === 0 ? (
               <div className="m3-banner">
                 <span className="material-symbols-outlined" aria-hidden="true">link_off</span>
-                <span className="m3-body-medium">Sin enlaces: no hay precios de la competencia para este producto. Agrégalos al editarlo o desde Competencia.</span>
+                <span className="m3-body-medium">Sin enlaces: no hay precios de la competencia para este producto. Usa "Vincular enlace".</span>
               </div>
             ) : (
               <ul className="space-y-1">
