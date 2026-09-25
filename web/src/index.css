@@ -792,9 +792,7 @@ body {
 
 .m3-data-table-toolbar {
   position: sticky;
-  /* Debajo de la barra de la app y, si la pantalla la tiene, de la barra de
-     filtros fija (FiltrosFijos publica su alto). */
-  top: calc(var(--alto-cabecera, 0px) + var(--alto-filtros, 0px));
+  top: 0;
   z-index: 20;
   padding: 16px;
   background-color: var(--md-sys-color-surface-container-lowest);
@@ -1808,13 +1806,6 @@ td.m3-calor-celda {
 .m3-stat-compact .m3-stat-hint { font-size: 0.75rem; line-height: 1.35; }
 .m3-stat-compact .m3-stat-icon { width: 2.25rem; height: 2.25rem; }
 
-/* Barra de filtros fija bajo la barra de la app (components/FiltrosFijos). */
-.m3-filtros-fijos {
-  position: sticky;
-  top: calc(var(--alto-cabecera, 0px) + 8px);
-  z-index: 19;
-  box-shadow: var(--md-sys-elevation-1);
-}
 
 /* ---------------------------------------------------------------------------
    MAPA DE CALOR: espectro por producto
@@ -1881,3 +1872,39 @@ td.m3-calor-celda {
 /* Titulo de una tabla que se va con el scroll; lo fijo es solo el buscador. */
 .m3-data-table-titulo { padding: 16px 16px 0; background-color: var(--md-sys-color-surface-container-lowest); }
 .m3-data-table-titulo + .m3-data-table-toolbar { padding-top: 12px; }
+
+/* Boton (i) de los graficos y su panel de ayuda (components/InfoGrafico). */
+.m3-info-grafico { position: relative; display: inline-flex; vertical-align: middle; }
+.m3-info-grafico-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9999px;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1), color 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.m3-info-grafico-btn .material-symbols-outlined { font-size: 18px; }
+.m3-info-grafico-btn:hover, .m3-info-grafico-btn[aria-expanded="true"] {
+  background-color: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+  color: var(--md-sys-color-primary);
+}
+.m3-info-grafico-btn:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 1px; }
+.m3-info-grafico-panel {
+  position: absolute; top: calc(100% + 6px); left: -8px; z-index: 40;
+  width: min(22rem, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px;
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border-radius: 16px;
+  box-shadow: var(--md-sys-elevation-3, 0 4px 12px rgb(0 0 0 / 0.18));
+  font-size: 0.8125rem; line-height: 1.5; font-weight: 400; letter-spacing: normal; text-transform: none;
+  text-align: left; white-space: normal;
+}
+.m3-info-grafico-panel.is-derecha { left: auto; right: -8px; }
+.m3-info-grafico-panel p { margin: 0; color: var(--md-sys-color-on-surface-variant); }
+.m3-info-grafico-formula { display: flex; flex-direction: column; gap: 4px; }
+.m3-info-grafico-formula code {
+  display: block; padding: 6px 10px; border-radius: 8px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; line-height: 1.45;
+  white-space: normal; color: var(--md-sys-color-on-surface);
+}

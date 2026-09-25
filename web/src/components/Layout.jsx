@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -34,18 +34,6 @@ export default function Layout({ user, userDoc, children }) {
     }
     return allowedMenuIds.includes(item.to);
   };
-
-  // Alto de la barra superior, para que lo fijo de cada pantalla quede debajo.
-  const cabeceraRef = useRef(null);
-  useLayoutEffect(() => {
-    const el = cabeceraRef.current;
-    if (!el) return undefined;
-    const publicar = () => document.documentElement.style.setProperty('--alto-cabecera', `${el.offsetHeight}px`);
-    publicar();
-    const obs = new ResizeObserver(publicar);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -270,11 +258,9 @@ export default function Layout({ user, userDoc, children }) {
       </aside>
 
       {/* Main content */}
-      {/* overflow-x-clip y no auto: auto convertia al main en contenedor de
-          desplazamiento y lo "sticky" de adentro dejaba de quedarse fijo. */}
-      <main className="flex-1 min-w-0 overflow-x-clip min-h-screen flex flex-col">
+      <main className="flex-1 overflow-x-auto min-h-screen flex flex-col">
         {/* Top Header Bar */}
-        <header ref={cabeceraRef} className="px-6 py-2.5 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/60 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20 shadow-xs">
+        <header className="px-6 py-2.5 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/60 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20 shadow-xs">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2.5 px-3 py-1 bg-surface-container-low rounded-full border border-outline-variant/40">
               <span className="m3-live-indicator"></span>
