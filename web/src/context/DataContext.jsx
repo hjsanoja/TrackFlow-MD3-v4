@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
 import { registrarColoresCadenas } from '../utils/brandColors';
+import { leerCache, guardarCache } from '../utils/cacheDatos';
 
 const DataContext = createContext(null);
 
@@ -39,12 +40,6 @@ const DEFAULT_CADENAS = [
   { id: 'C006', nombre: 'FarmaGo', website: 'https://www.farmago.com', modulo_scraper: 'farmago', activo: true }
 ];
 
-const DEFAULT_HISTORICO = [
-  { id: 'H001', id_producto_propio: 'P001', cadena: 'Farmatodo', marca: 'La Sante', precio_full_bs: 45.0, precio_desc_bs: 40.5, run_id: 'run_1', scraped_at: new Date(Date.now() - 3600000 * 2) },
-  { id: 'H002', id_producto_propio: 'P001', cadena: 'Farmatodo', marca: 'Calox', precio_full_bs: 42.0, precio_desc_bs: 38.0, run_id: 'run_1', scraped_at: new Date(Date.now() - 3600000 * 2) },
-  { id: 'H003', id_producto_propio: 'P002', cadena: 'Farmatodo', marca: 'La Sante', precio_full_bs: 54.0, precio_desc_bs: 50.0, run_id: 'run_1', scraped_at: new Date(Date.now() - 3600000 * 2) }
-];
-
 const DEFAULT_RATES = [
   { dayKey: '01/07/2026', fecha: '01 jul', valor: 712.40, source: 'oficial', rawDate: new Date('2026-07-01') },
   { dayKey: '05/07/2026', fecha: '05 jul', valor: 716.20, source: 'oficial', rawDate: new Date('2026-07-05') },
@@ -58,14 +53,6 @@ const DEFAULT_RATES = [
   { dayKey: '29/07/2026', fecha: '29 jul', valor: 742.80, source: 'auto', rawDate: new Date('2026-07-29') },
   { dayKey: '30/07/2026', fecha: '30 jul', valor: 744.23, source: 'oficial', rawDate: new Date('2026-07-30') },
 ];
-
-const DEFAULT_RUN = {
-  started_at: new Date(),
-  ok: 35,
-  errores: 0,
-  total: 35,
-  status: 'exitosa'
-};
 
 const DEFAULT_USUARIOS = [
   { id: 'admin_at_trackflow_com', email: 'admin@trackflow.com', nombre: 'Hernando Sanoja', rol: 'administrador', activo: true },
@@ -277,26 +264,155 @@ async function fetchDimProductos() {
   }
 }
 
+// Enlaces con su ultimo precio valido (v_ultimo_precio_valido) mezclado.
+function unirPrecios(pcData, validPricesData) {
+  const validMapByUrl = new Map();
+  const validMapById = new Map();
+  (Array.isArray(validPricesData) ? validPricesData : []).forEach(v => {
+    if (v.url) validMapByUrl.set(String(v.url).replace(/\?.*$/, '').trim().toLowerCase(), v);
+    if (v.id_interno) validMapById.set(String(v.id_interno).trim(), v);
+  });
+  return (Array.isArray(pcData) ? pcData : []).map(p => {
+    const urlNorm = String(p.url || '').replace(/\?.*$/, '').trim().toLowerCase();
+    const vm = validMapByUrl.get(urlNorm) || validMapById.get(String(p.id).trim());
+    if (!vm) return { ...p, id: p.id || '', id_producto_propio: p.id_producto_propio || '' };
+    return {
+      ...p,
+      id: p.id || '',
+      id_producto_propio: p.id_producto_propio || vm.id_interno || '',
+      cadena: p.cadena || vm.cadena_id,
+      ultimo_precio_full_bs: vm.precio_full_bs ?? p.ultimo_precio_full_bs,
+      ultimo_precio_desc_bs: vm.precio_desc_bs ?? p.ultimo_precio_desc_bs,
+      ultimo_precio_full_usd: (vm.precio_full_bs && vm.tasa_bcv)
+        ? Number((vm.precio_full_bs / vm.tasa_bcv).toFixed(2))
+        : p.ultimo_precio_full_usd,
+      ultimo_precio_desc_usd: (vm.precio_desc_bs && vm.tasa_bcv)
+        ? Number((vm.precio_desc_bs / vm.tasa_bcv).toFixed(2))
+        : p.ultimo_precio_desc_usd,
+      ultimo_nombre: limpiarNombreCapturado(vm.producto_nombre || p.ultimo_nombre),
+      ultimo_scrape: vm.fecha_captura || p.ultimo_scrape,
+      tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
+      tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,
+      precio_efectivo_unidad_usd: vm.precio_efectivo_unidad_usd,
+      laboratorio: vm.laboratorio_nombre || p.laboratorio,
+      es_propio: vm.es_propio,
+      publicacion_id: vm.publicacion_id
+    };
+  });
+}
+
+function ordenarProductos(pData) {
+  return (Array.isArray(pData) ? pData : []).map(p => ({
+    ...p,
+    id: p.id || p.id_interno || p.ID || '',
+    id_interno: p.id_interno || p.id || p.ID || ''
+  })).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
+}
+
+function ordenarCadenas(cData) {
+  return [...(Array.isArray(cData) ? cData : [])].map(c => ({
+    id: c.id,
+    nombre: c.nombre || c.id,
+    website: c.website || '',
+    color_hex: c.color_hex || '',
+    sigla: c.sigla || '',
+    modulo_scraper: c.modulo_scraper || c.scraper_modulo || '',
+    activo: c.activo !== false
+  })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+}
+
+// Una tasa por dia (la ultima del dia), en orden de fecha.
+function procesarTasas(bData) {
+  if (!Array.isArray(bData) || bData.length === 0) return [];
+  const porDia = {};
+  for (const d of bData) {
+    const fechaStr = d.fecha || d.updated_at;
+    const rawDate = fechaStr ? new Date(fechaStr) : new Date();
+    const dayKey = rawDate.toLocaleDateString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const tasa = {
+      dayKey,
+      fecha: rawDate.toLocaleDateString('es-VE', { month: 'short', day: 'numeric' }) || '—',
+      valor: Number(d.tasa ?? d.value ?? d.valor ?? 0),
+      source: d.fuente || d.source || 'oficial',
+      rawDate,
+    };
+    if (!porDia[dayKey] || tasa.rawDate > porDia[dayKey].rawDate) porDia[dayKey] = tasa;
+  }
+  return Object.values(porDia).sort((a, b) => a.rawDate - b.rawDate);
+}
+
+// La ultima corrida del robot: scrape_runs guarda UNA fila por cadena, asi
+// que se juntan las de la misma corrida (mismo github_run_id o, si falta,
+// las que empezaron en las 3 horas anteriores a la mas reciente).
+export function resumirCorrida(filas) {
+  const orden = (Array.isArray(filas) ? filas : [])
+    .filter(r => r.started_at)
+    .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+  if (orden.length === 0) return null;
+  const primera = orden[0];
+  const inicio = new Date(primera.started_at).getTime();
+  const misma = (r) => (primera.github_run_id && r.github_run_id
+    ? r.github_run_id === primera.github_run_id
+    : new Date(r.started_at).getTime() >= inicio - 3 * 3600 * 1000);
+  const porCadena = new Map();
+  for (const r of orden) {
+    if (!misma(r) || porCadena.has(r.cadena_id)) continue;
+    porCadena.set(r.cadena_id, r);
+  }
+  const cadenas = [...porCadena.values()];
+  const suma = (k) => cadenas.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+  const fines = cadenas.map(r => r.finished_at).filter(Boolean).map(f => new Date(f).getTime());
+  return {
+    started_at: new Date(Math.min(...cadenas.map(r => new Date(r.started_at).getTime()))),
+    finished_at: fines.length === cadenas.length && fines.length ? new Date(Math.max(...fines)) : null,
+    total: suma('total_urls'),
+    exitosos: suma('exitosos'),
+    fallidos: suma('fallidos'),
+    en_proceso: cadenas.some(r => r.estado === 'en_proceso'),
+    tipo_trigger: primera.tipo_trigger,
+    cadenas,
+  };
+}
+
+// Las fechas vuelven del almacenamiento local como texto.
+function revivirCorrida(c) {
+  if (!c) return null;
+  return { ...c, started_at: c.started_at ? new Date(c.started_at) : null, finished_at: c.finished_at ? new Date(c.finished_at) : null };
+}
+function revivirTasas(t) {
+  return (Array.isArray(t) ? t : []).map(r => ({ ...r, rawDate: new Date(r.rawDate) }));
+}
+
 export function DataProvider({ children, user }) {
-  const [productos, setProductos] = useState([]);
-  const [productosCompetencia, setProductosCompetencia] = useState([]);
+  // La copia local (utils/cacheDatos) se lee ANTES del primer pintado: si hay
+  // una, el panel aparece al instante y los datos frescos llegan despues.
+  const [cache] = useState(() => leerCache(user?.email));
+
+  const [productos, setProductos] = useState(() => cache?.productos || []);
+  const [productosCompetencia, setProductosCompetencia] = useState(() => cache?.productosCompetencia || []);
   const [ultimosPreciosValidos, setUltimosPreciosValidos] = useState([]);
   // Precio actual y de referencia a 1, 7 y 15 días, calculado por Postgres.
-  const [variaciones, setVariaciones] = useState([]);
-  const [cadenas, setCadenas] = useState([]);
+  const [variaciones, setVariaciones] = useState(() => cache?.variaciones || []);
+  const [cadenas, setCadenas] = useState(() => cache?.cadenas || []);
+  // El historico completo NO se baja al abrir (eran ~90 peticiones): lo pide
+  // quien lo necesita con cargarHistorico().
   const [historicoPrecios, setHistoricoPrecios] = useState([]);
-  const [bcvRates, setBcvRates] = useState([]);
-  const [ultimaCorrida, setUltimaCorrida] = useState(null);
-  const [usuarios, setUsuarios] = useState([]);
+  const [historicoEstado, setHistoricoEstado] = useState('sin_cargar'); // sin_cargar | cargando | listo
+  const [bcvRates, setBcvRates] = useState(() => revivirTasas(cache?.bcvRates));
+  const [ultimaCorrida, setUltimaCorrida] = useState(() => revivirCorrida(cache?.ultimaCorrida));
+  const [usuarios, setUsuarios] = useState(() => cache?.usuarios || []);
   // Los colores de las cadenas se registran durante el render (no en un
   // efecto) para que los graficos hijos ya los encuentren al pintarse.
   useMemo(() => registrarColoresCadenas(cadenas), [cadenas]);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingInitial, setLoadingInitial] = useState(!cache);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoadedOnce, setIsLoadedOnce] = useState(false);
-
-  const CACHE_KEY = 'trackflow_data_cache_v3';
-  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+  const [isLoadedOnce, setIsLoadedOnce] = useState(Boolean(cache));
+  // En una ref y no en el estado: si cargarTodo dependiera de isLoadedOnce,
+  // cambiaria al terminar la primera carga y el efecto la lanzaria OTRA vez
+  // (asi pasaba: todo se descargaba dos veces al abrir).
+  const cargadoRef = useRef(Boolean(cache));
+  const historicoRef = useRef(null);
+  const email = user?.email || '';
 
   // Si la app está en blanco, no inyectar mock data por defecto
   const applyDefaultSeed = useCallback(() => {
@@ -312,275 +428,123 @@ export function DataProvider({ children, user }) {
     setIsRefreshing(false);
   }, []);
 
-  // Intentar cargar desde caché de sesión para agilizar el arranque
-  useEffect(() => {
-    try {
-      const cachedStr = sessionStorage.getItem(CACHE_KEY);
-      if (cachedStr) {
-        const cached = JSON.parse(cachedStr);
-        if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-          if (cached.productos?.length) setProductos(cached.productos);
-          if (cached.productosCompetencia?.length) setProductosCompetencia(cached.productosCompetencia);
-          if (cached.cadenas?.length) setCadenas(cached.cadenas);
-          if (cached.historicoPrecios?.length) setHistoricoPrecios(cached.historicoPrecios);
-          if (cached.bcvRates?.length) setBcvRates(cached.bcvRates);
-          if (cached.ultimaCorrida) setUltimaCorrida(cached.ultimaCorrida);
-          if (cached.usuarios?.length) setUsuarios(cached.usuarios);
-          setIsLoadedOnce(true);
-          setLoadingInitial(false);
-        }
-      }
-    } catch (e) {
-      console.warn('Error leyendo cache:', e);
-    }
-  }, []);
-
-  const saveCache = useCallback((dataToCache) => {
-    try {
-      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        ...dataToCache
-      }));
-    } catch (e) {
-      console.warn('No se pudo guardar en sessionStorage cache:', e);
-    }
-  }, []);
-
   const cargarTodo = useCallback(async (showSilently = false) => {
-    if (!showSilently && !isLoadedOnce) {
+    if (!showSilently && !cargadoRef.current) {
       setLoadingInitial(true);
     } else {
       setIsRefreshing(true);
     }
 
-    const hasSupabase = isSupabaseActive();
-
-    if (hasSupabase) {
-      try {
-        const [
-          pData,
-          pcData,
-          validPricesData,
-          cData,
-          uData,
-          variacionData,
-          { data: rData },
-          { data: bData }
-        ] = await Promise.all([
-          fetchDimProductos(),
-          fetchAllSupabaseRows('productos_competencia'),
-          fetchAllSupabaseRows('v_ultimo_precio_valido'),
-          fetchAllSupabaseRows('dim_cadenas').then(res => (res && res.length > 0) ? res : fetchAllSupabaseRows('cadenas')),
-          fetchAllSupabaseRows('usuarios'),
-          // ~506 filas con el precio actual y los de hace 1, 7 y 15 días ya
-          // resueltos por Postgres. Sustituye la descarga del histórico
-          // completo, que eran ~18.000 filas en ~18 peticiones encadenadas
-          // antes de poder pintar nada.
-          fetchAllSupabaseRows('v_variacion'),
-          supabase.from('scrape_runs').select('*').order('started_at', { ascending: false }).limit(1),
-          supabase.from('dim_tasa_bcv').select('*').order('fecha', { ascending: true })
-            .then(res => (res.data && res.data.length > 0) ? res : supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true }))
-        ]);
-
-        if (Array.isArray(pData)) {
-          const prods = pData.map(p => ({
-            ...p,
-            id: p.id || p.id_interno || p.ID || '',
-            id_interno: p.id_interno || p.id || p.ID || ''
-          })).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
-          setProductos(prods);
-
-          // Mapa rápido O(1) de precios vigentes validados desde la vista SQL analítica
-          const validMapByUrl = new Map();
-          const validMapById = new Map();
-          (Array.isArray(validPricesData) ? validPricesData : []).forEach(v => {
-            if (v.url) {
-              const norm = String(v.url).replace(/\?.*$/, '').trim().toLowerCase();
-              validMapByUrl.set(norm, v);
-            }
-            if (v.id_interno) {
-              validMapById.set(String(v.id_interno).trim(), v);
-            }
-          });
-
-          const pc = (Array.isArray(pcData) ? pcData : []).map(p => {
-            const urlNorm = String(p.url || '').replace(/\?.*$/, '').trim().toLowerCase();
-            const vm = validMapByUrl.get(urlNorm) || validMapById.get(String(p.id).trim());
-
-            if (vm) {
-              return {
-                ...p,
-                id: p.id || '',
-                id_producto_propio: p.id_producto_propio || vm.id_interno || '',
-                cadena: p.cadena || vm.cadena_id,
-                ultimo_precio_full_bs: vm.precio_full_bs ?? p.ultimo_precio_full_bs,
-                ultimo_precio_desc_bs: vm.precio_desc_bs ?? p.ultimo_precio_desc_bs,
-                ultimo_precio_full_usd: (vm.precio_full_bs && vm.tasa_bcv)
-                  ? Number((vm.precio_full_bs / vm.tasa_bcv).toFixed(2))
-                  : p.ultimo_precio_full_usd,
-                ultimo_precio_desc_usd: (vm.precio_desc_bs && vm.tasa_bcv)
-                  ? Number((vm.precio_desc_bs / vm.tasa_bcv).toFixed(2))
-                  : p.ultimo_precio_desc_usd,
-                ultimo_nombre: limpiarNombreCapturado(vm.producto_nombre || p.ultimo_nombre),
-                ultimo_scrape: vm.fecha_captura || p.ultimo_scrape,
-                tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
-                tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,
-                precio_efectivo_unidad_usd: vm.precio_efectivo_unidad_usd,
-                laboratorio: vm.laboratorio_nombre || p.laboratorio,
-                es_propio: vm.es_propio,
-                publicacion_id: vm.publicacion_id
-              };
-            }
-
-            return {
-              ...p,
-              id: p.id || '',
-              id_producto_propio: p.id_producto_propio || ''
-            };
-          });
-          setProductosCompetencia(pc);
-          setUltimosPreciosValidos(Array.isArray(validPricesData) ? validPricesData : []);
-          setVariaciones(Array.isArray(variacionData) ? variacionData : []);
-
-          // El histórico completo solo lo necesitan los gráficos de evolución,
-          // así que se carga DESPUÉS del primer pintado y sin bloquearlo.
-          fetchHistorico()
-            .then(filas => {
-              setHistoricoPrecios(
-                (filas || []).map(d => ({
-                  ...d,
-                  scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
-                }))
-              );
-            })
-            .catch(e => console.warn('Aviso cargando histórico en segundo plano:', e?.message || String(e)));
-
-          const cSorted = [...(Array.isArray(cData) ? cData : [])].map(c => ({
-            id: c.id,
-            nombre: c.nombre || c.id,
-            website: c.website || '',
-            color_hex: c.color_hex || '',
-            sigla: c.sigla || '',
-            modulo_scraper: c.modulo_scraper || c.scraper_modulo || '',
-            activo: c.activo !== false
-          })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-          setCadenas(cSorted);
-
-          if (rData && rData.length > 0) {
-            setUltimaCorrida({
-              ...rData[0],
-              started_at: rData[0].started_at ? new Date(rData[0].started_at) : null
-            });
-          } else {
-            setUltimaCorrida(null);
-          }
-
-          if (bData && bData.length > 0) {
-            const rawRates = bData.map(d => {
-              const fechaStr = d.fecha || d.updated_at;
-              const dateObj = fechaStr ? new Date(fechaStr) : new Date();
-              const valor = Number(d.tasa ?? d.value ?? d.valor ?? 0);
-              return {
-                dayKey: dateObj.toLocaleDateString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit' }),
-                fecha: dateObj.toLocaleDateString('es-VE', { month: 'short', day: 'numeric' }) || '—',
-                valor,
-                source: d.fuente || d.source || 'oficial',
-                rawDate: dateObj
-              };
-            });
-
-            const ratesByDay = {};
-            rawRates.forEach(rate => {
-              const existing = ratesByDay[rate.dayKey];
-              if (!existing || rate.rawDate > existing.rawDate) {
-                ratesByDay[rate.dayKey] = rate;
-              }
-            });
-
-            const uniqueDaysRates = Object.values(ratesByDay)
-              .sort((a, b) => a.rawDate - b.rawDate);
-
-            setBcvRates(uniqueDaysRates.map(({ dayKey, fecha, valor, source, rawDate }) => ({ dayKey, fecha, valor, source, rawDate })));
-          } else {
-            setBcvRates(DEFAULT_RATES);
-          }
-
-          const uSorted = [...(Array.isArray(uData) ? uData : [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-          setUsuarios(uSorted);
-
-          saveCache({
-            productos: prods,
-            productosCompetencia: pc,
-            cadenas: cSorted,
-            // El histórico no entra al caché: pesa mucho y se recarga en
-            // segundo plano en cada arranque.
-            historicoPrecios: [],
-            bcvRates: bData || [],
-            ultimaCorrida: rData?.[0] || null,
-            usuarios: uSorted
-          });
-
-          setIsLoadedOnce(true);
-          setLoadingInitial(false);
-          setIsRefreshing(false);
-          return;
-        } else {
-          console.warn('[Supabase] No se encontraron registros de productos en Supabase');
-          setProductos([]);
-          setProductosCompetencia([]);
-          setUltimosPreciosValidos([]);
-          setHistoricoPrecios([]);
-          setIsLoadedOnce(true);
-          setLoadingInitial(false);
-          setIsRefreshing(false);
-          saveCache({
-            productos: [],
-            productosCompetencia: [],
-            cadenas: [],
-            historicoPrecios: [],
-            bcvRates: [],
-            ultimaCorrida: null,
-            usuarios: []
-          });
-          return;
-        }
-      } catch (sbErr) {
-        console.warn('Supabase retornó error o estado vacío:', sbErr);
-        // Si Supabase está configurado pero falló, no resucitar mock data automáticamente si el usuario lo vació
-        if (hasSupabase) {
-          setProductos([]);
-          setProductosCompetencia([]);
-          setLoadingInitial(false);
-          setIsRefreshing(false);
-          setIsLoadedOnce(true);
-          return;
-        }
-      }
+    if (!isSupabaseActive()) {
+      // Sin Supabase configurado no hay de dónde leer: estado vacío y listo.
+      applyDefaultSeed();
+      return;
     }
 
-    // Sin Supabase configurado no hay de dónde leer: estado vacío y listo.
-    // Antes aquí había un respaldo a Firestore, pero la migración a Supabase
-    // lo dejó apuntando a un proyecto que ya no existe.
-    applyDefaultSeed();
-    setLoadingInitial(false);
-    setIsRefreshing(false);
-  }, [isLoadedOnce, applyDefaultSeed]);
+    try {
+      const [
+        pData,
+        pcData,
+        validPricesData,
+        cData,
+        uData,
+        variacionData,
+        { data: rData },
+        { data: bData }
+      ] = await Promise.all([
+        fetchDimProductos(),
+        fetchAllSupabaseRows('productos_competencia'),
+        fetchAllSupabaseRows('v_ultimo_precio_valido'),
+        fetchAllSupabaseRows('dim_cadenas').then(res => (res && res.length > 0) ? res : fetchAllSupabaseRows('cadenas')),
+        fetchAllSupabaseRows('usuarios'),
+        // ~506 filas con el precio actual y los de hace 1, 7 y 15 días ya
+        // resueltos por Postgres (fase 11).
+        fetchAllSupabaseRows('v_variacion'),
+        // Una fila por cadena y corrida: con 60 alcanza para la ultima.
+        supabase.from('scrape_runs').select('*').order('started_at', { ascending: false }).limit(60),
+        supabase.from('dim_tasa_bcv').select('*').order('fecha', { ascending: true })
+          .then(res => (res.data && res.data.length > 0) ? res : supabase.from('bcv_rates').select('*').order('updated_at', { ascending: true }))
+      ]);
 
+      const prods = ordenarProductos(pData);
+      const pc = unirPrecios(pcData, validPricesData);
+      const cSorted = ordenarCadenas(cData);
+      const tasas = procesarTasas(bData);
+      const corrida = resumirCorrida(rData);
+      const uSorted = [...(Array.isArray(uData) ? uData : [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+      const vars = Array.isArray(variacionData) ? variacionData : [];
+
+      setProductos(prods);
+      setProductosCompetencia(pc);
+      setUltimosPreciosValidos(Array.isArray(validPricesData) ? validPricesData : []);
+      setVariaciones(vars);
+      setCadenas(cSorted);
+      setUltimaCorrida(corrida);
+      setBcvRates(tasas.length ? tasas : DEFAULT_RATES);
+      setUsuarios(uSorted);
+
+      guardarCache(email, {
+        productos: prods,
+        productosCompetencia: pc,
+        variaciones: vars,
+        cadenas: cSorted,
+        bcvRates: tasas,
+        ultimaCorrida: corrida,
+        usuarios: uSorted,
+      });
+
+      // Si alguien ya pidio el historico, se refresca tambien.
+      if (historicoRef.current) {
+        historicoRef.current = null;
+        cargarHistoricoRef.current?.();
+      }
+    } catch (sbErr) {
+      console.warn('Supabase retornó error o estado vacío:', sbErr);
+      // Con una copia local a la vista, mejor dejarla que vaciar la pantalla.
+      if (!cargadoRef.current) {
+        setProductos([]);
+        setProductosCompetencia([]);
+      }
+    } finally {
+      cargadoRef.current = true;
+      setIsLoadedOnce(true);
+      setLoadingInitial(false);
+      setIsRefreshing(false);
+    }
+  }, [applyDefaultSeed, email]);
+
+  // Historico de precios (180 dias) bajo demanda: la ficha del producto y
+  // algunas pantallas de Experimental. Una sola descarga aunque lo pidan varias.
+  const cargarHistorico = useCallback(() => {
+    if (historicoRef.current) return historicoRef.current;
+    setHistoricoEstado('cargando');
+    historicoRef.current = fetchHistorico()
+      .then(filas => {
+        setHistoricoPrecios((filas || []).map(d => ({ ...d, scraped_at: d.scraped_at ? new Date(d.scraped_at) : null })));
+        setHistoricoEstado('listo');
+      })
+      .catch(e => {
+        console.warn('Aviso cargando histórico:', e?.message || String(e));
+        historicoRef.current = null;
+        setHistoricoEstado('sin_cargar');
+      });
+    return historicoRef.current;
+  }, []);
+  const cargarHistoricoRef = useRef(cargarHistorico);
+  cargarHistoricoRef.current = cargarHistorico;
+
+  // Una sola carga al entrar (con copia local, en segundo plano).
   useEffect(() => {
-    cargarTodo(false);
-  }, [cargarTodo]);
+    cargarTodo(Boolean(cache));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refreshProductos = useCallback(async () => {
     try {
       if (isSupabaseActive()) {
         const data = await fetchDimProductos();
         if (Array.isArray(data)) {
-          const prods = data.map(p => ({
-            ...p,
-            id: p.id || p.id_interno || p.ID || '',
-            id_interno: p.id_interno || p.id || p.ID || ''
-          })).sort((a, b) => (a.id_interno || a.id || '').localeCompare(b.id_interno || b.id || ''));
-          setProductos(prods);
+          setProductos(ordenarProductos(data));
           return;
         }
       }
@@ -598,50 +562,7 @@ export function DataProvider({ children, user }) {
           fetchAllSupabaseRows('v_ultimo_precio_valido')
         ]);
         if (Array.isArray(data)) {
-          const validMapByUrl = new Map();
-          const validMapById = new Map();
-          (Array.isArray(validData) ? validData : []).forEach(v => {
-            if (v.url) {
-              validMapByUrl.set(String(v.url).replace(/\?.*$/, '').trim().toLowerCase(), v);
-            }
-            if (v.id_interno) {
-              validMapById.set(String(v.id_interno).trim(), v);
-            }
-          });
-
-          setProductosCompetencia(data.map(p => {
-            const urlNorm = String(p.url || '').replace(/\?.*$/, '').trim().toLowerCase();
-            const vm = validMapByUrl.get(urlNorm) || validMapById.get(String(p.id).trim());
-            if (vm) {
-              return {
-                ...p,
-                id: p.id || '',
-                id_producto_propio: p.id_producto_propio || vm.id_interno || '',
-                cadena: p.cadena || vm.cadena_id,
-                ultimo_precio_full_bs: vm.precio_full_bs ?? p.ultimo_precio_full_bs,
-                ultimo_precio_desc_bs: vm.precio_desc_bs ?? p.ultimo_precio_desc_bs,
-                ultimo_precio_full_usd: (vm.precio_full_bs && vm.tasa_bcv)
-                  ? Number((vm.precio_full_bs / vm.tasa_bcv).toFixed(2))
-                  : p.ultimo_precio_full_usd,
-                ultimo_precio_desc_usd: (vm.precio_desc_bs && vm.tasa_bcv)
-                  ? Number((vm.precio_desc_bs / vm.tasa_bcv).toFixed(2))
-                  : p.ultimo_precio_desc_usd,
-                ultimo_nombre: limpiarNombreCapturado(vm.producto_nombre || p.ultimo_nombre),
-                ultimo_scrape: vm.fecha_captura || p.ultimo_scrape,
-                tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
-                tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,
-                precio_efectivo_unidad_usd: vm.precio_efectivo_unidad_usd,
-                laboratorio: vm.laboratorio_nombre || p.laboratorio,
-                es_propio: vm.es_propio,
-                publicacion_id: vm.publicacion_id
-              };
-            }
-            return {
-              ...p,
-              id: p.id || '',
-              id_producto_propio: p.id_producto_propio || ''
-            };
-          }));
+          setProductosCompetencia(unirPrecios(data, validData));
           return;
         }
       }
@@ -659,16 +580,7 @@ export function DataProvider({ children, user }) {
           data = await fetchAllSupabaseRows('cadenas');
         }
         if (Array.isArray(data)) {
-          const cDocs = data.map(c => ({
-            id: c.id,
-            nombre: c.nombre || c.id,
-            website: c.website || '',
-            color_hex: c.color_hex || '',
-            sigla: c.sigla || '',
-            modulo_scraper: c.modulo_scraper || c.scraper_modulo || '',
-            activo: c.activo !== false
-          })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
-          setCadenas(cDocs);
+          setCadenas(ordenarCadenas(data));
           return;
         }
       }
@@ -695,15 +607,6 @@ export function DataProvider({ children, user }) {
   const vaciarHistorico = useCallback(() => {
     setHistoricoPrecios([]);
     setUltimaCorrida(null);
-    try {
-      const cachedStr = sessionStorage.getItem(CACHE_KEY);
-      if (cachedStr) {
-        const cached = JSON.parse(cachedStr);
-        cached.historicoPrecios = [];
-        cached.ultimaCorrida = null;
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify(cached));
-      }
-    } catch (_) {}
   }, []);
 
   const value = useMemo(() => ({
@@ -713,6 +616,8 @@ export function DataProvider({ children, user }) {
     variaciones,
     cadenas,
     historicoPrecios,
+    historicoEstado,
+    cargarHistorico,
     bcvRates,
     ultimaCorrida,
     usuarios,
@@ -737,6 +642,8 @@ export function DataProvider({ children, user }) {
     variaciones,
     cadenas,
     historicoPrecios,
+    historicoEstado,
+    cargarHistorico,
     bcvRates,
     ultimaCorrida,
     usuarios,

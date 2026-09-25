@@ -2,133 +2,113 @@ import { useEffect, useState } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
 import { supabaseInsertSafe } from '../utils/dbClient';
 
+// Tasa BCV compartida por todas las pantallas.
+//
+// Antes cada pantalla que la usaba la consultaba de nuevo al abrirse (y, si no
+// habia tasa del dia, preguntaba a dos paginas externas), y mientras tanto
+// calculaba con una tasa fija de 744,23. Ahora hay una sola consulta cada 10
+// minutos para toda la app y se arranca con la ultima tasa conocida, guardada
+// en el navegador.
+const CLAVE = 'trackflow.tasa_bcv';
+const VIGENCIA_MS = 10 * 60 * 1000;
+
+let actual = leerGuardada();   // { rate, source, updatedAt }
+let promesa = null;
+let pedidaEn = 0;
+const oyentes = new Set();
+
+function leerGuardada() {
+  try {
+    const t = JSON.parse(localStorage.getItem(CLAVE) || 'null');
+    if (t && t.rate > 0) return { ...t, updatedAt: t.updatedAt ? new Date(t.updatedAt) : null };
+  } catch { /* sin almacenamiento */ }
+  return null;
+}
+
+function publicar(t) {
+  actual = t;
+  try { localStorage.setItem(CLAVE, JSON.stringify(t)); } catch { /* sin almacenamiento */ }
+  oyentes.forEach(fn => fn(t));
+}
+
+async function leerDeSupabase() {
+  if (!isSupabaseActive()) return null;
+  try {
+    const { data, error } = await supabase.from('dim_tasa_bcv').select('*').order('fecha', { ascending: false }).limit(1);
+    if (!error && data?.length) {
+      const val = Number(data[0].tasa);
+      if (val > 0) return { rate: val, source: data[0].fuente || 'oficial', updatedAt: data[0].fecha ? new Date(data[0].fecha) : new Date() };
+    }
+    const { data: legacy, error: e2 } = await supabase.from('bcv_rates').select('*').order('updated_at', { ascending: false }).limit(1);
+    if (!e2 && legacy?.length) {
+      const val = Number(legacy[0].value || legacy[0].valor);
+      if (val > 0) return { rate: val, source: legacy[0].source || 'oficial', updatedAt: legacy[0].updated_at ? new Date(legacy[0].updated_at) : new Date() };
+    }
+  } catch (err) {
+    console.warn('[useBcvRate] aviso leyendo Supabase:', err?.message || String(err));
+  }
+  return null;
+}
+
+async function leerDeApis() {
+  const intentos = [
+    ['https://ve.dolarapi.com/v1/dolares/oficial', j => j?.promedio || j?.precio],
+    ['https://pydolarve.org/api/v1/dollar?page=bcv', j => j?.monitors?.usd?.price || j?.price],
+  ];
+  for (const [url, leer] of intentos) {
+    try {
+      // Sin respuesta en 4 s se pasa a la siguiente: no se espera de mas.
+      const res = await fetch(url, { signal: AbortSignal.timeout?.(4000) });
+      if (res.ok) {
+        const val = Number(leer(await res.json()));
+        if (val > 100) return val;
+      }
+    } catch { /* siguiente */ }
+  }
+  return null;
+}
+
+async function actualizar() {
+  const guardada = await leerDeSupabase();
+  if (guardada) publicar(guardada);
+  const esDeHoy = guardada?.updatedAt && new Date(guardada.updatedAt).toDateString() === new Date().toDateString();
+  if (esDeHoy) return;
+
+  // No hay tasa del dia: se busca fuera y se guarda para todos.
+  const auto = await leerDeApis();
+  if (!auto) return;
+  publicar({ rate: auto, source: 'auto', updatedAt: new Date() });
+  if (isSupabaseActive()) {
+    const hoy = new Date().toISOString().split('T')[0];
+    supabaseInsertSafe('bcv_rates', { value: auto, updated_at: new Date().toISOString() }).catch(() => {});
+    supabase.from('dim_tasa_bcv').upsert({ fecha: hoy, tasa: auto, fuente: 'BCV' }, { onConflict: 'fecha' }).then(() => {}, () => {});
+  }
+}
+
+function pedir(forzar = false) {
+  if (!promesa || forzar || Date.now() - pedidaEn > VIGENCIA_MS) {
+    pedidaEn = Date.now();
+    promesa = actualizar().catch(err => console.warn('[useBcvRate] aviso en refresh:', err?.message || String(err)));
+  }
+  return promesa;
+}
+
 export function useBcvRate() {
-  const [rate, setRate] = useState(744.23);
-  const [source, setSource] = useState('oficial');
-  const [updatedAt, setUpdatedAt] = useState(new Date());
-  const [loading, setLoading] = useState(true);
+  const [tasa, setTasa] = useState(actual);
+  const [loading, setLoading] = useState(!actual);
   const [error, setError] = useState(null);
 
-  const loadFromSupabase = async () => {
-    try {
-      if (!isSupabaseActive()) return null;
-      // 1. Intentar desde dim_tasa_bcv (nuevo modelo dimensional)
-      const { data: dimData, error: dimErr } = await supabase
-        .from('dim_tasa_bcv')
-        .select('*')
-        .order('fecha', { ascending: false })
-        .limit(1);
-
-      if (!dimErr && dimData && dimData.length > 0) {
-        const val = Number(dimData[0].tasa);
-        if (!isNaN(val) && val > 0) {
-          setRate(val);
-          setSource(dimData[0].fuente || 'oficial');
-          setUpdatedAt(dimData[0].fecha ? new Date(dimData[0].fecha) : new Date());
-          return { value: val, updated_at: dimData[0].fecha, source: dimData[0].fuente };
-        }
-      }
-
-      // 2. Fallback a tabla legacy bcv_rates
-      const { data, error } = await supabase
-        .from('bcv_rates')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1);
-
-      if (!error && data && data.length > 0) {
-        const val = Number(data[0].value || data[0].valor);
-        if (!isNaN(val) && val > 0) {
-          setRate(val);
-          setSource(data[0].source || 'oficial');
-          setUpdatedAt(data[0].updated_at ? new Date(data[0].updated_at) : new Date());
-          return data[0];
-        }
-      }
-      return null;
-    } catch (err) {
-      console.warn('[useBcvRate] aviso leyendo Supabase:', err?.message || String(err));
-      return null;
-    }
-  };
-
-  const loadFromFirestore = async () => {
-    try {
-
-      return null;
-    } catch (err) {
-      console.warn('[useBcvRate] aviso leyendo Firestore:', err?.message || String(err));
-      return null;
-    }
-  };
-
-  const fetchFromExternalApis = async () => {
-    // Intento 1: dolarapi.com
-    try {
-      const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
-      if (res.ok) {
-        const json = await res.json();
-        const val = Number(json?.promedio || json?.precio);
-        if (!isNaN(val) && val > 100) return val;
-      }
-    } catch (_) {}
-
-    // Intento 2: pydolarve.org
-    try {
-      const res = await fetch('https://pydolarve.org/api/v1/dollar?page=bcv');
-      if (res.ok) {
-        const json = await res.json();
-        const val = Number(json?.monitors?.usd?.price || json?.price);
-        if (!isNaN(val) && val > 100) return val;
-      }
-    } catch (_) {}
-
-    return null;
-  };
+  useEffect(() => {
+    oyentes.add(setTasa);
+    let vigente = true;
+    pedir().finally(() => { if (vigente) setLoading(false); });
+    return () => { vigente = false; oyentes.delete(setTasa); };
+  }, []);
 
   const refresh = async () => {
     setLoading(true);
     setError(null);
-    try {
-      // 1. Intentar Supabase
-      let existing = await loadFromSupabase();
-      if (!existing) {
-        // 2. Intentar Firestore
-        existing = await loadFromFirestore();
-      }
-
-      const today = new Date().toDateString();
-      const existingDate = existing?.updated_at ? new Date(existing.updated_at).toDateString() : (existing?.updated_at?.toDate?.()?.toDateString?.());
-      
-      if (existing && existingDate === today) {
-        setLoading(false);
-        return;
-      }
-
-      // 3. Si no hay del día, intentar APIs externas
-      const auto = await fetchFromExternalApis();
-      if (auto && auto > 100) {
-        setRate(auto);
-        setSource('auto');
-        setUpdatedAt(new Date());
-
-        // Guardar la nueva tasa
-        if (isSupabaseActive()) {
-          const hoyFecha = new Date().toISOString().split('T')[0];
-          supabaseInsertSafe('bcv_rates', {
-            value: auto,
-            updated_at: new Date().toISOString()
-          }).catch(() => {});
-          supabase.from('dim_tasa_bcv').upsert({
-            fecha: hoyFecha,
-            tasa: auto,
-            fuente: 'BCV'
-          }, { onConflict: 'fecha' }).then(() => {}).catch(() => {});
-        }
-      }
-    } catch (err) {
-      console.warn('[useBcvRate] aviso en refresh:', err?.message || String(err));
-    }
+    await pedir(true);
     setLoading(false);
   };
 
@@ -139,36 +119,28 @@ export function useBcvRate() {
       setError('La tasa debe ser un número positivo (usa punto, no coma)');
       return false;
     }
-    setRate(num);
-    setSource('manual');
-    setUpdatedAt(new Date());
-
+    publicar({ rate: num, source: 'manual', updatedAt: new Date() });
     try {
       if (isSupabaseActive()) {
-        const hoyFecha = new Date().toISOString().split('T')[0];
+        const hoy = new Date().toISOString().split('T')[0];
         await Promise.allSettled([
-          supabaseInsertSafe('bcv_rates', {
-            value: num,
-            updated_at: new Date().toISOString()
-          }),
-          supabase.from('dim_tasa_bcv').upsert({
-            fecha: hoyFecha,
-            tasa: num,
-            fuente: 'manual'
-          }, { onConflict: 'fecha' })
+          supabaseInsertSafe('bcv_rates', { value: num, updated_at: new Date().toISOString() }),
+          supabase.from('dim_tasa_bcv').upsert({ fecha: hoy, tasa: num, fuente: 'manual' }, { onConflict: 'fecha' }),
         ]);
       }
-      return true;
     } catch (err) {
       console.warn('[useBcvRate] guardado local tras aviso:', err?.message || String(err));
-      return true;
     }
+    return true;
   };
 
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  return { rate, source, updatedAt, loading, error, refresh, setManual };
+  return {
+    rate: tasa?.rate ?? null,
+    source: tasa?.source ?? null,
+    updatedAt: tasa?.updatedAt ?? null,
+    loading,
+    error,
+    refresh,
+    setManual,
+  };
 }
-

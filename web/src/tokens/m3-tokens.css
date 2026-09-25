@@ -97,6 +97,17 @@
   --md-sys-color-data-div-dear-1: #ec7a79;
   --md-sys-color-data-div-dear-2: #e34948;
 
+  /* Categorica para series (identidad), en este orden. Validada (skill
+     dataviz): los tres primeros se distinguen entre si en cualquier grafico. */
+  --md-sys-color-data-cat-1: #2a78d6;
+  --md-sys-color-data-cat-2: #eb6834;
+  --md-sys-color-data-cat-3: #1baf7a;
+  --md-sys-color-data-cat-4: #eda100;
+  --md-sys-color-data-cat-5: #e87ba4;
+  --md-sys-color-data-cat-6: #008300;
+  --md-sys-color-data-cat-7: #4a3aa7;
+  --md-sys-color-data-cat-8: #e34948;
+
   /* Ordered Chart Data Series Palette */
   --md-sys-color-data-series-1: #0F2C59; /* Navy (Our brand / Main) */
   --md-sys-color-data-series-2: #1E6B52; /* Emerald (Market Leader) */
@@ -246,6 +257,14 @@
   --md-sys-color-data-div-mid: #6b6a66;
   --md-sys-color-data-div-dear-1: #a8403f;
   --md-sys-color-data-div-dear-2: #ee7372;
+  --md-sys-color-data-cat-1: #3987e5;
+  --md-sys-color-data-cat-2: #d95926;
+  --md-sys-color-data-cat-3: #199e70;
+  --md-sys-color-data-cat-4: #c98500;
+  --md-sys-color-data-cat-5: #d55181;
+  --md-sys-color-data-cat-6: #008300;
+  --md-sys-color-data-cat-7: #9085e9;
+  --md-sys-color-data-cat-8: #e66767;
 
   --md-sys-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.4), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
   --md-sys-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.45), 0px 1px 2px 0px rgba(0, 0, 0, 0.35);

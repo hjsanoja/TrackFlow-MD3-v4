@@ -1690,3 +1690,104 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 .m3-dash-cambio { line-height: 1; margin-top: 2px; }
 .m3-dash-cambio .m3-diferencia { font-size: 0.75rem; }
 .m3-table-detalle td { --md-comp-table-row-height: 3.5rem; }
+
+/* ---------------------------------------------------------------------------
+   FICHA DEL PRODUCTO (pantalla completa)
+   -------------------------------------------------------------------------*/
+.m3-ficha-pantalla {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  animation: m3-ficha-entrar 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes m3-ficha-entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .m3-ficha-pantalla { animation: none; } }
+.m3-ficha-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.m3-ficha-contenido {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+@media (min-width: 768px) { .m3-ficha-contenido { padding: 24px; } }
+.m3-ficha-buscador {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(26rem, 90vw);
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background-color: var(--md-sys-color-surface-container);
+  box-shadow: var(--md-sys-elevation-3);
+  z-index: 40;
+}
+.m3-table-ficha { min-width: 880px; }
+
+/* ---------------------------------------------------------------------------
+   MAPA DE CALOR
+   Celdas teñidas con la escala divergente del Dashboard (azul mas barato,
+   gris parejo, rojo mas caro). El texto va siempre en on-surface y con signo:
+   el color no es la unica pista.
+   -------------------------------------------------------------------------*/
+.m3-calor-muy_barato { background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-2) 42%, var(--md-sys-color-surface-container-lowest)); }
+.m3-calor-barato     { background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-1) 30%, var(--md-sys-color-surface-container-lowest)); }
+.m3-calor-parejo     { background-color: color-mix(in srgb, var(--md-sys-color-data-div-mid) 22%, var(--md-sys-color-surface-container-lowest)); }
+.m3-calor-caro       { background-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-1) 30%, var(--md-sys-color-surface-container-lowest)); }
+.m3-calor-muy_caro   { background-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-2) 42%, var(--md-sys-color-surface-container-lowest)); }
+
+.m3-table-calor { min-width: 760px; }
+.m3-table-calor td { --md-comp-table-row-height: 4rem; }
+td.m3-calor-celda {
+  text-align: center;
+  white-space: nowrap;
+  color: var(--md-sys-color-on-surface);
+  border-left: 2px solid var(--md-sys-color-surface-container-lowest);
+}
+.m3-table-calor tr:hover td.m3-calor-celda { filter: brightness(0.96); }
+.m3-calor-precio { font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); }
+
+.m3-calor-leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); }
+.m3-calor-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.m3-calor-leyenda i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid var(--md-sys-color-outline-variant); }
+
+.m3-calor-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px 2px 3px; border-radius: 999px; font-size: 0.75rem;
+  border: 1px solid var(--md-sys-color-outline-variant); font-variant-numeric: tabular-nums;
+}
+
+.m3-rango { position: relative; height: 20px; min-width: 160px; }
+.m3-rango-barra {
+  position: absolute; top: 8px; height: 4px; border-radius: 4px;
+  background-color: var(--md-sys-color-outline-variant);
+}
+.m3-rango-promedio {
+  position: absolute; top: 3px; width: 2px; height: 14px; margin-left: -1px;
+  background-color: var(--md-sys-color-on-surface-variant);
+}
+.m3-rango-tuyo {
+  position: absolute; top: 3px; width: 14px; height: 14px; margin-left: -7px; border-radius: 999px;
+  border: 2px solid var(--md-sys-color-surface-container-lowest);
+  box-shadow: 0 0 0 1px var(--md-sys-color-on-surface-variant);
+}
+.m3-rango-tuyo.m3-calor-muy_barato { background-color: var(--md-sys-color-data-div-cheap-2); }
+.m3-rango-tuyo.m3-calor-barato { background-color: var(--md-sys-color-data-div-cheap-1); }
+.m3-rango-tuyo.m3-calor-parejo { background-color: var(--md-sys-color-data-div-mid); }
+.m3-rango-tuyo.m3-calor-caro { background-color: var(--md-sys-color-data-div-dear-1); }
+.m3-rango-tuyo.m3-calor-muy_caro { background-color: var(--md-sys-color-data-div-dear-2); }

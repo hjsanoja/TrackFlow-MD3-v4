@@ -19,80 +19,20 @@ import { useBcvRate } from '../hooks/useBcvRate';
 import { useRobot, estimarMinutos } from '../hooks/useRobot';
 import { tokensGrafico } from '../utils/chartTokens';
 import { getChainColor } from '../utils/brandColors';
-import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { dbClearAllHistoricoPrecios } from '../utils/dbClient';
 import { exportToCSV } from '../utils/exportUtils';
 import { fechaHora, haceCuanto } from '../utils/usuarios';
 import { normalizar } from '../components/formulario';
+import TendenciaPosicion, { diaLargo } from '../components/dashboard/TendenciaPosicion';
+import VistaMolecula from '../components/dashboard/VistaMolecula';
+import {
+  UMBRAL_CAMBIO, UMBRAL_EMPATE, VENTANAS, METAS, textoMeta, usePreferencia, leerColor, mediana, pct,
+  crearFormato, Diferencia, calcularAjuste, AjusteMeta, GRUPOS, grupoDe,
+} from '../components/dashboard/comun';
+import { useCambiosDesdeVisita } from '../hooks/useCambiosDesdeVisita';
+import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
+import { supabase } from '../supabase';
 
-// Preferencias de vista que se recuerdan en el navegador.
-function usePreferencia(clave, inicial, validos) {
-  const [valor, setValor] = useState(() => {
-    try {
-      const guardado = localStorage.getItem(clave);
-      if (guardado == null) return inicial;
-      const v = typeof inicial === 'number' ? Number(guardado) : guardado;
-      return !validos || validos.includes(v) ? v : inicial;
-    } catch { return inicial; }
-  });
-  const cambiar = useCallback((v) => {
-    setValor(v);
-    try { localStorage.setItem(clave, String(v)); } catch { /* sin almacenamiento */ }
-  }, [clave]);
-  return [valor, cambiar];
-}
-
-// Un cambio de precio cuenta si se movio mas de 0,05 %.
-const UMBRAL_CAMBIO = 0.05;
-// Diferencia con el minimo por debajo de la cual se considera "empatado".
-const UMBRAL_EMPATE = 0.5;
-
-const VENTANAS = { 1: 'últimas 24 horas', 7: 'últimos 7 días', 15: 'últimos 15 días' };
-
-// Grupos del grafico "Tu precio frente al promedio". Divergente: azul mas
-// barato, gris parejo, rojo mas caro (tokens validados en m3-tokens.css).
-const GRUPOS = [
-  { id: 'muy_barato', corto: '15 % o más barato', eje: '−15 %|o más', desde: -Infinity, hasta: -15, token: '--md-sys-color-data-div-cheap-2', respaldo: '#2a78d6' },
-  { id: 'barato', corto: '5 a 15 % más barato', eje: '−5 a|−15 %', desde: -15, hasta: -5, token: '--md-sys-color-data-div-cheap-1', respaldo: '#6aa1e6' },
-  { id: 'parejo', corto: 'Parejo (±5 %)', eje: '±5 %', desde: -5, hasta: 5, token: '--md-sys-color-data-div-mid', respaldo: '#a9a8a3' },
-  { id: 'caro', corto: '5 a 15 % más caro', eje: '+5 a|+15 %', desde: 5, hasta: 15, token: '--md-sys-color-data-div-dear-1', respaldo: '#ec7a79' },
-  { id: 'muy_caro', corto: '15 % o más caro', eje: '+15 %|o más', desde: 15, hasta: Infinity, token: '--md-sys-color-data-div-dear-2', respaldo: '#e34948' },
-];
-const grupoDe = (dif) => GRUPOS.find(g => dif > g.desde && dif <= g.hasta) || (dif <= -15 ? GRUPOS[0] : GRUPOS[4]);
-
-function leerColor(token, respaldo) {
-  try {
-    return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || respaldo;
-  } catch { return respaldo; }
-}
-
-function mediana(valores) {
-  if (!valores.length) return null;
-  const o = [...valores].sort((a, b) => a - b);
-  const m = Math.floor(o.length / 2);
-  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
-}
-
-// "−4,2 %" / "+3 %"
-function pct(v, decimales = 1) {
-  if (v == null || isNaN(v)) return '—';
-  const abs = Math.abs(v).toLocaleString('es-VE', { maximumFractionDigits: decimales });
-  if (Math.abs(v) < 0.05) return '0 %';
-  return `${v > 0 ? '+' : '−'}${abs} %`;
-}
-
-// Diferencia con signo y color: azul/verde si eres mas barato, rojo si mas caro.
-function Diferencia({ valor, invertir = false }) {
-  if (valor == null || isNaN(valor)) return <span className="text-on-surface-variant">—</span>;
-  const parejo = Math.abs(valor) < UMBRAL_EMPATE;
-  const caro = invertir ? valor < 0 : valor > 0;
-  return (
-    <span className={`m3-diferencia ${parejo ? '' : caro ? 'is-caro' : 'is-barato'}`}>
-      {!parejo && <span className="material-symbols-outlined" aria-hidden="true">{valor > 0 ? 'arrow_upward' : 'arrow_downward'}</span>}
-      {pct(valor)}
-    </span>
-  );
-}
 
 export default function Dashboard({ userDoc }) {
   const {
@@ -100,8 +40,8 @@ export default function Dashboard({ userDoc }) {
     productosCompetencia = [],
     cadenas = [],
     bcvRates: bcvHistorico = [],
-    historicoPrecios = [],
     variaciones = [],
+    ultimaCorrida,
     loadingInitial: loading,
     refreshData,
     vaciarHistorico,
@@ -115,13 +55,18 @@ export default function Dashboard({ userDoc }) {
   const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis']);
   const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento']);
   const [ventana, setVentana] = usePreferencia('trackflow_pref_ventana_variacion', 1, [1, 7, 15]);
+  // Meta: promedio de la competencia ± X %. Dice cuanto subir o bajar.
+  const [meta, setMeta] = usePreferencia('dashboard.meta', 0, METAS.map(([v]) => v));
 
   // Filtros de todo el panel
   const [filtroUnidad, setFiltroUnidad] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  // Comparar solo contra una cadena ('todos' = todas).
+  const [cadenaComp, setCadenaComp] = useState('todos');
 
   // Tabla
+  const [vista, setVista] = usePreferencia('dashboard.vista', 'producto', ['producto', 'molecula']);
   const [search, setSearch] = useState('');
   const [mostrar, setMostrar] = useState('todos');
   const [orden, setOrden] = useState({ campo: 'nombre', dir: 'asc' });
@@ -152,131 +97,11 @@ export default function Dashboard({ userDoc }) {
   });
   const enlacesActivos = useMemo(() => productosCompetencia.filter(e => e.activo !== false), [productosCompetencia]);
 
-  // Cadenas: los enlaces viejos traen el nombre en vez del id.
-  const cadenaPorClave = useMemo(() => {
-    const m = new Map();
-    for (const c of cadenas || []) {
-      m.set(String(c.id).toLowerCase(), c);
-      m.set(String(c.nombre).toLowerCase(), c);
-    }
-    return m;
-  }, [cadenas]);
-  const idCadena = useCallback((v) => cadenaPorClave.get(String(v || '').toLowerCase())?.id || v, [cadenaPorClave]);
-  const nombreCadena = useCallback((v) => cadenaPorClave.get(String(v || '').toLowerCase())?.nombre || v || '—', [cadenaPorClave]);
+  const { analizados, idCadena, nombreCadena } = useAnalisisPrecios({
+    productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis, ventana, cadenaComp,
+  });
 
-  // ------------------------------------------------------------------------
-  // Analisis por producto
-  // ------------------------------------------------------------------------
-  const analizados = useMemo(() => {
-    // v_variacion: por enlace, el precio actual y los de hace 1, 7 y 15 dias.
-    const mapaVariacion = new Map();
-    (variaciones || []).forEach(v => { if (v.publicacion_id != null) mapaVariacion.set(v.publicacion_id, v); });
-
-    // Respaldo para enlaces viejos sin publicacion_id: el historico completo.
-    const claveHist = (id, cadena, marca) => `${id}_${cadena}_${marca}`.toLowerCase().replace(/[\s/\\]+/g, '_');
-    const historial = {};
-    historicoPrecios.forEach(h => {
-      if (!h.id_producto_propio || !h.cadena || !h.marca) return;
-      const k = claveHist(h.id_producto_propio, h.cadena, h.marca);
-      (historial[k] ||= []).push(h);
-    });
-    const diaDe = (h) => h.fecha_local || (h.scraped_at ? new Date(h.scraped_at).toISOString().slice(0, 10) : null);
-    const conDescuento = modoPrecio === 'descuento';
-    const suf = ventana === 1 ? '1d' : ventana === 7 ? '7d' : '15d';
-
-    const enlacesPorProducto = new Map();
-    for (const e of productosCompetencia) {
-      if (!e.activo || !e.id_producto_propio) continue;
-      const id = String(e.id_producto_propio).trim();
-      if (!enlacesPorProducto.has(id)) enlacesPorProducto.set(id, []);
-      enlacesPorProducto.get(id).push(e);
-    }
-
-    return productos.filter(p => p.activo).map(p => {
-      const pId = String(p.id_interno || p.id || '').trim();
-      const competencia = enlacesPorProducto.get(pId) || [];
-      const unidadesPropio = parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis || p.unidades_empaque);
-      const factorPropio = modoAnalisis === 'unidosis' ? Math.max(unidadesPropio, 1) : 1;
-
-      const precios = competencia.map(c => {
-        const bs = conDescuento ? (c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs) : c.ultimo_precio_full_bs;
-        if (!bs || !bcv.rate) return null;
-        const unidades = parseUnidosisCount(c.tamano, c.marca, c.unidosis || c.unidades_empaque) || unidadesPropio;
-        const factor = modoAnalisis === 'unidosis' ? Math.max(unidades, 1) : 1;
-
-        let ahora = null;
-        let antes = null;
-        const fila = c.publicacion_id != null ? mapaVariacion.get(c.publicacion_id) : null;
-        if (fila) {
-          ahora = conDescuento ? (fila.precio_actual_desc_bs ?? fila.precio_actual_full_bs) : fila.precio_actual_full_bs;
-          antes = conDescuento ? (fila[`precio_${suf}_desc_bs`] ?? fila[`precio_${suf}_full_bs`]) : fila[`precio_${suf}_full_bs`];
-        } else {
-          const lista = historial[claveHist(p.id_interno, c.cadena, c.marca)] || [];
-          const actual = lista[0];
-          const dia = actual && diaDe(actual);
-          if (dia) {
-            const corte = new Date(`${dia}T00:00:00Z`);
-            corte.setUTCDate(corte.getUTCDate() - ventana);
-            const diaCorte = corte.toISOString().slice(0, 10);
-            const previo = lista.find(x => { const d = diaDe(x); return d && d <= diaCorte; });
-            const valor = h => (conDescuento ? (h.precio_desc_bs || h.precio_full_bs) : h.precio_full_bs);
-            ahora = valor(actual);
-            antes = previo ? valor(previo) : null;
-          }
-        }
-        const valorAhora = ahora != null ? Number(ahora) / factor : bs / factor;
-        const valorAntes = antes != null ? Number(antes) / factor : null;
-        const cambio = valorAntes > 0 ? ((valorAhora - valorAntes) / valorAntes) * 100 : 0;
-
-        return {
-          id: c.id,
-          tipo: String(c.tipo || '').toLowerCase(),
-          cadena: idCadena(c.cadena),
-          marca: c.marca,
-          priceUsd: bs / factor / bcv.rate,
-          antesUsd: valorAntes != null ? valorAntes / bcv.rate : null,
-          cambio,
-        };
-      }).filter(v => v && v.priceUsd > 0);
-
-      const propios = precios.filter(x => x.tipo === 'propio');
-      const competidores = precios.filter(x => x.tipo !== 'propio');
-      const valores = competidores.map(x => x.priceUsd);
-      const minimo = valores.length ? Math.min(...valores) : null;
-      const promedio = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
-      const cadenasMin = minimo == null ? [] : [...new Set(competidores.filter(x => Math.abs(x.priceUsd - minimo) < 0.0005).map(x => x.cadena))];
-
-      const pvp = Number(p.pvp_propio_usd || 0) > 0 ? Number(p.pvp_propio_usd) / factorPropio : null;
-      const tuPrecio = propios.length ? Math.min(...propios.map(x => x.priceUsd)) : pvp;
-      const fuenteTuPrecio = propios.length ? 'enlace' : pvp ? 'pvp' : null;
-      const difMin = tuPrecio != null && minimo > 0 ? ((tuPrecio - minimo) / minimo) * 100 : null;
-      const difProm = tuPrecio != null && promedio > 0 ? ((tuPrecio - promedio) / promedio) * 100 : null;
-
-      // Precio de la competencia por cadena (el mas bajo si hay varios).
-      const porCadena = new Map();
-      for (const x of competidores) {
-        const previo = porCadena.get(x.cadena);
-        if (!previo || x.priceUsd < previo.priceUsd) porCadena.set(x.cadena, x);
-      }
-
-      return {
-        producto: p,
-        competencia,
-        precios,
-        porCadena,
-        minimo,
-        promedio,
-        cadenasMin,
-        tuPrecio,
-        fuenteTuPrecio,
-        difMin,
-        difProm,
-        cambios: precios.filter(x => Math.abs(x.cambio) > UMBRAL_CAMBIO),
-        comparable: tuPrecio != null && minimo != null,
-        sinPrecio: precios.length === 0 && tuPrecio == null,
-      };
-    });
-  }, [productos, productosCompetencia, bcv.rate, modoPrecio, historicoPrecios, modoAnalisis, ventana, variaciones, idCadena]);
+  const ajusteDe = useCallback((x) => calcularAjuste(x.tuPrecio, x.promedio, meta), [meta]);
 
   // ------------------------------------------------------------------------
   // Filtros de todo el panel (indicadores, graficos y tabla)
@@ -295,7 +120,7 @@ export default function Dashboard({ userDoc }) {
     (filtroCategoria === 'todos' || p.categoria === filtroCategoria)
   ), [analizados, filtroUnidad, filtroTipo, filtroCategoria]);
 
-  const hayFiltros = filtroUnidad !== 'todos' || filtroTipo !== 'todos' || filtroCategoria !== 'todos';
+  const hayFiltros = filtroUnidad !== 'todos' || filtroTipo !== 'todos' || filtroCategoria !== 'todos' || cadenaComp !== 'todos';
 
   // ------------------------------------------------------------------------
   // Indicadores
@@ -314,8 +139,10 @@ export default function Dashboard({ userDoc }) {
       cambios,
       productosConCambios: new Set(cambios.map(c => c.item.producto.id_interno)).size,
       sinComparar: base.filter(x => !x.comparable),
+      deben: comparables.map(ajusteDe).filter(a => a?.estado === 'bajar').length,
+      pueden: comparables.map(ajusteDe).filter(a => a?.estado === 'subir').length,
     };
-  }, [base]);
+  }, [base, ajusteDe]);
 
   const gruposSinColor = useMemo(() => GRUPOS.map(g => {
     const items = kpi.comparables.filter(x => x.difProm != null && grupoDe(x.difProm).id === g.id);
@@ -369,6 +196,15 @@ export default function Dashboard({ userDoc }) {
     return [...ids].sort((a, b) => nombreCadena(a).localeCompare(nombreCadena(b)));
   }, [base, nombreCadena]);
 
+  // Cadenas con precios de la competencia, para "Comparar contra".
+  const cadenasComparables = useMemo(() => {
+    const ids = new Set();
+    for (const e of productosCompetencia) {
+      if (e.activo && String(e.tipo).toLowerCase() !== 'propio' && e.ultimo_precio_full_bs) ids.add(idCadena(e.cadena));
+    }
+    return [...ids].sort((a, b) => nombreCadena(a).localeCompare(nombreCadena(b)));
+  }, [productosCompetencia, idCadena, nombreCadena]);
+
   const filas = useMemo(() => {
     const term = normalizar(search);
     const lista = base.filter(x => {
@@ -377,6 +213,8 @@ export default function Dashboard({ userDoc }) {
       if (mostrar === 'mas_barato') return x.comparable && x.difMin <= UMBRAL_EMPATE;
       if (mostrar === 'cambios') return x.cambios.length > 0;
       if (mostrar === 'sin_comparar') return !x.comparable;
+      if (mostrar === 'bajar') return ajusteDe(x)?.estado === 'bajar';
+      if (mostrar === 'subir') return ajusteDe(x)?.estado === 'subir';
       return true;
     });
     const valor = {
@@ -386,6 +224,7 @@ export default function Dashboard({ userDoc }) {
       promedio: x => x.promedio,
       difMin: x => x.difMin,
       difProm: x => x.difProm,
+      ajuste: x => ajusteDe(x)?.porcentaje,
     }[orden.campo];
     const signo = orden.dir === 'asc' ? 1 : -1;
     return lista.sort((a, b) => {
@@ -398,7 +237,7 @@ export default function Dashboard({ userDoc }) {
       if (vb == null) return -1;
       return (typeof va === 'string' ? va.localeCompare(vb, 'es', { sensitivity: 'base' }) : va - vb) * signo;
     });
-  }, [base, search, mostrar, orden]);
+  }, [base, search, mostrar, orden, ajusteDe]);
 
   useEffect(() => { setPaginaActual(1); }, [search, mostrar, filtroUnidad, filtroTipo, filtroCategoria, orden, itemsPorPagina]);
   const totalPaginas = Math.max(1, Math.ceil(filas.length / itemsPorPagina));
@@ -409,12 +248,7 @@ export default function Dashboard({ userDoc }) {
   // ------------------------------------------------------------------------
   // Formatos
   // ------------------------------------------------------------------------
-  const fmt = (usd) => {
-    if (usd == null || isNaN(usd)) return '—';
-    if (moneda === 'usd') return `$${usd.toFixed(2)}`;
-    if (!bcv.rate) return '—';
-    return `Bs ${(usd * bcv.rate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  const { fmt, fmtUnidad } = crearFormato(moneda, bcv.rate);
   const porUnidad = modoAnalisis === 'unidosis' ? ' por unidad' : '';
 
   // ------------------------------------------------------------------------
@@ -442,6 +276,7 @@ export default function Dashboard({ userDoc }) {
   const colPromedio = { titulo: 'Promedio', alinear: 'right', celda: x => fmt(x.promedio) };
   const colDifMin = { titulo: 'Frente al mínimo', alinear: 'right', celda: x => <Diferencia valor={x.difMin} /> };
   const colDifProm = { titulo: 'Frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> };
+  const colAjuste = { titulo: 'Para la meta', alinear: 'right', celda: x => <AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} /> };
 
   const abrirDetalle = (d) => setDetalle(d);
   const abrirFicha = (item, desde = null) => {
@@ -457,15 +292,16 @@ export default function Dashboard({ userDoc }) {
     setDetalle(null);
     setSearch('');
     setMostrar(valor);
+    setVista('producto');
     setTimeout(() => tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
 
   const detalleFrentePromedio = () => abrirDetalle({
     titulo: 'Tu precio frente al promedio',
-    subtitulo: 'Cada producto con precio tuyo y de la competencia, del más barato al más caro frente al promedio.',
+    subtitulo: `Cada producto con tu precio y el de la competencia. "Para la meta" dice cuánto subir o bajar para quedar en ${textoMeta(meta)}. Primero los que más deben bajar.`,
     icono: 'balance',
-    filas: [...kpi.comparables].sort((a, b) => a.difProm - b.difProm),
-    columnas: [colProducto, colTuPrecio, colPromedio, colDifProm],
+    filas: [...kpi.comparables].sort((a, b) => (ajusteDe(a)?.porcentaje ?? 0) - (ajusteDe(b)?.porcentaje ?? 0)),
+    columnas: [colProducto, colTuPrecio, colPromedio, colDifProm, colAjuste],
   });
   const detalleMasBaratos = () => abrirDetalle({
     titulo: 'Eres el más barato',
@@ -527,7 +363,93 @@ export default function Dashboard({ userDoc }) {
     subtitulo: 'Productos en este grupo, según la diferencia de tu precio con el promedio de la competencia.',
     icono: 'balance',
     filas: [...g.items].sort((a, b) => a.difProm - b.difProm),
-    columnas: [colProducto, colTuPrecio, colPromedio, colDifProm],
+    columnas: [colProducto, colTuPrecio, colPromedio, colDifProm, colAjuste],
+  });
+
+  // Un dia de la tendencia: la posicion de cada producto ese dia (fase 28).
+  const productosFiltrados = hayFiltros ? base.map(x => x.producto.id_interno) : null;
+  const detalleDia = async (fecha) => {
+    const { data, error } = await supabase.rpc('fn_posicion_productos', {
+      p_desde: fecha, p_hasta: fecha,
+      p_con_descuento: modoPrecio === 'descuento',
+      p_por_unidad: modoAnalisis === 'unidosis',
+      p_cadena: cadenaComp === 'todos' ? null : cadenaComp,
+      p_productos: productosFiltrados,
+    });
+    if (error) { addToast(`No se pudo leer ese día: ${error.message}`, 'error'); return; }
+    const porId = new Map(base.map(x => [String(x.producto.id_interno), x]));
+    const filasDia = (data || [])
+      .filter(f => f.dif_promedio != null && porId.has(String(f.id_interno)))
+      .map(f => ({ ...f, item: porId.get(String(f.id_interno)) }))
+      .sort((a, b) => Number(a.dif_promedio) - Number(b.dif_promedio));
+    abrirDetalle({
+      titulo: `Tu posición el ${diaLargo(fecha)}`,
+      subtitulo: 'Tu precio y el promedio de la competencia ese día (el último precio leído de cada enlace), en dólares a la tasa de ese día.',
+      icono: 'show_chart',
+      filas: filasDia,
+      clave: f => String(f.id_interno),
+      abrir: f => f.item,
+      vacio: 'Ese día no hay productos con tu precio y el de la competencia.',
+      columnas: [
+        { ...colProducto, celda: f => colProducto.celda(f.item) },
+        { titulo: 'Tu precio', alinear: 'right', celda: f => fmt(Number(f.tu_precio_usd)) },
+        { titulo: 'Promedio', alinear: 'right', celda: f => fmt(Number(f.promedio_usd)) },
+        { titulo: 'Frente al promedio', alinear: 'right', celda: f => <Diferencia valor={Number(f.dif_promedio)} /> },
+      ],
+    });
+  };
+
+  // Cambios desde tu ultima visita (fase 28).
+  const cambiosVisita = useCambiosDesdeVisita(userDoc?.email);
+  const cambiosDesdeVisita = useMemo(() => {
+    const porPub = new Map();
+    for (const e of productosCompetencia) {
+      if (e.publicacion_id == null || !e.activo) continue;
+      if (!porPub.has(e.publicacion_id)) porPub.set(e.publicacion_id, []);
+      porPub.get(e.publicacion_id).push(e);
+    }
+    const porId = new Map(base.map(x => [String(x.producto.id_interno).trim(), x]));
+    const conDescuento = modoPrecio === 'descuento';
+    const lista = [];
+    for (const f of cambiosVisita.filas) {
+      const antesBs = conDescuento ? (f.antes_desc_bs ?? f.antes_full_bs) : f.antes_full_bs;
+      const ahoraBs = conDescuento ? (f.ahora_desc_bs ?? f.ahora_full_bs) : f.ahora_full_bs;
+      if (!(antesBs > 0) || !(ahoraBs > 0) || !(f.antes_tasa > 0) || !(f.ahora_tasa > 0)) continue;
+      const antesUsd = antesBs / f.antes_tasa;
+      const ahoraUsd = ahoraBs / f.ahora_tasa;
+      const cambio = (ahoraUsd / antesUsd - 1) * 100;
+      if (Math.abs(cambio) <= UMBRAL_CAMBIO) continue;
+      for (const e of porPub.get(f.publicacion_id) || []) {
+        const item = porId.get(String(e.id_producto_propio).trim());
+        if (!item) continue;
+        lista.push({ clave: `${f.publicacion_id}_${e.id}`, item, enlace: e, cadena: idCadena(e.cadena), antesUsd, ahoraUsd, cambio });
+      }
+    }
+    return lista.sort((a, b) => Math.abs(b.cambio) - Math.abs(a.cambio));
+  }, [cambiosVisita.filas, productosCompetencia, base, modoPrecio, idCadena]);
+
+  const detalleVisita = () => abrirDetalle({
+    titulo: 'Desde tu última visita',
+    subtitulo: `Precios que cambiaron desde ${fechaHora(cambiosVisita.desde)}, en dólares (a la tasa de cada día). Primero los mayores.`,
+    icono: 'history',
+    filas: cambiosDesdeVisita,
+    clave: f => f.clave,
+    abrir: f => f.item,
+    columnas: [
+      { ...colProducto, celda: f => colProducto.celda(f.item) },
+      {
+        titulo: 'Cadena · marca',
+        celda: f => (
+          <div className="flex items-center gap-2 min-w-0">
+            <CadenaBadge cadena={f.cadena} tamano="xs" title={nombreCadena(f.cadena)} />
+            <span className="m3-cell-clamp max-w-[12rem]" title={f.enlace.marca}>{String(f.enlace.tipo).toLowerCase() === 'propio' ? 'Tu producto' : f.enlace.marca}</span>
+          </div>
+        ),
+      },
+      { titulo: 'Antes', alinear: 'right', celda: f => fmt(f.antesUsd) },
+      { titulo: 'Ahora', alinear: 'right', celda: f => fmt(f.ahoraUsd) },
+      { titulo: 'Cambio', alinear: 'right', celda: f => <Diferencia valor={f.cambio} /> },
+    ],
   });
   const detalleCadena = (l) => abrirDetalle({
     titulo: `Más barato en ${l.nombre}`,
@@ -557,6 +479,8 @@ export default function Dashboard({ userDoc }) {
       { key: 'prom', label: `Promedio competencia (${sufijoMoneda})` },
       { key: 'difMin', label: 'Frente al mínimo (%)' },
       { key: 'difProm', label: 'Frente al promedio (%)' },
+      { key: 'meta', label: `Precio meta: ${textoMeta(meta)} (${sufijoMoneda})` },
+      { key: 'ajuste', label: 'Para la meta (%)' },
       ...cadenasTabla.map(c => ({ key: `c_${c}`, label: `${nombreCadena(c)} (${sufijoMoneda})` })),
     ];
     const datos = filas.map(x => ({
@@ -571,6 +495,8 @@ export default function Dashboard({ userDoc }) {
       prom: valor(x.promedio),
       difMin: x.difMin == null ? '' : x.difMin.toFixed(1),
       difProm: x.difProm == null ? '' : x.difProm.toFixed(1),
+      meta: valor(ajusteDe(x)?.objetivo),
+      ajuste: ajusteDe(x) ? ajusteDe(x).porcentaje.toFixed(1) : '',
       ...Object.fromEntries(cadenasTabla.map(c => [`c_${c}`, valor(x.porCadena.get(c)?.priceUsd)])),
     }));
     if (datos.length === 0) { addToast('No hay productos para exportar con estos filtros.', 'info'); return; }
@@ -619,9 +545,7 @@ export default function Dashboard({ userDoc }) {
           </div>
           <p className="text-xs text-on-surface-variant">
             Cómo están tus precios frente a la competencia.{' '}
-            <span title={ultimaLectura ? fechaHora(ultimaLectura) : ''}>
-              Última lectura del robot: <strong className="font-medium text-on-surface">{ultimaLectura ? haceCuanto(ultimaLectura).toLowerCase().replace(/\.$/, '') : 'sin lecturas'}</strong>.
-            </span>
+            <LecturaRobot corrida={ultimaCorrida} ultimaLectura={ultimaLectura} />
           </p>
         </div>
         <div className="flex items-center gap-2 self-start lg:self-auto">
@@ -653,6 +577,18 @@ export default function Dashboard({ userDoc }) {
 
       <AvisoRobot robot={robot} />
 
+      {cambiosDesdeVisita.length > 0 && (
+        <div className="m3-banner m3-banner-info" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">history</span>
+          <span className="m3-body-medium flex-1 min-w-0">
+            <strong>Desde tu última visita</strong> ({haceCuanto(cambiosVisita.desde).toLowerCase()}):{' '}
+            {cambiosDesdeVisita.length} {cambiosDesdeVisita.length === 1 ? 'precio cambió' : 'precios cambiaron'}
+            {' · '}{cambiosDesdeVisita.filter(c => c.cambio > 0).length} subieron, {cambiosDesdeVisita.filter(c => c.cambio < 0).length} bajaron.
+          </span>
+          <button type="button" onClick={detalleVisita} className="m3-btn-text">Ver cambios</button>
+        </div>
+      )}
+
       {/* Filtros y vista: una sola fila sobre los indicadores y graficos */}
       <section className="m3-dash-filtros" aria-label="Filtros del Dashboard">
         <div className="flex flex-wrap items-center gap-2">
@@ -662,9 +598,11 @@ export default function Dashboard({ userDoc }) {
             opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
           <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria}
             opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
+          <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={cadenaComp} onChange={setCadenaComp}
+            opciones={[['todos', 'Competencia: todas las cadenas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
           {hayFiltros && (
             <button type="button" className="m3-btn-text"
-              onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); }}>
+              onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); }}>
               Limpiar filtros
             </button>
           )}
@@ -676,6 +614,8 @@ export default function Dashboard({ userDoc }) {
             opciones={[['empaque', 'Por empaque'], ['unidosis', 'Por unidad (tableta, cápsula…)']]} />
           <AjusteChip etiqueta="Periodo de los cambios" icono="history" valor={String(ventana)} onChange={v => setVentana(Number(v))}
             opciones={[['1', 'Cambios: 24 horas'], ['7', 'Cambios: 7 días'], ['15', 'Cambios: 15 días']]} />
+          <AjusteChip etiqueta="Tu meta de precio" icono="flag" valor={String(meta)} onChange={v => setMeta(Number(v))}
+            opciones={METAS.map(([v, t]) => [String(v), t])} />
           <label className="m3-switch-label whitespace-nowrap ml-1" title="Moneda de todo el Dashboard">
             <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
             <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')}
@@ -690,11 +630,11 @@ export default function Dashboard({ userDoc }) {
         <StatCard
           label="Frente al promedio"
           value={pct(kpi.frentePromedio)}
-          hint={kpi.frentePromedio == null ? 'Sin productos para comparar' : kpi.frentePromedio < -UMBRAL_EMPATE ? 'Lo usual: tu precio más bajo que el promedio' : kpi.frentePromedio > UMBRAL_EMPATE ? 'Lo usual: tu precio más alto que el promedio' : 'Lo usual: tu precio en el promedio'}
+          hint={kpi.frentePromedio == null ? 'Sin productos para comparar' : `Meta ${textoMeta(meta)}: ${kpi.deben} deben bajar, ${kpi.pueden} pueden subir`}
           icon="balance"
           tono={kpi.frentePromedio == null ? 'neutral' : kpi.frentePromedio > 5 ? 'negative' : kpi.frentePromedio < -UMBRAL_EMPATE ? 'primary' : 'neutral'}
           onClick={detalleFrentePromedio}
-          title="La diferencia típica (mediana) de tu precio con el promedio de la competencia. Toca para ver cada producto."
+          title="La diferencia típica (mediana) de tu precio con el promedio de la competencia. Toca para ver cada producto y cuánto subir o bajar para llegar a tu meta."
         />
         <StatCard
           label="Eres el más barato"
@@ -736,7 +676,17 @@ export default function Dashboard({ userDoc }) {
       </section>
 
       {/* Graficos */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4" aria-label="Gráficos">
+      <TendenciaPosicion
+        productos={productosFiltrados}
+        conDescuento={modoPrecio === 'descuento'}
+        porUnidad={modoAnalisis === 'unidosis'}
+        cadena={cadenaComp === 'todos' ? null : cadenaComp}
+        meta={meta}
+        tg={tg}
+        onDia={detalleDia}
+      />
+
+      <section className={`grid grid-cols-1 ${cadenaComp === 'todos' ? 'lg:grid-cols-2' : ''} gap-4`} aria-label="Gráficos">
         <div className="m3-dash-card">
           <header className="m3-dash-card-header">
             <div>
@@ -771,7 +721,7 @@ export default function Dashboard({ userDoc }) {
           )}
         </div>
 
-        <div className="m3-dash-card">
+        {cadenaComp === 'todos' && <div className="m3-dash-card">
           <header className="m3-dash-card-header">
             <div>
               <h2 className="m3-title-medium text-on-surface">¿Qué cadena tiene el precio más bajo?</h2>
@@ -796,33 +746,49 @@ export default function Dashboard({ userDoc }) {
               </ResponsiveContainer>
             </div>
           )}
-        </div>
+        </div>}
       </section>
 
       {/* Tabla */}
       <section ref={tablaRef} className="m3-data-table scroll-mt-4" aria-label="Precios por cadena">
+        <nav className="m3-tabs px-2" aria-label="Ver la tabla">
+          <button type="button" onClick={() => setVista('producto')} aria-current={vista === 'producto' ? 'page' : undefined}
+            className={`m3-tab ${vista === 'producto' ? 'is-active' : ''}`}>
+            <span className="material-symbols-outlined" aria-hidden="true">medication</span>Por producto
+          </button>
+          <button type="button" onClick={() => setVista('molecula')} aria-current={vista === 'molecula' ? 'page' : undefined}
+            className={`m3-tab ${vista === 'molecula' ? 'is-active' : ''}`}>
+            <span className="material-symbols-outlined" aria-hidden="true">science</span>Por molécula
+          </button>
+        </nav>
         <div className="m3-data-table-toolbar">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col md:flex-row md:items-center gap-3">
               <div>
-                <h2 className="m3-title-medium text-on-surface">Precios por cadena</h2>
-                <p className="m3-body-small text-on-surface-variant">El precio más bajo de la competencia en cada cadena{porUnidad}. Resaltado, el mínimo. Toca una fila para ver la ficha.</p>
+                <h2 className="m3-title-medium text-on-surface">{vista === 'producto' ? 'Precios por cadena' : 'Precios por molécula'}</h2>
+                <p className="m3-body-small text-on-surface-variant">
+                  {vista === 'producto'
+                    ? `El precio más bajo de la competencia en cada cadena${porUnidad}. Resaltado, el mínimo. "Para la meta": cuánto subir o bajar para quedar en ${textoMeta(meta)}. Toca una fila para ver la ficha.`
+                    : 'Tus productos y los de la competencia con la misma molécula y concentración, comparados por unidad (1 tableta, 1 cápsula, 1 ml…). Toca una fila para ver todas las ofertas.'}
+                </p>
               </div>
-              <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
-                {filas.length === totalBase ? `${totalBase} productos` : `${filas.length} de ${totalBase} productos`}
-              </div>
+              {vista === 'producto' && (
+                <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
+                  {filas.length === totalBase ? `${totalBase} productos` : `${filas.length} de ${totalBase} productos`}
+                </div>
+              )}
             </div>
             <div className="flex flex-col md:flex-row md:items-center gap-3">
               <label className="m3-search-field">
                 <span className="material-symbols-outlined" aria-hidden="true">search</span>
-                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por ID, nombre o molécula" aria-label="Buscar producto" />
+                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder={vista === 'producto' ? 'Buscar por ID, nombre o molécula' : 'Buscar molécula o producto'} aria-label="Buscar" />
                 {search && (
                   <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
                     <span className="material-symbols-outlined">close</span>
                   </button>
                 )}
               </label>
-              <div className="flex flex-wrap items-center gap-2">
+              {vista === 'producto' && <div className="flex flex-wrap items-center gap-2">
                 <FiltroChip etiqueta="Mostrar" icono="filter_list" valor={mostrar} onChange={setMostrar}
                   opciones={[
                     ['todos', 'Mostrar: todos'],
@@ -830,16 +796,20 @@ export default function Dashboard({ userDoc }) {
                     ['mas_barato', 'Eres el más barato'],
                     ['cambios', 'Con cambios de precio'],
                     ['sin_comparar', 'Sin comparar'],
+                    ['bajar', 'Deben bajar para la meta'],
+                    ['subir', 'Pueden subir hasta la meta'],
                   ]} />
                 {(mostrar !== 'todos' || search) && (
                   <button type="button" onClick={() => { setMostrar('todos'); setSearch(''); }} className="m3-btn-text">Limpiar</button>
                 )}
-              </div>
+              </div>}
             </div>
           </div>
         </div>
 
-        {filas.length === 0 ? (
+        {vista === 'molecula' ? (
+          <VistaMolecula items={base} busqueda={search} fmt={fmt} fmtUnidad={fmtUnidad} nombreCadena={nombreCadena} onDetalle={abrirDetalle} />
+        ) : filas.length === 0 ? (
           <div className="p-12 text-center text-on-surface-variant flex flex-col items-center gap-3">
             <span className="material-symbols-outlined text-3xl">search_off</span>
             <div className="m3-title-medium text-on-surface">Ningún producto coincide</div>
@@ -856,7 +826,7 @@ export default function Dashboard({ userDoc }) {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 m3-body-small">
                       <span>Tu precio <strong className="font-medium">{fmt(x.tuPrecio)}</strong></span>
                       <span className="inline-flex items-center gap-1">Mínimo {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" />}<strong className="font-medium">{fmt(x.minimo)}</strong></span>
-                      <Diferencia valor={x.difMin} />
+                      <AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} />
                     </div>
                   </button>
                 </li>
@@ -878,6 +848,7 @@ export default function Dashboard({ userDoc }) {
                     <th className="text-right m3-dash-col-sep"><BotonOrden campo="tuPrecio" orden={orden} onClick={ordenarPor}>Tu precio</BotonOrden></th>
                     <th className="text-right"><BotonOrden campo="difMin" orden={orden} onClick={ordenarPor}>Frente al mínimo</BotonOrden></th>
                     <th className="text-right"><BotonOrden campo="difProm" orden={orden} onClick={ordenarPor}>Frente al promedio</BotonOrden></th>
+                    <th className="text-right"><BotonOrden campo="ajuste" orden={orden} onClick={ordenarPor}>Para la meta</BotonOrden></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -913,6 +884,7 @@ export default function Dashboard({ userDoc }) {
                         </td>
                         <td className="text-right whitespace-nowrap"><Diferencia valor={x.difMin} /></td>
                         <td className="text-right whitespace-nowrap"><Diferencia valor={x.difProm} /></td>
+                        <td className="text-right whitespace-nowrap"><AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} /></td>
                       </tr>
                     );
                   })}
@@ -957,6 +929,7 @@ export default function Dashboard({ userDoc }) {
           onFila={f => abrirFicha(detalle.abrir ? detalle.abrir(f) : f, detalle)}
           vacio={detalle.vacio}
           onVerEnTabla={detalle.tabla ? () => verEnTabla(detalle.tabla) : null}
+          ancho={detalle.ancho}
           onClose={() => setDetalle(null)}
         />
       )}
@@ -1093,5 +1066,27 @@ function TarjetaBcv({ resumen, bcv, color, onClick }) {
         </div>
       )}
     </button>
+  );
+}
+
+// "Ultima lectura del robot": la corrida completa (todas las cadenas) o, si no
+// hay corridas registradas, el precio mas reciente de los enlaces.
+function LecturaRobot({ corrida, ultimaLectura }) {
+  if (corrida?.started_at) {
+    const fallaron = corrida.fallidos || 0;
+    return (
+      <span title={`Empezó ${fechaHora(corrida.started_at)}${corrida.finished_at ? ` · terminó ${fechaHora(corrida.finished_at)}` : ''}`}>
+        Última lectura del robot:{' '}
+        <strong className="font-medium text-on-surface">{haceCuanto(corrida.started_at).toLowerCase()}</strong>
+        {corrida.en_proceso ? ' (en curso)' : ''}
+        {corrida.total > 0 && <> · {corrida.exitosos} de {corrida.total} enlaces leídos</>}
+        {fallaron > 0 && <> · <Link to="/cadenas" className="text-primary hover:underline">{fallaron} {fallaron === 1 ? 'falló' : 'fallaron'}</Link></>}
+      </span>
+    );
+  }
+  return (
+    <span title={ultimaLectura ? fechaHora(ultimaLectura) : ''}>
+      Última lectura del robot: <strong className="font-medium text-on-surface">{ultimaLectura ? haceCuanto(ultimaLectura).toLowerCase() : 'sin lecturas'}</strong>
+    </span>
   );
 }

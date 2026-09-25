@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { registrarAcceso } from '../utils/accesos';
+import { limpiarCacheDatos } from '../utils/cacheDatos';
 import { useData } from '../context/DataContext';
 
 export default function Layout({ user, userDoc, children }) {
@@ -37,6 +38,7 @@ export default function Layout({ user, userDoc, children }) {
   const handleLogout = async () => {
     try {
       await registrarAcceso('salida');
+      limpiarCacheDatos();
       await supabase.auth.signOut();
     } catch (e) {
       console.warn('Error durante el cierre de sesión en Supabase:', e);
@@ -74,10 +76,11 @@ export default function Layout({ user, userDoc, children }) {
   const allSearchNavItems = [
     ...navItems,
     ...(isNavVisible({ to: '/experimental', adminOnly: false }) ? [
-      { to: '/experimental?tab=reporteria', label: 'Reportería de Precios y Brechas (Experimental)', icon: 'table_chart' },
-      { to: '/experimental?tab=analisis', label: 'Análisis de Precios (Experimental)', icon: 'insights' },
-      { to: '/experimental?tab=simulador', label: 'Simulador de Precios (Experimental)', icon: 'calculate' },
-      { to: '/experimental?tab=hallazgos', label: 'Hallazgos de Mercado (Experimental)', icon: 'lightbulb' }
+      { to: '/experimental?tab=revision', label: 'Revisión de capturas (Experimental)', icon: 'rule' },
+      { to: '/experimental?tab=devaluacion', label: 'Devaluación vs subida real (Experimental)', icon: 'currency_exchange' },
+      { to: '/experimental?tab=canibalizacion', label: 'Canibalización de marcas (Experimental)', icon: 'compare_arrows' },
+      { to: '/experimental?tab=brecha_usd', label: 'Brechas USD diarias (Experimental)', icon: 'payments' },
+      { to: '/experimental?tab=simulador', label: 'Simulador de precios (Experimental)', icon: 'calculate' }
     ] : [])
   ];
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import {
@@ -16,7 +16,9 @@ import {
 import Select from './Select';
 
 export default function BrechaHistoricaUsd({ user, userDoc }) {
-  const { productos = [], productosCompetencia = [], historicoPrecios = [], bcvRates = [] } = useData();
+  const { productos = [], productosCompetencia = [], historicoPrecios = [], bcvRates = [], cargarHistorico } = useData();
+  // El historico no se baja al abrir el panel: se pide al entrar aqui.
+  useEffect(() => { cargarHistorico?.(); }, [cargarHistorico]);
   const bcv = useBcvRate();
   const currentBcv = bcv?.rate || 853.5;
 

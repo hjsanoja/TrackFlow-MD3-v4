@@ -1,1607 +1,526 @@
-import { getChainColor, colorCadenaRegistrado } from '../utils/brandColors';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import ConfirmModal from './ConfirmModal';
-import { parseUnidosisCount } from '../utils/unidosisUtils';
-import { useData } from '../context/DataContext';
-import { dbClearHistoricoPrecioForProduct } from '../utils/dbClient';
 import {
-  LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine
+  ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList, Legend,
 } from 'recharts';
+import StatCard from './StatCard';
 import Select from './Select';
+import CadenaBadge from './CadenaBadge';
+import ConfirmModal from './ConfirmModal';
+import { normalizar } from './formulario';
+import { useData } from '../context/DataContext';
+import { useToast } from '../context/ToastContext';
+import { supabase, isSupabaseActive } from '../supabase';
+import { getChainColor } from '../utils/brandColors';
+import { tokensGrafico } from '../utils/chartTokens';
+import { parseUnidosisCount } from '../utils/unidosisUtils';
+import { dbClearHistoricoPrecioForProduct } from '../utils/dbClient';
+import { describirPresentacion } from '../utils/presentacion';
+import { fechaHora, haceCuanto } from '../utils/usuarios';
+import {
+  crearFormato, Diferencia, AjusteMeta, calcularAjuste, pct, leerColor, textoMeta, UMBRAL_CAMBIO,
+} from './dashboard/comun';
 
-const COLORS = ['#040d53', '#70C145', '#ba1a1a', '#004ecb', '#002f6c', '#0891b2', '#db2777'];
+// Ficha de un producto: sus precios de hoy en cada cadena, cuanto se aleja
+// del minimo y del promedio de la competencia, y la historia de los precios.
+// Pantalla completa, con el mismo lenguaje que el Dashboard.
+//
+// La historia se pide solo para ESTE producto al abrir la ficha (antes
+// dependia del historico completo de todos los productos).
 
-function InfoTooltip({ text, align = 'center' }) {
-  const [open, setOpen] = useState(false);
-  const alignClass = align === 'left' 
-    ? 'left-0 translate-x-0' 
-    : align === 'right' 
-      ? 'right-0 translate-x-0' 
-      : 'left-1/2 -translate-x-1/2';
-      
+const PERIODOS = [[30, 'Últimos 30 días'], [90, 'Últimos 90 días'], [180, 'Últimos 180 días']];
+const MAX_SERIES = 8;
+const colorCategorico = (i) => leerColor(`--md-sys-color-data-cat-${i + 1}`, ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'][i]);
+const diaCorto = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
+
+function leerMeta() {
+  try { return Number(localStorage.getItem('dashboard.meta')) || 0; } catch { return 0; }
+}
+
+export default function ProductDetailModal({ producto, competencia, currency, bcvRate, onClose, initialPriceMode = 'lista', initialAnalisisMode = 'empaque' }) {
+  const { productos = [], productosCompetencia = [], cadenas = [], variaciones = [] } = useData() || {};
+  const { addToast } = useToast();
+
+  const [activo, setActivo] = useState(producto);
+  const [moneda, setMoneda] = useState(currency || 'usd');
+  const [modoPrecio, setModoPrecio] = useState(initialPriceMode === 'descuento' ? 'descuento' : 'lista');
+  const [modoAnalisis, setModoAnalisis] = useState(initialAnalisisMode === 'unidosis' ? 'unidosis' : 'empaque');
+  const [dias, setDias] = useState(90);
+  const [vistaHistoria, setVistaHistoria] = useState('resumen'); // resumen | ofertas
+  const [historia, setHistoria] = useState({ cargando: true, filas: [] });
+  const [buscador, setBuscador] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
+  const [confirmBorrar, setConfirmBorrar] = useState(false);
+  const menuRef = useRef(null);
+  const meta = leerMeta();
+
+  useEffect(() => { setActivo(producto); }, [producto]);
+
+  // Escape cierra; la pagina de fondo no se desplaza.
+  useEffect(() => {
+    const alTeclear = (e) => { if (e.key === 'Escape' && !confirmBorrar) (buscador ? setBuscador(false) : onClose()); };
+    window.addEventListener('keydown', alTeclear);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', alTeclear); document.body.style.overflow = overflow; };
+  }, [onClose, buscador, confirmBorrar]);
+
+  const cadenaPorClave = useMemo(() => {
+    const m = new Map();
+    for (const c of cadenas) { m.set(String(c.id).toLowerCase(), c); m.set(String(c.nombre).toLowerCase(), c); }
+    return m;
+  }, [cadenas]);
+  const idCadena = (v) => cadenaPorClave.get(String(v || '').toLowerCase())?.id || v;
+  const nombreCadena = (v) => cadenaPorClave.get(String(v || '').toLowerCase())?.nombre || v || '—';
+
+  const pId = String(activo?.id_interno || activo?.id || '').trim();
+  const enlaces = useMemo(() => {
+    const deContexto = productosCompetencia.filter(e => e.activo !== false && String(e.id_producto_propio || '').trim() === pId);
+    return deContexto.length || activo !== producto ? deContexto : (competencia || []).filter(e => e.activo !== false);
+  }, [productosCompetencia, pId, competencia, activo, producto]);
+
+  const unidadesPropio = Math.max(parseUnidosisCount(activo?.tamano || activo?.presentacion, activo?.nombre, activo?.unidosis || activo?.unidades_empaque), 1);
+  const porUnidad = modoAnalisis === 'unidosis';
+  const conDescuento = modoPrecio === 'descuento';
+  const unidadesDe = (e) => {
+    const leidas = Number(e.unidades_empaque || e.unidosis) > 1 ? Number(e.unidades_empaque || e.unidosis)
+      : String(e.tipo).toLowerCase() === 'propio' ? unidadesPropio
+        : parseUnidosisCount(e.tamano, e.marca, null);
+    return Math.max(leidas > 1 ? leidas : unidadesPropio, 1);
+  };
+
+  // ---------------------------------------------------------------------
+  // Precios de hoy
+  // ---------------------------------------------------------------------
+  const variacionPorPub = useMemo(() => new Map((variaciones || []).map(v => [v.publicacion_id, v])), [variaciones]);
+  const ofertas = useMemo(() => enlaces.map(e => {
+    const bs = conDescuento ? (e.ultimo_precio_desc_bs || e.ultimo_precio_full_bs) : e.ultimo_precio_full_bs;
+    const unidades = unidadesDe(e);
+    const tipo = String(e.tipo || '').toLowerCase();
+    const base = { id: e.id, enlace: e, tipo, cadena: idCadena(e.cadena), marca: e.marca, laboratorio: e.laboratorio, unidades, url: e.url, fecha: e.ultimo_scrape };
+    if (!bs || !bcvRate) return { ...base, sinPrecio: true };
+    // Cambio en 7 dias, en dolares a la tasa de cada dia.
+    const v = variacionPorPub.get(e.publicacion_id);
+    let cambio = null;
+    if (v?.precio_7d_full_bs && v?.precio_actual_full_bs) {
+      const ahora = (conDescuento ? (v.precio_actual_desc_bs ?? v.precio_actual_full_bs) : v.precio_actual_full_bs) / (Number(v.tasa_actual) || bcvRate);
+      const antes = (conDescuento ? (v.precio_7d_desc_bs ?? v.precio_7d_full_bs) : v.precio_7d_full_bs) / (Number(v.tasa_7d) || Number(v.tasa_actual) || bcvRate);
+      if (antes > 0) cambio = (ahora / antes - 1) * 100;
+    }
+    return {
+      ...base,
+      priceUsd: bs / bcvRate / (porUnidad ? unidades : 1),
+      unitUsd: bs / bcvRate / unidades,
+      empaqueUsd: bs / bcvRate,
+      cambio,
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }).sort((a, b) => (a.sinPrecio ? 1 : 0) - (b.sinPrecio ? 1 : 0) || (a.priceUsd ?? 0) - (b.priceUsd ?? 0)), [enlaces, conDescuento, bcvRate, porUnidad, variacionPorPub, cadenaPorClave]);
+
+  const conPrecio = ofertas.filter(o => !o.sinPrecio);
+  const tuyas = conPrecio.filter(o => o.tipo === 'propio');
+  const comp = conPrecio.filter(o => o.tipo !== 'propio');
+  const pvp = Number(activo?.pvp_propio_usd || 0) > 0 ? Number(activo.pvp_propio_usd) / (porUnidad ? unidadesPropio : 1) : null;
+  const tuPrecio = tuyas.length ? Math.min(...tuyas.map(o => o.priceUsd)) : pvp;
+  const minimo = comp.length ? Math.min(...comp.map(o => o.priceUsd)) : null;
+  const promedio = comp.length ? comp.reduce((a, o) => a + o.priceUsd, 0) / comp.length : null;
+  const ofertaMin = comp.find(o => o.priceUsd === minimo);
+  const difMin = tuPrecio != null && minimo > 0 ? (tuPrecio / minimo - 1) * 100 : null;
+  const difProm = tuPrecio != null && promedio > 0 ? (tuPrecio / promedio - 1) * 100 : null;
+  const ajuste = calcularAjuste(tuPrecio, promedio, meta);
+  const { fmt, fmtUnidad } = crearFormato(moneda, bcvRate);
+  const fmtModo = porUnidad ? fmtUnidad : fmt;
+
+  // ---------------------------------------------------------------------
+  // Historia (solo de este producto)
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    if (!pId || !isSupabaseActive()) { setHistoria({ cargando: false, filas: [] }); return undefined; }
+    let vigente = true;
+    setHistoria(h => ({ ...h, cargando: true }));
+    const desde = new Date(Date.now() - (dias + 7) * 864e5).toISOString();
+    (async () => {
+      const filas = [];
+      for (let pagina = 0; pagina < 10; pagina++) {
+        const { data, error } = await supabase.from('historico_precios')
+          .select('publicacion_id,cadena,marca,tipo,precio_full_bs,precio_desc_bs,tasa_bcv,fecha_local,scraped_at')
+          .eq('id_producto_propio', pId).gte('scraped_at', desde)
+          .order('scraped_at', { ascending: true })
+          .range(pagina * 1000, pagina * 1000 + 999);
+        if (error || !data?.length) break;
+        filas.push(...data);
+        if (data.length < 1000) break;
+      }
+      if (vigente) setHistoria({ cargando: false, filas });
+    })().catch(() => { if (vigente) setHistoria({ cargando: false, filas: [] }); });
+    return () => { vigente = false; };
+  }, [pId, dias]);
+
+  const serieHistoria = useMemo(() => {
+    const unidadesPorPub = new Map(enlaces.map(e => [e.publicacion_id, unidadesDe(e)]));
+    // Ultimo precio de cada enlace por dia.
+    const porPub = new Map();
+    for (const h of historia.filas) {
+      const bs = conDescuento ? (h.precio_desc_bs ?? h.precio_full_bs) : h.precio_full_bs;
+      const tasa = Number(h.tasa_bcv) || bcvRate;
+      if (!bs || !tasa) continue;
+      const dia = h.fecha_local || String(h.scraped_at).slice(0, 10);
+      const unidades = unidadesPorPub.get(h.publicacion_id) || (String(h.tipo) === 'propio' ? unidadesPropio : unidadesPropio);
+      const usd = bs / tasa / (porUnidad ? unidades : 1);
+      if (!porPub.has(h.publicacion_id)) porPub.set(h.publicacion_id, { tipo: h.tipo, cadena: idCadena(h.cadena), marca: h.marca, dias: new Map() });
+      porPub.get(h.publicacion_id).dias.set(dia, usd);
+    }
+    // Dias del periodo; cada enlace arrastra su ultimo precio hasta 7 dias.
+    const hoy = new Date();
+    const fechas = Array.from({ length: dias }, (_, i) => new Date(hoy.getTime() - (dias - 1 - i) * 864e5).toISOString().slice(0, 10));
+    const pubs = [...porPub.entries()];
+    const ultimoConocido = (dias, fecha) => {
+      for (let k = 0; k < 7; k++) {
+        const f = new Date(new Date(`${fecha}T12:00:00Z`).getTime() - k * 864e5).toISOString().slice(0, 10);
+        if (dias.has(f)) return dias.get(f);
+      }
+      return null;
+    };
+    const lineas = pubs
+      .sort((a, b) => (a[1].tipo === 'propio' ? -1 : 0) - (b[1].tipo === 'propio' ? -1 : 0))
+      .slice(0, MAX_SERIES)
+      .map(([pub, info], i) => ({ clave: `p${pub}`, nombre: `${info.tipo === 'propio' ? 'Tuyo · ' : ''}${info.marca} (${nombreCadena(info.cadena)})`, color: colorCategorico(i) }));
+    const puntos = fechas.map(fecha => {
+      const fila = { fecha };
+      const tuyos = [];
+      const otros = [];
+      for (const [pub, info] of pubs) {
+        const v = ultimoConocido(info.dias, fecha);
+        if (v == null) continue;
+        fila[`p${pub}`] = v;
+        (info.tipo === 'propio' ? tuyos : otros).push(v);
+      }
+      if (tuyos.length) fila.tuyo = Math.min(...tuyos);
+      if (otros.length) {
+        fila.minimo = Math.min(...otros);
+        fila.promedio = otros.reduce((a, b) => a + b, 0) / otros.length;
+      }
+      return fila;
+    }).filter(f => f.tuyo != null || f.minimo != null);
+    return { puntos, lineas, ocultas: Math.max(0, pubs.length - MAX_SERIES) };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historia.filas, conDescuento, porUnidad, dias, bcvRate, enlaces, cadenaPorClave]);
+
+  // ---------------------------------------------------------------------
+  // Cambiar de producto
+  // ---------------------------------------------------------------------
+  const activos = useMemo(() => productos.filter(p => p.activo !== false)
+    .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es')), [productos]);
+  const indice = activos.findIndex(p => String(p.id_interno) === pId);
+  const irA = (p) => { if (p) { setActivo(p); setBuscador(false); setBusqueda(''); } };
+  const encontrados = useMemo(() => {
+    const t = normalizar(busqueda);
+    return activos.filter(p => !t || normalizar(`${p.id_interno} ${p.nombre} ${p.principio_activo || ''}`).includes(t)).slice(0, 60);
+  }, [activos, busqueda]);
+
+  const borrarHistoria = async () => {
+    try {
+      await dbClearHistoricoPrecioForProduct(pId);
+      setHistoria({ cargando: false, filas: [] });
+      addToast('Historia de precios de este producto borrada.', 'success');
+    } catch (err) {
+      addToast(`No se pudo borrar: ${err?.message || err}`, 'error');
+    } finally {
+      setConfirmBorrar(false);
+    }
+  };
+
+  const tg = tokensGrafico();
+  if (!activo) return null;
+  const tipoMercado = (activo.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico';
+  const presentacion = [activo.concentracion, describirPresentacion(activo)].filter(v => v && v !== '—').join(' · ');
+  const datosBarras = conPrecio.map(o => ({
+    ...o,
+    etiqueta: `${o.tipo === 'propio' ? 'Tuyo · ' : ''}${String(o.marca || '').slice(0, 26)}${String(o.marca || '').length > 26 ? '…' : ''}`,
+    color: getChainColor(o.cadena),
+  }));
+
+  return createPortal(
+    <div className="m3-ficha-pantalla" role="dialog" aria-modal="true" aria-label={`Ficha de ${activo.nombre}`}>
+      {/* Barra superior */}
+      <header className="m3-ficha-appbar">
+        <button type="button" onClick={onClose} className="m3-icon-btn" title="Volver (Esc)" aria-label="Volver">
+          <span className="material-symbols-outlined">arrow_back</span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="m3-title-large text-on-surface truncate" title={activo.nombre}>{activo.nombre}</div>
+          <div className="m3-body-small text-on-surface-variant truncate">
+            <span className="font-mono">{activo.id_interno}</span> · {tipoMercado}
+            {activo.categoria ? ` · ${activo.categoria}` : ''}{presentacion ? ` · ${presentacion}` : ''}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button type="button" className="m3-icon-btn" disabled={indice <= 0} onClick={() => irA(activos[indice - 1])} title="Producto anterior" aria-label="Producto anterior">
+            <span className="material-symbols-outlined">chevron_left</span>
+          </button>
+          <div className="relative">
+            <button type="button" className="m3-btn-outline" onClick={() => setBuscador(b => !b)} aria-expanded={buscador}>
+              <span className="material-symbols-outlined text-base">swap_horiz</span>
+              <span className="hidden sm:inline">Cambiar producto</span>
+            </button>
+            {buscador && (
+              <div className="m3-ficha-buscador">
+                <label className="m3-search-field">
+                  <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                  <input autoFocus type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="ID, nombre o molécula" aria-label="Buscar producto" />
+                </label>
+                <ul className="max-h-80 overflow-auto mt-2" role="listbox">
+                  {encontrados.map(p => (
+                    <li key={p.id_interno}>
+                      <button type="button" onClick={() => irA(p)} role="option" aria-selected={String(p.id_interno) === pId}
+                        className={`m3-menu-item w-full ${String(p.id_interno) === pId ? 'text-primary' : ''}`}>
+                        <span className="font-mono text-on-surface-variant w-16 shrink-0 text-left">{p.id_interno}</span>
+                        <span className="truncate text-left">{p.nombre}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {encontrados.length === 0 && <li className="m3-body-medium text-on-surface-variant p-3">Ningún producto coincide.</li>}
+                </ul>
+              </div>
+            )}
+          </div>
+          <button type="button" className="m3-icon-btn" disabled={indice < 0 || indice >= activos.length - 1} onClick={() => irA(activos[indice + 1])} title="Producto siguiente" aria-label="Producto siguiente">
+            <span className="material-symbols-outlined">chevron_right</span>
+          </button>
+          <details ref={menuRef} className="m3-menu">
+            <summary className="m3-icon-btn" title="Más acciones" aria-label="Más acciones">
+              <span className="material-symbols-outlined">more_vert</span>
+            </summary>
+            <div className="m3-menu-panel" role="menu">
+              <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
+                onClick={() => { menuRef.current?.removeAttribute('open'); setConfirmBorrar(true); }}>
+                <span className="material-symbols-outlined">delete_sweep</span>
+                Borrar la historia de este producto
+              </button>
+            </div>
+          </details>
+        </div>
+      </header>
+
+      <main className="m3-ficha-contenido">
+        {/* Ajustes de vista */}
+        <section className="m3-dash-filtros" aria-label="Ajustes de la ficha">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
+              <option value="lista">Precio de lista</option>
+              <option value="descuento">Precio con oferta</option>
+            </Select>
+            <Select value={modoAnalisis} onChange={e => setModoAnalisis(e.target.value)} aria-label="Comparar por" className="m3-filter-chip" leadingIcon="medication">
+              <option value="empaque">Por empaque</option>
+              <option value="unidosis">Por unidad (tableta, cápsula…)</option>
+            </Select>
+          </div>
+          <div className="flex items-center gap-3 lg:ml-auto">
+            <span className="m3-body-small text-on-surface-variant">Tasa BCV: Bs {bcvRate ? bcvRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</span>
+            <label className="m3-switch-label whitespace-nowrap">
+              <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
+              <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')}
+                className="m3-switch" aria-label="Ver los precios en bolívares" />
+              <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
+            </label>
+          </div>
+        </section>
+
+        {/* Indicadores */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Indicadores del producto">
+          <StatCard label={`Tu precio${porUnidad ? ' por unidad' : ''}`} value={fmtModo(tuPrecio)} icon="sell" tono="primary"
+            hint={tuyas.length ? `${tuyas.length === 1 ? 'Tu enlace' : `El más bajo de tus ${tuyas.length} enlaces`}` : pvp ? 'PVP cargado en Productos' : 'Sin precio tuyo'} />
+          <StatCard label="Mínimo de la competencia" value={fmtModo(minimo)} icon="south" tono="neutral"
+            hint={ofertaMin ? `${ofertaMin.marca} en ${nombreCadena(ofertaMin.cadena)}` : 'Sin precios de la competencia'} />
+          <StatCard label="Frente al mínimo" value={pct(difMin)} icon="trending_up" tono={difMin > 0.5 ? 'negative' : difMin != null ? 'positive' : 'neutral'}
+            hint={difMin == null ? 'Falta tu precio o el de la competencia' : difMin > 0.5 ? 'Otra cadena lo vende más barato' : 'Eres el más barato'} />
+          <StatCard label="Frente al promedio" value={pct(difProm)} icon="balance" tono={difProm > 5 ? 'negative' : 'neutral'}
+            hint={ajuste ? (ajuste.estado === 'en_meta' ? `En tu meta (${textoMeta(meta)})` : `${ajuste.estado === 'bajar' ? 'Bajar' : 'Subir'} ${fmtModo(Math.abs(ajuste.usd))} para ${textoMeta(meta)}`) : `Promedio: ${fmtModo(promedio)}`} />
+        </section>
+
+        {/* Precios de hoy */}
+        <section className="m3-data-table" aria-label="Precios de hoy">
+          <div className="m3-data-table-toolbar">
+            <h2 className="m3-title-medium text-on-surface">Precios de hoy</h2>
+            <p className="m3-body-small text-on-surface-variant">
+              El último precio leído de cada enlace{porUnidad ? ', por unidad' : ''}, del más barato al más caro. La línea marca el promedio de la competencia.
+            </p>
+          </div>
+          {conPrecio.length > 0 && (
+            <div className="px-4 pt-4" style={{ height: Math.max(140, datosBarras.length * 34 + 40) }} role="img" aria-label="Precio de cada oferta">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={datosBarras} layout="vertical" margin={{ top: 16, right: 64, left: 8, bottom: 4 }} barCategoryGap="24%">
+                  <CartesianGrid horizontal={false} stroke={tg.rejilla} strokeOpacity={0.6} />
+                  <XAxis type="number" hide domain={[0, 'dataMax']} />
+                  <YAxis type="category" dataKey="etiqueta" width={190} tick={{ fill: tg.eje, fontSize: 12 }} tickLine={false} axisLine={false} />
+                  {promedio > 0 && (
+                    <ReferenceLine x={promedio} stroke={tg.eje} strokeOpacity={0.7}
+                      label={{ value: 'Promedio', position: 'top', fill: tg.eje, fontSize: 11 }} />
+                  )}
+                  <Tooltip cursor={{ fill: tg.rejilla, fillOpacity: 0.25 }} content={<TooltipOferta fmt={fmtModo} nombreCadena={nombreCadena} />} />
+                  <Bar dataKey="priceUsd" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                    {datosBarras.map(o => <Cell key={o.id} fill={o.color} fillOpacity={o.tipo === 'propio' ? 1 : 0.85} />)}
+                    <LabelList dataKey="priceUsd" position="right" formatter={fmtModo} fill={tg.texto} fontSize={12} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="m3-table m3-table-ficha">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cadena</th>
+                  <th className="text-right">Unidades</th>
+                  <th className="text-right">Precio</th>
+                  <th className="text-right">Por unidad</th>
+                  <th className="text-right" title="Cuánto más caro (rojo) o barato (azul) es tu precio que esta oferta">Tú frente a esta</th>
+                  <th className="text-right">Cambio 7 días</th>
+                  <th>Última lectura</th>
+                  <th className="m3-sticky-actions"><span className="sr-only">Enlace</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {ofertas.map(o => (
+                  <tr key={o.id}>
+                    <td>
+                      <div className="m3-cell-primary m3-cell-clamp max-w-[18rem]" title={o.marca}>{o.marca}</div>
+                      <div className="m3-cell-secondary">
+                        {o.tipo === 'propio' ? <span className="m3-chip-propio">Tuyo</span> : (o.laboratorio || 'Competidor')}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={o.cadena} tamano="xs" title="" />{nombreCadena(o.cadena)}</span>
+                    </td>
+                    <td className="text-right tabular-nums">{o.unidades}</td>
+                    <td className="text-right whitespace-nowrap tabular-nums">{o.sinPrecio ? <span className="text-on-surface-variant">Sin precio</span> : fmt(o.empaqueUsd)}</td>
+                    <td className="text-right whitespace-nowrap tabular-nums">{o.sinPrecio ? '—' : fmtUnidad(o.unitUsd)}</td>
+                    <td className="text-right whitespace-nowrap">
+                      {o.sinPrecio || o.tipo === 'propio' || tuPrecio == null ? '—' : <Diferencia valor={(tuPrecio / o.priceUsd - 1) * 100} />}
+                    </td>
+                    <td className="text-right whitespace-nowrap">{o.cambio != null && Math.abs(o.cambio) > UMBRAL_CAMBIO ? <Diferencia valor={o.cambio} /> : <span className="text-on-surface-variant">Sin cambio</span>}</td>
+                    <td className="whitespace-nowrap m3-body-small text-on-surface-variant" title={o.fecha ? fechaHora(o.fecha) : ''}>{o.fecha ? haceCuanto(o.fecha) : 'Nunca'}</td>
+                    <td className="m3-sticky-actions">
+                      {o.url && (
+                        <a href={o.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn" title="Abrir en la tienda" aria-label={`Abrir ${o.marca} en ${nombreCadena(o.cadena)}`}>
+                          <span className="material-symbols-outlined">open_in_new</span>
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {ofertas.length === 0 && (
+                  <tr><td colSpan={9} className="text-center text-on-surface-variant py-8">Este producto no tiene enlaces. Vincúlalos en Competencia.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {ajuste && (
+            <p className="m3-body-small text-on-surface-variant px-4 py-3 border-t border-outline-variant flex flex-wrap items-center gap-2">
+              Para quedar en tu meta ({textoMeta(meta)}, se cambia en el Dashboard) el precio sería {fmtModo(ajuste.objetivo)}:
+              <AjusteMeta ajuste={ajuste} fmt={fmtModo} />
+            </p>
+          )}
+        </section>
+
+        {/* Historia */}
+        <section className="m3-dash-card" aria-label="Historia de precios">
+          <header className="m3-dash-card-header">
+            <div className="min-w-0">
+              <h2 className="m3-title-medium text-on-surface">Historia de precios</h2>
+              <p className="m3-body-small text-on-surface-variant">
+                En dólares, cada día a la tasa de ese día{porUnidad ? ' y por unidad' : ''}. Si un día no hubo lectura se toma el último precio de la semana.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Select value={vistaHistoria} onChange={e => setVistaHistoria(e.target.value)} aria-label="Qué ver" className="m3-filter-chip" leadingIcon="stacked_line_chart">
+                <option value="resumen">Tuyo, mínimo y promedio</option>
+                <option value="ofertas">Cada oferta</option>
+              </Select>
+              <Select value={String(dias)} onChange={e => setDias(Number(e.target.value))} aria-label="Periodo" className="m3-filter-chip" leadingIcon="date_range">
+                {PERIODOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+              </Select>
+            </div>
+          </header>
+          {historia.cargando && serieHistoria.puntos.length === 0 ? (
+            <div className="h-72 rounded-2xl m3-skeleton" aria-busy="true" />
+          ) : serieHistoria.puntos.length < 2 ? (
+            <div className="h-56 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+              <span className="material-symbols-outlined text-3xl" aria-hidden="true">show_chart</span>
+              <span className="m3-body-medium">Aún no hay historia de precios para este producto en este periodo.</span>
+            </div>
+          ) : (
+            <div className={`h-80 ${historia.cargando ? 'opacity-60' : ''}`}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={serieHistoria.puntos} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
+                  <XAxis dataKey="fecha" tickFormatter={diaCorto} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={{ stroke: tg.rejilla }} minTickGap={28} />
+                  <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={72} domain={['auto', 'auto']} />
+                  <Tooltip content={<TooltipHistoria fmt={fmtModo} />} cursor={{ stroke: tg.eje, strokeOpacity: 0.3 }} />
+                  <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} formatter={v => <span style={{ color: tg.eje }}>{v}</span>} />
+                  {vistaHistoria === 'resumen' ? (
+                    [
+                      <Line key="tuyo" type="monotone" dataKey="tuyo" name="Tu precio" stroke={colorCategorico(0)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />,
+                      <Line key="minimo" type="monotone" dataKey="minimo" name="Mínimo de la competencia" stroke={colorCategorico(1)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />,
+                      <Line key="promedio" type="monotone" dataKey="promedio" name="Promedio de la competencia" stroke={colorCategorico(2)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />,
+                    ]
+                  ) : (
+                    serieHistoria.lineas.map(l => (
+                      <Line key={l.clave} type="monotone" dataKey={l.clave} name={l.nombre} stroke={l.color} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+                    ))
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {vistaHistoria === 'ofertas' && serieHistoria.ocultas > 0 && (
+            <p className="m3-body-small text-on-surface-variant mt-2">Se muestran {MAX_SERIES} ofertas; {serieHistoria.ocultas} más no caben en el gráfico.</p>
+          )}
+        </section>
+      </main>
+
+      <ConfirmModal
+        isOpen={confirmBorrar}
+        title="¿Borrar la historia de este producto?"
+        message={`Se borran las capturas de precio guardadas de ${activo.nombre} en todas las cadenas. Los enlaces no se tocan. No se puede deshacer.`}
+        confirmText="Borrar historia"
+        cancelText="Cancelar"
+        isDanger
+        onConfirm={borrarHistoria}
+        onCancel={() => setConfirmBorrar(false)}
+      />
+    </div>,
+    document.body
+  );
+}
+
+function TooltipOferta({ active, payload, fmt, nombreCadena }) {
+  if (!active || !payload?.length) return null;
+  const o = payload[0].payload;
   return (
-    <div 
-      className="relative group inline-block ml-1 align-middle leading-none"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(prev => !prev);
-        }}
-        className="p-0 bg-transparent border-0 inline-flex items-center justify-center cursor-pointer focus:outline-none"
-        aria-label="Información"
-      >
-        <span className="material-symbols-outlined text-body-md text-on-surface-variant hover:text-primary transition-colors select-none">
-          info
-        </span>
-      </button>
-      <div 
-        className={`absolute bottom-full mb-2 w-64 p-3 bg-[#1c1b1f] text-white text-[10.5px] leading-relaxed rounded-xl shadow-xl z-50 font-normal normal-case tracking-normal transition-all duration-effects-fast ease-effects-fast pointer-events-none ${
-          open ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible'
-        } ${alignClass}`}
-      >
-        {text}
-        <div className={`absolute top-full border-4 border-transparent border-t-[#1c1b1f] ${
-          align === 'left' ? 'left-3' : align === 'right' ? 'right-3' : 'left-1/2 -translate-x-1/2'
-        }`}></div>
-      </div>
+    <div className="m3-chart-tooltip">
+      <div className="font-medium">{o.marca}</div>
+      <div className="text-on-surface-variant">{o.tipo === 'propio' ? 'Tuyo · ' : ''}{nombreCadena(o.cadena)} · {o.unidades} {o.unidades === 1 ? 'unidad' : 'unidades'}</div>
+      <div>{fmt(o.priceUsd)}</div>
     </div>
   );
 }
 
-function CustomTooltip({ active, payload, label, propios, labMap, currency, analisisMode }) {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-surface-container-lowest border border-outline-variant p-3 rounded-2xl shadow-elevation-3 space-y-2 max-w-sm text-xs font-sans">
-        <p className="font-bold text-primary font-mono border-b border-outline-variant pb-1 flex justify-between items-center">
-          <span>Fecha: {label ? label.split('-').reverse().join('/') : ''}</span>
-          {analisisMode === 'unidosis' && (
-            <span className="text-label-sm text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
-          )}
-        </p>
-        <div className="space-y-1.5 max-h-48 overflow-y-auto">
-          {payload.map((pld) => {
-            const isPropio = propios && propios.includes(pld.name);
-            const isPromedio = pld.name === 'Promedio' || pld.name === 'Promedio Mercado';
-            const lab = labMap && labMap[pld.name];
-            
-            return (
-              <div key={pld.name} className="flex justify-between gap-4 items-center">
-                <div className="flex flex-col">
-                  <span className={`font-semibold ${isPropio ? 'text-secondary' : isPromedio ? 'text-amber-600' : 'text-on-surface'}`}>
-                    {pld.name}
-                    {isPropio && (pld.name.includes('(') ? ' (Mi Marca)' : ' (Mi Cadena)')}
-                  </span>
-                  {lab && (
-                    <span className="text-label-sm text-on-surface-variant font-sans leading-none mt-0.5">
-                      Lab: {lab}
-                    </span>
-                  )}
-                </div>
-                <span className={`font-mono font-bold ${isPropio ? 'text-secondary' : isPromedio ? 'text-amber-600' : 'text-primary'}`}>
-                  {currency === 'usd' ? '$' : 'Bs '}{pld.value?.toFixed(2)}{analisisMode === 'unidosis' ? '/u' : ''}
-                </span>
-              </div>
-            );
-          })}
+function TooltipHistoria({ active, payload, label, fmt }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="m3-chart-tooltip max-w-xs">
+      <div className="font-medium">{new Date(`${label}T12:00:00`).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+      {payload.filter(p => p.value != null).sort((a, b) => a.value - b.value).map(p => (
+        <div key={p.dataKey} className="flex items-center justify-between gap-4">
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <i className="inline-block w-3 h-0.5 shrink-0" style={{ background: p.color }} />
+            <span className="truncate">{p.name}</span>
+          </span>
+          <span className="tabular-nums font-medium">{fmt(p.value)}</span>
         </div>
-      </div>
-    );
-  }
-  return null;
-}
-
-function BarChartTooltip({ active, payload, label, currency, analisisMode }) {
-  if (active && payload && payload.length) {
-    const symbol = currency === 'usd' ? '$' : 'Bs ';
-    const locale = currency === 'usd' ? 'en-US' : 'es-VE';
-    return (
-      <div className="bg-surface-container-lowest border border-outline-variant p-3 rounded-2xl shadow-elevation-3 space-y-1.5 max-w-xs text-xs font-sans">
-        <p className="font-bold text-primary font-mono border-b border-outline-variant pb-1 flex justify-between items-center gap-2">
-          <span>{label}</span>
-          {analisisMode === 'unidosis' && (
-            <span className="text-label-sm text-tertiary bg-tertiary-container text-on-tertiary-container px-1.5 py-0.5 rounded font-bold">Por unidosis</span>
-          )}
-        </p>
-        <div className="space-y-1 max-h-48 overflow-y-auto">
-          {payload.map((entry) => (
-            <div key={entry.name} className="flex items-center justify-between gap-3 text-label-md">
-              <span className="flex items-center gap-1.5 font-medium" style={{ color: entry.color }}>
-                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color }}></span>
-                {entry.name}:
-              </span>
-              <span className="font-mono font-bold text-on-surface">
-                {symbol}{Number(entry.value).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{analisisMode === 'unidosis' ? '/u' : ''}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  return null;
-}
-
-export default function ProductDetailModal({ producto, competencia, currency, bcvRate, onClose, initialPriceMode = 'descuento', initialAnalisisMode = 'empaque' }) {
-  const { productos = [], productosCompetencia = [], historicoPrecios = [], setHistoricoPrecios } = useData() || {};
-
-  const [activeProduct, setActiveProduct] = useState(producto);
-  const [activeCompetencia, setActiveCompetencia] = useState(competencia);
-
-  useEffect(() => {
-    setActiveProduct(producto);
-  }, [producto]);
-
-  useEffect(() => {
-    setActiveCompetencia(competencia);
-  }, [competencia]);
-
-  const [historico, setHistorico] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [priceMode, setPriceMode] = useState(initialPriceMode);
-  const [analisisMode, setAnalisisMode] = useState(initialAnalisisMode);
-  const [modalCurrency, setModalCurrency] = useState(currency || 'usd');
-  const [chartViewType, setChartViewType] = useState('individual'); // 'individual' or 'chainAverage'
-  const [barGroupMode, setBarGroupMode] = useState('laboratorio'); // 'laboratorio' | 'cadena'
-  const [activeGraphTab, setActiveGraphTab] = useState('barras'); // 'barras' | 'tendencia' | 'ambos'
-
-  // Dropdown selector states
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('Todas');
-
-  // Filters inside modal
-  const [filterRelacion, setFilterRelacion] = useState('todos'); // 'todos', 'propio', 'competencia'
-  const [filterCadena, setFilterCadena] = useState('todas'); // 'todas', or specific chain name
-
-  const handleSelectProduct = (newProd) => {
-    setActiveProduct(newProd);
-    if (productosCompetencia && productosCompetencia.length) {
-      const targetId = String(newProd.id_interno || newProd.id || '').trim();
-      const compItems = targetId ? productosCompetencia.filter(
-        pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === targetId
-      ) : [];
-      setActiveCompetencia(compItems);
-    } else {
-      setActiveCompetencia([]);
-    }
-  };
-
-  const categoriesList = useMemo(() => {
-    const set = new Set(productos.map(p => p.categoria).filter(Boolean));
-    return ['Todas', ...Array.from(set).sort()];
-  }, [productos]);
-
-  const filteredProducts = useMemo(() => {
-    const queryStr = searchTerm.toLowerCase().trim();
-    return productos.filter(p => {
-      const matchCategory = categoryFilter === 'Todas' || p.categoria === categoryFilter;
-      if (!matchCategory) return false;
-      if (!queryStr) return true;
-      
-      const name = (p.nombre || '').toLowerCase();
-      const code = (p.id_interno || '').toLowerCase();
-      const pa = (p.principio_activo || '').toLowerCase();
-      const cat = (p.categoria || '').toLowerCase();
-      const pres = (p.presentacion || '').toLowerCase();
-      
-      return name.includes(queryStr) || code.includes(queryStr) || pa.includes(queryStr) || cat.includes(queryStr) || pres.includes(queryStr);
-    });
-  }, [productos, searchTerm, categoryFilter]);
-
-  const ownProductCount = useMemo(() => {
-    return parseUnidosisCount(activeProduct?.tamano || activeProduct?.presentacion, activeProduct?.nombre, activeProduct?.unidosis);
-  }, [activeProduct]);
-
-  const competenciaWithUnidosis = useMemo(() => {
-    return activeCompetencia.map(pc => {
-      const count = parseUnidosisCount(pc.tamano, pc.marca, pc.unidosis) || ownProductCount;
-      const factor = analisisMode === 'unidosis' ? Math.max(count, 1) : 1;
-      return {
-        ...pc,
-        unidosisCount: count,
-        factor,
-        adjustedFullBs: pc.ultimo_precio_full_bs ? pc.ultimo_precio_full_bs / factor : null,
-        adjustedDescBs: pc.ultimo_precio_desc_bs ? pc.ultimo_precio_desc_bs / factor : null,
-      };
-    });
-  }, [activeCompetencia, ownProductCount, analisisMode]);
-
-  const handleClearHistory = async () => {
-    setClearing(true);
-    try {
-      await dbClearHistoricoPrecioForProduct(activeProduct.id_interno);
-      setHistorico([]);
-      if (setHistoricoPrecios) {
-        setHistoricoPrecios(prev => (prev || []).filter(h => h.id_producto_propio !== activeProduct.id_interno));
-      }
-    } catch (err) {
-      console.warn('Aviso al borrar historial de producto:', err?.message || String(err));
-      setHistorico([]);
-      if (setHistoricoPrecios) {
-        setHistoricoPrecios(prev => (prev || []).filter(h => h.id_producto_propio !== activeProduct.id_interno));
-      }
-    } finally {
-      setClearing(false);
-      setShowClearConfirm(false);
-    }
-  };
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      let docs = [];
-
-      // Primary: filter from DataContext historicoPrecios
-      if (historicoPrecios && historicoPrecios.length > 0) {
-        docs = historicoPrecios.filter(h => h.id_producto_propio === activeProduct.id_interno);
-      }
-
-      // Secondary: Try fetching from Supabase or Firestore if available and docs is empty
-      if (docs.length === 0) {
-        try {
-          if (supabase) {
-            const { data, error: sbErr } = await supabase
-              .from('historico_precios')
-              .select('*')
-              .eq('id_producto_propio', activeProduct.id_interno);
-            if (!sbErr && data && data.length > 0) {
-              docs = data.map(d => ({
-                ...d,
-                scraped_at: d.scraped_at ? new Date(d.scraped_at) : null
-              }));
-            }
-          }
-        } catch (e) {
-          console.warn('Supabase historico fetch warning:', e?.message || String(e));
-        }
-
-      }
-
-      docs.sort((a, b) => {
-        const tA = a.scraped_at ? (a.scraped_at instanceof Date ? a.scraped_at.getTime() : new Date(a.scraped_at).getTime()) : 0;
-        const tB = b.scraped_at ? (b.scraped_at instanceof Date ? b.scraped_at.getTime() : new Date(b.scraped_at).getTime()) : 0;
-        return tA - tB;
-      });
-
-      setHistorico(docs);
-      setLoading(false);
-    })();
-  }, [activeProduct.id_interno, historicoPrecios]);
-
-  // Pivot: convertir historico en serie por marca-cadena o por promedio de cadena, agrupado por dia.
-  const chartData = (() => {
-    const byDate = new Map();
-    const marcasVistas = new Set();
-    const propios = new Set();
-
-    const byDateChain = new Map();
-    const chainsVistas = new Set();
-
-    for (const h of historico) {
-      if (!h.scraped_at) continue;
-
-      // Apply chain and relation filters to the history to filter chart as requested
-      const matchRelacion = filterRelacion === 'todos' || 
-        (filterRelacion === 'propio' && h.tipo === 'propio') || 
-        (filterRelacion === 'competencia' && h.tipo !== 'propio');
-      const matchCadena = filterCadena === 'todas' || h.cadena === filterCadena;
-      if (!matchRelacion || !matchCadena) continue;
-
-      const dateKey = h.scraped_at.toISOString().slice(0, 10);
-      const marca = `${h.marca} (${h.cadena})`;
-      marcasVistas.add(marca);
-
-      if (h.tipo === 'propio') {
-        propios.add(marca);
-      }
-
-      const rawPrecioBs = priceMode === 'descuento'
-        ? (h.precio_desc_bs || h.precio_full_bs)
-        : h.precio_full_bs;
-      if (!rawPrecioBs) continue;
-
-      const hCount = parseUnidosisCount(h.tamano, h.marca, h.unidosis) || ownProductCount;
-      const hFactor = analisisMode === 'unidosis' ? Math.max(hCount, 1) : 1;
-      const precioBs = rawPrecioBs / hFactor;
-      const precio = modalCurrency === 'usd' && bcvRate ? precioBs / bcvRate : precioBs;
-
-      // 1. Individual Brand structure
-      if (!byDate.has(dateKey)) byDate.set(dateKey, { date: dateKey });
-      byDate.get(dateKey)[marca] = parseFloat(precio.toFixed(2));
-
-      // 2. Chain Average structure
-      if (!byDateChain.has(dateKey)) byDateChain.set(dateKey, { date: dateKey });
-      if (!byDateChain.get(dateKey)[h.cadena]) {
-        byDateChain.get(dateKey)[h.cadena] = { sum: 0, count: 0 };
-      }
-      byDateChain.get(dateKey)[h.cadena].sum += precio;
-      byDateChain.get(dateKey)[h.cadena].count += 1;
-      chainsVistas.add(h.cadena);
-    }
-
-    // Process individual series
-    const dataIndividual = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
-    dataIndividual.forEach(item => {
-      const keys = Object.keys(item).filter(k => k !== 'date');
-      if (keys.length > 0) {
-        const sum = keys.reduce((acc, k) => acc + item[k], 0);
-        item['Promedio'] = parseFloat((sum / keys.length).toFixed(2));
-      }
-    });
-
-    // Process chain average series
-    const dataChainRaw = Array.from(byDateChain.values()).sort((a, b) => a.date.localeCompare(b.date));
-    const dataChain = dataChainRaw.map(item => {
-      const newItem = { date: item.date };
-      const chainKeys = Object.keys(item).filter(k => k !== 'date');
-      let totalSum = 0;
-      let totalCount = 0;
-      chainKeys.forEach(ch => {
-        const avg = item[ch].sum / item[ch].count;
-        newItem[ch] = parseFloat(avg.toFixed(2));
-        totalSum += item[ch].sum;
-        totalCount += item[ch].count;
-      });
-      if (totalCount > 0) {
-        newItem['Promedio'] = parseFloat((totalSum / totalCount).toFixed(2));
-      }
-      return newItem;
-    });
-
-    return {
-      individual: {
-        data: dataIndividual,
-        marcas: Array.from(marcasVistas),
-        propios,
-      },
-      chainAverage: {
-        data: dataChain,
-        cadenas: Array.from(chainsVistas),
-      }
-    };
-  })();
-
-  // Map each competitor/product key to its laboratory
-  const labMap = useMemo(() => {
-    const map = new Map();
-    for (const c of competenciaWithUnidosis) {
-      const key = `${c.marca} (${c.cadena})`;
-      map.set(key, c.laboratorio || '');
-    }
-    return map;
-  }, [competenciaWithUnidosis]);
-
-  // Available chains for dropdown filter
-  const cadenasDisponibles = useMemo(() => {
-    const set = new Set(competenciaWithUnidosis.map(c => c.cadena));
-    return Array.from(set).sort();
-  }, [competenciaWithUnidosis]);
-
-  // Filtered competition list for table
-  const competenciaFiltrada = useMemo(() => {
-    const filtered = competenciaWithUnidosis.filter(pc => {
-      const matchRelacion = filterRelacion === 'todos' || 
-        (filterRelacion === 'propio' && pc.tipo === 'propio') || 
-        (filterRelacion === 'competencia' && pc.tipo !== 'propio');
-      const matchCadena = filterCadena === 'todas' || pc.cadena === filterCadena;
-      return matchRelacion && matchCadena;
-    });
-
-    // Multi-criteria sort:
-    // 1. Cadena (Alphabetical)
-    // 2. Relación (propio / Mi Marca first, so it is in a predictable consistent position)
-    // 3. Price (lowest to highest based on current active priceMode)
-    return filtered.sort((a, b) => {
-      const cadenaA = (a.cadena || '').toLowerCase();
-      const cadenaB = (b.cadena || '').toLowerCase();
-      if (cadenaA !== cadenaB) {
-        return cadenaA.localeCompare(cadenaB, 'es');
-      }
-
-      if (a.tipo !== b.tipo) {
-        return a.tipo === 'propio' ? -1 : 1;
-      }
-
-      const priceA = priceMode === 'descuento'
-        ? (a.adjustedDescBs || a.adjustedFullBs || 0)
-        : (a.adjustedFullBs || 0);
-      const priceB = priceMode === 'descuento'
-        ? (b.adjustedDescBs || b.adjustedFullBs || 0)
-        : (b.adjustedFullBs || 0);
-
-      return priceA - priceB;
-    });
-  }, [competenciaWithUnidosis, filterRelacion, filterCadena, priceMode]);
-
-  // Data for Column/Bar chart: Price of each laboratory in each chain (omitting relation/chain filters as requested)
-  const barChartData = useMemo(() => {
-    const listToUse = competenciaWithUnidosis;
-    if (barGroupMode === 'cadena') {
-      const dataMap = new Map();
-      const seriesSet = new Set();
-
-      for (const pc of listToUse) {
-        const cadena = pc.cadena || 'Sin Cadena';
-        const labName = pc.laboratorio ? pc.laboratorio : (pc.marca || 'Sin Lab');
-        const seriesKey = pc.tipo === 'propio' ? `${labName} ⭐` : labName;
-
-        const rawBs = priceMode === 'descuento'
-          ? (pc.adjustedDescBs || pc.adjustedFullBs)
-          : pc.adjustedFullBs;
-
-        if (!rawBs || rawBs <= 0) continue;
-
-        const val = modalCurrency === 'usd' && bcvRate ? rawBs / bcvRate : rawBs;
-        const priceNum = parseFloat(val.toFixed(2));
-
-        seriesSet.add(seriesKey);
-
-        if (!dataMap.has(cadena)) {
-          dataMap.set(cadena, { name: cadena });
-        }
-        const item = dataMap.get(cadena);
-
-        if (item[seriesKey] !== undefined) {
-          const prevSum = item[`_sum_${seriesKey}`] || item[seriesKey];
-          const prevCount = item[`_count_${seriesKey}`] || 1;
-          const newSum = prevSum + priceNum;
-          const newCount = prevCount + 1;
-          item[`_sum_${seriesKey}`] = newSum;
-          item[`_count_${seriesKey}`] = newCount;
-          item[seriesKey] = parseFloat((newSum / newCount).toFixed(2));
-        } else {
-          item[seriesKey] = priceNum;
-        }
-      }
-
-      return {
-        data: Array.from(dataMap.values()),
-        series: Array.from(seriesSet).sort(),
-      };
-    } else {
-      const dataMap = new Map();
-      const seriesSet = new Set();
-
-      for (const pc of listToUse) {
-        const cadena = pc.cadena || 'Sin Cadena';
-        const labName = pc.laboratorio ? pc.laboratorio : (pc.marca || 'Sin Lab');
-        const xKey = pc.tipo === 'propio' ? `${labName} ⭐` : labName;
-        const seriesKey = cadena;
-
-        const rawBs = priceMode === 'descuento'
-          ? (pc.adjustedDescBs || pc.adjustedFullBs)
-          : pc.adjustedFullBs;
-
-        if (!rawBs || rawBs <= 0) continue;
-
-        const val = modalCurrency === 'usd' && bcvRate ? rawBs / bcvRate : rawBs;
-        const priceNum = parseFloat(val.toFixed(2));
-
-        seriesSet.add(seriesKey);
-
-        if (!dataMap.has(xKey)) {
-          dataMap.set(xKey, { name: xKey });
-        }
-        const item = dataMap.get(xKey);
-
-        if (item[seriesKey] !== undefined) {
-          const prevSum = item[`_sum_${seriesKey}`] || item[seriesKey];
-          const prevCount = item[`_count_${seriesKey}`] || 1;
-          const newSum = prevSum + priceNum;
-          const newCount = prevCount + 1;
-          item[`_sum_${seriesKey}`] = newSum;
-          item[`_count_${seriesKey}`] = newCount;
-          item[seriesKey] = parseFloat((newSum / newCount).toFixed(2));
-        } else {
-          item[seriesKey] = priceNum;
-        }
-      }
-
-      return {
-        data: Array.from(dataMap.values()),
-        series: Array.from(seriesSet).sort(),
-      };
-    }
-  }, [competenciaWithUnidosis, barGroupMode, priceMode, modalCurrency, bcvRate]);
-
-  // Calculate overall average price across all items for the column chart reference line
-  const overallBarAverage = useMemo(() => {
-    let sum = 0;
-    let count = 0;
-    for (const pc of competenciaWithUnidosis) {
-      const rawBs = priceMode === 'descuento'
-        ? (pc.adjustedDescBs || pc.adjustedFullBs)
-        : pc.adjustedFullBs;
-      if (rawBs && rawBs > 0) {
-        const val = modalCurrency === 'usd' && bcvRate ? rawBs / bcvRate : rawBs;
-        sum += val;
-        count++;
-      }
-    }
-    return count > 0 ? parseFloat((sum / count).toFixed(2)) : null;
-  }, [competenciaWithUnidosis, priceMode, modalCurrency, bcvRate]);
-
-  // Minimum and maximum prices for highlights in table (calculated on filtered set)
-  const validFullPrices = competenciaFiltrada
-    .map(c => c.adjustedFullBs)
-    .filter(p => p && p > 0);
-  const minFullPriceBs = validFullPrices.length > 0 ? Math.min(...validFullPrices) : null;
-  const maxFullPriceBs = validFullPrices.length > 0 ? Math.max(...validFullPrices) : null;
-  const avgFullPriceBs = validFullPrices.length > 0 ? validFullPrices.reduce((a, b) => a + b, 0) / validFullPrices.length : null;
-
-  const validDescPrices = competenciaFiltrada
-    .map(c => c.adjustedDescBs)
-    .filter(p => p && p > 0);
-  const minDescPriceBs = validDescPrices.length > 0 ? Math.min(...validDescPrices) : null;
-  const maxDescPriceBs = validDescPrices.length > 0 ? Math.max(...validDescPrices) : null;
-  const avgDescPriceBs = validDescPrices.length > 0 ? validDescPrices.reduce((a, b) => a + b, 0) / validDescPrices.length : null;
-
-  // Calculations for smart indicators (calculated on filtered set)
-  const validPrices = competenciaFiltrada
-    .map(c => {
-      const pBs = priceMode === 'descuento'
-        ? (c.adjustedDescBs || c.adjustedFullBs)
-        : c.adjustedFullBs;
-      return pBs ? { cadena: c.cadena, marca: c.marca, priceBs: pBs, tipo: c.tipo, count: c.unidosisCount } : null;
-    })
-    .filter(Boolean);
-
-  const minPriceItem = validPrices.length > 0 
-    ? validPrices.reduce((prev, curr) => (prev.priceBs < curr.priceBs) ? prev : curr)
-    : null;
-
-  const avgPriceBs = validPrices.length > 0
-    ? validPrices.reduce((sum, item) => sum + item.priceBs, 0) / validPrices.length
-    : null;
-
-  const propioItem = competenciaFiltrada.find(c => c.tipo === 'propio') || competenciaWithUnidosis.find(c => c.tipo === 'propio');
-  
-  // Si no hay un scrape propio en cadenas pero el producto tiene PVP fijado en dim_productos / pvp_propio
-  const fallbackPropioUsd = Number(activeProduct?.pvp_propio_usd || 0);
-  const fallbackPropioFactor = analisisMode === 'unidosis' ? Math.max(ownProductCount, 1) : 1;
-  const fallbackPropioBs = (fallbackPropioUsd > 0 && bcvRate) 
-    ? (fallbackPropioUsd * bcvRate) / fallbackPropioFactor 
-    : null;
-
-  const propioPriceBs = propioItem 
-    ? (priceMode === 'descuento' 
-        ? (propioItem.adjustedDescBs || propioItem.adjustedFullBs)
-        : propioItem.adjustedFullBs)
-    : fallbackPropioBs;
-
-  const diffMinBs = (propioPriceBs !== null && minPriceItem !== null) ? propioPriceBs - minPriceItem.priceBs : null;
-  const pctMin = (diffMinBs !== null && minPriceItem.priceBs > 0) ? (diffMinBs / minPriceItem.priceBs) * 100 : null;
-
-  const diffAvgBs = (propioPriceBs !== null && avgPriceBs !== null) ? propioPriceBs - avgPriceBs : null;
-  const pctAvg = (diffAvgBs !== null && avgPriceBs > 0) ? (diffAvgBs / avgPriceBs) * 100 : null;
-
-  // El color de cada cadena sale del menu Cadenas (el mismo en todo el panel).
-  // Para lo que no es una cadena (marcas, competidores) se usa la paleta de abajo.
-  const getChainSpecificColor = (name) => {
-    if (!name) return null;
-    const registrado = colorCadenaRegistrado(name);
-    if (registrado) return registrado;
-    const lower = name.toLowerCase();
-    if (lower.includes('farmatodo') || lower.includes('locatel') || lower.includes('saas')) return getChainColor(name);
-    return null;
-  };
-
-  const getLineColor = (marcaName, index, isPropioChain = false) => {
-    const chainColor = getChainSpecificColor(marcaName);
-    if (chainColor) return chainColor;
-
-    if (isPropioChain || (chartData?.individual?.propios && chartData.individual.propios.has(marcaName))) {
-      return '#2e7d32'; // Always green for Propio
-    }
-    const competitorColors = ['#040d53', '#ba1a1a', '#004ecb', '#0891b2', '#db2777', '#8b5cf6', '#ea580c', '#3b82f6'];
-    return competitorColors[index % competitorColors.length];
-  };
-
-  const getBarColor = (seriesKey) => {
-    const chainColor = getChainSpecificColor(seriesKey);
-    if (chainColor) return chainColor;
-
-    const isPropio = seriesKey.includes('⭐') || 
-      (propioItem && seriesKey === propioItem.cadena) ||
-      (propioItem && propioItem.marca && seriesKey.toLowerCase().includes(propioItem.marca.toLowerCase()));
-
-    if (isPropio) {
-      return '#2e7d32'; // Always green for user's product/brand/chain
-    }
-    const competitorColors = ['#040d53', '#004ecb', '#ba1a1a', '#0891b2', '#db2777', '#8b5cf6', '#ea580c', '#3b82f6'];
-    let hash = 0;
-    for (let i = 0; i < seriesKey.length; i++) {
-      hash = seriesKey.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const colorIndex = Math.abs(hash) % competitorColors.length;
-    return competitorColors[colorIndex];
-  };
-  const formatHeaderPrice = (priceBs) => {
-    if (priceBs == null) return '—';
-    const suffix = analisisMode === 'unidosis' ? '/u' : '';
-    if (modalCurrency === 'usd') {
-      if (!bcvRate) return '—';
-      return '$' + (priceBs / bcvRate).toFixed(2) + suffix;
-    }
-    return 'Bs ' + priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 bg-[#f8f9fa] z-50 flex flex-col overflow-hidden animate-fade-in text-on-surface">
-      {/* Header Navigation Bar */}
-      <div className="bg-surface-container-lowest border-b border-outline-variant px-4 md:px-8 py-3 flex items-center justify-between gap-4 shrink-0 shadow-sm z-30">
-        {/* Left: Regresar / Volver button */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 px-3.5 py-2 bg-surface-container-lowest border border-outline-variant hover:bg-surface-container text-primary text-xs font-bold rounded-xl transition-all shadow-xs group"
-            title="Regresar a la pantalla principal"
-          >
-            <span className="material-symbols-outlined text-base group-hover:-translate-x-0.5 transition-transform">
-              arrow_back
-            </span>
-            <span className="hidden sm:inline">Volver</span>
-          </button>
-          <div className="h-6 w-[1px] bg-surface-container-high hidden sm:block"></div>
-        </div>
-
-        {/* Center: Searchable Product Selector Dropdown */}
-        <div className="flex-1 max-w-2xl relative">
-          <button
-            onClick={() => setDropdownOpen(prev => !prev)}
-            className="w-full bg-surface-container hover:bg-[#e8eaef] border border-outline-variant rounded-2xl px-3.5 py-2 flex items-center justify-between transition-all shadow-xs text-left group"
-          >
-            <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs font-mono">
-                {activeProduct.id_interno || 'P'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-sm text-primary truncate">{activeProduct.nombre}</span>
-                  {activeProduct.categoria && (
-                    <span className="hidden sm:inline-block px-2 py-0.5 bg-surface-container-high text-primary text-label-sm font-bold rounded-md font-mono shrink-0">
-                      {activeProduct.categoria}
-                    </span>
-                  )}
-                </div>
-                <p className="text-label-md text-on-surface-variant truncate leading-tight">
-                  {activeProduct.principio_activo || 'Sin principio activo'} · {activeProduct.concentracion || ''} {activeProduct.presentacion || ''}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 text-primary font-bold text-xs shrink-0 pl-2">
-              <span className="hidden md:inline text-label-md font-mono text-on-surface-variant">Cambiar producto</span>
-              <span className="material-symbols-outlined text-lg group-hover:translate-y-0.5 transition-transform">
-                {dropdownOpen ? 'expand_less' : 'unfold_more'}
-              </span>
-            </div>
-          </button>
-
-          {/* Searchable Dropdown Popover */}
-          {dropdownOpen && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setDropdownOpen(false)}></div>
-              <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-2xl z-40 p-3 space-y-2.5 animate-fade-in max-w-2xl w-full">
-                {/* Search Bar */}
-                <div className="relative flex items-center">
-                  <span className="material-symbols-outlined absolute left-3 text-[18px] text-on-surface-variant pointer-events-none select-none">search</span>
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por nombre, id, principio activo o categoría..."
-                    className="w-full pl-10 pr-8 py-2 bg-surface-container border border-outline-variant focus:border-primary focus:bg-surface-container-lowest rounded-xl text-xs font-medium text-on-surface placeholder-[#464650]/60 outline-none transition-all"
-                    autoFocus
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-2.5 text-on-surface-variant hover:text-black w-5 h-5 flex items-center justify-center rounded-full"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Categories Horizontal Scroll */}
-                {categoriesList.length > 2 && (
-                  <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar text-label-md">
-                    {categoriesList.map(cat => (
-                      <button
-                        key={cat}
-                        onClick={() => setCategoryFilter(cat)}
-                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold whitespace-nowrap transition-all ${
-                          categoryFilter === cat
-                            ? 'bg-primary text-white shadow-xs'
-                            : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Counter */}
-                <div className="flex items-center justify-between text-label-md font-mono text-on-surface-variant px-1 border-b border-[#f3f4f9] pb-1.5">
-                  <span>{filteredProducts.length} productos coincidentes</span>
-                  <span>{productos.length} total</span>
-                </div>
-
-                {/* Product List */}
-                <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
-                  {filteredProducts.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-on-surface-variant italic">
-                      No se encontraron productos que coincidan con "{searchTerm}"
-                    </div>
-                  ) : (
-                    filteredProducts.map(p => {
-                      const isSelected = p.id_interno === activeProduct.id_interno;
-                      const pId = String(p.id_interno || p.id || '').trim();
-                      const compCount = pId ? productosCompetencia.filter(pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === pId).length : 0;
-
-                      return (
-                        <button
-                          key={p.id_interno || p.id}
-                          onClick={() => {
-                            handleSelectProduct(p);
-                            setDropdownOpen(false);
-                          }}
-                          className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between gap-3 ${
-                            isSelected
-                              ? 'bg-primary/5 border border-primary/20 text-primary'
-                              : 'hover:bg-surface-container border border-transparent text-on-surface'
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-xs truncate">{p.nombre}</span>
-                              <span className="px-1.5 py-0.2 bg-surface-container text-primary text-[9.5px] font-mono font-bold rounded">
-                                {p.id_interno}
-                              </span>
-                            </div>
-                            <p className="text-label-md text-on-surface-variant truncate mt-0.5">
-                              {p.principio_activo || '—'} {p.concentracion || ''} · {p.presentacion || ''}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-label-sm font-mono font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">
-                              {compCount} comp.
-                            </span>
-                            {isSelected && (
-                              <span className="material-symbols-outlined text-base text-primary font-bold">check_circle</span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowClearConfirm(true)}
-            disabled={clearing || historico.length === 0}
-            className="px-3 py-2 border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5 shadow-xs"
-            title="Eliminar historial acumulado para este producto"
-          >
-            <span className="material-symbols-outlined text-base">delete_sweep</span>
-            <span className="hidden lg:inline">Limpiar Historial</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 text-on-surface-variant hover:text-black hover:bg-surface-container-high/50 rounded-xl transition-colors"
-            title="Cerrar vista"
-          >
-            <span className="material-symbols-outlined text-2xl">close</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content Scrollable Container */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6">
-          {/* Price and Currency Switch Controls */}
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-surface-container p-4 rounded-2xl border border-outline-variant animate-fade-in">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 flex-1">
-              {/* Unidosis vs Empaque Switcher */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-body-lg">medication</span>
-                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Modo:</span>
-                </div>
-                <div className="bg-surface-container-high p-1 rounded-xl flex gap-1 h-[34px] items-center">
-                  <button
-                    onClick={() => setAnalisisMode('empaque')}
-                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
-                      analisisMode === 'empaque' 
-                        ? 'bg-primary text-white shadow-sm' 
-                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                    }`}
-                  >
-                    Empaque
-                  </button>
-                  <button
-                    onClick={() => setAnalisisMode('unidosis')}
-                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
-                      analisisMode === 'unidosis' 
-                        ? 'bg-primary text-white shadow-sm' 
-                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                    }`}
-                    title="Analizar precios normalizados por 1 unidad/tableta/dosis"
-                  >
-                    Unidosis
-                  </button>
-                </div>
-              </div>
-
-              {/* Modo de Comparacion Selector */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-body-lg">receipt_long</span>
-                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Comparación:</span>
-                </div>
-                <div className="bg-surface-container-high p-1 rounded-xl flex gap-1 h-[34px] items-center">
-                  <button
-                    onClick={() => setPriceMode('descuento')}
-                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
-                      priceMode === 'descuento' 
-                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
-                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                    }`}
-                  >
-                    Oferta
-                  </button>
-                  <button
-                    onClick={() => setPriceMode('lista')}
-                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center justify-center gap-1 ${
-                      priceMode === 'lista' 
-                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
-                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                    }`}
-                  >
-                    Lista
-                  </button>
-                </div>
-              </div>
-
-              {/* Moneda Selector */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-body-lg">monetization_on</span>
-                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Moneda:</span>
-                </div>
-                <div className="bg-surface-container-high p-1 rounded-xl flex gap-1 h-[34px] items-center">
-                  <button
-                    onClick={() => setModalCurrency('usd')}
-                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all ${
-                      modalCurrency === 'usd' 
-                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
-                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                    }`}
-                  >
-                    USD ($)
-                  </button>
-                  <button
-                    onClick={() => setModalCurrency('bs')}
-                    className={`flex-1 py-1 rounded-lg text-label-sm font-bold transition-all ${
-                      modalCurrency === 'bs' 
-                        ? 'bg-surface-container-lowest text-primary shadow-sm' 
-                        : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                    }`}
-                  >
-                    Bs
-                  </button>
-                </div>
-              </div>
-
-              {/* Relación Selector */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-body-lg">groups</span>
-                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Relación Marca:</span>
-                </div>
-                <Select
-                  value={filterRelacion}
-                  onChange={(e) => setFilterRelacion(e.target.value)}
-                  className="m3-select m3-select-dense w-full"
-                >
-                  <option value="todos">Todos</option>
-                  <option value="propio">Mi Marca</option>
-                  <option value="competencia">Competidores</option>
-                </Select>
-              </div>
-
-              {/* Cadena Selector */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-body-lg">storefront</span>
-                  <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Cadena:</span>
-                </div>
-                <Select
-                  value={filterCadena}
-                  onChange={(e) => setFilterCadena(e.target.value)}
-                  className="m3-select m3-select-dense w-full"
-                >
-                  <option value="todas">Todas</option>
-                  {cadenasDisponibles.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-
-            {/* BCV Rate Badge */}
-            {bcvRate && (
-              <div className="flex items-center gap-2 bg-surface-container-lowest/60 border border-outline-variant px-3 py-2 rounded-xl text-label-md font-mono text-on-surface-variant self-start xl:self-auto min-w-[110px] justify-center h-[34px] mt-auto">
-                <span className="text-label-sm uppercase font-bold text-on-surface-variant/70">Tasa BCV:</span>
-                <span className="font-extrabold text-primary">Bs {bcvRate.toFixed(2)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Smart Indicators Card Grid */}
-          {validPrices.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
-              {/* Mas Barato Card */}
-              <div className="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
-                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-1">
-                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
-                      Más Barato {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
-                    </span>
-                    <InfoTooltip text="El precio mínimo detectado entre todos tus competidores en el mercado para el modo seleccionado (con descuento o de lista)." align="left" />
-                  </div>
-                  <div className="text-xl font-display font-extrabold text-emerald-700">
-                    {formatHeaderPrice(minPriceItem?.priceBs)}
-                  </div>
-                  <p className="text-label-md text-on-surface-variant truncate font-sans">
-                    En: {minPriceItem?.cadena} ({minPriceItem?.marca})
-                  </p>
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-                  <span className="material-symbols-outlined text-xl select-none">savings</span>
-                </div>
-              </div>
-
-              {/* Mi Precio Card */}
-              <div className="bg-surface-container-lowest border border-emerald-500/30 p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
-                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-1">
-                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-emerald-800 truncate">
-                      Mi Precio {analisisMode === 'unidosis' ? '(Unidosis)' : '(Marca Propia)'}
-                    </span>
-                    <InfoTooltip text="El precio actual de tu producto marca propia. Se muestra en verde para resaltar que es la referencia de tu marca." align="left" />
-                  </div>
-                  <div className="text-xl font-display font-extrabold text-emerald-800">
-                    {propioPriceBs ? formatHeaderPrice(propioPriceBs) : '—'}
-                  </div>
-                  <p className="text-label-md text-emerald-700 font-sans truncate">
-                    {propioItem?.marca ? `Marca: ${propioItem.marca}` : activeProduct?.laboratorio ? `Lab: ${activeProduct.laboratorio}` : 'Catálogo Propio'}
-                  </p>
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-800 shrink-0">
-                  <span className="material-symbols-outlined text-xl select-none">verified_user</span>
-                </div>
-              </div>
-
-              {/* vs Minimo Card */}
-              <div className="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
-                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-1">
-                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">Diferencia vs Mínimo</span>
-                    <InfoTooltip text="Calculado como: ((Mi Precio - Precio Mínimo) / Precio Mínimo) * 100. Te indica qué tan por encima del precio más económico del mercado te encuentras. El valor ideal es <= 0%." align="right" />
-                  </div>
-                  {propioPriceBs && minPriceItem ? (
-                    <>
-                      <div className={`text-xl font-display font-extrabold ${pctMin && pctMin > 0.005 ? 'text-error' : 'text-emerald-700'}`}>
-                        {pctMin && pctMin > 0.005 ? `+${pctMin.toFixed(2)}%` : '¡Precio Mínimo!'}
-                      </div>
-                      <p className="text-label-md text-on-surface-variant font-sans truncate">
-                        {pctMin && pctMin > 0.005 ? `+${formatHeaderPrice(diffMinBs)} vs mín.` : 'Líder en este producto'}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-xl font-display font-bold text-gray-300">—</div>
-                      <p className="text-label-md text-on-surface-variant font-sans">—</p>
-                    </>
-                  )}
-                </div>
-                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${pctMin && pctMin > 0.005 ? 'bg-rose-50 border border-rose-200 text-rose-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}>
-                  <span className="material-symbols-outlined text-xl select-none">balance</span>
-                </div>
-              </div>
-
-              {/* Precio Promedio Card */}
-              <div className="bg-surface-container-lowest border border-outline-variant p-4 rounded-2xl shadow-sm flex items-center justify-between relative">
-                <div className="space-y-0.5 flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-1">
-                    <span className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant truncate">
-                      Promedio {filterCadena !== 'todas' ? `(${filterCadena})` : (analisisMode === 'unidosis' ? '(Unidosis)' : '(Mercado)')}
-                    </span>
-                    <InfoTooltip text="El precio promedio aritmético calculado entre todos los competidores vigentes en el mercado." align="right" />
-                  </div>
-                  <div className="text-xl font-display font-extrabold text-primary">
-                    {avgPriceBs ? formatHeaderPrice(avgPriceBs) : '—'}
-                  </div>
-                  {propioPriceBs && avgPriceBs ? (
-                    <p className="text-label-md font-sans truncate">
-                      Mi precio:{' '}
-                      <span className={pctAvg && pctAvg > 0 ? 'text-error font-bold' : 'text-emerald-700 font-bold'}>
-                        {pctAvg && pctAvg > 0 ? `+${pctAvg.toFixed(1)}%` : `${pctAvg?.toFixed(1)}%`}
-                      </span>
-                    </p>
-                  ) : (
-                    <p className="text-label-md text-on-surface-variant font-sans">
-                      Referencia del mercado
-                    </p>
-                  )}
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                  <span className="material-symbols-outlined text-xl select-none">analytics</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Current Competitor Prices Table */}
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm">payments</span>
-                Precios Actuales por Cadena Farmacéutica {analisisMode === 'unidosis' ? '(Por Unidosis / Dosis)' : ''}
-              </h3>
-            </div>
-
-            <div className="border border-outline-variant rounded-2xl overflow-hidden bg-surface-container-lowest shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="m3-table">
-                  <thead className="m3-sticky-header">
-                    <tr>
-                      <th>Cadena</th>
-                      <th>Marca</th>
-                      <th>Relación</th>
-                      <th className="text-right">
-                        Precio Lista {analisisMode === 'unidosis' ? '(/u)' : ''}
-                      </th>
-                      <th className="text-right">
-                        Precio Oferta {analisisMode === 'unidosis' ? '(/u)' : ''}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-variant">
-                    {competenciaFiltrada.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-on-surface-variant italic bg-surface-container-lowest">
-                          Sin productos que coincidan con los filtros seleccionados.
-                        </td>
-                      </tr>
-                    ) : (
-                      competenciaFiltrada.map(pc => {
-                        const isCheapestFull = pc.adjustedFullBs && pc.adjustedFullBs === minFullPriceBs;
-                        const isCheapestDesc = pc.adjustedDescBs && pc.adjustedDescBs === minDescPriceBs;
-                        const isMostExpensiveFull = pc.adjustedFullBs && pc.adjustedFullBs === maxFullPriceBs && maxFullPriceBs > minFullPriceBs;
-                        const isMostExpensiveDesc = pc.adjustedDescBs && pc.adjustedDescBs === maxDescPriceBs && maxDescPriceBs > minDescPriceBs;
-                        
-                        return (
-                          <tr key={pc.id} className="hover:bg-surface-low transition-colors">
-                            <td className="font-bold text-primary font-display text-sm">{pc.cadena}</td>
-                            <td className="font-semibold text-on-surface">
-                              {pc.url ? (
-                                <a
-                                  href={pc.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline inline-flex items-center gap-1 group transition-all"
-                                  title="Ver enlace de origen del producto ↗"
-                                >
-                                  <span className="font-semibold">{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
-                                  {pc.unidosisCount > 0 && (
-                                    <span className="px-1.5 py-0.2 text-label-sm bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold ml-1">
-                                      {pc.unidosisCount}u
-                                    </span>
-                                  )}
-                                  <span className="material-symbols-outlined text-body-sm text-primary/70 group-hover:text-primary transition-colors leading-none">
-                                    open_in_new
-                                  </span>
-                                </a>
-                              ) : (
-                                <div className="flex items-center gap-1">
-                                  <span>{pc.marca} {pc.concentracion || ''} {pc.tamano || ''}</span>
-                                  {pc.unidosisCount > 0 && (
-                                    <span className="px-1.5 py-0.2 text-label-sm bg-sky-50 text-sky-700 border border-sky-200 rounded font-bold">
-                                      {pc.unidosisCount}u
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              {pc.laboratorio && (
-                                <div className="text-xs text-on-surface-variant font-mono mt-0.5">Lab: {pc.laboratorio}</div>
-                              )}
-                            </td>
-                            <td>
-                              <span className={`text-label-sm uppercase font-mono font-bold px-2 py-0.5 rounded-full ${
-                                pc.tipo === 'propio' ? 'bg-secondary/10 text-secondary border border-secondary/20' : 'bg-surface-low text-on-surface-variant border border-outline-variant'
-                              }`}>
-                                {pc.tipo === 'propio' ? 'Mi Marca' : 'Competencia'}
-                              </span>
-                            </td>
-                            <td className="text-right font-mono font-bold text-on-surface">
-                              <div className="flex flex-col items-end justify-center">
-                                <span className={
-                                  isCheapestFull ? 'text-emerald-700 font-extrabold' : 
-                                  isMostExpensiveFull ? 'text-rose-700 font-extrabold' : ''
-                                }>
-                                  {formatHeaderPrice(pc.adjustedFullBs)}
-                                </span>
-                                {isCheapestFull && (
-                                  <span className="text-label-sm bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                    Más bajo
-                                  </span>
-                                )}
-                                {isMostExpensiveFull && (
-                                  <span className="text-label-sm bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                    Más alto
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="text-right font-mono font-extrabold text-primary">
-                              <div className="flex flex-col items-end justify-center">
-                                <span className={
-                                  isCheapestDesc ? 'text-emerald-700 font-extrabold' : 
-                                  isMostExpensiveDesc ? 'text-rose-700 font-extrabold' : ''
-                                }>
-                                  {formatHeaderPrice(pc.adjustedDescBs)}
-                                </span>
-                                {isCheapestDesc && (
-                                  <span className="text-label-sm bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                    Más bajo
-                                  </span>
-                                )}
-                                {isMostExpensiveDesc && (
-                                  <span className="text-label-sm bg-rose-50 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                                    Más alto
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                  {competenciaFiltrada.length > 0 && (
-                    <tfoot className="bg-surface-low border-t-2 border-outline-variant font-mono text-xs font-bold">
-                      <tr className="border-b border-outline-variant/60">
-                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-label-sm">
-                          Mínimo de la Lista
-                        </td>
-                        <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
-                          {minFullPriceBs ? formatHeaderPrice(minFullPriceBs) : '—'}
-                        </td>
-                        <td className="px-5 py-2.5 text-right text-emerald-700 font-extrabold">
-                          {minDescPriceBs ? formatHeaderPrice(minDescPriceBs) : '—'}
-                        </td>
-                      </tr>
-                      <tr className="border-b border-outline-variant/60">
-                        <td colSpan="3" className="px-5 py-2.5 text-right font-sans text-on-surface-variant uppercase tracking-wider text-label-sm">
-                          Máximo de la Lista
-                        </td>
-                        <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
-                          {maxFullPriceBs ? formatHeaderPrice(maxFullPriceBs) : '—'}
-                        </td>
-                        <td className="px-5 py-2.5 text-right text-rose-700 font-extrabold">
-                          {maxDescPriceBs ? formatHeaderPrice(maxDescPriceBs) : '—'}
-                        </td>
-                      </tr>
-                      <tr className="bg-surface-container-high/60">
-                        <td colSpan="3" className="px-5 py-3 text-right font-sans text-primary uppercase tracking-wider text-label-sm font-extrabold">
-                          Promedio General ({competenciaFiltrada.length} items)
-                        </td>
-                        <td className="px-5 py-3 text-right text-on-surface font-black text-xs">
-                          {avgFullPriceBs ? formatHeaderPrice(avgFullPriceBs) : '—'}
-                        </td>
-                        <td className="px-5 py-3 text-right text-on-surface font-black text-xs">
-                          {avgDescPriceBs ? formatHeaderPrice(avgDescPriceBs) : '—'}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Chart Section Header with Tab Switch */}
-          <div className="space-y-4 pt-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container-lowest p-3 rounded-2xl border border-outline-variant shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-lg text-primary">analytics</span>
-                <span className="text-xs font-bold text-primary uppercase font-mono tracking-wider">Análisis Gráfico</span>
-              </div>
-              <div className="bg-surface-container p-1 rounded-xl flex gap-1 border border-outline-variant">
-                <button
-                  onClick={() => setActiveGraphTab('tendencia')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    activeGraphTab === 'tendencia'
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-on-surface-variant hover:bg-surface-container-lowest/60'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-body-md">show_chart</span>
-                  Historial de Tendencia
-                </button>
-                <button
-                  onClick={() => setActiveGraphTab('barras')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    activeGraphTab === 'barras'
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-on-surface-variant hover:bg-surface-container-lowest/60'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-body-md">bar_chart</span>
-                  Precios por Laboratorio
-                </button>
-                <button
-                  onClick={() => setActiveGraphTab('ambos')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    activeGraphTab === 'ambos'
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-on-surface-variant hover:bg-surface-container-lowest/60'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-body-md">grid_view</span>
-                  Ver Ambos
-                </button>
-              </div>
-            </div>
-
-            {/* Historical Trend Chart */}
-            {(activeGraphTab === 'tendencia' || activeGraphTab === 'ambos') && (
-              <div className="space-y-2 animate-fade-in">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-sm">show_chart</span>
-                    Historial de Tendencia de Precios ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
-                  </h3>
-                  {historico.length > 0 && (
-                    <button
-                      onClick={() => setShowClearConfirm(true)}
-                      className="text-label-sm font-bold text-error hover:bg-red-50 px-3 py-1 rounded-full border border-red-200 transition-all flex items-center gap-1"
-                    >
-                      <span className="material-symbols-outlined text-body-sm">delete</span>
-                      Borrar histórico
-                    </button>
-                  )}
-                </div>
-                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-4 shadow-sm space-y-4">
-                  {/* Selector de tipo de gráfico */}
-                  {historico.length > 0 && !loading && !error && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-outline-variant animate-fade-in">
-                      <div className="flex items-center gap-1.5 text-on-surface-variant">
-                        <span className="material-symbols-outlined text-body-lg">insights</span>
-                        <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Modo del Gráfico:</span>
-                      </div>
-                      <div className="bg-surface-container p-0.5 rounded-xl flex gap-1 self-start sm:self-auto border border-outline-variant">
-                        <button
-                          onClick={() => setChartViewType('individual')}
-                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
-                            chartViewType === 'individual'
-                              ? 'bg-surface-container-lowest text-primary shadow-sm'
-                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-body-md">medication</span>
-                          Detalle por Variante
-                        </button>
-                        <button
-                          onClick={() => setChartViewType('chainAverage')}
-                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
-                            chartViewType === 'chainAverage'
-                              ? 'bg-surface-container-lowest text-primary shadow-sm'
-                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-body-md">corporate_fare</span>
-                          Promedio por Cadena
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {loading ? (
-                    <div className="h-64 flex flex-col items-center justify-center text-xs text-on-surface-variant font-semibold gap-1.5 animate-pulse">
-                      <span className="material-symbols-outlined animate-spin text-2xl text-primary">autorenew</span>
-                      Cargando tendencia histórica...
-                    </div>
-                  ) : error ? (
-                    <div className="h-64 flex items-center justify-center text-error text-xs font-mono font-bold">{error}</div>
-                  ) : chartData[chartViewType].data.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-on-surface-variant text-xs italic text-center px-4">
-                      No hay suficiente historial que coincida con los filtros seleccionados (relación / cadena) para este gráfico.
-                    </div>
-                  ) : (
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart 
-                          key={`trend-line-${chartViewType}-${competenciaWithUnidosis.length}-${chartData[chartViewType].data.length}`}
-                          data={chartData[chartViewType].data} 
-                          margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                          <XAxis 
-                            dataKey="date" 
-                            tickFormatter={(tick) => {
-                              try {
-                                const parts = tick.split('-');
-                                if (parts.length === 3) {
-                                  return `${parts[2]}/${parts[1]}`;
-                                }
-                              } catch (e) {}
-                              return tick;
-                            }}
-                            tick={{ fontSize: 11, fill: '#464650' }} 
-                          />
-                          <YAxis tick={{ fontSize: 11, fill: '#464650' }} />
-                          <Tooltip content={
-                            <CustomTooltip 
-                              propios={chartViewType === 'individual' 
-                                ? Array.from(chartData.individual.propios) 
-                                : (propioItem ? [propioItem.cadena] : [])
-                              } 
-                              labMap={chartViewType === 'individual' ? Object.fromEntries(labMap) : {}} 
-                              currency={modalCurrency} 
-                              analisisMode={analisisMode}
-                            />
-                          } />
-                          <Legend wrapperStyle={{ fontSize: 11, marginTop: 10 }} />
-                          
-                          {chartViewType === 'individual' ? (
-                            chartData.individual.marcas.map((m, i) => {
-                              const isPropio = chartData.individual.propios.has(m);
-                              return (
-                                <Line
-                                  key={m}
-                                  type="monotone"
-                                  dataKey={m}
-                                  name={isPropio ? `${m} ⭐ (Mi Marca)` : m}
-                                  stroke={getLineColor(m, i)}
-                                  strokeWidth={isPropio ? 4.5 : 2}
-                                  dot={{ r: isPropio ? 5 : 3 }}
-                                  connectNulls
-                                  isAnimationActive={true}
-                                  animationDuration={750}
-                                  animationBegin={0}
-                                  animationEasing="ease-out"
-                                />
-                              );
-                            })
-                          ) : (
-                            chartData.chainAverage.cadenas.map((c, i) => {
-                              const isPropioChain = propioItem && propioItem.cadena === c;
-                              return (
-                                <Line
-                                  key={c}
-                                  type="monotone"
-                                  dataKey={c}
-                                  name={isPropioChain ? `${c} ⭐ (Mi Cadena)` : c}
-                                  stroke={getLineColor(c, i, isPropioChain)}
-                                  strokeWidth={isPropioChain ? 4.5 : 2}
-                                  dot={{ r: isPropioChain ? 5 : 3 }}
-                                  connectNulls
-                                  isAnimationActive={true}
-                                  animationDuration={750}
-                                  animationBegin={0}
-                                  animationEasing="ease-out"
-                                />
-                              );
-                            })
-                          )}
-
-                          {/* Línea especial para el Promedio del mercado */}
-                          {chartData[chartViewType].data.length > 0 && (
-                            <Line
-                              type="monotone"
-                              dataKey="Promedio"
-                              name="Promedio Mercado"
-                              stroke="var(--md-sys-color-tertiary)"
-                              strokeWidth={3}
-                              strokeDasharray="6 4"
-                              dot={{ r: 4 }}
-                              connectNulls
-                              isAnimationActive={true}
-                              animationDuration={750}
-                              animationBegin={0}
-                              animationEasing="ease-out"
-                            />
-                          )}
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Column Chart: Price of each laboratory in each chain */}
-            {(activeGraphTab === 'barras' || activeGraphTab === 'ambos') && (
-              <div className="space-y-2 animate-fade-in">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-sm">bar_chart</span>
-                    Precios por Laboratorio por Cadena ({modalCurrency === 'usd' ? 'USD $' : 'Bs'})
-                  </h3>
-                </div>
-                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-4 shadow-sm space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-outline-variant">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div className="flex items-center gap-1.5 text-on-surface-variant">
-                        <span className="material-symbols-outlined text-body-lg">tune</span>
-                        <span className="text-label-sm font-extrabold uppercase tracking-wider font-mono">Agrupar Eje X Por:</span>
-                      </div>
-                      <div className="bg-surface-container p-0.5 rounded-xl flex gap-1 border border-outline-variant">
-                        <button
-                          onClick={() => setBarGroupMode('laboratorio')}
-                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
-                            barGroupMode === 'laboratorio'
-                              ? 'bg-surface-container-lowest text-primary shadow-sm'
-                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-body-md">science</span>
-                          Por Laboratorio
-                        </button>
-                        <button
-                          onClick={() => setBarGroupMode('cadena')}
-                          className={`px-3 py-1 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1 ${
-                            barGroupMode === 'cadena'
-                              ? 'bg-surface-container-lowest text-primary shadow-sm'
-                              : 'text-on-surface-variant hover:bg-surface-container-lowest/50'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-body-md">storefront</span>
-                          Por Cadena
-                        </button>
-                      </div>
-                    </div>
-
-                    {overallBarAverage !== null && (
-                      <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-tertiary px-3 py-1 rounded-xl text-label-md font-bold font-mono self-start sm:self-auto shadow-xs">
-                        <span className="material-symbols-outlined text-body-md">show_chart</span>
-                        <span>Promedio General: {modalCurrency === 'usd' ? '$' : 'Bs '}{overallBarAverage.toLocaleString(modalCurrency === 'usd' ? 'en-US' : 'es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {barChartData.data.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-on-surface-variant text-xs italic text-center px-4">
-                      No hay productos registrados para mostrar en este gráfico.
-                    </div>
-                  ) : (
-                    <div className="h-72">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart 
-                          key={`modal-bars-${barGroupMode}-${modalCurrency}-${barChartData.data.length}`}
-                          data={barChartData.data} 
-                          margin={{ top: 22, right: 10, left: -10, bottom: 0 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#464650' }} />
-                          <YAxis tick={{ fontSize: 11, fill: '#464650' }} />
-                          <Tooltip content={<BarChartTooltip currency={modalCurrency} analisisMode={analisisMode} />} />
-                          <Legend wrapperStyle={{ fontSize: 11, marginTop: 10 }} />
-                          {overallBarAverage !== null && (
-                            <ReferenceLine
-                              y={overallBarAverage}
-                              stroke="var(--md-sys-color-tertiary)"
-                              strokeDasharray="4 4"
-                              strokeWidth={1.5}
-                              strokeOpacity={0.7}
-                              isFront={false}
-                            />
-                          )}
-                          {barChartData.series.map((seriesKey) => {
-                            const barColor = getBarColor(seriesKey);
-                            const symbol = modalCurrency === 'usd' ? '$' : 'Bs ';
-                            return (
-                              <Bar
-                                key={seriesKey}
-                                dataKey={seriesKey}
-                                name={seriesKey}
-                                fill={barColor}
-                                radius={[4, 4, 0, 0]}
-                                isAnimationActive={true}
-                                animationDuration={750}
-                                animationBegin={0}
-                                animationEasing="ease-out"
-                              >
-                                {barGroupMode === 'cadena' && barChartData.data.map((entry, idx) => {
-                                  const cellColor = getChainSpecificColor(entry.name);
-                                  return cellColor ? <Cell key={`cell-${idx}`} fill={cellColor} /> : null;
-                                })}
-                                <LabelList
-                                  dataKey={seriesKey}
-                                  content={(props) => {
-                                    const { x, y, width, value } = props;
-                                    if (value == null || value <= 0) return null;
-                                    const numStr = Number(value).toLocaleString(modalCurrency === 'usd' ? 'en-US' : 'es-VE', {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2
-                                    });
-                                    const labelText = `${symbol}${numStr}`;
-                                    const cx = x + width / 2;
-                                    const cy = y - 9;
-                                    const pillWidth = Math.max(42, labelText.length * 5.2 + 8);
-                                    const pillHeight = 14;
-                                    return (
-                                      <g>
-                                        <rect
-                                          x={cx - pillWidth / 2}
-                                          y={cy - pillHeight / 2}
-                                          width={pillWidth}
-                                          height={pillHeight}
-                                          rx={3}
-                                          fill="#ffffff"
-                                          stroke="var(--md-sys-color-outline-variant)"
-                                          strokeWidth={1}
-                                          opacity={0.95}
-                                        />
-                                        <text
-                                          x={cx}
-                                          y={cy + 0.5}
-                                          fill="var(--md-sys-color-primary)"
-                                          textAnchor="middle"
-                                          dominantBaseline="middle"
-                                          fontSize="8.5px"
-                                          fontWeight="800"
-                                          fontFamily="monospace"
-                                        >
-                                          {labelText}
-                                        </text>
-                                      </g>
-                                    );
-                                  }}
-                                />
-                              </Bar>
-                            );
-                          })}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-      {/* Clear Product History Dialog */}
-      <ConfirmModal
-        isOpen={showClearConfirm}
-        title="¿Borrar Historial del Producto?"
-        message={`¿Estás seguro de que deseas eliminar TODOS los registros de precios históricos para "${activeProduct.nombre}"?\n\nEsta acción no afectará la información actual del producto ni de sus competidores, pero vaciará el gráfico de tendencias.`}
-        confirmText={clearing ? 'Borrando...' : 'Borrar'}
-        cancelText="Cancelar"
-        isDanger={true}
-        onConfirm={handleClearHistory}
-        onCancel={() => setShowClearConfirm(false)}
-      />
-    </div>,
-    document.body
+      ))}
+    </div>
   );
 }

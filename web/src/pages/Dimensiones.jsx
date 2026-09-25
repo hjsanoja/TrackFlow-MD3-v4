@@ -9,6 +9,7 @@ import Select from '../components/Select';
 import { FormSection, Field, ChoiceChips, ComboField, normalizar } from '../components/formulario';
 import { invalidarDimensiones } from '../hooks/useDimensiones';
 import { claveNombre, formatearMolecula } from '../utils/dbClient';
+import { limpiarCacheDatos } from '../utils/cacheDatos';
 
 // Catalogos del sistema. `uso`: la dimension la usan productos (se cuenta con
 // v_uso_dimensiones, fase 27) y, si esta en uso, en vez de borrar se UNE con
@@ -676,7 +677,7 @@ function LimpiezaModal({ onClose, onTerminado }) {
           await vaciar('dim_productos');
         }
       }
-      try { sessionStorage.removeItem('trackflow_data_cache_v3'); } catch { /* sin cache */ }
+      limpiarCacheDatos();
       if (fallos.length) addToast(`Terminó con errores (${fallos.length}): ${fallos[0]}`, 'error');
       else addToast(`Limpieza terminada: ${total} filas eliminadas.`, 'success');
       await onTerminado();

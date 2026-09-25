@@ -1,5 +1,6 @@
 import { supabase, isSupabaseActive } from '../supabase';
 import { parsearPrincipios, parsearContenido } from './parsearFicha';
+import { limpiarCacheDatos } from './cacheDatos';
 
 export { isSupabaseActive };
 
@@ -864,9 +865,7 @@ export async function dbDeleteProducto(id, linksCompetencia = []) {
   }
 
   // Limpiar cache local de sesión para forzar render fresco
-  try {
-    sessionStorage.removeItem('trackflow_data_cache_v3');
-  } catch (_) {}
+  limpiarCacheDatos();
 
   if (anyError && isSupabaseActive()) {
     throw anyError;
@@ -901,9 +900,7 @@ export async function dbDeleteAllProductos() {
     }
   }
 
-  try {
-    sessionStorage.removeItem('trackflow_data_cache_v3');
-  } catch (_) {}
+  limpiarCacheDatos();
 
   if (anyError && isSupabaseActive()) {
     throw anyError;
@@ -1153,9 +1150,7 @@ export async function dbDeleteProductoCompetencia(enlace) {
     }
   }
 
-  try {
-    sessionStorage.removeItem('trackflow_data_cache_v3');
-  } catch (_) {}
+  limpiarCacheDatos();
 
   if (anyError && isSupabaseActive()) {
     throw anyError;
@@ -1179,9 +1174,7 @@ export async function dbDeleteAllProductosCompetencia() {
     }
   }
 
-  try {
-    sessionStorage.removeItem('trackflow_data_cache_v3');
-  } catch (_) {}
+  limpiarCacheDatos();
 
   if (anyError && isSupabaseActive()) {
     throw anyError;
