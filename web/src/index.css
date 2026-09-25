@@ -1620,3 +1620,73 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
   .m3-select-arrow { transition: none; }
   .m3-linear-progress > div, .m3-filter-chip, .m3-icon-btn, .m3-btn-tonal, .m3-btn-text, .m3-search-field { transition: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   DASHBOARD
+   -------------------------------------------------------------------------*/
+/* Filtros y ajustes de vista: una sola fila sobre indicadores y graficos. */
+.m3-dash-filtros {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background-color: var(--md-sys-color-surface-container-lowest);
+}
+@media (min-width: 1024px) {
+  .m3-dash-filtros { flex-direction: row; align-items: center; }
+}
+
+/* Tarjeta de grafico: misma superficie que la tabla. */
+.m3-dash-card {
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 24px;
+  padding: 16px 20px 12px;
+  min-width: 0;
+}
+.m3-dash-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+
+.m3-dash-leyenda {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px;
+  font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); padding-top: 10px;
+}
+.m3-dash-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.m3-dash-leyenda i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.m3-chart-tooltip {
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  box-shadow: var(--md-sys-elevation-2);
+}
+
+/* Diferencia de precio: con signo y flecha, nunca solo color. Azul = mas
+   barato, rojo = mas caro (los mismos lados que el grafico divergente). */
+.m3-diferencia {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.m3-diferencia .material-symbols-outlined { font-size: 14px; }
+.m3-diferencia.is-barato { color: #1c5fb0; }
+.m3-diferencia.is-caro { color: #b93332; }
+[data-theme="dark"] .m3-diferencia.is-barato, .dark .m3-diferencia.is-barato { color: #7ab0f3; }
+[data-theme="dark"] .m3-diferencia.is-caro, .dark .m3-diferencia.is-caro { color: #f08a89; }
+
+.m3-table-dashboard { min-width: 960px; }
+.m3-table-dashboard td { --md-comp-table-row-height: 4rem; }
+.m3-dash-col-producto { width: 260px; max-width: 260px; }
+.m3-dash-col-sep { border-left: 1px solid var(--md-sys-color-outline-variant); }
+.m3-dash-min {
+  background-color: color-mix(in srgb, var(--md-sys-color-primary-container) 55%, transparent);
+  font-weight: 600;
+}
+.m3-dash-cambio { line-height: 1; margin-top: 2px; }
+.m3-dash-cambio .m3-diferencia { font-size: 0.75rem; }
+.m3-table-detalle td { --md-comp-table-row-height: 3.5rem; }
