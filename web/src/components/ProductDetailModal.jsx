@@ -1,3 +1,4 @@
+import { getChainColor, colorCadenaRegistrado } from '../utils/brandColors';
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ConfirmModal from './ConfirmModal';
@@ -583,12 +584,14 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const diffAvgBs = (propioPriceBs !== null && avgPriceBs !== null) ? propioPriceBs - avgPriceBs : null;
   const pctAvg = (diffAvgBs !== null && avgPriceBs > 0) ? (diffAvgBs / avgPriceBs) * 100 : null;
 
+  // El color de cada cadena sale del menu Cadenas (el mismo en todo el panel).
+  // Para lo que no es una cadena (marcas, competidores) se usa la paleta de abajo.
   const getChainSpecificColor = (name) => {
     if (!name) return null;
+    const registrado = colorCadenaRegistrado(name);
+    if (registrado) return registrado;
     const lower = name.toLowerCase();
-    if (lower.includes('farmatodo')) return '#004ecb'; // Farmatodo en azul
-    if (lower.includes('locatel')) return '#2e7d32'; // Locatel en verde
-    if (lower.includes('saas')) return '#0d9488'; // SAAS en azul-verde / teal
+    if (lower.includes('farmatodo') || lower.includes('locatel') || lower.includes('saas')) return getChainColor(name);
     return null;
   };
 

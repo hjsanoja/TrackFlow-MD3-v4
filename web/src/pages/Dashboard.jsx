@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import StatCard from '../components/StatCard';
 import { tokensGrafico, paletaSeries } from '../utils/chartTokens';
+import { getChainColor } from '../utils/brandColors';
 import { useBcvRate } from '../hooks/useBcvRate';
 import ProductDetailModal from '../components/ProductDetailModal';
 import BcvDetailModal from '../components/BcvDetailModal';
@@ -575,11 +576,11 @@ export default function Dashboard({ user, userDoc }) {
       }
     });
 
-    const colors = paletaSeries();
-    return Object.keys(counts).map((key, index) => ({
+    // Cada cadena con su color del menu Cadenas, igual en todo el panel.
+    return Object.keys(counts).map(key => ({
       name: key,
       liderazgos: counts[key],
-      fill: colors[index % colors.length]
+      fill: getChainColor(key)
     }));
   }, [filas, cadenasUnicas]);
 

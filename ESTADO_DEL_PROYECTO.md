@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 23 fases de SQL
+## Las 24 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -105,9 +105,10 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 21 | Competencia: borra competidores `COMP_` sin URL (huérfanos) y crea `fn_registrar_precio_manual` (SECURITY DEFINER: el panel no puede insertar en `fact_precios`) |
 | 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
 | 23 | Vista `v_enlaces_fallidos`: lecturas fallidas seguidas por publicación (el panel marca "Revisar URL" desde 3) |
+| 24 | Un color único por cadena en `dim_cadenas.color_hex` (marcas conocidas + paleta) e índice único `uq_dim_cadenas_color` |
 
-**Corridas en Supabase de la 1 a la 23.** La 22 dio 0 y 0; la 23, 0 enlaces
-para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
+**Corridas en Supabase de la 1 a la 23. La 24 está pendiente** (PR #42). La 22
+dio 0 y 0; la 23, 0 enlaces para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
 o unidad de negocio; un competidor no tiene PVP propio.
@@ -118,14 +119,16 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #36, desplegado (GitHub Pages sale solo de `main`); etapa B de Competencia en el PR #37 |
-| SQL corrido en Supabase | **Hasta la fase 23** |
+| Código en `main` | PR #41, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 23** (la 24 en el PR #42) |
 | Módulo Productos | **Terminado** (ver abajo) |
-| Módulo Competencia | **Etapas A (#36) y B (#37), limpieza (#38), ajustes (#39) y funciones de revisión, robot y cobertura (#40)** |
+| Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
+| Módulo Cadenas | Color único por cadena (#42, fase 24); diagnóstico hecho, rediseño pendiente |
+| Módulo Usuarios | **Diagnóstico hecho** (ver "Usuarios y acceso"); nada cambiado todavía |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
-Lo siguiente lo decide Hernando. Candidatos, en el orden en que salieron:
-terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
+Lo siguiente: la seguridad de Usuarios (ver abajo, es lo más urgente), y
+luego lo que Hernando elija del diagnóstico de Usuarios y Cadenas.
 
 ---
 
@@ -150,6 +153,7 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
 | #38 | Fase 22: PVP falsos de competidores y los 20 `COMP_` sin URL |
 | #39 | Competencia: columna ID para ordenar por bloques, interruptor $/Bs, CSV con los nombres de Productos |
+| #42 | Cadenas: color único por cadena en todo el panel (fase 24); guarda en `dim_cadenas` y muestra los errores |
 | #41 | Formulario de enlace: muestra los enlaces que ya tiene el producto y avisa de URL o competidor repetidos antes de guardar |
 | #40 | Competencia: URL que fallan (fase 23), posibles duplicados, filtro por laboratorio, robot para los seleccionados con avance, cobertura por cadena; "Vincular enlace" desde la ficha de Productos; columna ID en Productos. El robot ahora sí lee solo los enlaces pedidos |
 | #34 | Menús desplegables M3 en toda la app (`components/Select.jsx`, 31 `<select>`), deshacer al eliminar (borrado diferido 8 s), ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
@@ -299,6 +303,66 @@ equivalencia y todos eran competidor en alguna. El PVP venía de la fase 2
 limpieza de la 21.
 
 ---
+
+## Usuarios y acceso (diagnóstico del 2026-09-25)
+
+**Cómo funciona hoy**
+- **Inicio de sesión:** correo y contraseña con Supabase Auth
+  (`Login.jsx` → `signInWithPassword`). Después `App.jsx` busca el correo en
+  la tabla `usuarios`: si no está o `activo` es falso, cierra la sesión.
+- **Roles:** `administrador` (todo) o `consulta` (solo los menús de
+  `menus_permitidos`; por defecto Dashboard y Mapa de Calor). El control es
+  solo del panel: oculta menús y rutas.
+- **Crear usuario:** el administrador pone correo, nombre y contraseña; la
+  Edge Function `supabase/functions/crear-usuario` crea la cuenta con la
+  service role (confirmada, sin correo) y la fila en `usuarios`.
+- **Contraseña:** el botón "Clave" de Usuarios llama a
+  `resetPasswordForEmail`. No hay "¿Olvidaste tu contraseña?" en el login ni
+  pantalla para escribir la contraseña nueva.
+- **Correos y alertas:** `recibe_alertas_inmediatas` y
+  `recibe_resumen_diario` son solo casillas guardadas en `usuarios`. **Ningún
+  código envía correos**: no hay SMTP, ni función, ni tarea programada.
+
+**Problemas encontrados**
+1. **Seguridad (lo más grave).** `supabase_setup_rls.sql` desactiva RLS en
+   `usuarios` y `secrets` y da `GRANT ALL` a `anon` sobre `usuarios`. Ninguna
+   fase posterior las vuelve a proteger. Si ese script se corrió, cualquiera
+   con la clave pública (va dentro del panel) puede leer la tabla `usuarios`,
+   hacerse administrador, y leer `secrets` (el token de GitHub). Además, las
+   políticas de las tablas de datos permiten todo a cualquier `authenticated`:
+   si en Supabase está activo "Allow new users to sign up", cualquiera puede
+   crearse una cuenta por la API y leer o cambiar datos sin estar en
+   `usuarios`. Un usuario borrado o inactivo conserva su cuenta de Auth y el
+   mismo acceso por la API.
+2. **Recuperar contraseña no funciona de punta a punta:** sin `redirectTo`,
+   sin pantalla de contraseña nueva (el enlace entra directo al panel), y el
+   SMTP de Supabase por defecto solo envía a miembros del equipo del proyecto
+   y unos pocos correos por hora.
+3. **Eliminar usuario** borra la fila de `usuarios` pero no la cuenta de Auth.
+4. `dbUpsertUsuario` y `dbDeleteUsuario` esconden los errores: el panel dice
+   "guardado" aunque no se haya guardado.
+5. Desactivar a alguien no cierra su sesión abierta hasta que recargue.
+6. No hay "Mi cuenta" (cambiar la propia contraseña) ni registro de accesos.
+7. La lista de menús de Usuarios no incluye Dimensiones.
+
+## Cadenas (PR #42 y diagnóstico del 2026-09-25)
+
+- **Color único por cadena** (fase 24): `dim_cadenas.color_hex`, editable en
+  el formulario de Cadenas con muestras (las que ya usa otra cadena salen
+  bloqueadas) y "otro color". `DataContext` los registra
+  (`registrarColoresCadenas` en `utils/brandColors.js`) y `getChainColor`
+  los usa primero, así el Dashboard, Análisis, Reportería y el detalle de
+  producto pintan cada cadena igual. Antes había tres juegos de colores
+  distintos (Locatel era rojo en uno y verde, el color de "mi producto", en
+  otro) y el del Dashboard dependía del orden.
+- **Arreglos:** Cadenas guardaba en la vista `cadenas` y escondía los
+  errores; al editar recalculaba el id desde el nombre ("Farmacias_SAAS" en
+  vez de "Saas") y el cambio no se guardaba. Ahora escribe en `dim_cadenas`
+  (`dbGuardarCadena`, `dbCambiarActivoCadena`, `dbEliminarCadena`) y avisa
+  si algo falla. Eliminar solo se permite sin enlaces. El contador de URL
+  buscaba por nombre y SAAS salía con 0.
+- **Pendiente:** la tabla y el formulario todavía tienen el diseño viejo
+  (ver el diagnóstico en el chat del 2026-09-25).
 
 ## La recarga del catálogo (aparcada)
 
