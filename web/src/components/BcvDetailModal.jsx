@@ -152,8 +152,8 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
     <ModalWrapper
       isOpen={isOpen}
       onClose={onClose}
-      title="Historial Completo & Análisis Tasa Oficial BCV"
-      subtitle="Evolución de la cotización oficial del Banco Central de Venezuela"
+      title="Tasa BCV"
+      subtitle="Historia de la tasa oficial del Banco Central de Venezuela. Aquí también se cambia a mano."
       icon="show_chart"
       maxWidth="max-w-5xl"
       footer={

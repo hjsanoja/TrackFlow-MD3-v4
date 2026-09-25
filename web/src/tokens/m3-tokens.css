@@ -88,6 +88,15 @@
   --md-sys-color-data-positive: #16A34A;
   --md-sys-color-data-negative: #E11D48;
 
+  /* Divergente "tu precio frente al promedio" (Dashboard): azul = mas barato,
+     gris = parejo, rojo = mas caro. Dos pasos por lado, validados para
+     daltonismo y contraste (skill dataviz). */
+  --md-sys-color-data-div-cheap-2: #2a78d6;
+  --md-sys-color-data-div-cheap-1: #6aa1e6;
+  --md-sys-color-data-div-mid: #a9a8a3;
+  --md-sys-color-data-div-dear-1: #ec7a79;
+  --md-sys-color-data-div-dear-2: #e34948;
+
   /* Ordered Chart Data Series Palette */
   --md-sys-color-data-series-1: #0F2C59; /* Navy (Our brand / Main) */
   --md-sys-color-data-series-2: #1E6B52; /* Emerald (Market Leader) */
@@ -231,6 +240,12 @@
   --md-sys-color-data-neutral-container: #00438D;
   --md-sys-color-data-positive: #4ADE80;
   --md-sys-color-data-negative: #FB7185;
+
+  --md-sys-color-data-div-cheap-2: #5b9cf0;
+  --md-sys-color-data-div-cheap-1: #2f68b3;
+  --md-sys-color-data-div-mid: #6b6a66;
+  --md-sys-color-data-div-dear-1: #a8403f;
+  --md-sys-color-data-div-dear-2: #ee7372;
 
   --md-sys-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.4), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
   --md-sys-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.45), 0px 1px 2px 0px rgba(0, 0, 0, 0.35);

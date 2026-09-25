@@ -123,19 +123,20 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #44, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 26** (la 27 en el PR #45) |
+| Código en `main` | PR #45, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 27** |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
 | Módulo Usuarios | Seguridad, recuperar contraseña, Mi cuenta, accesos, eliminar de verdad y rediseño (#43, fase 25). **Aparcado por Hernando:** Brevo/SMTP y los correos de alertas y resumen |
 | Módulo Dimensiones | Rediseño, columna "En uso", **Unir** en vez de borrar lo que está en uso, sinónimos, pestaña Moléculas (#45, fase 27) |
+| Dashboard | Rediseño: indicadores que abren su detalle, gráficos nuevos, filtros unificados, tabla "Precios por cadena" y "Más caros que el mínimo" (PR #46, sin SQL) |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
 Lo siguiente lo decide Hernando. Aparcado: el correo (Brevo/SMTP, sin él
 tampoco llegan los de recuperar contraseña a otras personas) y los correos de
-alertas y resumen; la recarga del catálogo; el filtro "más caro que la
-competencia" para el Dashboard.
+alertas y resumen; la recarga del catálogo; el rediseño de Mapa de Calor y
+Experimental.
 
 ---
 
@@ -452,6 +453,40 @@ solo decía que no se podía. Ahora:
   ni tildes) se rechazan sugiriendo Unir. Las moléculas se guardan sin tildes.
 - "Limpiar datos de prueba" pasó al menú ⋮ y pide escribir BORRAR.
 
+## Dashboard (PR #46, sin SQL)
+
+Rehecho de cero en `pages/Dashboard.jsx` con el mismo patrón que las otras
+pantallas. De arriba abajo:
+- **Encabezado**: "Dashboard", cuándo fue la última lectura del robot (el
+  `ultimo_scrape` más reciente de los enlaces), **Exportar** y el menú ⋮
+  (solo admin): "Leer todos los precios" (el mismo `useRobot` y aviso que
+  Competencia y Cadenas) y "Borrar historial de precios".
+- **Una fila de filtros** que aplica a todo: Unidad, Tipo, Categoría. A la
+  derecha los ajustes de vista (se recuerdan en el navegador): precio de
+  lista u oferta, por empaque o por unidad, periodo de los cambios (24 h / 7
+  / 15 días) y el switch $ / Bs.
+- **6 indicadores, todos abren su detalle** (`components/DetalleLista.jsx`,
+  una lista cuyas filas abren la ficha del producto; al cerrar la ficha se
+  vuelve a la lista; "Ver en la tabla" filtra la tabla de abajo):
+  Frente al promedio (mediana, para que un producto raro no lo mueva), Eres
+  el más barato, **Más caros que el mínimo** (el filtro que pidió Hernando),
+  Cambios de precio, Sin comparar (qué le falta a cada uno) y la Tasa BCV en
+  pequeño con su tendencia de 30 días (abre su historia y el cambio manual).
+- **Gráficos**: "¿Dónde está tu precio?" (divergente, azul más barato, gris
+  parejo, rojo más caro; tokens `--md-sys-color-data-div-*` validados para
+  daltonismo) y "¿Qué cadena tiene el precio más bajo?" (color de cada
+  cadena). Cada barra abre su lista.
+- **Tabla "Precios por cadena"**: el precio más bajo de la competencia en cada
+  cadena (resaltado el mínimo, con flecha si cambió), Mínimo, Promedio, Tu
+  precio (· PVP si sale del PVP y no de un enlace propio), Frente al mínimo y
+  Frente al promedio. Ordenable, buscador, filtro "Mostrar", filas por
+  página y tarjetas en el móvil.
+
+Cambio de criterio: Mínimo y Promedio son **solo de la competencia** (antes
+incluían tu propio enlace, y "frente al mínimo" daba 0 cuando eras el más
+barato). Se quitaron el gráfico grande de la tasa, el bloque de paridad
+marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
+
 ## La recarga del catálogo (aparcada)
 
 **Objetivo:** que dosis, forma y empaque salgan del nombre y vivan en sus
@@ -608,8 +643,14 @@ capturas y devaluación vs subida real. Faltan:
 el "Nombre en la tienda" de la ficha (la vista pone el nombre del competidor,
 no el que lee el robot: `fact_precios.nombre_capturado`; es un SQL pequeño).
 
-**Dashboard**, cuando se ajuste ese menú: el filtro "más caro que la
-competencia" (decisión de Hernando: va ahí, no en Competencia ni Productos).
+**Dashboard**, ideas propuestas (PR #46): cambios desde tu última visita,
+tendencia de tu posición frente al promedio, "precio para igualar" en Más
+caros que el mínimo, comparar contra una sola cadena y vista por molécula.
+Mejoras: rediseñar la ficha del producto (`ProductDetailModal`, 1.600 líneas,
+fondo claro fijo), unir Mapa de Calor y Experimental con el Dashboard, usar
+las unidades por empaque de la ficha en vez de adivinarlas del nombre, leer
+toda la última corrida de `scrape_runs` (hoy se lee una fila) y no bajar el
+histórico completo al abrir el panel.
 
 **Limpieza del repo**: mover los `fase*.sql` (ya son 22) a `sql/`, borrar
 `debug/`, y borrar `recarga/` cuando termine la recarga.
@@ -623,7 +664,7 @@ resto quedaban 71 colores hex sueltos (sobre todo gradientes y Recharts en
 mismo diseño a Cadenas y Dimensiones.
 
 **Ideas que quedaron sobre la mesa**
-- Productos: filtro "más caro que la competencia", historial del PVP en la
+- Productos: historial del PVP en la
   ficha, gestionar enlaces desde la ficha, filtros en la dirección web.
 - Siglas de unidad de negocio (`PH`): la tabla no tiene columna `codigo`;
   haría falta SQL.
