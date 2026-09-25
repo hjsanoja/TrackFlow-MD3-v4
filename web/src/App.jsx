@@ -2,6 +2,13 @@ import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import Login from './pages/Login';
+import NuevaContrasena from './components/NuevaContrasena';
+
+// El enlace de "recuperar contraseña" llega con type=recovery en la URL.
+// Se mira al cargar, antes de que Supabase limpie la direccion.
+const LLEGO_POR_RECUPERACION = typeof window !== 'undefined' &&
+  /type=recovery/.test(`${window.location.hash}${window.location.search}`);
+const esActivo = (u) => Boolean(u) && (u.activo === true || u.activo === 'si' || u.activo === 'sí');
 
 // Carga bajo demanda: cada pantalla viaja en su propio archivo y solo se
 // descarga al entrar en ella. Antes todo el panel iba en un unico bundle de
@@ -14,6 +21,7 @@ const Competencia = lazy(() => import('./pages/Competencia'));
 const Cadenas = lazy(() => import('./pages/Cadenas'));
 const Usuarios = lazy(() => import('./pages/Usuarios'));
 const Dimensiones = lazy(() => import('./pages/Dimensiones'));
+const MiCuenta = lazy(() => import('./pages/MiCuenta'));
 
 import Layout from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -25,6 +33,7 @@ function AppContent() {
   const [userDoc, setUserDoc] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
+  const [recuperando, setRecuperando] = useState(LLEGO_POR_RECUPERACION);
   const { addToast } = useToast();
 
   const syncUserSession = useCallback(async (session) => {
@@ -58,7 +67,7 @@ function AppContent() {
       }
 
       // Si el usuario no existe en la tabla usuarios o no está activo, rechazar acceso
-      const isActive = uData && (uData.activo === true || uData.activo === 'si' || uData.activo === 'sí');
+      const isActive = esActivo(uData);
       if (!uData || !isActive) {
         await supabase.auth.signOut();
         setUser(null);
@@ -104,10 +113,12 @@ function AppContent() {
     checkInitialSession();
 
     // Suscribirse a cambios de sesión en Supabase Auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (isMounted) {
-        await syncUserSession(session);
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      if (event === 'PASSWORD_RECOVERY') setRecuperando(true);
+      // Renovar el token no cambia al usuario: no hace falta volver a leerlo.
+      if (event === 'TOKEN_REFRESHED') return;
+      await syncUserSession(session);
     });
 
     // Timeout de cortesía para advertir problemas de red si la sesión demora más de 10 segundos
@@ -130,6 +141,30 @@ function AppContent() {
     };
   }, [checkInitialSession, syncUserSession]);
 
+  // Si un administrador desactiva o elimina a alguien, esa persona sale del
+  // panel en unos minutos (o al volver a la pestaña), sin esperar a que
+  // recargue. Tambien recoge cambios de rol o de menus.
+  useEffect(() => {
+    if (!user?.email) return undefined;
+    let vigente = true;
+    const revisar = async () => {
+      const { data, error } = await supabase.from('usuarios').select('*').eq('email', user.email.toLowerCase()).maybeSingle();
+      if (!vigente || error) return;
+      if (!esActivo(data)) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setUserDoc(null);
+        setAuthError(data ? 'Tu acceso fue desactivado por un administrador.' : 'Tu usuario fue eliminado del sistema.');
+        return;
+      }
+      setUserDoc(prev => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data));
+    };
+    const alVolver = () => { if (document.visibilityState === 'visible') revisar(); };
+    const t = setInterval(revisar, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => { vigente = false; clearInterval(t); document.removeEventListener('visibilitychange', alVolver); };
+  }, [user?.email]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
@@ -143,7 +178,7 @@ function AppContent() {
   if (authError && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4 text-on-background">
-        <div className="w-full max-w-md bg-white rounded-[32px] border border-outline-variant p-8 shadow-sm text-center space-y-6">
+        <div className="w-full max-w-md bg-surface-container-lowest rounded-[28px] border border-outline-variant p-8 text-center space-y-6">
           <div className="mx-auto w-14 h-14 rounded-2xl bg-error-container text-error flex items-center justify-center">
             <span className="material-symbols-outlined text-3xl">lock_person</span>
           </div>
@@ -171,6 +206,20 @@ function AppContent() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (recuperando && user) {
+    return (
+      <NuevaContrasena
+        email={user.email}
+        onListo={() => {
+          setRecuperando(false);
+          window.history.replaceState(null, '', window.location.pathname);
+          addToast('Contraseña guardada. Ya puedes usar la nueva al entrar.', 'success');
+        }}
+        onCancelar={() => { setRecuperando(false); window.history.replaceState(null, '', window.location.pathname); }}
+      />
     );
   }
 
@@ -228,6 +277,7 @@ function AppContent() {
           <Route path="/cadenas" element={isAllowed('/cadenas') ? <Cadenas /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/dimensiones" element={isAllowed('/dimensiones') ? <Dimensiones /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/usuarios" element={isAdmin ? <Usuarios userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/mi-cuenta" element={<MiCuenta user={user} userDoc={userDoc} onActualizado={setUserDoc} />} />
           <Route path="/login" element={<Navigate to={fallbackPath} replace />} />
           <Route path="*" element={<Navigate to={fallbackPath} replace />} />
         </Routes>

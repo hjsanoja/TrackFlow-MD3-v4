@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 24 fases de SQL
+## Las 25 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -106,8 +106,9 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
 | 23 | Vista `v_enlaces_fallidos`: lecturas fallidas seguidas por publicación (el panel marca "Revisar URL" desde 3) |
 | 24 | Un color único por cadena en `dim_cadenas.color_hex` (marcas conocidas + paleta) e índice único `uq_dim_cadenas_color` |
+| 25 | **Seguridad:** `usuarios` con RLS (cada quien su fila, el admin todas), políticas abiertas → solo usuarios activos (`fn_usuario_activo`, `fn_es_admin`), sin permisos para `anon`; tabla `accesos`, `fn_registrar_acceso`, `fn_actualizar_mi_cuenta`, `fn_eliminar_usuario` |
 
-**Corridas en Supabase de la 1 a la 23. La 24 está pendiente** (PR #42). La 22
+**Corridas en Supabase de la 1 a la 24. La 25 está pendiente** (PR #43). La 22
 dio 0 y 0; la 23, 0 enlaces para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
@@ -119,16 +120,17 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #41, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 23** (la 24 en el PR #42) |
+| Código en `main` | PR #42, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 24** (la 25 en el PR #43) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color único por cadena (#42, fase 24); diagnóstico hecho, rediseño pendiente |
-| Módulo Usuarios | **Diagnóstico hecho** (ver "Usuarios y acceso"); nada cambiado todavía |
+| Módulo Usuarios | Seguridad, recuperar contraseña, Mi cuenta, accesos, eliminar de verdad y rediseño (#43, fase 25). Faltan los correos de alertas y resumen |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
-Lo siguiente: la seguridad de Usuarios (ver abajo, es lo más urgente), y
-luego lo que Hernando elija del diagnóstico de Usuarios y Cadenas.
+Lo siguiente: correr la fase 25 y configurar el correo (SMTP, ver "Usuarios
+y acceso"); después los correos de alertas y resumen (punto 4) y las 5
+mejoras de Cadenas.
 
 ---
 
@@ -153,6 +155,7 @@ luego lo que Hernando elija del diagnóstico de Usuarios y Cadenas.
 | #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
 | #38 | Fase 22: PVP falsos de competidores y los 20 `COMP_` sin URL |
 | #39 | Competencia: columna ID para ordenar por bloques, interruptor $/Bs, CSV con los nombres de Productos |
+| #43 | Usuarios: seguridad (fase 25), recuperar contraseña, Mi cuenta, registro de accesos, eliminar de verdad, rediseño |
 | #42 | Cadenas: color único por cadena en todo el panel (fase 24); guarda en `dim_cadenas` y muestra los errores |
 | #41 | Formulario de enlace: muestra los enlaces que ya tiene el producto y avisa de URL o competidor repetidos antes de guardar |
 | #40 | Competencia: URL que fallan (fase 23), posibles duplicados, filtro por laboratorio, robot para los seleccionados con avance, cobertura por cadena; "Vincular enlace" desde la ficha de Productos; columna ID en Productos. El robot ahora sí lee solo los enlaces pedidos |
@@ -344,6 +347,47 @@ limpieza de la 21.
 5. Desactivar a alguien no cierra su sesión abierta hasta que recargue.
 6. No hay "Mi cuenta" (cambiar la propia contraseña) ni registro de accesos.
 7. La lista de menús de Usuarios no incluye Dimensiones.
+
+### Lo hecho en el PR #43 (fase 25)
+
+- **Seguridad:** la consulta de Hernando confirmó `usuarios` sin RLS y con
+  lectura y escritura para `anon`. La fase 25 lo cierra (ver la tabla de
+  fases). Desactivar a alguien le corta los datos al instante; el panel
+  además lo saca en menos de 5 minutos o al volver a la pestaña (`App.jsx`).
+  Hernando ya desactivó "Allow new users to sign up" en Supabase.
+- **Recuperar contraseña:** "¿Olvidaste tu contraseña?" en el login
+  (`resetPasswordForEmail` con `redirectTo` = la dirección del panel) y la
+  pantalla `components/NuevaContrasena.jsx`, que App muestra cuando la URL
+  trae `type=recovery` o llega el evento `PASSWORD_RECOVERY`.
+- **Mi cuenta** (`/mi-cuenta`, al pulsar la tarjeta del usuario en el menú):
+  nombre y correos (`fn_actualizar_mi_cuenta`), cambiar contraseña
+  (comprueba la actual antes) y últimos accesos.
+- **Accesos:** `utils/accesos.js` → `fn_registrar_acceso` al entrar, salir y
+  cambiar la contraseña. Usuarios muestra el último acceso de cada uno y la
+  ficha lateral los últimos 20.
+- **Eliminar de verdad** (`fn_eliminar_usuario`): borra la fila y la cuenta
+  de `auth.users`. Nadie puede eliminarse ni quitarse el rol a sí mismo.
+- **Rediseño de Usuarios** como Productos: buscador, chips (Rol, Estado,
+  Correos), tabla con acciones fijas, ficha lateral, formulario por
+  secciones con contraseña inicial generada. Dimensiones ya se puede asignar.
+  Piezas comunes en `utils/usuarios.js`. Escrituras con errores visibles
+  (`dbGuardarUsuario`, `dbEliminarUsuarioCompleto`).
+
+### Correo (SMTP): lo configura Hernando
+
+El servidor de correo de Supabase por defecto solo envía a los miembros del
+proyecto y pocos correos por hora. Para que lleguen los de recuperar
+contraseña (y luego las alertas) hace falta un SMTP propio. Se eligió
+**Brevo** (gratis, 300 correos al día, no pide dominio propio: basta
+verificar el correo remitente). Pasos:
+1. Crear cuenta en brevo.com, verificar el remitente y sacar la clave SMTP
+   (SMTP & API → SMTP).
+2. Supabase → Authentication → Emails → SMTP Settings: host
+   `smtp-relay.brevo.com`, puerto `587`, usuario y clave de Brevo, remitente
+   verificado.
+3. Supabase → Authentication → URL Configuration: Site URL = la dirección
+   del panel, y la misma en Redirect URLs.
+4. Traducir las plantillas de correo (Authentication → Emails → Templates).
 
 ## Cadenas (PR #42 y diagnóstico del 2026-09-25)
 

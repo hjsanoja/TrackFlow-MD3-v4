@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
+import { registrarAcceso, urlDelPanel, mensajeAuth } from '../utils/accesos';
 
+// Inicio de sesion con correo y contraseña, y "¿Olvidaste tu contraseña?":
+// Supabase manda un enlace; al abrirlo, App muestra "Crea tu contraseña nueva".
 export default function Login() {
+  const [modo, setModo] = useState('entrar'); // 'entrar' | 'recuperar' | 'enviado'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -11,126 +15,132 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
-
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-
-    // Validación estricta de configuración de entorno
-    if (!supabaseUrl) {
-      setError('Error de configuración: La variable VITE_SUPABASE_URL no está definida en el entorno.');
-      setLoading(false);
+    if (!import.meta.env.VITE_SUPABASE_URL) {
+      setError('Error de configuración: falta VITE_SUPABASE_URL.');
       return;
     }
-
+    setLoading(true);
     try {
       const { data, error: sbError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
-        password: password,
+        password,
       });
-
-      if (sbError) {
-        setError(sbError.message || 'Error al autenticar credenciales en Supabase.');
+      if (sbError || !data?.user) {
+        setError(mensajeAuth(sbError || 'No se recibió una sesión válida.'));
         setLoading(false);
         return;
       }
-
-      if (!data?.user) {
-        setError('No se recibió una sesión válida del servidor de autenticación.');
-        setLoading(false);
-        return;
-      }
-
-      // El listener en App.jsx procesará la sesión y validará autorización en la tabla usuarios
+      registrarAcceso('ingreso');
+      // App.jsx recibe la sesion y comprueba que el usuario este activo.
     } catch (err) {
-      setError(err?.message || 'Error inesperado al conectar con Supabase Auth.');
+      setError(mensajeAuth(err));
       setLoading(false);
     }
   };
 
+  const handleRecuperar = async (e) => {
+    e.preventDefault();
+    setError('');
+    const correo = email.trim().toLowerCase();
+    if (!/\S+@\S+\.\S+/.test(correo)) { setError('Escribe tu correo.'); return; }
+    setLoading(true);
+    const { error: sbError } = await supabase.auth.resetPasswordForEmail(correo, { redirectTo: urlDelPanel() });
+    setLoading(false);
+    // Por seguridad no se dice si el correo existe o no.
+    if (sbError && /rate limit|too many/i.test(sbError.message || '')) { setError(mensajeAuth(sbError)); return; }
+    setModo('enviado');
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 text-on-background">
-      <div className="w-full max-w-md bg-surface-container-lowest rounded-[32px] border border-outline-variant p-10 shadow-sm space-y-8">
+      <div className="w-full max-w-md bg-surface-container-lowest rounded-[28px] border border-outline-variant p-8 sm:p-10 space-y-8">
         <div className="text-center space-y-2">
-          {/* Logo TrackFlow */}
-          <div className="mx-auto w-16 h-16 rounded-[20px] bg-primary flex items-center justify-center shadow-inner">
-            <span className="material-symbols-outlined text-secondary-container text-3xl select-none">monitoring</span>
+          <div className="mx-auto w-16 h-16 rounded-[20px] bg-primary flex items-center justify-center">
+            <span className="material-symbols-outlined text-on-primary text-3xl select-none">monitoring</span>
           </div>
           <h1 className="text-3xl font-display font-extrabold text-primary tracking-tight">TrackFlow</h1>
-          <p className="text-xs font-mono font-bold uppercase tracking-wider text-on-surface-variant">Inteligencia de Precios</p>
+          <p className="m3-body-medium text-on-surface-variant">Inteligencia de precios</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1">
-            <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">Correo Electrónico</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="m3-input"
-              placeholder="usuario@empresa.com"
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="block text-xs font-mono font-bold uppercase tracking-wider text-primary">Contraseña</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="m3-input pr-11"
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-on-surface-variant hover:text-primary transition-colors focus:outline-none"
-              >
-                <span className="material-symbols-outlined text-xl select-none">
-                  {showPassword ? "visibility_off" : "visibility"}
-                </span>
-              </button>
+        {modo === 'enviado' ? (
+          <div className="space-y-5">
+            <div className="flex gap-3 p-4 rounded-2xl bg-primary-container text-on-primary-container">
+              <span className="material-symbols-outlined" aria-hidden="true">mark_email_read</span>
+              <p className="m3-body-medium">
+                Si <strong>{email.trim().toLowerCase()}</strong> tiene acceso, te llegará un correo con un enlace para crear una contraseña nueva.
+                Revisa también la carpeta de spam.
+              </p>
             </div>
+            <button type="button" onClick={() => { setModo('entrar'); setError(''); }} className="m3-btn-text w-full justify-center">
+              <span className="material-symbols-outlined">arrow_back</span>
+              Volver a iniciar sesión
+            </button>
           </div>
-
-          {error && (
-            <div className="text-xs font-semibold text-error bg-error-container border border-error/20 px-4 py-2.5 rounded-xl flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm leading-none">error</span>
-              <span>{error}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full m3-btn-primary h-11 text-xs uppercase font-mono tracking-wider shadow-elevation-1"
-          >
-            {loading ? (
-              <>
-                <span className="material-symbols-outlined text-base leading-none animate-spin">autorenew</span>
-                <span>Iniciando sesión...</span>
-              </>
-            ) : (
-              <>
-                <span>Acceder al Sistema</span>
-                <span className="material-symbols-outlined text-base leading-none">login</span>
-              </>
+        ) : (
+          <form onSubmit={modo === 'entrar' ? handleSubmit : handleRecuperar} className="space-y-5" noValidate>
+            {modo === 'recuperar' && (
+              <p className="m3-body-medium text-on-surface-variant">
+                Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.
+              </p>
             )}
-          </button>
-        </form>
+            <label className="m3-field">
+              <span className="m3-field-label">Correo electrónico</span>
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                className="m3-input" placeholder="usuario@empresa.com" autoComplete="email" autoFocus />
+            </label>
 
-        <div className="pt-5 border-t border-outline-variant text-center flex flex-col items-center gap-1.5">
-          <span className="text-label-md text-on-surface-variant font-mono tracking-wide">
-            TrackFlow · Acceso Restringido a Personal Autorizado
-          </span>
-          <span className="text-label-sm text-on-surface-variant/70 font-mono">
-            Autenticación Administrada por Supabase Auth
-          </span>
-        </div>
+            {modo === 'entrar' && (
+              <label className="m3-field">
+                <span className="m3-field-label">Contraseña</span>
+                <div className="relative">
+                  <input type={showPassword ? 'text' : 'password'} required value={password}
+                    onChange={(e) => setPassword(e.target.value)} className="m3-input pr-12"
+                    placeholder="••••••••" autoComplete="current-password" />
+                  <button type="button" onClick={() => setShowPassword(v => !v)}
+                    className="m3-icon-btn m3-icon-btn-sm absolute right-2 top-1/2 -translate-y-1/2"
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
+                    <span className="material-symbols-outlined">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                  </button>
+                </div>
+              </label>
+            )}
+
+            {error && (
+              <div className="m3-form-alert" role="alert">
+                <span className="material-symbols-outlined" aria-hidden="true">error</span>
+                <span className="flex-1">{error}</span>
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className="w-full m3-btn-primary h-11 justify-center">
+              {loading ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  {modo === 'entrar' ? 'Entrando…' : 'Enviando…'}
+                </>
+              ) : modo === 'entrar' ? (
+                <>
+                  Entrar
+                  <span className="material-symbols-outlined">login</span>
+                </>
+              ) : (
+                <>
+                  Enviar enlace
+                  <span className="material-symbols-outlined">send</span>
+                </>
+              )}
+            </button>
+
+            <button type="button" onClick={() => { setModo(modo === 'entrar' ? 'recuperar' : 'entrar'); setError(''); }}
+              className="m3-btn-text w-full justify-center">
+              {modo === 'entrar' ? '¿Olvidaste tu contraseña?' : 'Volver a iniciar sesión'}
+            </button>
+          </form>
+        )}
+
+        <p className="pt-5 border-t border-outline-variant text-center m3-body-small text-on-surface-variant">
+          Acceso restringido a personal autorizado.
+        </p>
       </div>
     </div>
   );
