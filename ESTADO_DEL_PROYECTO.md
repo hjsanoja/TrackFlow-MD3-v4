@@ -111,8 +111,10 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 28 | `fn_posicion_productos` / `fn_tendencia_posicion` (tu precio vs mínimo y promedio, día a día, en dólares a la tasa de cada día), `fn_cambios_desde` (cambios de precio desde una fecha, en dólares) y `productos_competencia` suma `unidades_empaque` y `unidad_contenido` (conserva sus opciones de seguridad) |
 | 25 | **Seguridad:** `usuarios` con RLS (cada quien su fila, el admin todas), políticas abiertas → solo usuarios activos (`fn_usuario_activo`, `fn_es_admin`), sin permisos para `anon`; tabla `accesos`, `fn_registrar_acceso`, `fn_actualizar_mi_cuenta`, `fn_eliminar_usuario` |
 
-**Corridas en Supabase de la 1 a la 27** (la 25 dejó `usuarios` y `accesos`
-con RLS y sin permisos públicos). **La 28 está pendiente** (PR #47). La 22
+**Corridas en Supabase de la 1 a la 28** (la 25 dejó `usuarios` y `accesos`
+con RLS y sin permisos públicos). La 28 dio, a la fecha, 140 productos
+comparados, mediana +14,78 % (tus precios típicamente sobre el promedio),
+34 más baratos y 106 más caros. La 22
 dio 0 y 0; la 23, 0 enlaces para revisar. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
@@ -124,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #46, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 27** (la 28 en el PR #47) |
+| Código en `main` | PR #47, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 28** (el #48 no trae SQL) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -509,9 +511,8 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   la línea de la tendencia y en el CSV.
 - **Comparar contra una cadena** (filtro "Competencia"): mínimo, promedio,
   indicadores, tendencia y tabla usan solo esa cadena.
-- **Por molécula** (pestaña de la tabla, `VistaMolecula.jsx`): agrupa por
-  molécula + concentración y compara **siempre por unidad** (tableta, cápsula,
-  ml). Una fila abre todas las ofertas ordenadas por precio por unidad.
+- ~~Por molécula~~: se quitó en el #48 a pedido de Hernando (difícil de
+  explicar); se puede recuperar del historial de git (`VistaMolecula.jsx`).
 - **Los cambios de precio se miden en dólares** (cada precio a la tasa de su
   día, columnas `tasa_*` de `v_variacion`): la subida del bolívar ya no cuenta
   como cambio. Umbral 0,5 %.
@@ -521,6 +522,44 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   y el de un competidor las del nombre ("x 20 tabletas") o las tuyas.
 - Encabezado: la última corrida completa del robot (todas las cadenas de
   `scrape_runs`: "21 de 24 enlaces leídos · 3 fallaron").
+
+## Ajustes del PR #48 (sin SQL)
+
+- **Dashboard**: filtros **fijos** bajo la barra de la app al bajar
+  (`components/FiltrosFijos.jsx`; publica su alto en `--alto-filtros` y el
+  buscador de cada tabla se queda debajo; la barra de la app publica
+  `--alto-cabecera`; `main` pasó de `overflow-x-auto` a `overflow-x-clip`
+  porque lo primero rompía lo "sticky"). Indicadores compactos en una fila
+  (`StatCard compacto`). Tendencia 7/15/30/90 días (7 por defecto) en la misma
+  fila que los otros dos gráficos. Tabla con presentación bajo el nombre
+  (ID · tipo · concentración · empaque), columna **Posición** ("2 de 5": lugar
+  de tu precio entre todas las ofertas, 1 = el más barato) y "Mostrar:
+  Ocultar sin precio". "Desde tu última visita" aparece también sin cambios y
+  usa el ingreso anterior de `accesos` si el navegador no tiene la visita.
+  Por unidad los precios llevan 3 decimales. Nombres: "Tú frente al mínimo /
+  al promedio" en todas partes.
+- **Ficha**: filtros **Relación** (todas / solo tus enlaces / solo
+  competencia) y **Cadena**; mínimo, promedio, máximo, gráficos y tabla se
+  calculan sobre lo que dejan ver. Barras a columnas, los dos gráficos juntos,
+  historia 7/15/30/90/180 (7 por defecto), leyenda con nombre corto y
+  laboratorio (detalle al pasar el mouse). Sin columna "por unidad" (lo da el
+  ajuste Por empaque / Por unidad).
+- **Mapa de Calor**: vuelve el concepto anterior (espectro por producto:
+  mínimo, promedio y máximo de la competencia y tu precio) con diseño nuevo:
+  franja en tres zonas (barata azul, pareja ±5 % gris, cara roja), filtros
+  fijos (incluye "Comparar contra" una cadena), indicadores clicables,
+  paginación. El mapa productos × cadenas pasó a **Experimental → Mapa por
+  cadena** (`components/MapaPorCadena.jsx`).
+- **Competencia**: campo **Unidades por empaque** (y medida: unidades, ml, g)
+  en el formulario del competidor y columna `unidades_empaque` en la
+  plantilla CSV. Se guarda en `dim_productos.cantidad_contenido` del `COMP_`;
+  vacío = se conserva lo guardado. Antes, al crear un competidor sin dato se
+  guardaba 1 (sigue así; el panel lee 1 como "no se sabe").
+- **Modal Tasa BCV** rehecho (indicadores, historia 7/30/90/todo, cambio a
+  mano, tabla y Exportar).
+- **Desplegables de filtro con ancho fijo** (`Select`, clases
+  `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
+  empujan a los de al lado al cambiar.
 
 ## Rendimiento (PR #47)
 

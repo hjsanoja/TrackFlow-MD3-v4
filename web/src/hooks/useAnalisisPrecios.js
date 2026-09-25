@@ -106,6 +106,11 @@ export function useAnalisisPrecios({
       const fuenteTuPrecio = propios.length ? 'enlace' : pvpUsd ? 'pvp' : null;
       const difMin = tuPrecio != null && minimo > 0 ? ((tuPrecio - minimo) / minimo) * 100 : null;
       const difProm = tuPrecio != null && promedio > 0 ? ((tuPrecio - promedio) / promedio) * 100 : null;
+      // Posicion: el lugar de tu precio entre todas las ofertas (la tuya mas
+      // las de la competencia), de la mas barata (1) a la mas cara.
+      const posicion = tuPrecio != null && competidores.length
+        ? { lugar: 1 + competidores.filter(x => x.priceUsd < tuPrecio - 0.0005).length, de: competidores.length + 1 }
+        : null;
 
       // Precio de la competencia por cadena (el mas bajo si hay varios).
       const porCadena = new Map();
@@ -128,6 +133,7 @@ export function useAnalisisPrecios({
         fuenteTuPrecio,
         difMin,
         difProm,
+        posicion,
         cambios: precios.filter(x => Math.abs(x.cambio) > UMBRAL_CAMBIO),
         comparable: tuPrecio != null && minimo != null,
         sinPrecio: precios.length === 0 && tuPrecio == null,

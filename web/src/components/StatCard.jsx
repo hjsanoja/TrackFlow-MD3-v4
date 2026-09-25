@@ -19,9 +19,11 @@ export default function StatCard({
   tono = 'neutral',   // neutral | primary | positive | negative | warning
   onClick,
   title,
+  compacto = false,   // version baja: deja mas sitio a graficos y tablas
 }) {
   const clases = [
     'm3-stat',
+    compacto ? 'm3-stat-compact' : '',
     tono !== 'neutral' ? `m3-stat-${tono}` : '',
     onClick ? 'cursor-pointer m3-interactive text-left w-full' : '',
   ].filter(Boolean).join(' ');
@@ -37,7 +39,7 @@ export default function StatCard({
       </div>
       {icon && (
         <div className="m3-stat-icon" aria-hidden="true">
-          <span className="material-symbols-outlined text-[22px]">{icon}</span>
+          <span className={`material-symbols-outlined ${compacto ? 'text-[18px]' : 'text-[22px]'}`}>{icon}</span>
         </div>
       )}
     </Etiqueta>

@@ -48,6 +48,8 @@ export default function Select({
   const opciones = useMemo(() => leerOpciones(children), [children]);
   const valor = String(value ?? '');
   const elegida = opciones.find(o => o.valor === valor);
+  // Los chips de filtro no cambian de ancho al cambiar de opcion.
+  const anchoFijo = /m3-filter-chip|m3-rows-select/.test(className) && opciones.length <= 60;
 
   const [abierto, setAbierto] = useState(false);
   const [activo, setActivo] = useState(-1);
@@ -156,7 +158,19 @@ export default function Select({
         onKeyDown={alTeclear}
       >
         {leadingIcon && <span className="material-symbols-outlined m3-select-lead" aria-hidden="true">{leadingIcon}</span>}
-        <span className={`m3-select-value ${elegida ? '' : 'is-placeholder'}`}>{elegida ? elegida.etiqueta : placeholder}</span>
+        {anchoFijo ? (
+          // Todas las opciones ocupan la misma celda (invisibles salvo la
+          // elegida): el campo mide lo que la mas larga y no cambia de ancho
+          // al elegir otra, asi no empuja a los de al lado.
+          <span className="m3-select-value m3-select-stack">
+            {opciones.map((o, i) => (
+              <span key={`${o.valor}-${i}`} aria-hidden={o.valor !== valor || undefined} className={o.valor === valor ? '' : 'is-oculta'}>{o.etiqueta}</span>
+            ))}
+            {!elegida && <span className="is-placeholder">{placeholder}</span>}
+          </span>
+        ) : (
+          <span className={`m3-select-value ${elegida ? '' : 'is-placeholder'}`}>{elegida ? elegida.etiqueta : placeholder}</span>
+        )}
         <span className="material-symbols-outlined m3-select-arrow" aria-hidden="true">arrow_drop_down</span>
       </button>
       {/* Para que `required` siga funcionando en los formularios. */}

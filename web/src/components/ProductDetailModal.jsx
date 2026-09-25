@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList, Legend,
 } from 'recharts';
 import StatCard from './StatCard';
+import FiltroChip from './FiltroChip';
 import Select from './Select';
 import CadenaBadge from './CadenaBadge';
 import ConfirmModal from './ConfirmModal';
@@ -28,10 +29,19 @@ import {
 // La historia se pide solo para ESTE producto al abrir la ficha (antes
 // dependia del historico completo de todos los productos).
 
-const PERIODOS = [[30, 'Últimos 30 días'], [90, 'Últimos 90 días'], [180, 'Últimos 180 días']];
+const PERIODOS = [[7, 'Últimos 7 días'], [15, 'Últimos 15 días'], [30, 'Últimos 30 días'], [90, 'Últimos 90 días'], [180, 'Últimos 180 días']];
 const MAX_SERIES = 8;
 const colorCategorico = (i) => leerColor(`--md-sys-color-data-cat-${i + 1}`, ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'][i]);
 const diaCorto = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
+
+// "Atamel 500 mg x 20 tabletas recubiertas" -> "Atamel": el nombre sin la
+// concentracion ni el empaque (lo que va desde la primera cifra).
+export function nombreCorto(nombre) {
+  const t = String(nombre || '').trim();
+  const corte = t.search(/\s\S*\d/);
+  const corto = (corte > 0 ? t.slice(0, corte) : t).replace(/(\s+(x|de|por|con))+$/i, '').replace(/[\s,.;:-]+$/, '');
+  return corto || t;
+}
 
 function leerMeta() {
   try { return Number(localStorage.getItem('dashboard.meta')) || 0; } catch { return 0; }
@@ -45,7 +55,9 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const [moneda, setMoneda] = useState(currency || 'usd');
   const [modoPrecio, setModoPrecio] = useState(initialPriceMode === 'descuento' ? 'descuento' : 'lista');
   const [modoAnalisis, setModoAnalisis] = useState(initialAnalisisMode === 'unidosis' ? 'unidosis' : 'empaque');
-  const [dias, setDias] = useState(90);
+  const [dias, setDias] = useState(7);
+  const [relacion, setRelacion] = useState('todos'); // todos | propio | competencia
+  const [cadenaFiltro, setCadenaFiltro] = useState('todos');
   const [vistaHistoria, setVistaHistoria] = useState('resumen'); // resumen | ofertas
   const [historia, setHistoria] = useState({ cargando: true, filas: [] });
   const [buscador, setBuscador] = useState(false);
@@ -117,17 +129,26 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }).sort((a, b) => (a.sinPrecio ? 1 : 0) - (b.sinPrecio ? 1 : 0) || (a.priceUsd ?? 0) - (b.priceUsd ?? 0)), [enlaces, conDescuento, bcvRate, porUnidad, variacionPorPub, cadenaPorClave]);
 
-  const conPrecio = ofertas.filter(o => !o.sinPrecio);
-  const tuyas = conPrecio.filter(o => o.tipo === 'propio');
-  const comp = conPrecio.filter(o => o.tipo !== 'propio');
+  // Los filtros Relacion y Cadena definen que ofertas cuentan: minimo,
+  // promedio, maximo, graficos y tabla se calculan solo sobre esas.
+  const pasaFiltros = (tipo, cadena) =>
+    (relacion === 'todos' || (relacion === 'propio' ? tipo === 'propio' : tipo !== 'propio')) &&
+    (cadenaFiltro === 'todos' || cadena === cadenaFiltro);
+  const cadenasOfertas = [...new Set(ofertas.map(o => o.cadena))].sort((a, b) => nombreCadena(a).localeCompare(nombreCadena(b)));
+  const ofertasVisibles = ofertas.filter(o => pasaFiltros(o.tipo, o.cadena));
+  const visibles = ofertasVisibles.filter(o => !o.sinPrecio);
+  const tuyas = ofertas.filter(o => !o.sinPrecio && o.tipo === 'propio' && (cadenaFiltro === 'todos' || o.cadena === cadenaFiltro));
   const pvp = Number(activo?.pvp_propio_usd || 0) > 0 ? Number(activo.pvp_propio_usd) / (porUnidad ? unidadesPropio : 1) : null;
   const tuPrecio = tuyas.length ? Math.min(...tuyas.map(o => o.priceUsd)) : pvp;
-  const minimo = comp.length ? Math.min(...comp.map(o => o.priceUsd)) : null;
-  const promedio = comp.length ? comp.reduce((a, o) => a + o.priceUsd, 0) / comp.length : null;
-  const ofertaMin = comp.find(o => o.priceUsd === minimo);
-  const difMin = tuPrecio != null && minimo > 0 ? (tuPrecio / minimo - 1) * 100 : null;
+  const valores = visibles.map(o => o.priceUsd);
+  const minimo = valores.length ? Math.min(...valores) : null;
+  const maximo = valores.length ? Math.max(...valores) : null;
+  const promedio = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
+  const ofertaMin = visibles.find(o => o.priceUsd === minimo);
+  const ofertaMax = visibles.find(o => o.priceUsd === maximo);
   const difProm = tuPrecio != null && promedio > 0 ? (tuPrecio / promedio - 1) * 100 : null;
   const ajuste = calcularAjuste(tuPrecio, promedio, meta);
+  const sufijoGrupo = relacion === 'propio' ? '(tuyos)' : relacion === 'competencia' ? '(competencia)' : '(todas)';
   const { fmt, fmtUnidad } = crearFormato(moneda, bcvRate);
   const fmtModo = porUnidad ? fmtUnidad : fmt;
 
@@ -167,13 +188,19 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       const dia = h.fecha_local || String(h.scraped_at).slice(0, 10);
       const unidades = unidadesPorPub.get(h.publicacion_id) || (String(h.tipo) === 'propio' ? unidadesPropio : unidadesPropio);
       const usd = bs / tasa / (porUnidad ? unidades : 1);
-      if (!porPub.has(h.publicacion_id)) porPub.set(h.publicacion_id, { tipo: h.tipo, cadena: idCadena(h.cadena), marca: h.marca, dias: new Map() });
+      const cadena = idCadena(h.cadena);
+      if (!pasaFiltros(String(h.tipo), cadena) && !(String(h.tipo) === 'propio' && (cadenaFiltro === 'todos' || cadena === cadenaFiltro))) continue;
+      if (!porPub.has(h.publicacion_id)) {
+        const enlace = enlaces.find(e => e.publicacion_id === h.publicacion_id);
+        porPub.set(h.publicacion_id, { tipo: h.tipo, cadena, marca: h.marca, laboratorio: enlace?.laboratorio || '', unidades: unidadesPorPub.get(h.publicacion_id) || unidadesPropio, dias: new Map() });
+      }
       porPub.get(h.publicacion_id).dias.set(dia, usd);
     }
     // Dias del periodo; cada enlace arrastra su ultimo precio hasta 7 dias.
     const hoy = new Date();
     const fechas = Array.from({ length: dias }, (_, i) => new Date(hoy.getTime() - (dias - 1 - i) * 864e5).toISOString().slice(0, 10));
     const pubs = [...porPub.entries()];
+    const visiblesPub = pubs.filter(([, info]) => pasaFiltros(String(info.tipo), info.cadena));
     const ultimoConocido = (dias, fecha) => {
       for (let k = 0; k < 7; k++) {
         const f = new Date(new Date(`${fecha}T12:00:00Z`).getTime() - k * 864e5).toISOString().slice(0, 10);
@@ -181,10 +208,21 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       }
       return null;
     };
-    const lineas = pubs
+    const lineas = visiblesPub
       .sort((a, b) => (a[1].tipo === 'propio' ? -1 : 0) - (b[1].tipo === 'propio' ? -1 : 0))
       .slice(0, MAX_SERIES)
-      .map(([pub, info], i) => ({ clave: `p${pub}`, nombre: `${info.tipo === 'propio' ? 'Tuyo · ' : ''}${info.marca} (${nombreCadena(info.cadena)})`, color: colorCategorico(i) }));
+      .map(([pub, info], i) => ({
+        clave: `p${pub}`,
+        nombre: `${nombreCorto(info.marca)}${info.tipo === 'propio' ? ' (tuyo)' : info.laboratorio ? ` · ${info.laboratorio}` : ''}`,
+        detalle: `${info.marca} · ${nombreCadena(info.cadena)} · ${info.unidades} ${info.unidades === 1 ? 'unidad' : 'unidades'}${info.laboratorio ? ` · ${info.laboratorio}` : ''}`,
+        color: colorCategorico(i),
+      }));
+    // Dos lineas con el mismo nombre (mismo producto en dos cadenas): se
+    // distinguen por la cadena.
+    const repetidos = new Set(lineas.map(l => l.nombre).filter((n, i, a) => a.indexOf(n) !== i));
+    for (const l of lineas) {
+      if (repetidos.has(l.nombre)) l.nombre = `${l.nombre} (${l.detalle.split(' · ')[1]})`;
+    }
     const puntos = fechas.map(fecha => {
       const fila = { fecha };
       const tuyos = [];
@@ -192,8 +230,9 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       for (const [pub, info] of pubs) {
         const v = ultimoConocido(info.dias, fecha);
         if (v == null) continue;
-        fila[`p${pub}`] = v;
-        (info.tipo === 'propio' ? tuyos : otros).push(v);
+        const visible = pasaFiltros(String(info.tipo), info.cadena);
+        if (visible) { fila[`p${pub}`] = v; otros.push(v); }
+        if (info.tipo === 'propio') tuyos.push(v);
       }
       if (tuyos.length) fila.tuyo = Math.min(...tuyos);
       if (otros.length) {
@@ -204,7 +243,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     }).filter(f => f.tuyo != null || f.minimo != null);
     return { puntos, lineas, ocultas: Math.max(0, pubs.length - MAX_SERIES) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historia.filas, conDescuento, porUnidad, dias, bcvRate, enlaces, cadenaPorClave]);
+  }, [historia.filas, conDescuento, porUnidad, dias, bcvRate, enlaces, cadenaPorClave, relacion, cadenaFiltro]);
 
   // ---------------------------------------------------------------------
   // Cambiar de producto
@@ -234,9 +273,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   if (!activo) return null;
   const tipoMercado = (activo.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico';
   const presentacion = [activo.concentracion, describirPresentacion(activo)].filter(v => v && v !== '—').join(' · ');
-  const datosBarras = conPrecio.map(o => ({
+  const datosBarras = visibles.map(o => ({
     ...o,
-    etiqueta: `${o.tipo === 'propio' ? 'Tuyo · ' : ''}${String(o.marca || '').slice(0, 26)}${String(o.marca || '').length > 26 ? '…' : ''}`,
+    etiqueta: `${nombreCorto(o.marca)}${o.tipo === 'propio' ? ' (tuyo)' : ''}`,
+    // El color configurado en Cadenas, sin transparencia.
     color: getChainColor(o.cadena),
   }));
 
@@ -303,21 +343,27 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       </header>
 
       <main className="m3-ficha-contenido">
-        {/* Ajustes de vista */}
-        <section className="m3-dash-filtros" aria-label="Ajustes de la ficha">
+        {/* Filtros y ajustes */}
+        <section className="m3-dash-filtros" aria-label="Filtros de la ficha">
           <div className="flex flex-wrap items-center gap-2">
+            <FiltroChip etiqueta="Relación" icono="group" valor={relacion} onChange={setRelacion}
+              opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
+            <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadenaFiltro} onChange={setCadenaFiltro}
+              opciones={[['todos', 'Cadena: todas'], ...cadenasOfertas.map(c => [c, nombreCadena(c)])]} />
+            {(relacion !== 'todos' || cadenaFiltro !== 'todos') && (
+              <button type="button" className="m3-btn-text" onClick={() => { setRelacion('todos'); setCadenaFiltro('todos'); }}>Limpiar filtros</button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
             <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
               <option value="lista">Precio de lista</option>
               <option value="descuento">Precio con oferta</option>
             </Select>
             <Select value={modoAnalisis} onChange={e => setModoAnalisis(e.target.value)} aria-label="Comparar por" className="m3-filter-chip" leadingIcon="medication">
               <option value="empaque">Por empaque</option>
-              <option value="unidosis">Por unidad (tableta, cápsula…)</option>
+              <option value="unidosis">Por unidad</option>
             </Select>
-          </div>
-          <div className="flex items-center gap-3 lg:ml-auto">
-            <span className="m3-body-small text-on-surface-variant">Tasa BCV: Bs {bcvRate ? bcvRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</span>
-            <label className="m3-switch-label whitespace-nowrap">
+            <label className="m3-switch-label whitespace-nowrap ml-1" title={`Tasa BCV: Bs ${bcvRate ? bcvRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}`}>
               <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
               <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')}
                 className="m3-switch" aria-label="Ver los precios en bolívares" />
@@ -326,46 +372,118 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           </div>
         </section>
 
-        {/* Indicadores */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Indicadores del producto">
-          <StatCard label={`Tu precio${porUnidad ? ' por unidad' : ''}`} value={fmtModo(tuPrecio)} icon="sell" tono="primary"
-            hint={tuyas.length ? `${tuyas.length === 1 ? 'Tu enlace' : `El más bajo de tus ${tuyas.length} enlaces`}` : pvp ? 'PVP cargado en Productos' : 'Sin precio tuyo'} />
-          <StatCard label="Mínimo de la competencia" value={fmtModo(minimo)} icon="south" tono="neutral"
-            hint={ofertaMin ? `${ofertaMin.marca} en ${nombreCadena(ofertaMin.cadena)}` : 'Sin precios de la competencia'} />
-          <StatCard label="Frente al mínimo" value={pct(difMin)} icon="trending_up" tono={difMin > 0.5 ? 'negative' : difMin != null ? 'positive' : 'neutral'}
-            hint={difMin == null ? 'Falta tu precio o el de la competencia' : difMin > 0.5 ? 'Otra cadena lo vende más barato' : 'Eres el más barato'} />
-          <StatCard label="Frente al promedio" value={pct(difProm)} icon="balance" tono={difProm > 5 ? 'negative' : 'neutral'}
-            hint={ajuste ? (ajuste.estado === 'en_meta' ? `En tu meta (${textoMeta(meta)})` : `${ajuste.estado === 'bajar' ? 'Bajar' : 'Subir'} ${fmtModo(Math.abs(ajuste.usd))} para ${textoMeta(meta)}`) : `Promedio: ${fmtModo(promedio)}`} />
+        {/* Indicadores: sobre las ofertas que dejan ver los filtros */}
+        <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3" aria-label="Indicadores del producto">
+          <StatCard compacto label={`Tu precio${porUnidad ? ' por unidad' : ''}`} value={fmtModo(tuPrecio)} icon="sell" tono="primary"
+            hint={tuyas.length ? (tuyas.length === 1 ? 'Tu enlace' : `El más bajo de tus ${tuyas.length} enlaces`) : pvp ? 'PVP cargado en Productos' : 'Sin precio tuyo'} />
+          <StatCard compacto label={`Mínimo ${sufijoGrupo}`} value={fmtModo(minimo)} icon="south" tono="neutral"
+            hint={ofertaMin ? `${nombreCorto(ofertaMin.marca)} en ${nombreCadena(ofertaMin.cadena)}` : 'Sin precios'} />
+          <StatCard compacto label={`Promedio ${sufijoGrupo}`} value={fmtModo(promedio)} icon="balance" tono="neutral"
+            hint={`${visibles.length} ${visibles.length === 1 ? 'oferta' : 'ofertas'}`} />
+          <StatCard compacto label={`Máximo ${sufijoGrupo}`} value={fmtModo(maximo)} icon="north" tono="neutral"
+            hint={ofertaMax ? `${nombreCorto(ofertaMax.marca)} en ${nombreCadena(ofertaMax.cadena)}` : 'Sin precios'} />
+          <StatCard compacto label="Tú frente al promedio" value={pct(difProm)} icon="percent" tono={difProm > 5 ? 'negative' : difProm < -0.5 ? 'primary' : 'neutral'}
+            hint={ajuste ? (ajuste.estado === 'en_meta' ? `En tu meta (${textoMeta(meta)})` : `${ajuste.estado === 'bajar' ? 'Bajar' : 'Subir'} ${fmtModo(Math.abs(ajuste.usd))} para tu meta`) : 'Falta tu precio o el promedio'} />
         </section>
 
-        {/* Precios de hoy */}
-        <section className="m3-data-table" aria-label="Precios de hoy">
-          <div className="m3-data-table-toolbar">
-            <h2 className="m3-title-medium text-on-surface">Precios de hoy</h2>
-            <p className="m3-body-small text-on-surface-variant">
-              El último precio leído de cada enlace{porUnidad ? ', por unidad' : ''}, del más barato al más caro. La línea marca el promedio de la competencia.
-            </p>
+        {/* Graficos juntos */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Gráficos">
+          <div className="m3-dash-card">
+            <header className="m3-dash-card-header">
+              <div className="min-w-0">
+                <h2 className="m3-title-medium text-on-surface">Precios de hoy</h2>
+                <p className="m3-body-small text-on-surface-variant">
+                  El último precio de cada oferta{porUnidad ? ', por unidad' : ''}, del más barato al más caro. Color de la cadena; la línea es el promedio.
+                </p>
+              </div>
+            </header>
+            {visibles.length === 0 ? (
+              <div className="h-72 flex items-center justify-center text-on-surface-variant m3-body-medium">No hay precios con estos filtros.</div>
+            ) : (
+              <div className="h-72" role="img" aria-label="Precio de cada oferta">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={datosBarras} margin={{ top: 20, right: 8, left: 0, bottom: 0 }} barCategoryGap="22%">
+                    <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
+                    <XAxis dataKey="etiqueta" interval={0} tick={<TickOferta color={tg.eje} />} tickLine={false} axisLine={{ stroke: tg.rejilla }} height={40} />
+                    <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} />
+                    {promedio > 0 && (
+                      <ReferenceLine y={promedio} stroke={tg.eje} strokeOpacity={0.7}
+                        label={{ value: 'Promedio', position: 'insideBottomLeft', fill: tg.eje, fontSize: 11 }} />
+                    )}
+                    <Tooltip cursor={{ fill: tg.rejilla, fillOpacity: 0.25 }} content={<TooltipOferta fmt={fmtModo} nombreCadena={nombreCadena} />} />
+                    <Bar dataKey="priceUsd" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                      {datosBarras.map(o => <Cell key={o.id} fill={o.color} stroke={o.tipo === 'propio' ? tg.texto : undefined} strokeWidth={o.tipo === 'propio' ? 2 : 0} />)}
+                      <LabelList dataKey="priceUsd" position="top" formatter={fmtModo} fill={tg.texto} stroke="none" fontSize={11} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
-          {conPrecio.length > 0 && (
-            <div className="px-4 pt-4" style={{ height: Math.max(140, datosBarras.length * 34 + 40) }} role="img" aria-label="Precio de cada oferta">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosBarras} layout="vertical" margin={{ top: 16, right: 64, left: 8, bottom: 4 }} barCategoryGap="24%">
-                  <CartesianGrid horizontal={false} stroke={tg.rejilla} strokeOpacity={0.6} />
-                  <XAxis type="number" hide domain={[0, 'dataMax']} />
-                  <YAxis type="category" dataKey="etiqueta" width={190} tick={{ fill: tg.eje, fontSize: 12 }} tickLine={false} axisLine={false} />
-                  {promedio > 0 && (
-                    <ReferenceLine x={promedio} stroke={tg.eje} strokeOpacity={0.7}
-                      label={{ value: 'Promedio', position: 'top', fill: tg.eje, fontSize: 11 }} />
-                  )}
-                  <Tooltip cursor={{ fill: tg.rejilla, fillOpacity: 0.25 }} content={<TooltipOferta fmt={fmtModo} nombreCadena={nombreCadena} />} />
-                  <Bar dataKey="priceUsd" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                    {datosBarras.map(o => <Cell key={o.id} fill={o.color} fillOpacity={o.tipo === 'propio' ? 1 : 0.85} />)}
-                    <LabelList dataKey="priceUsd" position="right" formatter={fmtModo} fill={tg.texto} fontSize={12} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+
+          <div className="m3-dash-card">
+            <header className="m3-dash-card-header flex-wrap">
+              <div className="min-w-0 basis-full">
+                <h2 className="m3-title-medium text-on-surface">Historia de precios</h2>
+                <p className="m3-body-small text-on-surface-variant">
+                  En dólares a la tasa de cada día{porUnidad ? ' y por unidad' : ''}. Pasa el mouse por la leyenda para ver el detalle.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={vistaHistoria} onChange={e => setVistaHistoria(e.target.value)} aria-label="Qué ver" className="m3-filter-chip" leadingIcon="stacked_line_chart">
+                  <option value="resumen">Tuyo, mínimo y promedio</option>
+                  <option value="ofertas">Cada oferta</option>
+                </Select>
+                <Select value={String(dias)} onChange={e => setDias(Number(e.target.value))} aria-label="Periodo" className="m3-filter-chip" leadingIcon="date_range">
+                  {PERIODOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                </Select>
+              </div>
+            </header>
+            {historia.cargando && serieHistoria.puntos.length === 0 ? (
+              <div className="h-72 rounded-2xl m3-skeleton" aria-busy="true" />
+            ) : serieHistoria.puntos.length < 2 ? (
+              <div className="h-72 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+                <span className="material-symbols-outlined text-3xl" aria-hidden="true">show_chart</span>
+                <span className="m3-body-medium">Aún no hay historia de precios en este periodo.</span>
+              </div>
+            ) : (
+              <div className={`h-72 ${historia.cargando ? 'opacity-60' : ''}`}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={serieHistoria.puntos} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
+                    <XAxis dataKey="fecha" tickFormatter={diaCorto} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={{ stroke: tg.rejilla }} minTickGap={24} />
+                    <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} domain={['auto', 'auto']} />
+                    <Tooltip content={<TooltipHistoria fmt={fmtModo} />} cursor={{ stroke: tg.eje, strokeOpacity: 0.3 }} />
+                    <Legend content={<LeyendaHistoria color={tg.eje} />} />
+                    {vistaHistoria === 'resumen' ? (
+                      [
+                        <Line key="tuyo" type="monotone" dataKey="tuyo" name="Tu precio" stroke={colorCategorico(0)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
+                        <Line key="minimo" type="monotone" dataKey="minimo" name={`Mínimo ${sufijoGrupo}`} stroke={colorCategorico(1)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
+                        <Line key="promedio" type="monotone" dataKey="promedio" name={`Promedio ${sufijoGrupo}`} stroke={colorCategorico(2)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
+                      ]
+                    ) : (
+                      serieHistoria.lineas.map(l => (
+                        <Line key={l.clave} type="monotone" dataKey={l.clave} name={l.nombre} detalle={l.detalle} stroke={l.color} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />
+                      ))
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {vistaHistoria === 'ofertas' && serieHistoria.ocultas > 0 && (
+              <p className="m3-body-small text-on-surface-variant mt-2">Se muestran {MAX_SERIES} ofertas; {serieHistoria.ocultas} más no caben en el gráfico.</p>
+            )}
+          </div>
+        </section>
+
+        {/* Ofertas */}
+        <section className="m3-data-table" aria-label="Ofertas">
+          <div className="m3-data-table-toolbar flex flex-wrap items-center gap-2">
+            <h2 className="m3-title-medium text-on-surface">Ofertas</h2>
+            <span className="m3-body-small text-on-surface-variant">
+              {ofertasVisibles.length} {ofertasVisibles.length === 1 ? 'oferta' : 'ofertas'}{porUnidad ? ' · precios por unidad' : ''}
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="m3-table m3-table-ficha">
               <thead>
@@ -373,8 +491,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   <th>Producto</th>
                   <th>Cadena</th>
                   <th className="text-right">Unidades</th>
-                  <th className="text-right">Precio</th>
-                  <th className="text-right">Por unidad</th>
+                  <th className="text-right">{porUnidad ? 'Precio por unidad' : 'Precio'}</th>
                   <th className="text-right" title="Cuánto más caro (rojo) o barato (azul) es tu precio que esta oferta">Tú frente a esta</th>
                   <th className="text-right">Cambio 7 días</th>
                   <th>Última lectura</th>
@@ -382,10 +499,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 </tr>
               </thead>
               <tbody>
-                {ofertas.map(o => (
+                {ofertasVisibles.map(o => (
                   <tr key={o.id}>
                     <td>
-                      <div className="m3-cell-primary m3-cell-clamp max-w-[18rem]" title={o.marca}>{o.marca}</div>
+                      <div className="m3-cell-primary m3-cell-clamp max-w-[20rem]" title={o.marca}>{o.marca}</div>
                       <div className="m3-cell-secondary">
                         {o.tipo === 'propio' ? <span className="m3-chip-propio">Tuyo</span> : (o.laboratorio || 'Competidor')}
                       </div>
@@ -394,8 +511,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                       <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={o.cadena} tamano="xs" title="" />{nombreCadena(o.cadena)}</span>
                     </td>
                     <td className="text-right tabular-nums">{o.unidades}</td>
-                    <td className="text-right whitespace-nowrap tabular-nums">{o.sinPrecio ? <span className="text-on-surface-variant">Sin precio</span> : fmt(o.empaqueUsd)}</td>
-                    <td className="text-right whitespace-nowrap tabular-nums">{o.sinPrecio ? '—' : fmtUnidad(o.unitUsd)}</td>
+                    <td className="text-right whitespace-nowrap tabular-nums font-medium">{o.sinPrecio ? <span className="text-on-surface-variant font-normal">Sin precio</span> : fmtModo(o.priceUsd)}</td>
                     <td className="text-right whitespace-nowrap">
                       {o.sinPrecio || o.tipo === 'propio' || tuPrecio == null ? '—' : <Diferencia valor={(tuPrecio / o.priceUsd - 1) * 100} />}
                     </td>
@@ -410,72 +526,17 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     </td>
                   </tr>
                 ))}
-                {ofertas.length === 0 && (
-                  <tr><td colSpan={9} className="text-center text-on-surface-variant py-8">Este producto no tiene enlaces. Vincúlalos en Competencia.</td></tr>
+                {ofertasVisibles.length === 0 && (
+                  <tr><td colSpan={8} className="text-center text-on-surface-variant py-8">{ofertas.length ? 'Ninguna oferta con estos filtros.' : 'Este producto no tiene enlaces. Vincúlalos en Competencia.'}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
           {ajuste && (
             <p className="m3-body-small text-on-surface-variant px-4 py-3 border-t border-outline-variant flex flex-wrap items-center gap-2">
-              Para quedar en tu meta ({textoMeta(meta)}, se cambia en el Dashboard) el precio sería {fmtModo(ajuste.objetivo)}:
+              Para quedar en tu meta ({textoMeta(meta)}, se cambia en el Dashboard) tu precio sería {fmtModo(ajuste.objetivo)}:
               <AjusteMeta ajuste={ajuste} fmt={fmtModo} />
             </p>
-          )}
-        </section>
-
-        {/* Historia */}
-        <section className="m3-dash-card" aria-label="Historia de precios">
-          <header className="m3-dash-card-header">
-            <div className="min-w-0">
-              <h2 className="m3-title-medium text-on-surface">Historia de precios</h2>
-              <p className="m3-body-small text-on-surface-variant">
-                En dólares, cada día a la tasa de ese día{porUnidad ? ' y por unidad' : ''}. Si un día no hubo lectura se toma el último precio de la semana.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <Select value={vistaHistoria} onChange={e => setVistaHistoria(e.target.value)} aria-label="Qué ver" className="m3-filter-chip" leadingIcon="stacked_line_chart">
-                <option value="resumen">Tuyo, mínimo y promedio</option>
-                <option value="ofertas">Cada oferta</option>
-              </Select>
-              <Select value={String(dias)} onChange={e => setDias(Number(e.target.value))} aria-label="Periodo" className="m3-filter-chip" leadingIcon="date_range">
-                {PERIODOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
-              </Select>
-            </div>
-          </header>
-          {historia.cargando && serieHistoria.puntos.length === 0 ? (
-            <div className="h-72 rounded-2xl m3-skeleton" aria-busy="true" />
-          ) : serieHistoria.puntos.length < 2 ? (
-            <div className="h-56 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
-              <span className="material-symbols-outlined text-3xl" aria-hidden="true">show_chart</span>
-              <span className="m3-body-medium">Aún no hay historia de precios para este producto en este periodo.</span>
-            </div>
-          ) : (
-            <div className={`h-80 ${historia.cargando ? 'opacity-60' : ''}`}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={serieHistoria.puntos} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
-                  <XAxis dataKey="fecha" tickFormatter={diaCorto} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={{ stroke: tg.rejilla }} minTickGap={28} />
-                  <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={72} domain={['auto', 'auto']} />
-                  <Tooltip content={<TooltipHistoria fmt={fmtModo} />} cursor={{ stroke: tg.eje, strokeOpacity: 0.3 }} />
-                  <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} formatter={v => <span style={{ color: tg.eje }}>{v}</span>} />
-                  {vistaHistoria === 'resumen' ? (
-                    [
-                      <Line key="tuyo" type="monotone" dataKey="tuyo" name="Tu precio" stroke={colorCategorico(0)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />,
-                      <Line key="minimo" type="monotone" dataKey="minimo" name="Mínimo de la competencia" stroke={colorCategorico(1)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />,
-                      <Line key="promedio" type="monotone" dataKey="promedio" name="Promedio de la competencia" stroke={colorCategorico(2)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />,
-                    ]
-                  ) : (
-                    serieHistoria.lineas.map(l => (
-                      <Line key={l.clave} type="monotone" dataKey={l.clave} name={l.nombre} stroke={l.color} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
-                    ))
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          {vistaHistoria === 'ofertas' && serieHistoria.ocultas > 0 && (
-            <p className="m3-body-small text-on-surface-variant mt-2">Se muestran {MAX_SERIES} ofertas; {serieHistoria.ocultas} más no caben en el gráfico.</p>
           )}
         </section>
       </main>
@@ -522,5 +583,37 @@ function TooltipHistoria({ active, payload, label, fmt }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// Etiqueta de cada columna: el nombre corto en dos lineas como maximo.
+function TickOferta({ x, y, payload, color }) {
+  const texto = String(payload.value);
+  const palabras = texto.split(' ');
+  const l1 = [];
+  const l2 = [];
+  for (const p of palabras) ((l1.join(' ').length + p.length) < 13 && l2.length === 0 ? l1 : l2).push(p);
+  const segunda = l2.join(' ');
+  return (
+    <text x={x} y={y + 12} textAnchor="middle" fill={color} fontSize={11}>
+      <title>{texto}</title>
+      <tspan x={x} dy={0}>{l1.join(' ') || texto.slice(0, 12)}</tspan>
+      {segunda && <tspan x={x} dy={13}>{segunda.length > 14 ? `${segunda.slice(0, 13)}…` : segunda}</tspan>}
+    </text>
+  );
+}
+
+// Leyenda: nombre corto y laboratorio; al pasar el mouse, el detalle completo.
+function LeyendaHistoria({ payload, color }) {
+  if (!payload?.length) return null;
+  return (
+    <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 pt-2" style={{ fontSize: 12 }}>
+      {payload.map(p => (
+        <li key={p.dataKey} className="inline-flex items-center gap-1.5 cursor-default" title={p.payload?.detalle || p.value}>
+          <i className="inline-block w-3 h-0.5" style={{ background: p.color }} />
+          <span style={{ color }}>{p.value}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -49,6 +49,8 @@ export const ESQUEMAS = {
         alias: ['competidor', 'marca_competencia'] },
       { campo: 'laboratorio_competidor', etiqueta: 'Laboratorio del competidor', obligatorio: false,
         alias: ['laboratorio', 'fabricante'] },
+      { campo: 'unidades_empaque', etiqueta: 'Unidades por empaque', obligatorio: false,
+        alias: ['unidades', 'unidades_por_empaque'] },
       { campo: 'activo', etiqueta: 'Activo', obligatorio: false, tipo: 'booleano', exacto: true },
     ],
   },
@@ -192,6 +194,11 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
         filaOk = false;
       } else {
         clavesVistas.set(clave, numero);
+      }
+
+      const unidades = getRowValue(fila, 'unidades_empaque', 'unidades_por_empaque').trim();
+      if (unidades && !(Number(unidades.replace(',', '.')) > 0)) {
+        avisos.push({ fila: numero, campo: 'Unidades por empaque', mensaje: `"${unidades}" no es un número: se ignora` });
       }
 
       const tipo = getRowValue(fila, 'tipo').toLowerCase().trim();

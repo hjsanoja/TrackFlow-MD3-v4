@@ -24,7 +24,8 @@ import { exportToCSV } from '../utils/exportUtils';
 import { fechaHora, haceCuanto } from '../utils/usuarios';
 import { normalizar } from '../components/formulario';
 import TendenciaPosicion, { diaLargo } from '../components/dashboard/TendenciaPosicion';
-import VistaMolecula from '../components/dashboard/VistaMolecula';
+import FiltrosFijos from '../components/FiltrosFijos';
+import { describirPresentacion } from '../utils/presentacion';
 import {
   UMBRAL_CAMBIO, UMBRAL_EMPATE, VENTANAS, METAS, textoMeta, usePreferencia, leerColor, mediana, pct,
   crearFormato, Diferencia, calcularAjuste, AjusteMeta, GRUPOS, grupoDe,
@@ -66,7 +67,6 @@ export default function Dashboard({ userDoc }) {
   const [cadenaComp, setCadenaComp] = useState('todos');
 
   // Tabla
-  const [vista, setVista] = usePreferencia('dashboard.vista', 'producto', ['producto', 'molecula']);
   const [search, setSearch] = useState('');
   const [mostrar, setMostrar] = useState('todos');
   const [orden, setOrden] = useState({ campo: 'nombre', dir: 'asc' });
@@ -213,6 +213,7 @@ export default function Dashboard({ userDoc }) {
       if (mostrar === 'mas_barato') return x.comparable && x.difMin <= UMBRAL_EMPATE;
       if (mostrar === 'cambios') return x.cambios.length > 0;
       if (mostrar === 'sin_comparar') return !x.comparable;
+      if (mostrar === 'con_precio') return !x.sinPrecio;
       if (mostrar === 'bajar') return ajusteDe(x)?.estado === 'bajar';
       if (mostrar === 'subir') return ajusteDe(x)?.estado === 'subir';
       return true;
@@ -224,6 +225,7 @@ export default function Dashboard({ userDoc }) {
       promedio: x => x.promedio,
       difMin: x => x.difMin,
       difProm: x => x.difProm,
+      posicion: x => (x.posicion ? x.posicion.lugar / x.posicion.de : null),
       ajuste: x => ajusteDe(x)?.porcentaje,
     }[orden.campo];
     const signo = orden.dir === 'asc' ? 1 : -1;
@@ -248,7 +250,9 @@ export default function Dashboard({ userDoc }) {
   // ------------------------------------------------------------------------
   // Formatos
   // ------------------------------------------------------------------------
-  const { fmt, fmtUnidad } = crearFormato(moneda, bcv.rate);
+  // Por unidad los precios son pequenos ($0.060): llevan un decimal mas.
+  const { fmt: fmtEmpaque, fmtUnidad } = crearFormato(moneda, bcv.rate);
+  const fmt = modoAnalisis === 'unidosis' ? fmtUnidad : fmtEmpaque;
   const porUnidad = modoAnalisis === 'unidosis' ? ' por unidad' : '';
 
   // ------------------------------------------------------------------------
@@ -259,7 +263,7 @@ export default function Dashboard({ userDoc }) {
     celda: x => (
       <div className="min-w-0">
         <div className="m3-cell-primary m3-cell-clamp max-w-[18rem]" title={x.producto.nombre}>{x.producto.nombre}</div>
-        <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
+        <div className="m3-cell-secondary">{subtituloProducto(x.producto)}</div>
       </div>
     ),
   };
@@ -274,8 +278,8 @@ export default function Dashboard({ userDoc }) {
     ),
   };
   const colPromedio = { titulo: 'Promedio', alinear: 'right', celda: x => fmt(x.promedio) };
-  const colDifMin = { titulo: 'Frente al mínimo', alinear: 'right', celda: x => <Diferencia valor={x.difMin} /> };
-  const colDifProm = { titulo: 'Frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> };
+  const colDifMin = { titulo: 'Tú frente al mínimo', alinear: 'right', celda: x => <Diferencia valor={x.difMin} /> };
+  const colDifProm = { titulo: 'Tú frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> };
   const colAjuste = { titulo: 'Para la meta', alinear: 'right', celda: x => <AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} /> };
 
   const abrirDetalle = (d) => setDetalle(d);
@@ -292,7 +296,6 @@ export default function Dashboard({ userDoc }) {
     setDetalle(null);
     setSearch('');
     setMostrar(valor);
-    setVista('producto');
     setTimeout(() => tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
 
@@ -394,7 +397,7 @@ export default function Dashboard({ userDoc }) {
         { ...colProducto, celda: f => colProducto.celda(f.item) },
         { titulo: 'Tu precio', alinear: 'right', celda: f => fmt(Number(f.tu_precio_usd)) },
         { titulo: 'Promedio', alinear: 'right', celda: f => fmt(Number(f.promedio_usd)) },
-        { titulo: 'Frente al promedio', alinear: 'right', celda: f => <Diferencia valor={Number(f.dif_promedio)} /> },
+        { titulo: 'Tú frente al promedio', alinear: 'right', celda: f => <Diferencia valor={Number(f.dif_promedio)} /> },
       ],
     });
   };
@@ -477,8 +480,9 @@ export default function Dashboard({ userDoc }) {
       { key: 'min', label: `Mínimo competencia (${sufijoMoneda})` },
       { key: 'cadMin', label: 'Cadena del mínimo' },
       { key: 'prom', label: `Promedio competencia (${sufijoMoneda})` },
-      { key: 'difMin', label: 'Frente al mínimo (%)' },
-      { key: 'difProm', label: 'Frente al promedio (%)' },
+      { key: 'difMin', label: 'Tú frente al mínimo (%)' },
+      { key: 'posicion', label: 'Posición (1 = el más barato)' },
+      { key: 'difProm', label: 'Tú frente al promedio (%)' },
       { key: 'meta', label: `Precio meta: ${textoMeta(meta)} (${sufijoMoneda})` },
       { key: 'ajuste', label: 'Para la meta (%)' },
       ...cadenasTabla.map(c => ({ key: `c_${c}`, label: `${nombreCadena(c)} (${sufijoMoneda})` })),
@@ -494,6 +498,7 @@ export default function Dashboard({ userDoc }) {
       cadMin: x.cadenasMin.map(nombreCadena).join(' / '),
       prom: valor(x.promedio),
       difMin: x.difMin == null ? '' : x.difMin.toFixed(1),
+      posicion: x.posicion ? `${x.posicion.lugar} de ${x.posicion.de}` : '',
       difProm: x.difProm == null ? '' : x.difProm.toFixed(1),
       meta: valor(ajusteDe(x)?.objetivo),
       ajuste: ajusteDe(x) ? ajusteDe(x).porcentaje.toFixed(1) : '',
@@ -577,20 +582,24 @@ export default function Dashboard({ userDoc }) {
 
       <AvisoRobot robot={robot} />
 
-      {cambiosDesdeVisita.length > 0 && (
+      {cambiosVisita.listo && cambiosVisita.desde && (
         <div className="m3-banner m3-banner-info" role="status">
           <span className="material-symbols-outlined" aria-hidden="true">history</span>
           <span className="m3-body-medium flex-1 min-w-0">
             <strong>Desde tu última visita</strong> ({haceCuanto(cambiosVisita.desde).toLowerCase()}):{' '}
-            {cambiosDesdeVisita.length} {cambiosDesdeVisita.length === 1 ? 'precio cambió' : 'precios cambiaron'}
-            {' · '}{cambiosDesdeVisita.filter(c => c.cambio > 0).length} subieron, {cambiosDesdeVisita.filter(c => c.cambio < 0).length} bajaron.
+            {cambiosDesdeVisita.length === 0 ? 'ningún precio cambió.' : (
+              <>
+                {cambiosDesdeVisita.length} {cambiosDesdeVisita.length === 1 ? 'precio cambió' : 'precios cambiaron'}
+                {' · '}{cambiosDesdeVisita.filter(c => c.cambio > 0).length} subieron, {cambiosDesdeVisita.filter(c => c.cambio < 0).length} bajaron.
+              </>
+            )}
           </span>
-          <button type="button" onClick={detalleVisita} className="m3-btn-text">Ver cambios</button>
+          {cambiosDesdeVisita.length > 0 && <button type="button" onClick={detalleVisita} className="m3-btn-text">Ver cambios</button>}
         </div>
       )}
 
-      {/* Filtros y vista: una sola fila sobre los indicadores y graficos */}
-      <section className="m3-dash-filtros" aria-label="Filtros del Dashboard">
+      {/* Filtros y ajustes: fijos arriba al bajar por la pagina */}
+      <FiltrosFijos etiqueta="Filtros del Dashboard">
         <div className="flex flex-wrap items-center gap-2">
           <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad}
             opciones={[['todos', 'Unidad: todas'], ...unidades]} />
@@ -611,7 +620,7 @@ export default function Dashboard({ userDoc }) {
           <AjusteChip etiqueta="Precio que se compara" icono="receipt_long" valor={modoPrecio} onChange={setModoPrecio}
             opciones={[['lista', 'Precio de lista'], ['descuento', 'Precio con oferta']]} />
           <AjusteChip etiqueta="Comparar por" icono="medication" valor={modoAnalisis} onChange={setModoAnalisis}
-            opciones={[['empaque', 'Por empaque'], ['unidosis', 'Por unidad (tableta, cápsula…)']]} />
+            opciones={[['empaque', 'Por empaque'], ['unidosis', 'Por unidad']]} />
           <AjusteChip etiqueta="Periodo de los cambios" icono="history" valor={String(ventana)} onChange={v => setVentana(Number(v))}
             opciones={[['1', 'Cambios: 24 horas'], ['7', 'Cambios: 7 días'], ['15', 'Cambios: 15 días']]} />
           <AjusteChip etiqueta="Tu meta de precio" icono="flag" valor={String(meta)} onChange={v => setMeta(Number(v))}
@@ -623,50 +632,55 @@ export default function Dashboard({ userDoc }) {
             <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
           </label>
         </div>
-      </section>
+      </FiltrosFijos>
 
       {/* Indicadores */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" aria-label="Indicadores">
+      <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3" aria-label="Indicadores">
         <StatCard
-          label="Frente al promedio"
+          compacto
+          label="Tú frente al promedio"
           value={pct(kpi.frentePromedio)}
-          hint={kpi.frentePromedio == null ? 'Sin productos para comparar' : `Meta ${textoMeta(meta)}: ${kpi.deben} deben bajar, ${kpi.pueden} pueden subir`}
+          hint={kpi.frentePromedio == null ? 'Sin productos para comparar' : `${kpi.deben} deben bajar · ${kpi.pueden} pueden subir`}
           icon="balance"
           tono={kpi.frentePromedio == null ? 'neutral' : kpi.frentePromedio > 5 ? 'negative' : kpi.frentePromedio < -UMBRAL_EMPATE ? 'primary' : 'neutral'}
           onClick={detalleFrentePromedio}
           title="La diferencia típica (mediana) de tu precio con el promedio de la competencia. Toca para ver cada producto y cuánto subir o bajar para llegar a tu meta."
         />
         <StatCard
+          compacto
           label="Eres el más barato"
           value={`${kpi.masBaratos.length} de ${kpi.comparables.length}`}
-          hint={kpi.comparables.length ? `${Math.round((kpi.masBaratos.length / kpi.comparables.length) * 100)} % de los productos que se pueden comparar` : 'Sin productos para comparar'}
+          hint={kpi.comparables.length ? `${Math.round((kpi.masBaratos.length / kpi.comparables.length) * 100)} % de los comparables` : 'Sin productos para comparar'}
           icon="workspace_premium"
           tono="primary"
           onClick={detalleMasBaratos}
           title="Ver los productos donde eres el más barato"
         />
         <StatCard
+          compacto
           label="Más caros que el mínimo"
           value={kpi.masCaros.length}
-          hint="Otra cadena vende una alternativa más barata"
+          hint="Otra cadena es más barata"
           icon="trending_up"
           tono={kpi.masCaros.length ? 'negative' : 'neutral'}
           onClick={detalleMasCaros}
           title="Ver los productos donde la competencia es más barata"
         />
         <StatCard
+          compacto
           label="Cambios de precio"
           value={kpi.cambios.length}
-          hint={`En ${kpi.productosConCambios} ${kpi.productosConCambios === 1 ? 'producto' : 'productos'} · ${VENTANAS[ventana]}`}
+          hint={`${kpi.productosConCambios} ${kpi.productosConCambios === 1 ? 'producto' : 'productos'} · ${{ 1: '24 h', 7: '7 días', 15: '15 días' }[ventana]}`}
           icon="swap_vert"
           tono={kpi.cambios.length ? 'warning' : 'neutral'}
           onClick={detalleCambios}
           title="Ver qué precios cambiaron"
         />
         <StatCard
+          compacto
           label="Sin comparar"
           value={kpi.sinComparar.length}
-          hint={`De ${totalBase} productos activos: falta tu precio o el de la competencia`}
+          hint="Falta tu precio o el de la competencia"
           icon="help"
           tono={kpi.sinComparar.length ? 'warning' : 'neutral'}
           onClick={detalleSinComparar}
@@ -675,30 +689,29 @@ export default function Dashboard({ userDoc }) {
         <TarjetaBcv resumen={bcvResumen} bcv={bcv} color={tg.eje} onClick={() => setShowBcvModal(true)} />
       </section>
 
-      {/* Graficos */}
-      <TendenciaPosicion
-        productos={productosFiltrados}
-        conDescuento={modoPrecio === 'descuento'}
-        porUnidad={modoAnalisis === 'unidosis'}
-        cadena={cadenaComp === 'todos' ? null : cadenaComp}
-        meta={meta}
-        tg={tg}
-        onDia={detalleDia}
-      />
-
-      <section className={`grid grid-cols-1 ${cadenaComp === 'todos' ? 'lg:grid-cols-2' : ''} gap-4`} aria-label="Gráficos">
+      {/* Graficos: los tres en una fila */}
+      <section className={`grid grid-cols-1 lg:grid-cols-2 ${cadenaComp === 'todos' ? '2xl:grid-cols-3' : ''} gap-4`} aria-label="Gráficos">
+        <TendenciaPosicion
+          productos={productosFiltrados}
+          conDescuento={modoPrecio === 'descuento'}
+          porUnidad={modoAnalisis === 'unidosis'}
+          cadena={cadenaComp === 'todos' ? null : cadenaComp}
+          meta={meta}
+          tg={tg}
+          onDia={detalleDia}
+        />
         <div className="m3-dash-card">
           <header className="m3-dash-card-header">
             <div>
               <h2 className="m3-title-medium text-on-surface">¿Dónde está tu precio?</h2>
-              <p className="m3-body-small text-on-surface-variant">Productos según la diferencia de tu precio con el promedio de la competencia. Toca una barra para ver cuáles son.</p>
+              <p className="m3-body-small text-on-surface-variant">Cuántos productos tienes en cada rango frente al promedio de la competencia. Toca una barra.</p>
             </div>
           </header>
           {kpi.comparables.length === 0 ? (
             <SinDatos texto="Aún no hay productos con tu precio y el de la competencia." />
           ) : (
             <>
-              <div className="h-60" role="img" aria-label="Productos por grupo de diferencia con el promedio">
+              <div className="h-44" role="img" aria-label="Productos por grupo de diferencia con el promedio">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={grupos} margin={{ top: 24, right: 8, left: 8, bottom: 0 }} barCategoryGap="18%">
                     <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
@@ -725,13 +738,13 @@ export default function Dashboard({ userDoc }) {
           <header className="m3-dash-card-header">
             <div>
               <h2 className="m3-title-medium text-on-surface">¿Qué cadena tiene el precio más bajo?</h2>
-              <p className="m3-body-small text-on-surface-variant">En cuántos productos cada cadena tiene el precio más bajo de la competencia. Toca una barra para ver cuáles.</p>
+              <p className="m3-body-small text-on-surface-variant">En cuántos productos cada cadena tiene el precio más bajo de la competencia. Toca una barra.</p>
             </div>
           </header>
           {lideres.length === 0 ? (
             <SinDatos texto="Aún no hay precios de la competencia." />
           ) : (
-            <div style={{ height: Math.max(160, lideres.length * 40 + 24) }} role="img" aria-label="Productos donde cada cadena es la más barata">
+            <div style={{ height: Math.min(200, Math.max(150, lideres.length * 34 + 16)) }} role="img" aria-label="Productos donde cada cadena es la más barata">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={lideres} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 4 }} barCategoryGap="28%">
                   <CartesianGrid horizontal={false} stroke={tg.rejilla} strokeOpacity={0.6} />
@@ -751,47 +764,36 @@ export default function Dashboard({ userDoc }) {
 
       {/* Tabla */}
       <section ref={tablaRef} className="m3-data-table scroll-mt-4" aria-label="Precios por cadena">
-        <nav className="m3-tabs px-2" aria-label="Ver la tabla">
-          <button type="button" onClick={() => setVista('producto')} aria-current={vista === 'producto' ? 'page' : undefined}
-            className={`m3-tab ${vista === 'producto' ? 'is-active' : ''}`}>
-            <span className="material-symbols-outlined" aria-hidden="true">medication</span>Por producto
-          </button>
-          <button type="button" onClick={() => setVista('molecula')} aria-current={vista === 'molecula' ? 'page' : undefined}
-            className={`m3-tab ${vista === 'molecula' ? 'is-active' : ''}`}>
-            <span className="material-symbols-outlined" aria-hidden="true">science</span>Por molécula
-          </button>
-        </nav>
+        <div className="m3-data-table-titulo">
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <div>
+              <h2 className="m3-title-medium text-on-surface">Precios por cadena</h2>
+              <p className="m3-body-small text-on-surface-variant">
+                {`El precio más bajo de la competencia en cada cadena${porUnidad}; resaltado, el mínimo. "Posición": el lugar de tu precio del más barato al más caro. "Para la meta": cuánto subir o bajar para quedar en ${textoMeta(meta)}.`}
+              </p>
+            </div>
+            <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
+              {filas.length === totalBase ? `${totalBase} productos` : `${filas.length} de ${totalBase} productos`}
+            </div>
+          </div>
+        </div>
         <div className="m3-data-table-toolbar">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <div>
-                <h2 className="m3-title-medium text-on-surface">{vista === 'producto' ? 'Precios por cadena' : 'Precios por molécula'}</h2>
-                <p className="m3-body-small text-on-surface-variant">
-                  {vista === 'producto'
-                    ? `El precio más bajo de la competencia en cada cadena${porUnidad}. Resaltado, el mínimo. "Para la meta": cuánto subir o bajar para quedar en ${textoMeta(meta)}. Toca una fila para ver la ficha.`
-                    : 'Tus productos y los de la competencia con la misma molécula y concentración, comparados por unidad (1 tableta, 1 cápsula, 1 ml…). Toca una fila para ver todas las ofertas.'}
-                </p>
-              </div>
-              {vista === 'producto' && (
-                <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
-                  {filas.length === totalBase ? `${totalBase} productos` : `${filas.length} de ${totalBase} productos`}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col md:flex-row md:items-center gap-3">
               <label className="m3-search-field">
                 <span className="material-symbols-outlined" aria-hidden="true">search</span>
-                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder={vista === 'producto' ? 'Buscar por ID, nombre o molécula' : 'Buscar molécula o producto'} aria-label="Buscar" />
+                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por ID, nombre o molécula" aria-label="Buscar producto" />
                 {search && (
                   <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
                     <span className="material-symbols-outlined">close</span>
                   </button>
                 )}
               </label>
-              {vista === 'producto' && <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <FiltroChip etiqueta="Mostrar" icono="filter_list" valor={mostrar} onChange={setMostrar}
                   opciones={[
                     ['todos', 'Mostrar: todos'],
+                    ['con_precio', 'Ocultar sin precio'],
                     ['mas_caro', 'Más caros que el mínimo'],
                     ['mas_barato', 'Eres el más barato'],
                     ['cambios', 'Con cambios de precio'],
@@ -802,14 +804,12 @@ export default function Dashboard({ userDoc }) {
                 {(mostrar !== 'todos' || search) && (
                   <button type="button" onClick={() => { setMostrar('todos'); setSearch(''); }} className="m3-btn-text">Limpiar</button>
                 )}
-              </div>}
+              </div>
             </div>
           </div>
         </div>
 
-        {vista === 'molecula' ? (
-          <VistaMolecula items={base} busqueda={search} fmt={fmt} fmtUnidad={fmtUnidad} nombreCadena={nombreCadena} onDetalle={abrirDetalle} />
-        ) : filas.length === 0 ? (
+        {filas.length === 0 ? (
           <div className="p-12 text-center text-on-surface-variant flex flex-col items-center gap-3">
             <span className="material-symbols-outlined text-3xl">search_off</span>
             <div className="m3-title-medium text-on-surface">Ningún producto coincide</div>
@@ -822,7 +822,7 @@ export default function Dashboard({ userDoc }) {
                 <li key={x.producto.id_interno}>
                   <button type="button" onClick={() => abrirFicha(x)} className="w-full text-left px-4 py-3 space-y-1">
                     <div className="m3-cell-primary">{x.producto.nombre}</div>
-                    <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
+                    <div className="m3-cell-secondary">{subtituloProducto(x.producto)}</div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 m3-body-small">
                       <span>Tu precio <strong className="font-medium">{fmt(x.tuPrecio)}</strong></span>
                       <span className="inline-flex items-center gap-1">Mínimo {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" />}<strong className="font-medium">{fmt(x.minimo)}</strong></span>
@@ -846,8 +846,9 @@ export default function Dashboard({ userDoc }) {
                     <th className="text-right m3-dash-col-sep"><BotonOrden campo="minimo" orden={orden} onClick={ordenarPor}>Mínimo</BotonOrden></th>
                     <th className="text-right"><BotonOrden campo="promedio" orden={orden} onClick={ordenarPor}>Promedio</BotonOrden></th>
                     <th className="text-right m3-dash-col-sep"><BotonOrden campo="tuPrecio" orden={orden} onClick={ordenarPor}>Tu precio</BotonOrden></th>
-                    <th className="text-right"><BotonOrden campo="difMin" orden={orden} onClick={ordenarPor}>Frente al mínimo</BotonOrden></th>
-                    <th className="text-right"><BotonOrden campo="difProm" orden={orden} onClick={ordenarPor}>Frente al promedio</BotonOrden></th>
+                    <th className="text-right" title="Lugar de tu precio entre todas las ofertas, del más barato (1) al más caro"><BotonOrden campo="posicion" orden={orden} onClick={ordenarPor}>Posición</BotonOrden></th>
+                    <th className="text-right"><BotonOrden campo="difMin" orden={orden} onClick={ordenarPor}>Tú frente al mínimo</BotonOrden></th>
+                    <th className="text-right"><BotonOrden campo="difProm" orden={orden} onClick={ordenarPor}>Tú frente al promedio</BotonOrden></th>
                     <th className="text-right"><BotonOrden campo="ajuste" orden={orden} onClick={ordenarPor}>Para la meta</BotonOrden></th>
                   </tr>
                 </thead>
@@ -859,10 +860,7 @@ export default function Dashboard({ userDoc }) {
                         tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') abrirFicha(x); }}>
                         <td className="m3-dash-col-producto">
                           <div className="m3-cell-primary m3-cell-clamp" title={x.producto.nombre}>{x.producto.nombre}</div>
-                          <div className="m3-cell-secondary">
-                            <span className="font-mono">{x.producto.id_interno}</span>
-                            {' · '}{(x.producto.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico'}
-                          </div>
+                          <div className="m3-cell-secondary m3-cell-clamp" title={subtituloProducto(x.producto)}>{subtituloProducto(x.producto)}</div>
                         </td>
                         {cadenasTabla.map(c => {
                           const p = x.porCadena.get(c);
@@ -882,6 +880,7 @@ export default function Dashboard({ userDoc }) {
                           {fmt(x.tuPrecio)}{x.fuenteTuPrecio === 'pvp' && <span className="text-on-surface-variant font-normal"> · PVP</span>}
                           {cambioPropio && <div className="m3-dash-cambio"><Diferencia valor={cambioPropio.cambio} /></div>}
                         </td>
+                        <td className="text-right whitespace-nowrap"><Posicion p={x.posicion} /></td>
                         <td className="text-right whitespace-nowrap"><Diferencia valor={x.difMin} /></td>
                         <td className="text-right whitespace-nowrap"><Diferencia valor={x.difProm} /></td>
                         <td className="text-right whitespace-nowrap"><AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} /></td>
@@ -1046,17 +1045,17 @@ function TarjetaBcv({ resumen, bcv, color, onClick }) {
     ? `Bs ${resumen.ultimo.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : (bcv.loading ? '…' : 'Sin tasa');
   const partes = [];
-  if (resumen.diario != null) partes.push(`${pct(resumen.diario, 2)} desde el día anterior`);
-  if (resumen.mensual != null) partes.push(`${pct(resumen.mensual)} en 30 días`);
+  if (resumen.diario != null) partes.push(`${pct(resumen.diario, 2)} hoy`);
+  if (resumen.mensual != null) partes.push(`${pct(resumen.mensual)} en 30 d`);
   return (
-    <button type="button" onClick={onClick} className="m3-stat cursor-pointer m3-interactive text-left w-full" title="Ver la historia de la tasa BCV o cambiarla a mano">
+    <button type="button" onClick={onClick} className="m3-stat m3-stat-compact cursor-pointer m3-interactive text-left w-full" title="Ver la historia de la tasa BCV o cambiarla a mano">
       <div className="m3-stat-body">
         <div className="m3-stat-label">Tasa BCV (por dólar)</div>
         <div className="m3-stat-value">{valor}</div>
         <div className="m3-stat-hint" title={partes.join(' · ')}>{partes.join(' · ') || 'Toca para ver la historia'}</div>
       </div>
       {resumen.serie.length > 1 && (
-        <div className="w-24 h-12 shrink-0" aria-hidden="true">
+        <div className="w-16 h-9 shrink-0" aria-hidden="true">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={resumen.serie} margin={{ top: 4, right: 2, bottom: 4, left: 2 }}>
               <YAxis hide domain={['dataMin', 'dataMax']} />
@@ -1087,6 +1086,25 @@ function LecturaRobot({ corrida, ultimaLectura }) {
   return (
     <span title={ultimaLectura ? fechaHora(ultimaLectura) : ''}>
       Última lectura del robot: <strong className="font-medium text-on-surface">{ultimaLectura ? haceCuanto(ultimaLectura).toLowerCase() : 'sin lecturas'}</strong>
+    </span>
+  );
+}
+
+// "140216 · Genérico · 500 mg · 20 tabletas": lo que distingue a dos
+// productos con el mismo nombre.
+function subtituloProducto(p) {
+  const tipo = (p.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico';
+  return [p.id_interno, tipo, p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ');
+}
+
+// "2 de 5": el lugar de tu precio entre todas las ofertas (la tuya y las de
+// la competencia), del mas barato al mas caro.
+function Posicion({ p }) {
+  if (!p) return <span className="text-on-surface-variant">—</span>;
+  const extremo = p.lugar === 1 ? 'is-barato' : p.lugar === p.de ? 'is-caro' : '';
+  return (
+    <span className={`m3-diferencia ${extremo}`} title={`Tu precio es el ${p.lugar}.º más barato de ${p.de} ofertas`}>
+      {p.lugar} de {p.de}
     </span>
   );
 }
