@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 21 fases de SQL
+## Las 22 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -103,12 +103,13 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 19 | Un solo laboratorio propio `LA SANTE`; borra PHARMETIQUE*, BIOQU* y duplicados |
 | 20 | Une moléculas duplicadas (`Acetaminofen` / `Acetaminofén`…) y deja **todas sin tildes** ("Losartan potasico"); los nombres anteriores quedan como `sinonimos`. `fn_clave_molecula`, `fn_nombre_molecula` |
 | 21 | Competencia: borra competidores `COMP_` sin URL (huérfanos) y crea `fn_registrar_precio_manual` (SECURITY DEFINER: el panel no puede insertar en `fact_precios`) |
+| 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
 
-**Corridas en Supabase de la 1 a la 21.** Tras la 21 la comprobación dio
-**20** competidores `COMP_` sin URL (no 0): la fase solo borra los que nadie
-más usa, y esos 20 están enganchados a `pvp_propio` o a
-`producto_equivalencias` como producto propio. Pendiente de diagnosticar con
-la consulta de la sección de Competencia.
+**Corridas en Supabase de la 1 a la 21. La 22 está pendiente de correr**
+(PR #38). Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
+tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
+$1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
+o unidad de negocio; un competidor no tiene PVP propio.
 
 ---
 
@@ -117,9 +118,9 @@ la consulta de la sección de Competencia.
 | | |
 |---|---|
 | Código en `main` | PR #36, desplegado (GitHub Pages sale solo de `main`); etapa B de Competencia en el PR #37 |
-| SQL corrido en Supabase | **Hasta la fase 21** |
+| SQL corrido en Supabase | **Hasta la fase 21** (la 22 en el PR #38) |
 | Módulo Productos | **Terminado** (ver abajo) |
-| Módulo Competencia | **Etapa A (#36) y B (#37) hechas**; quedan los 20 huérfanos |
+| Módulo Competencia | **Etapa A (#36) y B (#37) hechas**; los 20 huérfanos, en la fase 22 |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
 Lo siguiente lo decide Hernando. Candidatos, en el orden en que salieron:
@@ -250,19 +251,11 @@ nombres de campo donde son el mismo dato.
 - **CSV:** ver `CARGA_CSV.md`. Mismo archivo para exportar, plantilla e
   importar; un enlace existente (cadena + URL) se actualiza.
 
-**Los 20 competidores `COMP_` sin URL que dejó la fase 21.** Para ver por qué
-siguen, en el SQL Editor:
-
-```sql
-SELECT p.id, p.id_interno, p.nombre,
-  EXISTS(SELECT 1 FROM pvp_propio pv WHERE pv.producto_id = p.id) AS tiene_pvp,
-  EXISTS(SELECT 1 FROM producto_equivalencias e WHERE e.producto_propio_id = p.id) AS es_propio_en_equiv,
-  EXISTS(SELECT 1 FROM producto_equivalencias e WHERE e.producto_competidor_id = p.id) AS es_competidor_en_equiv
-FROM dim_productos p
-WHERE p.id_interno LIKE 'COMP\_%'
-  AND NOT EXISTS (SELECT 1 FROM publicaciones pub WHERE pub.producto_id = p.id)
-ORDER BY p.id_interno;
-```
+**Los 20 competidores `COMP_` sin URL que dejó la fase 21.** El diagnóstico
+dio que los 20 tenían PVP (`tiene_pvp`), ninguno era producto propio en una
+equivalencia y todos eran competidor en alguna. El PVP venía de la fase 2
+($1.00 base). La fase 22 borra el PVP de todos los `COMP_` y repite la
+limpieza de la 21.
 
 ---
 
@@ -418,10 +411,9 @@ capturas y devaluación vs subida real. Faltan:
 - Alertas por correo
 - Reporte semanal
 
-**Competencia**: diagnosticar y limpiar los 20 `COMP_` sin URL; opcional, una
-vista agrupada por producto.
+**Competencia**: correr la fase 22; opcional, una vista agrupada por producto.
 
-**Limpieza del repo**: mover los `fase*.sql` (ya son 21) a `sql/`, borrar
+**Limpieza del repo**: mover los `fase*.sql` (ya son 22) a `sql/`, borrar
 `debug/`, y borrar `recarga/` cuando termine la recarga.
 
 **Diseño (Material Design 3 Expressive)**: Productos y Competencia ya están al día. En el
