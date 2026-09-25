@@ -766,6 +766,34 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
     return result
 
 
+def enlaces_pedidos() -> set:
+    """Ids de enlace (los de la vista productos_competencia) que pidio el panel.
+
+    Llegan en el client_payload del repository_dispatch: `doc_ids` (lista o
+    texto separado por comas) o `doc_id` (uno). GitHub Actions deja el evento
+    en el archivo GITHUB_EVENT_PATH; ONLY_DOC_ID(S) sirven para probar a mano.
+    Vacio = todos los enlaces activos (la corrida diaria).
+    """
+    valores = []
+    ruta = os.environ.get("GITHUB_EVENT_PATH")
+    if ruta and Path(ruta).exists():
+        try:
+            evento = json.loads(Path(ruta).read_text(encoding="utf-8"))
+            payload = evento.get("client_payload") or {}
+            valores += [payload.get("doc_ids"), payload.get("doc_id")]
+        except Exception as ex:
+            print(f"Aviso: no se pudo leer el evento de GitHub ({ex})", flush=True)
+    valores += [os.environ.get("ONLY_DOC_IDS"), os.environ.get("ONLY_DOC_ID")]
+
+    ids = set()
+    for v in valores:
+        if isinstance(v, list):
+            ids.update(str(x).strip() for x in v if str(x).strip())
+        elif v:
+            ids.update(x.strip() for x in str(v).split(",") if x.strip())
+    return ids
+
+
 async def main_async():
     inicio = time.time()
     bcv_rate = await get_bcv_rate()
@@ -791,7 +819,18 @@ async def main_async():
         if es_activo and (f.get("url") or "").strip():
             filas_activas.append(f)
 
-    if len(sys.argv) > 1:
+    ids_pedidos = enlaces_pedidos()
+    if ids_pedidos:
+        # El panel pidio enlaces concretos (boton Robot de un enlace o de una
+        # seleccion): solo esos. Si ninguno esta activo no se lee nada; leer
+        # todos tarda mucho y no es lo que se pidio.
+        filas_procesar = [f for f in filas_activas
+                          if str(f.get("_doc_id") or f.get("id") or "") in ids_pedidos]
+        print(f"Pedidos {len(ids_pedidos)} enlaces desde el panel; activos entre ellos: {len(filas_procesar)}.", flush=True)
+        if not filas_procesar:
+            OUT_PATH.write_text("[]", encoding="utf-8")
+            return
+    elif len(sys.argv) > 1:
         arg_target = sys.argv[1].strip()
         filas_procesar = [f for f in filas_activas if f.get("id_producto_propio") == arg_target or f.get("_doc_id") == arg_target or f.get("id") == arg_target]
         if not filas_procesar:

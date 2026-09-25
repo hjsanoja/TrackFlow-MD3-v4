@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { validarCsv } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
 import { useDimensiones } from '../hooks/useDimensiones';
@@ -8,6 +8,8 @@ import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import FichaEnlace from '../components/FichaEnlace';
+import CoberturaCadenas from '../components/CoberturaCadenas';
+import { useRobot, estimarMinutos } from '../hooks/useRobot';
 import FiltroChip from '../components/FiltroChip';
 import Select from '../components/Select';
 import { FormSection, Field, ChoiceChips, ComboField, normalizar } from '../components/formulario';
@@ -26,7 +28,6 @@ import {
   publicacionIdDe,
   normalizarUrl,
 } from '../utils/dbClient';
-import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
 // Un solo formato de CSV de enlaces para exportar, para la plantilla y para
 // importar (igual que en Productos). Donde el dato es el mismo que en el CSV
@@ -42,6 +43,11 @@ const ARCHIVO_REPORTE = 'competencia_enlaces_reporte';
 const ARCHIVO_PLANTILLA = 'competencia_enlaces_plantilla_carga';
 
 const esPropio = (it) => String(it.tipo || '').toLowerCase() === 'propio';
+
+// Lecturas fallidas seguidas a partir de las cuales el enlace se marca
+// "Revisar URL" (vista v_enlaces_fallidos, fase 23).
+const FALLOS_REVISAR = 3;
+const claveTexto = (t) => normalizar(t).replace(/[^a-z0-9]/g, '');
 
 // Valor de la primera de estas columnas que exista, comparando el nombre
 // entero (sin mayusculas ni signos), no por partes.
@@ -85,6 +91,8 @@ export default function Competencia() {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroPrecio, setFiltroPrecio] = useState('todos');
   const [filtroActivo, setFiltroActivo] = useState('todos');
+  const [filtroLab, setFiltroLab] = useState('todos');
+  const [filtroRevisar, setFiltroRevisar] = useState('todos');
   const [orden, setOrden] = useState({ campo: null, dir: 'asc' });
   // Moneda de la columna Precio. Se recuerda en el navegador.
   const [enBs, setEnBs] = useState(() => {
@@ -102,9 +110,11 @@ export default function Competencia() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
-  const [scrapingItems, setScrapingItems] = useState({});
-  const [isGlobalScraping, setIsGlobalScraping] = useState(false);
   const [showGithubModal, setShowGithubModal] = useState(false);
+  const [confirmRobotTodos, setConfirmRobotTodos] = useState(false);
+  const [showCobertura, setShowCobertura] = useState(false);
+  // Producto y cadena ya elegidos al abrir "Vincular enlace" desde otro sitio.
+  const [preseleccion, setPreseleccion] = useState(null);
 
   const [seleccion, setSeleccion] = useState(() => new Set());
   const [confirmBorrarSel, setConfirmBorrarSel] = useState(false);
@@ -117,12 +127,19 @@ export default function Competencia() {
   const menuMasRef = useRef(null);
 
   // Si llegamos con ?producto=140216 (desde Productos), se filtra por el.
+  // Con &vincular=1 (boton de la ficha de Productos) se abre el formulario.
   useEffect(() => {
     const productoParam = searchParams.get('producto');
     if (productoParam) setFiltroProducto(productoParam);
+    if (productoParam && searchParams.get('vincular') === '1') {
+      setPreseleccion({ producto: productoParam, cadena: '' });
+      setEditing('new');
+      setSearchParams({ producto: productoParam });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const claveFiltros = [search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo].join('|');
+  const claveFiltros = [search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, filtroLab, filtroRevisar].join('|');
   useEffect(() => { setSeleccion(new Set()); }, [claveFiltros]);
 
   // "/" lleva al buscador.
@@ -182,6 +199,35 @@ export default function Competencia() {
     return pvp > 0 && precio > 0 ? ((pvp - precio) / precio) * 100 : null;
   };
 
+  // Lecturas fallidas seguidas por publicacion. Sin la fase 23 la vista no
+  // existe y simplemente no hay datos.
+  const [fallos, setFallos] = useState(() => new Map());
+  const cargarFallos = useCallback(async () => {
+    if (!isSupabaseActive()) return;
+    const { data, error } = await supabase.from('v_enlaces_fallidos').select('*');
+    if (!error) setFallos(new Map((data || []).map(f => [String(f.publicacion_id), f])));
+  }, []);
+  useEffect(() => { cargarFallos(); }, [cargarFallos, items]);
+  const fallosDe = (it) => fallos.get(String(publicacionIdDe(it))) || null;
+  const revisarUrl = (it) => it.activo !== false && (fallosDe(it)?.fallos_seguidos || 0) >= FALLOS_REVISAR;
+
+  // Posibles duplicados: el mismo competidor (por nombre) dos veces en la
+  // misma cadena para el mismo producto, o dos enlaces propios en una cadena.
+  const duplicados = useMemo(() => {
+    const grupos = new Map();
+    for (const it of items) {
+      if (ocultos.has(it.id)) continue;
+      const clave = [String(it.id_producto_propio).trim(), String(idCadena(it.cadena)).toLowerCase(),
+        esPropio(it) ? '#propio' : claveTexto(it.marca)].join('|');
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(it.id);
+    }
+    const ids = new Set();
+    for (const lista of grupos.values()) if (lista.length > 1) lista.forEach(id => ids.add(id));
+    return ids;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, ocultos, cadenaPorClave]);
+
   const ORDENES = {
     producto: it => (productoPorId.get(String(it.id_producto_propio).trim())?.nombre || it.id_producto_propio || '').toLowerCase(),
     competidor: it => (esPropio(it) ? '' : (it.marca || '')).toLowerCase(),
@@ -204,7 +250,10 @@ export default function Competencia() {
       if (filtroActivo === 'inactivos' && it.activo) return false;
       if (filtroPrecio === 'con_precio' && !(precioUsd(it) > 0)) return false;
       if (filtroPrecio === 'sin_captura' && it.ultimo_scrape) return false;
-      if (filtroPrecio === 'viejo' && !enlaceCaido(it)) return false;
+      if (filtroLab !== 'todos' && (esPropio(it) || it.laboratorio !== filtroLab)) return false;
+      if (filtroRevisar === 'fallos' && !revisarUrl(it)) return false;
+      if (filtroRevisar === 'duplicados' && !duplicados.has(it.id)) return false;
+      if (filtroRevisar === 'viejo' && !(it.activo && enlaceCaido(it))) return false;
       if (!term) return true;
       const p = productoPorId.get(String(it.id_producto_propio).trim());
       return [p?.nombre, it.id_producto_propio, it.marca, it.laboratorio, it.url, nombreCadena(it.cadena), it.ultimo_nombre]
@@ -227,16 +276,22 @@ export default function Competencia() {
       return porBloque(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
+  }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, filtroLab, filtroRevisar, fallos, duplicados, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
 
-  const hayFiltros = filtroProducto !== 'todos' || filtroCadena !== 'todas' || filtroTipo !== 'todos' || filtroPrecio !== 'todos' || filtroActivo !== 'todos';
+  const hayFiltros = filtroProducto !== 'todos' || filtroCadena !== 'todas' || filtroTipo !== 'todos' || filtroPrecio !== 'todos' ||
+    filtroActivo !== 'todos' || filtroLab !== 'todos' || filtroRevisar !== 'todos';
   const limpiarFiltros = () => {
     setFiltroProducto('todos'); setFiltroCadena('todas'); setFiltroTipo('todos');
-    setFiltroPrecio('todos'); setFiltroActivo('todos');
+    setFiltroPrecio('todos'); setFiltroActivo('todos'); setFiltroLab('todos'); setFiltroRevisar('todos');
     if (searchParams.get('producto')) setSearchParams({});
   };
 
   const caidosActivos = useMemo(() => items.filter(it => it.activo && enlaceCaido(it)).length, [items]);
+  const urlsQueFallan = useMemo(() => items.filter(revisarUrl).length,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, fallos]);
+  const laboratoriosCompetidores = useMemo(() => [...new Set(items.filter(it => !esPropio(it) && it.laboratorio).map(it => it.laboratorio))]
+    .sort((a, b) => a.localeCompare(b)), [items]);
   const productoFiltradoSinEnlaces = filtroProducto !== 'todos' && !items.some(it => String(it.id_producto_propio).trim() === filtroProducto)
     ? productoPorId.get(filtroProducto) || null
     : null;
@@ -404,72 +459,34 @@ export default function Competencia() {
   };
 
   // ------------------------------------------------------------------ robot
-  const handleDispararScraperGlobal = async () => {
-    setIsGlobalScraping(true);
-    try {
-      const config = await getGitHubConfig();
-      if (!config || !config.token || !config.repo_owner || !config.repo_name) {
-        addToast('Faltan las credenciales de GitHub Actions. Ingrésalas para continuar.', 'info');
-        setShowGithubModal(true);
-        return;
+  // El robot corre en GitHub Actions: tarda unos minutos en arrancar. El
+  // avance se sigue en useRobot y se muestra en un aviso sobre la tabla.
+  const robot = useRobot({
+    onTerminado: async ({ corrida, leidos, fallo, urlGitHub }) => {
+      await cargar(true);
+      cargarFallos();
+      if (fallo) {
+        addToast('El robot terminó con errores. Revisa la corrida en GitHub Actions.', 'error',
+          urlGitHub ? { accion: { texto: 'Ver en GitHub', onClick: () => window.open(urlGitHub, '_blank', 'noopener') } } : {});
+      } else if (corrida.ids) {
+        addToast(`Robot terminado: ${leidos} de ${corrida.total} ${corrida.total === 1 ? 'enlace leído' : 'enlaces leídos'}.`, 'success');
+      } else {
+        addToast('Robot terminado: precios actualizados.', 'success');
       }
-      await triggerGitHubScraper({ config });
-      addToast('Robot lanzado para todos los enlaces activos (GitHub Actions).', 'success');
-    } catch (err) {
-      if (err.message === 'CONFIG_MISSING') setShowGithubModal(true);
-      else addToast('Error al lanzar el robot: ' + err.message, 'error');
-    } finally {
-      setIsGlobalScraping(false);
+    },
+    onError: (mensaje, { faltaConfig } = {}) => {
+      if (faltaConfig) setShowGithubModal(true);
+      addToast(mensaje, faltaConfig ? 'info' : 'error');
+    },
+  });
+  const activos = useMemo(() => items.filter(it => it.activo !== false), [items]);
+  const lanzarRobot = async (enlaces) => {
+    const ok = await robot.lanzar(enlaces, activos);
+    if (ok && enlaces) {
+      const deBaja = enlaces.length - enlaces.filter(e => e.activo !== false).length;
+      addToast(`Robot lanzado para ${enlaces.length - deBaja} ${enlaces.length - deBaja === 1 ? 'enlace' : 'enlaces'}${deBaja ? ` (${deBaja} de baja no se leen)` : ''}.`, 'info');
     }
-  };
-
-  const handleScrapeIndividual = async (item) => {
-    setScrapingItems(prev => ({ ...prev, [item.id]: 'disparando' }));
-    try {
-      const config = await getGitHubConfig();
-      if (!config || !config.token || !config.repo_owner || !config.repo_name) {
-        addToast('Ingresa tus credenciales de GitHub Actions para continuar.', 'info');
-        setShowGithubModal(true);
-        setScrapingItems(prev => ({ ...prev, [item.id]: null }));
-        return;
-      }
-      await triggerGitHubScraper({ config, payload: { product_id: item.id_producto_propio, doc_id: item.id } });
-      setScrapingItems(prev => ({ ...prev, [item.id]: 'esperando' }));
-      addToast(`Robot lanzado para "${item.marca}". Esperando el resultado…`, 'info');
-
-      // Se consulta la vista hasta que aparezca una captura nueva (max. 65 s).
-      const inicio = Date.now();
-      const sondeo = setInterval(async () => {
-        try {
-          let actualizado = null;
-          if (isSupabaseActive()) {
-            const { data } = await supabase.from('productos_competencia').select('*').eq('id', item.id).maybeSingle();
-            actualizado = data || null;
-          }
-          const t = actualizado?.ultimo_scrape ? new Date(actualizado.ultimo_scrape).getTime() : 0;
-          if (actualizado && t >= inicio - 4000) {
-            clearInterval(sondeo);
-            setScrapingItems(prev => ({ ...prev, [item.id]: null }));
-            setProductosCompetencia(prev => prev.map(p => p.id === item.id ? { ...p, ...actualizado } : p));
-            await cargar(true);
-            addToast(`Precio actualizado: ${item.marca}`, 'success');
-            return;
-          }
-          if (Date.now() - inicio > 65000) {
-            clearInterval(sondeo);
-            setScrapingItems(prev => ({ ...prev, [item.id]: null }));
-            addToast('El robot no devolvió un precio nuevo todavía. Revisa la ficha en unos minutos.', 'info');
-            await cargar(true);
-          }
-        } catch (e) {
-          console.warn('Error en sondeo del scraper:', e);
-        }
-      }, 3500);
-    } catch (err) {
-      setScrapingItems(prev => ({ ...prev, [item.id]: null }));
-      if (err.message === 'CONFIG_MISSING') setShowGithubModal(true);
-      else addToast('Error al lanzar el robot: ' + err.message, 'error');
-    }
+    return ok;
   };
 
   // -------------------------------------------------------------------- CSV
@@ -611,7 +628,10 @@ export default function Competencia() {
 
   // Un solo precio por celda, en la moneda elegida: con los dos no cabia el
   // de Bs. Si hay oferta, debajo va el precio normal.
-  const formatoBs = (v) => v.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // "Bs 1.234,56". Desde 10.000 sin centimos, para que quepa en la columna.
+  const formatoBs = (v) => `Bs ${v.toLocaleString('es-VE', v >= 10000
+    ? { maximumFractionDigits: 0 }
+    : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const precioEnMoneda = (it) => {
     const fullBs = Number(it.ultimo_precio_full_bs) || 0;
     const descBs = Number(it.ultimo_precio_desc_bs) || 0;
@@ -634,6 +654,25 @@ export default function Competencia() {
     );
   };
   const celdaCaptura = (it) => {
+    if (robot.leyendo(it)) {
+      return (
+        <>
+          <div className="m3-cell-primary text-primary font-medium" title="El robot está leyendo este enlace">Leyendo</div>
+          <div className="m3-cell-secondary text-primary">
+            <span className="material-symbols-outlined text-[16px] animate-spin align-middle" aria-hidden="true">sync</span>
+          </div>
+        </>
+      );
+    }
+    const f = fallosDe(it);
+    if (revisarUrl(it)) {
+      return (
+        <>
+          <div className="m3-cell-primary text-error font-medium" title={`Revisar la URL. ${f.ultimo_error || 'El robot no logra leer esta página.'}`}>Revisar</div>
+          <div className="m3-cell-secondary">{f.fallos_seguidos} fallos</div>
+        </>
+      );
+    }
     const caido = enlaceCaido(it);
     const fecha = it.ultimo_scrape ? new Date(it.ultimo_scrape) : null;
     const dias = fecha ? Math.floor((Date.now() - fecha.getTime()) / 86400000) : null;
@@ -682,7 +721,7 @@ export default function Competencia() {
             <span className="material-symbols-outlined text-base">upload_file</span>
             <span>Carga masiva</span>
           </button>
-          <button onClick={() => setEditing('new')} className="m3-btn-primary">
+          <button onClick={() => { setPreseleccion(null); setEditing('new'); }} className="m3-btn-primary">
             <span className="material-symbols-outlined text-base">add_link</span>
             <span>Vincular enlace</span>
           </button>
@@ -691,10 +730,15 @@ export default function Competencia() {
               <span className="material-symbols-outlined">more_vert</span>
             </summary>
             <div className="m3-menu-panel" role="menu">
-              <button type="button" role="menuitem" className="m3-menu-item" disabled={isGlobalScraping}
-                onClick={() => { menuMasRef.current?.removeAttribute('open'); handleDispararScraperGlobal(); }}>
-                <span className={`material-symbols-outlined ${isGlobalScraping ? 'animate-spin' : ''}`}>{isGlobalScraping ? 'sync' : 'smart_toy'}</span>
-                {isGlobalScraping ? 'Lanzando robot…' : 'Ejecutar robot (todos)'}
+              <button type="button" role="menuitem" className="m3-menu-item"
+                onClick={() => { menuMasRef.current?.removeAttribute('open'); setShowCobertura(true); }}>
+                <span className="material-symbols-outlined">grid_view</span>
+                Cobertura por cadena
+              </button>
+              <button type="button" role="menuitem" className="m3-menu-item" disabled={Boolean(robot.corrida)}
+                onClick={() => { menuMasRef.current?.removeAttribute('open'); setConfirmRobotTodos(true); }}>
+                <span className={`material-symbols-outlined ${robot.corrida ? 'animate-spin' : ''}`}>{robot.corrida ? 'sync' : 'smart_toy'}</span>
+                {robot.corrida ? 'Robot en curso…' : 'Leer todos los precios'}
               </button>
               <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
                 disabled={deletingAll || items.length === 0}
@@ -707,21 +751,62 @@ export default function Competencia() {
         </div>
       </div>
 
+      {robot.corrida && (
+        <div className="m3-banner m3-banner-info" role="status" aria-live="polite">
+          <span className="material-symbols-outlined animate-spin" aria-hidden="true">sync</span>
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="m3-body-medium">
+              <strong>El robot está leyendo {robot.corrida.ids ? `${robot.corrida.total} ${robot.corrida.total === 1 ? 'enlace' : 'enlaces'}` : `los ${robot.corrida.total} enlaces activos`}</strong>
+              {' · '}{robot.corrida.estadoGitHub === 'queued' ? 'en cola en GitHub' : robot.minutos < 1 ? 'arrancando' : `${robot.minutos} de unos ${robot.corrida.estimado} min`}
+              <span className="text-on-surface-variant"> · puedes seguir usando el panel</span>
+            </div>
+            <div className="m3-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(robot.avance)}>
+              <div style={{ width: `${Math.max(4, robot.avance)}%` }} />
+            </div>
+          </div>
+          {robot.corrida.urlGitHub && (
+            <a href={robot.corrida.urlGitHub} target="_blank" rel="noopener noreferrer" className="m3-btn-text">Ver en GitHub</a>
+          )}
+          <button type="button" onClick={robot.ocultar} className="m3-icon-btn" title="Dejar de seguir (el robot sigue trabajando)" aria-label="Dejar de seguir el robot">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      )}
+
       {productoFiltradoSinEnlaces ? (
         <div className="m3-banner" role="status">
           <span className="material-symbols-outlined" aria-hidden="true">link_off</span>
           <span className="m3-body-medium flex-1">
             <strong>{productoFiltradoSinEnlaces.nombre}</strong> todavía no tiene enlaces: el robot no lo vigila.
           </span>
-          <button type="button" onClick={() => setEditing('new')} className="m3-btn-text">Vincular enlace</button>
+          <button type="button" onClick={() => { setPreseleccion({ producto: filtroProducto, cadena: '' }); setEditing('new'); }} className="m3-btn-text">Vincular enlace</button>
         </div>
-      ) : caidosActivos > 0 && filtroPrecio !== 'viejo' && (
+      ) : (urlsQueFallan > 0 || duplicados.size > 0 || caidosActivos > 0) && filtroRevisar === 'todos' && (
         <div className="m3-banner" role="status">
-          <span className="material-symbols-outlined" aria-hidden="true">schedule</span>
-          <span className="m3-body-medium flex-1">
-            <strong>{caidosActivos} {caidosActivos === 1 ? 'enlace activo no tiene' : 'enlaces activos no tienen'} precio</strong> hace más de {DIAS_ENLACE_CAIDO} días: puede que la tienda haya cambiado la URL.
+          <span className="material-symbols-outlined" aria-hidden="true">rule</span>
+          <span className="m3-body-medium flex-1 min-w-0">
+            <strong>Para revisar:</strong>{' '}
+            <span className="m3-banner-links">
+              {urlsQueFallan > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('fallos')} className="text-primary font-medium hover:underline"
+                  title={`El robot falló ${FALLOS_REVISAR} o más veces seguidas: casi siempre la tienda cambió o quitó la página`}>
+                  {urlsQueFallan} {urlsQueFallan === 1 ? 'URL que falla' : 'URL que fallan'}
+                </button>
+              )}
+              {duplicados.size > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('duplicados')} className="text-primary font-medium hover:underline"
+                  title="El mismo competidor dos veces en la misma cadena para un producto">
+                  {duplicados.size} posibles duplicados
+                </button>
+              )}
+              {caidosActivos > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('viejo')} className="text-primary font-medium hover:underline"
+                  title={`Enlaces activos sin precio nuevo hace más de ${DIAS_ENLACE_CAIDO} días`}>
+                  {caidosActivos} sin precio hace +{DIAS_ENLACE_CAIDO} días
+                </button>
+              )}
+            </span>
           </span>
-          <button type="button" onClick={() => setFiltroPrecio('viejo')} className="m3-btn-text">Ver cuáles</button>
         </div>
       )}
 
@@ -745,6 +830,12 @@ export default function Competencia() {
               </div>
               {!procesandoSel && (
                 <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={async () => { if (await lanzarRobot(seleccionados)) setSeleccion(new Set()); }}
+                    disabled={Boolean(robot.corrida)} className="m3-btn-tonal"
+                    title={robot.corrida ? 'Ya hay una lectura en curso' : 'El robot lee ahora el precio de los enlaces seleccionados'}>
+                    <span className="material-symbols-outlined">smart_toy</span>
+                    Leer precios
+                  </button>
                   <button type="button" onClick={() => cambiarActivoSeleccion(false)} className="m3-btn-primary h-10" title="El robot deja de leerlos. Conserva el historial.">
                     <span className="material-symbols-outlined">archive</span>
                     Dar de baja
@@ -796,10 +887,14 @@ export default function Competencia() {
                   opciones={[['todos', 'Cadena: todas'], ...(cadenas || []).map(c => [c.id, c.nombre])]} />
                 <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
                   opciones={[['todos', 'Tipo: todos'], ['competidor', 'Competidores'], ['propio', 'Mis productos']]} />
+                <FiltroChip etiqueta="Laboratorio" icono="science" valor={filtroLab} onChange={setFiltroLab}
+                  opciones={[['todos', 'Laboratorio: todos'], ...laboratoriosCompetidores.map(l => [l, l])]} />
                 <FiltroChip etiqueta="Precio" icono="payments" valor={filtroPrecio} onChange={setFiltroPrecio}
-                  opciones={[['todos', 'Precio: todos'], ['con_precio', 'Con precio'], ['sin_captura', 'Sin captura'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`]]} />
+                  opciones={[['todos', 'Precio: todos'], ['con_precio', 'Con precio'], ['sin_captura', 'Sin captura']]} />
                 <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
                   opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
+                <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
+                  opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`]]} />
                 {hayFiltros && <button type="button" onClick={limpiarFiltros} className="m3-btn-text">Limpiar filtros</button>}
               </div>
             </div>
@@ -838,7 +933,7 @@ export default function Competencia() {
                       <span className="m3-cell-primary">{p?.nombre || it.id_producto_propio}</span>
                       <div className="m3-cell-secondary"><span className="font-mono">{it.id_producto_propio}</span> · {esPropio(it) ? 'Mi producto' : it.marca} · {nombreCadena(it.cadena)}</div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                        <span className="m3-cell-primary tabular-nums">{precioEnMoneda(it).texto || 'Sin precio'}{enBs && precioEnMoneda(it).texto ? ' Bs' : ''}</span>
+                        <span className="m3-cell-primary tabular-nums">{precioEnMoneda(it).texto || 'Sin precio'}</span>
                         {celdaDif(it)}
                         <span className={`m3-status ${it.activo ? 'is-on' : ''}`}>{it.activo ? 'Activo' : 'De baja'}</span>
                       </div>
@@ -860,8 +955,8 @@ export default function Competencia() {
                   <col />
                   <col className="w-[14%]" />
                   <col className="w-[11%]" />
-                  <col className="w-[88px]" />
-                  <col className="w-[120px]" />
+                  <col className="w-[96px]" />
+                  <col className="w-[112px]" />
                   <col className="w-[72px]" />
                   <col className="w-[104px]" />
                   <col className="w-[136px]" />
@@ -912,7 +1007,14 @@ export default function Competencia() {
                               <span className="material-symbols-outlined text-[16px] align-middle">open_in_new</span>
                             </a>
                           </div>
-                          <div className="m3-cell-secondary">{it.laboratorio || '—'}</div>
+                          <div className="m3-cell-secondary">
+                            {duplicados.has(it.id) && (
+                              <span className="material-symbols-outlined m3-count-stale align-[-2px] mr-1" style={{ fontSize: 14 }}
+                                title="Posible duplicado: hay otro enlace de este mismo competidor en esta cadena para este producto"
+                                aria-label="Posible duplicado">content_copy</span>
+                            )}
+                            {it.laboratorio || '—'}
+                          </div>
                         </td>
                         <td>
                           <div className="m3-cell-primary">{nombreCadena(it.cadena)}</div>
@@ -977,11 +1079,14 @@ export default function Competencia() {
           producto={productoPorId.get(String(fichaItem.id_producto_propio).trim())}
           nombreCadena={nombreCadena}
           precioUsd={precioUsd}
-          robotOcupado={Boolean(scrapingItems[fichaItem.id])}
+          robotOcupado={Boolean(robot.corrida)}
+          leyendo={robot.leyendo(fichaItem)}
+          fallos={fallosDe(fichaItem)}
+          duplicado={duplicados.has(fichaItem.id)}
           onClose={() => setFichaId(null)}
           onEditar={() => { setFichaId(null); setEditing(fichaItem.id); }}
           onPrecioManual={() => setManualPriceItem(fichaItem)}
-          onRobot={() => handleScrapeIndividual(fichaItem)}
+          onRobot={() => lanzarRobot([fichaItem])}
           onAlternarActivo={() => handleToggleActivo(fichaItem)}
         />
       )}
@@ -989,11 +1094,13 @@ export default function Competencia() {
       {editing && (
         <EnlaceModal
           item={editing === 'new' ? null : items.find(i => i.id === editing)}
-          productoIdPreseleccionado={filtroProducto !== 'todos' ? filtroProducto : ''}
+          productoIdPreseleccionado={preseleccion?.producto || (filtroProducto !== 'todos' ? filtroProducto : '')}
+          cadenaPreseleccionada={preseleccion?.cadena || ''}
+          tipoPreseleccionado={preseleccion?.tipo || ''}
           productos={productos}
           cadenas={cadenas}
           onSave={handleSave}
-          onClose={() => setEditing(null)}
+          onClose={() => { setEditing(null); setPreseleccion(null); }}
         />
       )}
 
@@ -1098,6 +1205,27 @@ export default function Competencia() {
         onCancel={() => setConfirmDeleteAll(false)}
       />
 
+      <ConfirmModal
+        isOpen={confirmRobotTodos}
+        title="¿Leer todos los precios ahora?"
+        message={`El robot leerá los ${activos.length} enlaces activos. Tarda unos ${estimarMinutos(activos)} minutos (GitHub necesita unos 4 para arrancar). Puedes seguir usando el panel: el avance se ve arriba de la tabla.\n\nEl robot ya corre solo todos los días a las 4:00 a. m.`}
+        confirmText="Leer precios"
+        cancelText="Cancelar"
+        onConfirm={() => { setConfirmRobotTodos(false); lanzarRobot(null); }}
+        onCancel={() => setConfirmRobotTodos(false)}
+      />
+
+      {showCobertura && (
+        <CoberturaCadenas
+          productos={productos}
+          cadenas={cadenas}
+          enlaces={items}
+          idCadena={idCadena}
+          onVincular={(producto, cadena) => { setShowCobertura(false); setPreseleccion({ producto, cadena, tipo: 'propio' }); setEditing('new'); }}
+          onClose={() => setShowCobertura(false)}
+        />
+      )}
+
       <GitHubConfigModal isOpen={showGithubModal} onClose={() => setShowGithubModal(false)} />
     </div>
   );
@@ -1106,7 +1234,7 @@ export default function Competencia() {
 // ---------------------------------------------------------------------------
 // Formulario de enlace: misma estructura que el de producto.
 // ---------------------------------------------------------------------------
-function EnlaceModal({ item, productoIdPreseleccionado, productos, cadenas, onSave, onClose }) {
+function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = '', tipoPreseleccionado = '', productos, cadenas, onSave, onClose }) {
   const dimensiones = useDimensiones();
   const isNew = !item;
   const cadenasActivas = (cadenas || []).filter(c => c.activo !== false);
@@ -1122,7 +1250,7 @@ function EnlaceModal({ item, productoIdPreseleccionado, productos, cadenas, onSa
   const idInicial = item?.id_producto_propio || productoIdPreseleccionado || '';
   const productoInicial = (productos || []).find(p => String(p.id_interno) === String(idInicial));
   const cadenaInicial = (() => {
-    if (!item?.cadena) return '';
+    if (!item?.cadena) return cadenaPreseleccionada;
     const c = (cadenas || []).find(x => String(x.id).toLowerCase() === String(item.cadena).toLowerCase() || String(x.nombre).toLowerCase() === String(item.cadena).toLowerCase());
     return c?.id || item.cadena;
   })();
@@ -1130,7 +1258,7 @@ function EnlaceModal({ item, productoIdPreseleccionado, productos, cadenas, onSa
   const [productoTexto, setProductoTexto] = useState(productoInicial ? etiquetaProducto(productoInicial) : '');
   const [form, setForm] = useState({
     cadena: cadenaInicial,
-    tipo: item ? (String(item.tipo) === 'propio' ? 'propio' : 'alternativa') : 'alternativa',
+    tipo: item ? (String(item.tipo) === 'propio' ? 'propio' : 'alternativa') : (tipoPreseleccionado === 'propio' ? 'propio' : 'alternativa'),
     marca: item && String(item.tipo) !== 'propio' ? item.marca || '' : '',
     laboratorio: item && String(item.tipo) !== 'propio' ? item.laboratorio || '' : '',
     url: item?.url || '',

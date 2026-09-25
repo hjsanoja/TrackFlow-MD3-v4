@@ -35,6 +35,7 @@ function Dato({ etiqueta, children }) {
 
 export default function FichaEnlace({
   enlace: e, producto, nombreCadena, precioUsd, onClose, onEditar, onPrecioManual, onRobot, robotOcupado, onAlternarActivo,
+  leyendo = false, fallos = null, duplicado = false,
 }) {
   const [historial, setHistorial] = useState(null);
 
@@ -87,6 +88,28 @@ export default function FichaEnlace({
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+          {leyendo && (
+            <div className="m3-banner m3-banner-info" role="status">
+              <span className="material-symbols-outlined animate-spin" aria-hidden="true">sync</span>
+              <span className="m3-body-medium">El robot está leyendo este enlace. El precio nuevo aparece al terminar.</span>
+            </div>
+          )}
+          {fallos && fallos.fallos_seguidos > 0 && (
+            <div className="m3-banner" role="status">
+              <span className="material-symbols-outlined" aria-hidden="true">link_off</span>
+              <span className="m3-body-medium min-w-0 break-words">
+                <strong>El robot falló {fallos.fallos_seguidos} {fallos.fallos_seguidos === 1 ? 'vez' : 'veces seguidas'}</strong>
+                {fallos.ultimo_error ? `: ${fallos.ultimo_error}` : '.'}
+                {fallos.fallos_seguidos >= 3 && ' Abre la URL: si la tienda cambió o quitó la página, edita el enlace con la dirección nueva o dalo de baja.'}
+              </span>
+            </div>
+          )}
+          {duplicado && (
+            <div className="m3-banner" role="status">
+              <span className="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              <span className="m3-body-medium">Hay otro enlace de este mismo competidor en {nombreCadena(e.cadena)} para este producto. Si es la misma página, elimina uno.</span>
+            </div>
+          )}
           <section aria-labelledby="fe-precio">
             <h3 id="fe-precio" className="m3-title-small text-on-surface-variant mb-2">Precio</h3>
             <div className="grid grid-cols-3 gap-2">
@@ -179,9 +202,9 @@ export default function FichaEnlace({
             {e.activo ? 'Dar de baja' : 'Reactivar'}
           </button>
           <button type="button" onClick={onRobot} disabled={robotOcupado || !e.activo} className="m3-icon-btn"
-            title={robotOcupado ? 'Leyendo el precio…' : e.activo ? 'Leer el precio ahora con el robot' : 'Reactiva el enlace para usar el robot'}
+            title={leyendo ? 'Leyendo el precio…' : robotOcupado ? 'Ya hay una lectura del robot en curso' : e.activo ? 'Leer el precio ahora con el robot' : 'Reactiva el enlace para usar el robot'}
             aria-label="Leer el precio con el robot">
-            <span className={`material-symbols-outlined ${robotOcupado ? 'animate-spin' : ''}`}>{robotOcupado ? 'sync' : 'smart_toy'}</span>
+            <span className={`material-symbols-outlined ${leyendo ? 'animate-spin' : ''}`}>{leyendo ? 'sync' : 'smart_toy'}</span>
           </button>
           <button type="button" onClick={onPrecioManual} className="m3-btn-tonal">
             <span className="material-symbols-outlined">edit_note</span>

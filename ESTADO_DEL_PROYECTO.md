@@ -79,7 +79,7 @@ propósito.
 
 ---
 
-## Las 22 fases de SQL
+## Las 23 fases de SQL
 
 Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 
@@ -104,8 +104,11 @@ Se corren en orden en el SQL Editor de Supabase. Todas son idempotentes.
 | 20 | Une moléculas duplicadas (`Acetaminofen` / `Acetaminofén`…) y deja **todas sin tildes** ("Losartan potasico"); los nombres anteriores quedan como `sinonimos`. `fn_clave_molecula`, `fn_nombre_molecula` |
 | 21 | Competencia: borra competidores `COMP_` sin URL (huérfanos) y crea `fn_registrar_precio_manual` (SECURITY DEFINER: el panel no puede insertar en `fact_precios`) |
 | 22 | Borra el PVP de todos los `COMP_` (el $1.00 que puso la fase 2) y los 20 competidores sin URL que la 21 no pudo borrar por ese PVP |
+| 23 | Vista `v_enlaces_fallidos`: lecturas fallidas seguidas por publicación (el panel marca "Revisar URL" desde 3) |
 
-**Corridas en Supabase de la 1 a la 22.** La comprobación de la 22 dio 0 y 0. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
+**Corridas en Supabase de la 1 a la 22** (la 22 dio 0 y 0). **La 23 está
+pendiente de correr** (PR #40); sin ella el panel funciona, solo no marca las
+URL que fallan. Tras la 21 quedaron **20** competidores `COMP_` sin URL: todos
 tenían PVP en `pvp_propio` y la 21 no borra nada con PVP. Ese PVP era el
 $1.00 base que la fase 2 le dio a todo lo que parecía propio por laboratorio
 o unidad de negocio; un competidor no tiene PVP propio.
@@ -117,9 +120,9 @@ o unidad de negocio; un competidor no tiene PVP propio.
 | | |
 |---|---|
 | Código en `main` | PR #36, desplegado (GitHub Pages sale solo de `main`); etapa B de Competencia en el PR #37 |
-| SQL corrido en Supabase | **Hasta la fase 22** |
+| SQL corrido en Supabase | **Hasta la fase 22** (la 23 en el PR #40) |
 | Módulo Productos | **Terminado** (ver abajo) |
-| Módulo Competencia | **Etapas A (#36) y B (#37), limpieza (#38, fase 22) y ajustes (#39)** |
+| Módulo Competencia | **Etapas A (#36) y B (#37), limpieza (#38), ajustes (#39) y funciones de revisión, robot y cobertura (#40)** |
 | Recarga del catálogo | **A medias y aparcada por decisión de Hernando** |
 
 Lo siguiente lo decide Hernando. Candidatos, en el orden en que salieron:
@@ -148,6 +151,7 @@ terminar la recarga, las 7 funciones del bloque 5, o el siguiente módulo.
 | #37 | Competencia, etapa B: misma tabla que Productos (ver "El módulo Competencia") |
 | #38 | Fase 22: PVP falsos de competidores y los 20 `COMP_` sin URL |
 | #39 | Competencia: columna ID para ordenar por bloques, interruptor $/Bs, CSV con los nombres de Productos |
+| #40 | Competencia: URL que fallan (fase 23), posibles duplicados, filtro por laboratorio, robot para los seleccionados con avance, cobertura por cadena; "Vincular enlace" desde la ficha de Productos; columna ID en Productos. El robot ahora sí lee solo los enlaces pedidos |
 | #34 | Menús desplegables M3 en toda la app (`components/Select.jsx`, 31 `<select>`), deshacer al eliminar (borrado diferido 8 s), ordenar por columna, filtro de ficha incompleta, enlaces sin precio +7 días, aviso de duplicados, duplicar producto, celda vacía = no cambiar, revisión antes → después, CSV de Excel, deshacer la baja, tarjetas en celular |
 
 ### Cómo queda la pantalla
@@ -254,6 +258,33 @@ nombres de campo donde son el mismo dato.
   competidor. Rechaza la misma URL dos veces en la misma cadena.
 - **CSV:** ver `CARGA_CSV.md`. Mismo archivo para exportar, plantilla e
   importar; un enlace existente (cadena + URL) se actualiza.
+
+**Funciones del PR #40**
+- **Para revisar** (aviso sobre la tabla y chip "Revisar"): URL que fallan
+  (`v_enlaces_fallidos`, 3+ lecturas fallidas seguidas; la celda Captura dice
+  "Revisar" y la ficha muestra el último error), posibles duplicados (mismo
+  producto + cadena + nombre del competidor sin mayúsculas ni signos, o dos
+  enlaces propios en una cadena) y sin precio hace +7 días.
+- **Filtro Laboratorio**: el laboratorio del competidor.
+- **Robot** (`hooks/useRobot.js`): "Leer precios" en la barra de selección, el
+  botón de la ficha y "Leer todos los precios" en el menú ⋮ (con
+  confirmación y tiempo estimado). Manda `doc_ids` en el `client_payload` del
+  `repository_dispatch`; `scraper/farmatodo.py` los lee del archivo del
+  evento (`GITHUB_EVENT_PATH`) y solo procesa esos. **Antes el robot ignoraba
+  el enlace pedido y leía todos**, por eso el botón de un enlace nunca
+  terminaba a tiempo. El avance sale en un aviso azul: estado de la corrida
+  en GitHub (si el token puede leer Actions) y tiempo transcurrido frente al
+  estimado (4 min de arranque + ~10 s por enlace de Farmatodo, ~5 s en las
+  demás). Termina cuando GitHub la da por completada o cuando aparecen en
+  `fact_precios` las capturas pedidas. Se guarda en `localStorage`
+  (`competencia.robot`), así sobrevive a recargar la página.
+- **Cobertura por cadena** (menú ⋮, `components/CoberturaCadenas.jsx`): tabla
+  producto × cadena con tu enlace (✓), el número de competidores y un botón
+  para vincular tu enlace donde falta (abre el formulario con producto,
+  cadena y "Mi producto" ya elegidos).
+- **Desde Productos**: la ficha del producto tiene "Vincular enlace", que abre
+  Competencia con `?producto=<id>&vincular=1`.
+- **Columna ID** también en Productos (ordenable, como número).
 
 **Los 20 competidores `COMP_` sin URL que dejó la fase 21.** El diagnóstico
 dio que los 20 tenían PVP (`tiene_pvp`), ninguno era producto propio en una
@@ -415,7 +446,12 @@ capturas y devaluación vs subida real. Faltan:
 - Alertas por correo
 - Reporte semanal
 
-**Competencia**: ver la lista de propuestas del 2026-09-25 en el chat (PR #39).
+**Competencia**: correr la fase 23. Quedan pendientes de decidir: el filtro
+"más caro que la competencia" (Hernando lo quiere en otro menú, no en
+Competencia), el historial de precios en la ficha del enlace, el "Nombre en
+la tienda" de la ficha (la vista pone el nombre del competidor, no el que lee
+el robot: `fact_precios.nombre_capturado`) y mostrar los enlaces actuales del
+producto al vincular uno nuevo.
 
 **Limpieza del repo**: mover los `fase*.sql` (ya son 22) a `sql/`, borrar
 `debug/`, y borrar `recarga/` cuando termine la recarga.
