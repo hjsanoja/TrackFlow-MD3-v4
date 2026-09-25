@@ -78,22 +78,32 @@ Una fila por URL monitoreada. Es el mismo formato que baja el botón
 que un reporte se puede corregir y volver a subir tal cual:
 
 ```
-id_producto_propio, producto, cadena, tipo, competidor, laboratorio, url,
-activo, precio_bs, precio_oferta_bs, precio_usd, ultima_captura
+id_interno, nombre, cadena, tipo, competidor, laboratorio_competidor, url,
+activo, pvp_propio_usd, precio_usd, precio_bs, precio_oferta_bs, ultima_captura
 ```
 
-- **`id_producto_propio` debe coincidir con un `id_interno` ya cargado.** Es lo
+Archivos: `competencia_enlaces_plantilla_carga_<fecha>.csv` (modal de Carga
+masiva, todos los enlaces) y `competencia_enlaces_reporte_<fecha>.csv` (botón
+Exportar, lo filtrado en pantalla).
+
+Las columnas que son el mismo dato que en el CSV de productos se llaman igual:
+`id_interno` y `nombre` (tu producto), `activo` y `pvp_propio_usd`. El
+laboratorio va como `laboratorio_competidor` porque es el del competidor, no
+el tuyo. Los archivos con los nombres viejos (`id_producto_propio`,
+`producto`, `laboratorio`) se siguen aceptando.
+
+- **`id_interno` debe coincidir con un producto ya cargado.** Es lo
   que construye la equivalencia entre tu producto y el del competidor. Si no
   coincide, la fila se rechaza con un mensaje que nombra el producto.
 - **`tipo`**: `propio` si la URL es de **tu** producto en esa cadena;
   `competidor` (o `alternativa`, el nombre viejo) si es de un competidor.
 - **`competidor`**: el nombre del producto de la competencia (antes `marca`,
   que se sigue aceptando).
-- **`laboratorio`** del competidor: con él se crea su producto. Vacío en uno
+- **`laboratorio_competidor`**: con él se crea su producto. Vacío en uno
   nuevo, queda como "OTRO"; vacío en uno que ya existe, se conserva.
 - `cadena` acepta el id (`Saas`) o el nombre comercial (`Farmacias SAAS`).
 - **`activo`**: `si` / `no`. Vacío o sin columna, se conserva lo guardado.
-- `producto`, `precio_*` y `ultima_captura` son informativas: al importar se
+- `nombre`, `pvp_propio_usd`, `precio_*` y `ultima_captura` son informativas: al importar se
   ignoran (los precios los pone el robot o el botón "Precio manual").
 - La clave real de un enlace es **cadena + URL**. Si ya existe, se actualiza
   (no se duplica); la revisión previa dice cuántos son nuevos y cuántos ya
