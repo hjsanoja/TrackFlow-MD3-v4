@@ -4,7 +4,7 @@ import Select from '../Select';
 import { supabase, isSupabaseActive } from '../../supabase';
 import { leerColor, pct, textoMeta } from './comun';
 
-const PERIODOS = [[30, 'Últimos 30 días'], [90, 'Últimos 90 días'], [180, 'Últimos 180 días']];
+const PERIODOS = [[7, 'Últimos 7 días'], [15, 'Últimos 15 días'], [30, 'Últimos 30 días'], [90, 'Últimos 90 días']];
 
 const diaCorto = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
 const diaLargo = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -14,7 +14,7 @@ const diaLargo = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { 
 // (fn_tendencia_posicion, fase 28); al navegador llegan ~90 puntos.
 export default function TendenciaPosicion({ productos, conDescuento, porUnidad, cadena, meta, tg, onDia }) {
   const [dias, setDias] = useState(() => {
-    try { return Number(localStorage.getItem('dashboard.tendencia')) || 90; } catch { return 90; }
+    try { return [7, 15, 30, 90].includes(Number(localStorage.getItem('dashboard.tendencia.dias'))) ? Number(localStorage.getItem('dashboard.tendencia.dias')) : 7; } catch { return 7; }
   });
   const [estado, setEstado] = useState({ cargando: true, filas: [], error: null });
   // La lista de productos cambia de identidad en cada filtro: se compara por texto.
@@ -40,7 +40,7 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
 
   const cambiarDias = (v) => {
     setDias(v);
-    try { localStorage.setItem('dashboard.tendencia', String(v)); } catch { /* sin almacenamiento */ }
+    try { localStorage.setItem('dashboard.tendencia.dias', String(v)); } catch { /* sin almacenamiento */ }
   };
 
   const { filas, cargando, error } = estado;
@@ -63,7 +63,7 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
         <div className="min-w-0">
           <h2 className="m3-title-medium text-on-surface">Tendencia de tu posición</h2>
           <p className="m3-body-small text-on-surface-variant">
-            Cuánto más caro o barato estás que el promedio de la competencia, día a día (lo usual entre tus productos). Toca un día para ver cada producto.
+            Tu precio frente al promedio de la competencia, día a día. Por encima de 0 eres más caro; por debajo, más barato. Toca un día.
           </p>
         </div>
         <Select value={String(dias)} onChange={e => cambiarDias(Number(e.target.value))} aria-label="Periodo de la tendencia"
@@ -73,7 +73,7 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
       </header>
 
       {ultima && primera && primera !== ultima && (
-        <p className="m3-body-medium text-on-surface mb-1">
+        <p className="m3-body-small text-on-surface mb-1">
           {diaCorto(primera.fecha)}: <strong className="font-medium">{pct(primera.mediana)}</strong>
           <span className="text-on-surface-variant"> → </span>
           hoy: <strong className="font-medium">{pct(ultima.mediana)}</strong>
@@ -84,19 +84,19 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
       )}
 
       {cargando && filas.length === 0 ? (
-        <div className="h-56 rounded-2xl m3-skeleton" aria-busy="true" />
+        <div className="h-44 rounded-2xl m3-skeleton" aria-busy="true" />
       ) : faltaSql ? (
-        <div className="h-56 flex flex-col items-center justify-center gap-2 text-on-surface-variant text-center px-6">
+        <div className="h-44 flex flex-col items-center justify-center gap-2 text-on-surface-variant text-center px-6">
           <span className="material-symbols-outlined text-3xl" aria-hidden="true">database</span>
           <span className="m3-body-medium">Falta correr la fase 28 en Supabase para ver la tendencia.</span>
         </div>
       ) : filas.length < 2 ? (
-        <div className="h-56 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+        <div className="h-44 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
           <span className="material-symbols-outlined text-3xl" aria-hidden="true">show_chart</span>
           <span className="m3-body-medium">Aún no hay días suficientes con tu precio y el de la competencia.</span>
         </div>
       ) : (
-        <div className={`h-56 ${cargando ? 'opacity-60' : ''}`} role="img" aria-label={`Tendencia: hoy ${pct(ultima?.mediana)} frente al promedio`}>
+        <div className={`h-44 ${cargando ? 'opacity-60' : ''}`} role="img" aria-label={`Tendencia: hoy ${pct(ultima?.mediana)} frente al promedio`}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={filas} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}
               onClick={(e) => { if (e?.activeLabel) onDia(e.activeLabel); }} style={{ cursor: 'pointer' }}>

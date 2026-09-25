@@ -39,7 +39,7 @@ import {
 // va aparte. Nombre, PVP, precios y captura son informativos: al importar se
 // ignoran.
 const COLUMNAS_CSV_ENLACES = [
-  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio_competidor', 'url', 'activo',
+  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio_competidor', 'unidades_empaque', 'url', 'activo',
   'pvp_propio_usd', 'precio_usd', 'precio_bs', 'precio_oferta_bs', 'ultima_captura',
 ].map(key => ({ label: key, key }));
 const ARCHIVO_REPORTE = 'competencia_enlaces_reporte';
@@ -512,6 +512,8 @@ export default function Competencia() {
       tipo: esPropio(it) ? 'propio' : 'competidor',
       competidor: esPropio(it) ? '' : (it.marca || ''),
       laboratorio_competidor: esPropio(it) ? '' : (it.laboratorio || ''),
+      // 1 es el valor por defecto ("no se sabe"): se deja vacio.
+      unidades_empaque: !esPropio(it) && Number(it.unidades_empaque) > 1 ? String(Number(it.unidades_empaque)) : '',
       url: it.url || '',
       activo: it.activo === false ? 'no' : 'si',
       pvp_propio_usd: pvp ? pvp.toFixed(2) : '',
@@ -597,6 +599,7 @@ export default function Competencia() {
         // tomaba el valor de 'laboratorio_competidor', que la contiene.
         const marca = celdaExacta(row, 'competidor', 'marca', 'marca_competencia');
         const laboratorio = getRowValue(row, 'laboratorio_competidor', 'laboratorio', 'fabricante').trim();
+        const unidades = Number(getRowValue(row, 'unidades_empaque', 'unidades_por_empaque').trim().replace(',', '.'));
         const urlSlug = normalizarUrl(url).replace(/[^a-z0-9]/gi, '_');
 
         lista.push({
@@ -610,6 +613,7 @@ export default function Competencia() {
           // Sin la columna o vacia se conserva lo guardado (activo por defecto en uno nuevo).
           activo: activoRaw ? !['no', 'false', '0'].includes(activoRaw) : (existente ? existente.activo !== false : true),
           laboratorio: laboratorio || (existente && !esPropio(existente) ? existente.laboratorio || '' : ''),
+          unidades_empaque: !propio && unidades > 0 ? unidades : null,
         });
       });
       if (lista.length === 0) throw new Error('No hay filas con producto y URL.');
@@ -1129,6 +1133,7 @@ export default function Competencia() {
               </div>
               <div>id_interno, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
               <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio_competidor</div>
+              <div>unidades_empaque <span className="text-on-surface-variant font-sans font-medium">(tabletas, cápsulas o ml del competidor)</span></div>
               <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
               <div className="font-sans font-medium text-on-surface-variant pt-1">
                 nombre, pvp_propio_usd y las columnas de precio y captura son informativas: al importar se ignoran. Una celda vacía no cambia nada.
@@ -1254,6 +1259,9 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
     tipo: item ? (String(item.tipo) === 'propio' ? 'propio' : 'alternativa') : (tipoPreseleccionado === 'propio' ? 'propio' : 'alternativa'),
     marca: item && String(item.tipo) !== 'propio' ? item.marca || '' : '',
     laboratorio: item && String(item.tipo) !== 'propio' ? item.laboratorio || '' : '',
+    // 1 es el valor por defecto ("no se sabe"): el campo sale vacio.
+    unidades: item && String(item.tipo) !== 'propio' && Number(item.unidades_empaque) > 1 ? String(Number(item.unidades_empaque)) : '',
+    medida: ['ml', 'g'].includes(item?.unidad_contenido) ? item.unidad_contenido : 'unidad',
     url: item?.url || '',
     activo: item?.activo ?? true,
   });
@@ -1311,6 +1319,7 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
     if (!form.cadena) e.cadena = 'Elige la cadena';
     if (!form.url.trim()) e.url = 'Obligatoria';
     if (form.tipo !== 'propio' && !form.marca.trim()) e.marca = 'Escribe el nombre del competidor';
+    if (form.tipo !== 'propio' && form.unidades.trim() && !(Number(form.unidades.replace(',', '.')) > 0)) e.unidades = 'Escribe un número mayor que cero';
     setErrores(e);
     if (Object.keys(e).length > 0) {
       setTimeout(() => {
@@ -1327,6 +1336,8 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
       tipo: form.tipo,
       marca: form.tipo === 'propio' ? producto.nombre : form.marca.trim(),
       laboratorio: form.tipo === 'propio' ? producto.laboratorio || '' : form.laboratorio.trim(),
+      unidades_empaque: form.tipo !== 'propio' && form.unidades.trim() ? Number(form.unidades.replace(',', '.')) : null,
+      unidad_contenido: form.tipo !== 'propio' && form.unidades.trim() ? form.medida : null,
       url: form.url.trim(),
       activo: form.activo,
     }, isNew);
@@ -1436,6 +1447,18 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
               <Field label="Laboratorio" hint="Fabricante del competidor">
                 <ComboField value={form.laboratorio} onChange={v => cambiar('laboratorio', v)}
                   opciones={dimensiones.laboratorios} cargando={!dimensiones.cargado} permitirNuevo />
+              </Field>
+              <Field label="Unidades por empaque" error={errores.unidades}
+                hint={`Cuántas trae el empaque del competidor. Sirve para comparar por unidad.${producto?.tamano ? ` El tuyo: ${producto.tamano}.` : ''}`}>
+                <div className="flex gap-2">
+                  <input type="text" inputMode="decimal" value={form.unidades} onChange={e => cambiar('unidades', e.target.value)}
+                    className="m3-input flex-1 min-w-0" placeholder="Ej: 20" aria-label="Unidades por empaque" />
+                  <Select value={form.medida} onChange={e => cambiar('medida', e.target.value)} className="m3-select w-40" aria-label="Medida">
+                    <option value="unidad">unidades</option>
+                    <option value="ml">ml</option>
+                    <option value="g">g</option>
+                  </Select>
+                </div>
               </Field>
             </div>
           </FormSection>

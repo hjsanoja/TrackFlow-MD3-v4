@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
 import FiltroChip from '../components/FiltroChip';
+import FiltrosFijos from '../components/FiltrosFijos';
 import Select from '../components/Select';
 import CadenaBadge from '../components/CadenaBadge';
 import DetalleLista from '../components/DetalleLista';
@@ -10,13 +11,14 @@ import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
 import { exportToCSV } from '../utils/exportUtils';
-import { crearFormato, Diferencia, pct, usePreferencia, GRUPOS, grupoDe } from '../components/dashboard/comun';
+import { describirPresentacion } from '../utils/presentacion';
+import { crearFormato, Diferencia, pct, usePreferencia, grupoDe } from '../components/dashboard/comun';
 
-// Mapa de calor: en que cadenas eres mas caro o mas barato. Cada celda compara
-// tu precio con el precio mas bajo de la competencia EN ESA CADENA, con los
-// mismos colores que "¿Donde esta tu precio?" del Dashboard: azul si eres mas
-// barato, gris si estas parejo (±5 %), rojo si eres mas caro.
-// La vista "Rango de precios" muestra tu precio entre el minimo y el maximo.
+// Mapa de calor: por cada producto, el espectro de precios de la competencia
+// (del mas barato al mas caro) y donde cae tu precio. La franja se colorea
+// como un termometro: azul la zona barata, gris la zona pareja (±5 % del
+// promedio) y rojo la zona cara. El punto es tu precio.
+// La comparacion por cadena (productos × cadenas) esta en Experimental.
 
 const POSICIONES = [
   ['todos', 'Posición: todas'],
@@ -26,6 +28,7 @@ const POSICIONES = [
   ['sin_comparar', 'Sin comparar'],
 ];
 const posicionDe = (x) => (!x.comparable || x.difProm == null ? 'sin_comparar' : x.difProm < -5 ? 'barato' : x.difProm > 5 ? 'caro' : 'parejo');
+const ETIQUETA_POSICION = { barato: 'Más barato', parejo: 'Parejo', caro: 'Más caro', sin_comparar: 'Sin comparar' };
 
 export default function MapaCalor() {
   const { productos = [], productosCompetencia = [], cadenas = [], variaciones = [], loadingInitial: loading } = useData();
@@ -34,7 +37,7 @@ export default function MapaCalor() {
   const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs']);
   const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis']);
   const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento']);
-  const [vista, setVista] = usePreferencia('mapa.vista', 'cadenas', ['cadenas', 'rango']);
+  const [filtroCadena, setFiltroCadena] = useState('todos');
   const [filtroUnidad, setFiltroUnidad] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
@@ -47,8 +50,8 @@ export default function MapaCalor() {
   const [ficha, setFicha] = useState(null);
   const [volverA, setVolverA] = useState(null);
 
-  const { analizados, nombreCadena } = useAnalisisPrecios({
-    productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis,
+  const { analizados, nombreCadena, idCadena } = useAnalisisPrecios({
+    productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis, cadenaComp: filtroCadena,
   });
   const { fmt, fmtUnidad } = crearFormato(moneda, bcv.rate);
   const fmtModo = modoAnalisis === 'unidosis' ? fmtUnidad : fmt;
@@ -60,38 +63,45 @@ export default function MapaCalor() {
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [productos]);
   const categorias = useMemo(() => [...new Set(productos.map(p => p.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [productos]);
+  const cadenasCompetencia = useMemo(() => {
+    const ids = new Set();
+    for (const e of productosCompetencia) {
+      if (e.activo && String(e.tipo).toLowerCase() !== 'propio' && e.ultimo_precio_full_bs) ids.add(idCadena(e.cadena));
+    }
+    return [...ids].sort((a, b) => nombreCadena(a).localeCompare(nombreCadena(b)));
+  }, [productosCompetencia, idCadena, nombreCadena]);
 
-  // Productos con algun precio (tuyo o de la competencia), segun los filtros.
-  const base = useMemo(() => analizados.filter(({ producto: p, sinPrecio }) =>
-    !sinPrecio &&
-    (filtroUnidad === 'todos' || claveUnidad(p) === filtroUnidad) &&
-    (filtroTipo === 'todos' || (p.market_type || 'GENERICO').toLowerCase() === filtroTipo) &&
-    (filtroCategoria === 'todos' || p.categoria === filtroCategoria)
-  ), [analizados, filtroUnidad, filtroTipo, filtroCategoria]);
-  const hayFiltros = filtroUnidad !== 'todos' || filtroTipo !== 'todos' || filtroCategoria !== 'todos' || filtroPosicion !== 'todos';
+  // Productos con algun precio, segun los filtros; con el maximo de la competencia.
+  const base = useMemo(() => analizados
+    .filter(({ producto: p, sinPrecio }) =>
+      !sinPrecio &&
+      (filtroUnidad === 'todos' || claveUnidad(p) === filtroUnidad) &&
+      (filtroTipo === 'todos' || (p.market_type || 'GENERICO').toLowerCase() === filtroTipo) &&
+      (filtroCategoria === 'todos' || p.categoria === filtroCategoria))
+    .map(x => {
+      const comp = x.precios.filter(o => o.tipo !== 'propio');
+      const maximo = comp.length ? Math.max(...comp.map(o => o.priceUsd)) : null;
+      const ofertaMax = comp.find(o => o.priceUsd === maximo);
+      return { ...x, maximo, cadenaMax: ofertaMax?.cadena, competidores: comp.length, posicion: posicionDe(x) };
+    }), [analizados, filtroUnidad, filtroTipo, filtroCategoria]);
+  const hayFiltros = [filtroCadena, filtroUnidad, filtroTipo, filtroCategoria, filtroPosicion].some(v => v !== 'todos');
 
   const porPosicion = useMemo(() => {
     const g = { barato: [], parejo: [], caro: [], sin_comparar: [] };
-    for (const x of base) g[posicionDe(x)].push(x);
+    for (const x of base) g[x.posicion].push(x);
     return g;
   }, [base]);
-
-  const cadenasTabla = useMemo(() => {
-    const ids = new Map();
-    for (const x of base) for (const c of x.porCadena.keys()) ids.set(c, (ids.get(c) || 0) + 1);
-    return [...ids.entries()].sort((a, b) => nombreCadena(a[0]).localeCompare(nombreCadena(b[0]))).map(([id, n]) => ({ id, n }));
-  }, [base, nombreCadena]);
 
   const filas = useMemo(() => {
     const term = normalizar(search);
     const lista = base.filter(x =>
-      (filtroPosicion === 'todos' || posicionDe(x) === filtroPosicion) &&
+      (filtroPosicion === 'todos' || x.posicion === filtroPosicion) &&
       (!term || normalizar(`${x.producto.id_interno} ${x.producto.nombre} ${x.producto.principio_activo || ''}`).includes(term)));
     const signo = orden.dir === 'asc' ? 1 : -1;
     return lista.sort((a, b) => {
       if (orden.campo === 'nombre') return (a.producto.nombre || '').localeCompare(b.producto.nombre || '', 'es', { sensitivity: 'base' }) * signo;
-      const va = orden.campo === 'difProm' ? a.difProm : a.difMin;
-      const vb = orden.campo === 'difProm' ? b.difProm : b.difMin;
+      const va = a.difProm;
+      const vb = b.difProm;
       if (va == null && vb == null) return 0;
       if (va == null) return 1;
       if (vb == null) return -1;
@@ -99,22 +109,13 @@ export default function MapaCalor() {
     });
   }, [base, search, filtroPosicion, orden]);
 
-  useEffect(() => { setPaginaActual(1); }, [search, filtroPosicion, filtroUnidad, filtroTipo, filtroCategoria, orden, itemsPorPagina, vista]);
+  useEffect(() => { setPaginaActual(1); }, [search, filtroPosicion, filtroCadena, filtroUnidad, filtroTipo, filtroCategoria, orden, itemsPorPagina]);
   const totalPaginas = Math.max(1, Math.ceil(filas.length / itemsPorPagina));
   const filasPagina = filas.slice((paginaActual - 1) * itemsPorPagina, paginaActual * itemsPorPagina);
   const ordenarPor = (campo) => setOrden(o => ({ campo, dir: o.campo === campo && o.dir === 'asc' ? 'desc' : 'asc' }));
 
   const abrirFicha = (x, desde = null) => { setVolverA(desde); setDetalle(null); setFicha({ producto: x.producto, competencia: x.competencia }); };
   const cerrarFicha = () => { setFicha(null); if (volverA) { setDetalle(volverA); setVolverA(null); } };
-  const colProducto = {
-    titulo: 'Producto',
-    celda: x => (
-      <div className="min-w-0">
-        <div className="m3-cell-primary m3-cell-clamp max-w-[18rem]" title={x.producto.nombre}>{x.producto.nombre}</div>
-        <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
-      </div>
-    ),
-  };
   const abrirGrupo = (clave, titulo, icono) => setDetalle({
     titulo,
     subtitulo: 'Tu precio frente al promedio de la competencia. Toca un producto para ver su ficha.',
@@ -125,40 +126,40 @@ export default function MapaCalor() {
       : [colProducto,
         { titulo: 'Tu precio', alinear: 'right', celda: x => fmtModo(x.tuPrecio) },
         { titulo: 'Promedio', alinear: 'right', celda: x => fmtModo(x.promedio) },
-        { titulo: 'Frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> }],
+        { titulo: 'Tú frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> }],
     posicion: clave,
   });
+  const colProducto = {
+    titulo: 'Producto',
+    celda: x => (
+      <div className="min-w-0">
+        <div className="m3-cell-primary m3-cell-clamp max-w-[18rem]" title={x.producto.nombre}>{x.producto.nombre}</div>
+        <div className="m3-cell-secondary">{subtituloProducto(x.producto)}</div>
+      </div>
+    ),
+  };
 
   const exportar = () => {
     const suf = moneda === 'usd' ? 'USD' : 'Bs';
     const valor = (usd) => (usd == null ? '' : moneda === 'usd' ? usd.toFixed(modoAnalisis === 'unidosis' ? 4 : 2) : (usd * (bcv.rate || 0)).toFixed(2));
-    const cols = [
-      { key: 'id', label: 'ID' }, { key: 'producto', label: 'Producto' },
+    const datos = filas.map(x => ({
+      id: x.producto.id_interno, producto: x.producto.nombre, presentacion: subtituloProducto(x.producto, false),
+      tu: valor(x.tuPrecio), min: valor(x.minimo), prom: valor(x.promedio), max: valor(x.maximo),
+      dif: x.difProm == null ? '' : x.difProm.toFixed(1), posicion: ETIQUETA_POSICION[x.posicion],
+    }));
+    if (!datos.length) return;
+    exportToCSV(`mapa_de_calor${filtroCadena !== 'todos' ? `_${filtroCadena}` : ''}${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`, [
+      { key: 'id', label: 'ID' }, { key: 'producto', label: 'Producto' }, { key: 'presentacion', label: 'Presentación' },
       { key: 'tu', label: `Tu precio (${suf})` }, { key: 'min', label: `Mínimo competencia (${suf})` },
       { key: 'prom', label: `Promedio competencia (${suf})` }, { key: 'max', label: `Máximo competencia (${suf})` },
-      { key: 'difProm', label: 'Frente al promedio (%)' },
-      ...cadenasTabla.map(c => ({ key: `c_${c.id}`, label: `Frente a ${nombreCadena(c.id)} (%)` })),
-    ];
-    const datos = filas.map(x => {
-      const precios = [...x.porCadena.values()].map(p => p.priceUsd);
-      return {
-        id: x.producto.id_interno, producto: x.producto.nombre,
-        tu: valor(x.tuPrecio), min: valor(x.minimo), prom: valor(x.promedio), max: valor(precios.length ? Math.max(...precios) : null),
-        difProm: x.difProm == null ? '' : x.difProm.toFixed(1),
-        ...Object.fromEntries(cadenasTabla.map(c => {
-          const p = x.porCadena.get(c.id);
-          return [`c_${c.id}`, p && x.tuPrecio != null ? ((x.tuPrecio / p.priceUsd - 1) * 100).toFixed(1) : ''];
-        })),
-      };
-    });
-    if (datos.length) exportToCSV(`mapa_de_calor_por_cadena${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`, cols, datos);
+      { key: 'dif', label: 'Tú frente al promedio (%)' }, { key: 'posicion', label: 'Posición' },
+    ], datos);
   };
 
   if (loading && productos.length === 0) {
     return (
       <div className="space-y-6" aria-busy="true">
         <div className="h-16 rounded-2xl m3-skeleton" />
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">{[1, 2, 3, 4].map(n => <div key={n} className="h-28 rounded-2xl m3-skeleton" />)}</div>
         <div className="h-96 rounded-2xl m3-skeleton" />
       </div>
     );
@@ -167,14 +168,16 @@ export default function MapaCalor() {
   const comparables = base.length - porPosicion.sin_comparar.length;
 
   return (
-    <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
+    <div className="space-y-5 text-on-background pb-12 animate-fade-in-slide font-sans">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-primary text-3xl">thermostat</span>
             <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Mapa de calor</h1>
           </div>
-          <p className="text-xs text-on-surface-variant">En qué cadenas eres más caro o más barato. Cada celda compara tu precio con el más bajo de la competencia en esa cadena.</p>
+          <p className="text-xs text-on-surface-variant">
+            Para cada producto, los precios de la competencia del más barato al más caro y dónde cae el tuyo.
+          </p>
         </div>
         <button onClick={exportar} className="m3-btn-outline self-start lg:self-auto" title="Descargar en CSV lo que se ve, con los filtros actuales">
           <span className="material-symbols-outlined text-base">download</span>
@@ -182,15 +185,17 @@ export default function MapaCalor() {
         </button>
       </div>
 
-      <section className="m3-dash-filtros" aria-label="Filtros del mapa">
+      <FiltrosFijos etiqueta="Filtros del mapa">
         <div className="flex flex-wrap items-center gap-2">
+          <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={filtroCadena} onChange={setFiltroCadena}
+            opciones={[['todos', 'Competencia: todas las cadenas'], ...cadenasCompetencia.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
           <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidades]} />
           <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
           <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
           <FiltroChip etiqueta="Posición" icono="balance" valor={filtroPosicion} onChange={setFiltroPosicion} opciones={POSICIONES} />
           {hayFiltros && (
             <button type="button" className="m3-btn-text"
-              onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }}>
+              onClick={() => { setFiltroCadena('todos'); setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }}>
               Limpiar filtros
             </button>
           )}
@@ -202,7 +207,7 @@ export default function MapaCalor() {
           </Select>
           <Select value={modoAnalisis} onChange={e => setModoAnalisis(e.target.value)} aria-label="Comparar por" className="m3-filter-chip" leadingIcon="medication">
             <option value="empaque">Por empaque</option>
-            <option value="unidosis">Por unidad (tableta, cápsula…)</option>
+            <option value="unidosis">Por unidad</option>
           </Select>
           <label className="m3-switch-label whitespace-nowrap ml-1">
             <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
@@ -210,53 +215,39 @@ export default function MapaCalor() {
             <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
           </label>
         </div>
-      </section>
+      </FiltrosFijos>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Indicadores">
-        <StatCard label="Más baratos que el promedio" value={`${porPosicion.barato.length} de ${comparables}`} icon="south" tono="primary"
+      <section className="grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Indicadores">
+        <StatCard compacto label="Más baratos que el promedio" value={`${porPosicion.barato.length} de ${comparables}`} icon="south" tono="primary"
           hint="Tu precio más de 5 % bajo el promedio" onClick={() => abrirGrupo('barato', 'Más baratos que el promedio', 'south')} />
-        <StatCard label="Parejos" value={`${porPosicion.parejo.length} de ${comparables}`} icon="drag_handle" tono="neutral"
+        <StatCard compacto label="Parejos" value={`${porPosicion.parejo.length} de ${comparables}`} icon="drag_handle" tono="neutral"
           hint="Tu precio a ±5 % del promedio" onClick={() => abrirGrupo('parejo', 'Parejos con el promedio', 'drag_handle')} />
-        <StatCard label="Más caros que el promedio" value={`${porPosicion.caro.length} de ${comparables}`} icon="north" tono={porPosicion.caro.length ? 'negative' : 'neutral'}
+        <StatCard compacto label="Más caros que el promedio" value={`${porPosicion.caro.length} de ${comparables}`} icon="north" tono={porPosicion.caro.length ? 'negative' : 'neutral'}
           hint="Tu precio más de 5 % sobre el promedio" onClick={() => abrirGrupo('caro', 'Más caros que el promedio', 'north')} />
-        <StatCard label="Sin comparar" value={porPosicion.sin_comparar.length} icon="help" tono={porPosicion.sin_comparar.length ? 'warning' : 'neutral'}
+        <StatCard compacto label="Sin comparar" value={porPosicion.sin_comparar.length} icon="help" tono={porPosicion.sin_comparar.length ? 'warning' : 'neutral'}
           hint="Falta tu precio o el de la competencia" onClick={() => abrirGrupo('sin_comparar', 'Sin comparar', 'help')} />
       </section>
 
       <section className="m3-data-table" aria-label="Mapa de calor">
-        <nav className="m3-tabs px-2" aria-label="Vista del mapa">
-          <button type="button" onClick={() => setVista('cadenas')} className={`m3-tab ${vista === 'cadenas' ? 'is-active' : ''}`} aria-current={vista === 'cadenas' ? 'page' : undefined}>
-            <span className="material-symbols-outlined" aria-hidden="true">grid_on</span>Por cadena
-          </button>
-          <button type="button" onClick={() => setVista('rango')} className={`m3-tab ${vista === 'rango' ? 'is-active' : ''}`} aria-current={vista === 'rango' ? 'page' : undefined}>
-            <span className="material-symbols-outlined" aria-hidden="true">linear_scale</span>Rango de precios
-          </button>
-        </nav>
         <div className="m3-data-table-toolbar">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <p className="m3-body-small text-on-surface-variant flex-1">
-                {vista === 'cadenas'
-                  ? 'Cada celda: cuánto más caro o barato es tu precio que el más bajo de la competencia en esa cadena. Toca una fila para ver la ficha.'
-                  : 'Tu precio (punto) entre el mínimo y el máximo de la competencia; la raya marca el promedio. Toca una fila para ver la ficha.'}
-              </p>
-              <div className="m3-label-large text-on-surface-variant whitespace-nowrap" aria-live="polite">
-                {filas.length === base.length ? `${base.length} productos` : `${filas.length} de ${base.length} productos`}
-              </div>
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <label className="m3-search-field">
+              <span className="material-symbols-outlined" aria-hidden="true">search</span>
+              <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por ID, nombre o molécula" aria-label="Buscar producto" />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              )}
+            </label>
+            <div className="m3-espectro-leyenda" aria-label="Cómo se lee">
+              <span><i className="m3-espectro-zona-barata" />Zona barata</span>
+              <span><i className="m3-espectro-zona-pareja" />Parejo (±5 % del promedio)</span>
+              <span><i className="m3-espectro-zona-cara" />Zona cara</span>
+              <span><b className="m3-espectro-punto-leyenda" />Tu precio</span>
             </div>
-            <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <label className="m3-search-field">
-                <span className="material-symbols-outlined" aria-hidden="true">search</span>
-                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por ID, nombre o molécula" aria-label="Buscar producto" />
-                {search && (
-                  <button type="button" onClick={() => setSearch('')} className="m3-icon-btn m3-icon-btn-sm" aria-label="Borrar búsqueda">
-                    <span className="material-symbols-outlined">close</span>
-                  </button>
-                )}
-              </label>
-              <div className="m3-calor-leyenda" aria-label="Leyenda de colores">
-                {GRUPOS.map(g => <span key={g.id}><i className={`m3-calor-${g.id}`} />{g.corto}</span>)}
-              </div>
+            <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
+              {filas.length === base.length ? `${base.length} productos` : `${filas.length} de ${base.length} productos`}
             </div>
           </div>
         </div>
@@ -268,105 +259,38 @@ export default function MapaCalor() {
           </div>
         ) : (
           <>
-            <ul className="md:hidden divide-y divide-outline-variant" aria-label="Productos">
+            <div className="m3-espectro-cabecera" role="row">
+              <button type="button" onClick={() => ordenarPor('nombre')} className={`m3-sort-btn ${orden.campo === 'nombre' ? 'is-active' : ''}`}>
+                Producto
+                <span className="material-symbols-outlined" aria-hidden="true">{orden.campo === 'nombre' ? (orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}</span>
+              </button>
+              <span className="hidden md:block">Precios de la competencia y el tuyo</span>
+              <button type="button" onClick={() => ordenarPor('difProm')} className={`m3-sort-btn justify-self-end ${orden.campo === 'difProm' ? 'is-active' : ''}`}>
+                Tú frente al promedio
+                <span className="material-symbols-outlined" aria-hidden="true">{orden.campo === 'difProm' ? (orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}</span>
+              </button>
+            </div>
+            <ul className="divide-y divide-outline-variant" aria-label="Productos">
               {filasPagina.map(x => (
                 <li key={x.producto.id_interno}>
-                  <button type="button" onClick={() => abrirFicha(x)} className="w-full text-left px-4 py-3 space-y-2">
-                    <div>
-                      <div className="m3-cell-primary">{x.producto.nombre}</div>
-                      <div className="m3-cell-secondary">Tu precio {fmtModo(x.tuPrecio)} · <Diferencia valor={x.difProm} /> frente al promedio</div>
+                  <button type="button" onClick={() => abrirFicha(x)} className="m3-espectro-fila">
+                    <div className="min-w-0">
+                      <div className="m3-cell-primary m3-cell-clamp" title={x.producto.nombre}>{x.producto.nombre}</div>
+                      <div className="m3-cell-secondary m3-cell-clamp">{subtituloProducto(x.producto)}</div>
+                      <div className="mt-1 m3-body-small text-on-surface-variant">
+                        {x.tuPrecio != null ? <>Tu precio <strong className="font-medium text-on-surface">{fmtModo(x.tuPrecio)}</strong></> : 'Sin tu precio'}
+                        {x.competidores > 0 && <> · {x.competidores} {x.competidores === 1 ? 'competidor' : 'competidores'}</>}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {cadenasTabla.filter(c => x.porCadena.has(c.id)).map(c => {
-                        const dif = x.tuPrecio != null ? (x.tuPrecio / x.porCadena.get(c.id).priceUsd - 1) * 100 : null;
-                        return (
-                          <span key={c.id} className={`m3-calor-chip ${dif != null ? `m3-calor-${grupoDe(dif).id}` : ''}`}>
-                            <CadenaBadge cadena={c.id} tamano="xs" title="" />{dif != null ? pct(dif, 0) : fmtModo(x.porCadena.get(c.id).priceUsd)}
-                          </span>
-                        );
-                      })}
+                    <Espectro x={x} fmt={fmtModo} nombreCadena={nombreCadena} />
+                    <div className="flex flex-col items-end gap-1">
+                      <Diferencia valor={x.difProm} />
+                      <span className={`m3-espectro-estado is-${x.posicion}`}>{ETIQUETA_POSICION[x.posicion]}</span>
                     </div>
                   </button>
                 </li>
               ))}
             </ul>
-
-            <div className="hidden md:block overflow-x-auto">
-              {vista === 'cadenas' ? (
-                <table className="m3-table m3-table-calor">
-                  <thead className="m3-sticky-header">
-                    <tr>
-                      <th className="m3-dash-col-producto"><Orden campo="nombre" orden={orden} onClick={ordenarPor}>Producto</Orden></th>
-                      <th className="text-right">Tu precio</th>
-                      {cadenasTabla.map(c => (
-                        <th key={c.id} className="text-center">
-                          <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={c.id} tamano="xs" title="" />{nombreCadena(c.id)}</span>
-                        </th>
-                      ))}
-                      <th className="text-right m3-dash-col-sep"><Orden campo="difProm" orden={orden} onClick={ordenarPor}>Frente al promedio</Orden></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filasPagina.map(x => (
-                      <tr key={x.producto.id_interno} onClick={() => abrirFicha(x)} className="cursor-pointer" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') abrirFicha(x); }}>
-                        <td className="m3-dash-col-producto">
-                          <div className="m3-cell-primary m3-cell-clamp" title={x.producto.nombre}>{x.producto.nombre}</div>
-                          <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
-                        </td>
-                        <td className="text-right whitespace-nowrap tabular-nums font-medium">{fmtModo(x.tuPrecio)}</td>
-                        {cadenasTabla.map(c => {
-                          const p = x.porCadena.get(c.id);
-                          if (!p) return <td key={c.id} className="text-center text-on-surface-variant">—</td>;
-                          const dif = x.tuPrecio != null ? (x.tuPrecio / p.priceUsd - 1) * 100 : null;
-                          return (
-                            <td key={c.id} className={`m3-calor-celda ${dif != null ? `m3-calor-${grupoDe(dif).id}` : ''}`}
-                              title={`${p.marca} en ${nombreCadena(c.id)}: ${fmtModo(p.priceUsd)}${x.tuPrecio != null ? ` · tu precio ${fmtModo(x.tuPrecio)}` : ''}`}>
-                              <div className="font-medium tabular-nums">{dif != null ? pct(dif, 0) : '—'}</div>
-                              <div className="m3-calor-precio tabular-nums">{fmtModo(p.priceUsd)}</div>
-                            </td>
-                          );
-                        })}
-                        <td className="text-right whitespace-nowrap m3-dash-col-sep"><Diferencia valor={x.difProm} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <table className="m3-table m3-table-dashboard">
-                  <thead className="m3-sticky-header">
-                    <tr>
-                      <th className="m3-dash-col-producto"><Orden campo="nombre" orden={orden} onClick={ordenarPor}>Producto</Orden></th>
-                      <th className="text-right">Tu precio</th>
-                      <th className="w-[36%]">Rango de la competencia</th>
-                      <th className="text-right">Mínimo</th>
-                      <th className="text-right">Promedio</th>
-                      <th className="text-right">Máximo</th>
-                      <th className="text-right"><Orden campo="difProm" orden={orden} onClick={ordenarPor}>Frente al promedio</Orden></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filasPagina.map(x => {
-                      const precios = [...x.porCadena.values()].map(p => p.priceUsd);
-                      const max = precios.length ? Math.max(...precios) : null;
-                      return (
-                        <tr key={x.producto.id_interno} onClick={() => abrirFicha(x)} className="cursor-pointer" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') abrirFicha(x); }}>
-                          <td className="m3-dash-col-producto">
-                            <div className="m3-cell-primary m3-cell-clamp" title={x.producto.nombre}>{x.producto.nombre}</div>
-                            <div className="m3-cell-secondary font-mono">{x.producto.id_interno}</div>
-                          </td>
-                          <td className="text-right whitespace-nowrap tabular-nums font-medium">{fmtModo(x.tuPrecio)}</td>
-                          <td><Rango min={x.minimo} max={max} promedio={x.promedio} tuyo={x.tuPrecio} dif={x.difProm} /></td>
-                          <td className="text-right whitespace-nowrap tabular-nums">{fmtModo(x.minimo)}</td>
-                          <td className="text-right whitespace-nowrap tabular-nums">{fmtModo(x.promedio)}</td>
-                          <td className="text-right whitespace-nowrap tabular-nums">{fmtModo(max)}</td>
-                          <td className="text-right whitespace-nowrap"><Diferencia valor={x.difProm} /></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
 
             <footer className="m3-data-table-footer">
               <label className="flex items-center gap-2 m3-body-medium text-on-surface-variant">
@@ -423,29 +347,49 @@ export default function MapaCalor() {
   );
 }
 
-function Orden({ campo, orden, onClick, children }) {
-  const activo = orden.campo === campo;
-  return (
-    <button type="button" onClick={() => onClick(campo)} className={`m3-sort-btn ${activo ? 'is-active' : ''}`}>
-      {children}
-      <span className="material-symbols-outlined" aria-hidden="true">{activo ? (orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}</span>
-    </button>
-  );
+// "140216 · Genérico · 500 mg · 20 tabletas": lo que distingue a dos
+// productos con el mismo nombre.
+function subtituloProducto(p, conId = true) {
+  const tipo = (p.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico';
+  return [conId ? p.id_interno : null, tipo, p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ');
 }
 
-// Rango de la competencia: barra gris del minimo al maximo, raya en el
-// promedio y un punto con tu precio (fuera de la barra si estas por fuera).
-function Rango({ min, max, promedio, tuyo, dif }) {
-  if (min == null || max == null) return <span className="text-on-surface-variant m3-body-small">Sin precios de la competencia</span>;
-  const lo = Math.min(min, tuyo ?? min);
-  const hi = Math.max(max, tuyo ?? max);
-  const ancho = hi - lo || 1;
-  const pos = (v) => `${((v - lo) / ancho) * 100}%`;
+// Espectro: la franja va del precio mas bajo al mas alto de la competencia
+// (se alarga si el tuyo cae por fuera). Tres zonas: barata (azul), pareja
+// ±5 % del promedio (gris) y cara (rojo). Raya = promedio, punto = tu precio.
+function Espectro({ x, fmt, nombreCadena }) {
+  const { minimo: min, maximo: max, promedio: prom, tuPrecio: tuyo, difProm } = x;
+  if (min == null || max == null) {
+    return <div className="m3-body-small text-on-surface-variant">Sin precios de la competencia para comparar.</div>;
+  }
+  const lo = Math.min(min, tuyo ?? min, prom * 0.95);
+  const hi = Math.max(max, tuyo ?? max, prom * 1.05);
+  const rango = hi - lo || 1;
+  const pos = (v) => ((v - lo) / rango) * 100;
+  const pBajo = pos(prom * 0.95);
+  const pAlto = pos(prom * 1.05);
   return (
-    <div className="m3-rango" role="img" aria-label={`Tu precio ${dif != null ? pct(dif) : 'sin dato'} frente al promedio`}>
-      <div className="m3-rango-barra" style={{ left: pos(min), width: `${((max - min) / ancho) * 100}%` }} />
-      {promedio != null && <div className="m3-rango-promedio" style={{ left: pos(promedio) }} />}
-      {tuyo != null && <div className={`m3-rango-tuyo m3-calor-${grupoDe(dif ?? 0).id}`} style={{ left: pos(tuyo) }} />}
+    <div className="m3-espectro" role="img"
+      aria-label={`Mínimo ${fmt(min)}, promedio ${fmt(prom)}, máximo ${fmt(max)}${tuyo != null ? `, tu precio ${fmt(tuyo)} (${pct(difProm)})` : ''}`}>
+      <div className="m3-espectro-pista">
+        <div className="m3-espectro-zona-barata" style={{ left: 0, width: `${pBajo}%` }} />
+        <div className="m3-espectro-zona-pareja" style={{ left: `${pBajo}%`, width: `${pAlto - pBajo}%` }} />
+        <div className="m3-espectro-zona-cara" style={{ left: `${pAlto}%`, width: `${100 - pAlto}%` }} />
+        <div className="m3-espectro-competencia" style={{ left: `${pos(min)}%`, width: `${Math.max(0.5, pos(max) - pos(min))}%` }} />
+        <div className="m3-espectro-promedio" style={{ left: `${pos(prom)}%` }} />
+        {tuyo != null && (
+          <div className={`m3-espectro-punto m3-calor-punto-${grupoDe(difProm ?? 0).id}`} style={{ left: `${pos(tuyo)}%` }} title={`Tu precio: ${fmt(tuyo)}`} />
+        )}
+      </div>
+      <div className="m3-espectro-etiquetas">
+        <span title={x.cadenasMin[0] ? `En ${nombreCadena(x.cadenasMin[0])}` : ''}>
+          {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" title="" />}Mín {fmt(min)}
+        </span>
+        <span>Prom {fmt(prom)}</span>
+        <span title={x.cadenaMax ? `En ${nombreCadena(x.cadenaMax)}` : ''}>
+          Máx {fmt(max)}{x.cadenaMax && <CadenaBadge cadena={x.cadenaMax} tamano="xs" title="" />}
+        </span>
+      </div>
     </div>
   );
 }

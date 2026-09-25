@@ -792,7 +792,9 @@ body {
 
 .m3-data-table-toolbar {
   position: sticky;
-  top: 0;
+  /* Debajo de la barra de la app y, si la pantalla la tiene, de la barra de
+     filtros fija (FiltrosFijos publica su alto). */
+  top: calc(var(--alto-cabecera, 0px) + var(--alto-filtros, 0px));
   z-index: 20;
   padding: 16px;
   background-color: var(--md-sys-color-surface-container-lowest);
@@ -1681,7 +1683,7 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
 
 .m3-table-dashboard { min-width: 960px; }
 .m3-table-dashboard td { --md-comp-table-row-height: 4rem; }
-.m3-dash-col-producto { width: 260px; max-width: 260px; }
+.m3-dash-col-producto { width: 300px; max-width: 300px; }
 .m3-dash-col-sep { border-left: 1px solid var(--md-sys-color-outline-variant); }
 .m3-dash-min {
   background-color: color-mix(in srgb, var(--md-sys-color-primary-container) 55%, transparent);
@@ -1791,3 +1793,91 @@ td.m3-calor-celda {
 .m3-rango-tuyo.m3-calor-parejo { background-color: var(--md-sys-color-data-div-mid); }
 .m3-rango-tuyo.m3-calor-caro { background-color: var(--md-sys-color-data-div-dear-1); }
 .m3-rango-tuyo.m3-calor-muy_caro { background-color: var(--md-sys-color-data-div-dear-2); }
+
+/* Chip de filtro con ancho estable: todas las opciones apiladas en la misma
+   celda; solo se ve la elegida (Select.jsx, anchoFijo). */
+.m3-select-stack { display: inline-grid; }
+.m3-select-stack > span { grid-area: 1 / 1; white-space: nowrap; text-align: left; }
+.m3-select-stack > span.is-oculta { visibility: hidden; }
+
+/* Indicador compacto: la mitad de alto, para no quitar espacio a graficos y
+   tablas. Misma variante de tarjeta; solo cambian medidas. */
+.m3-stat.m3-stat-compact { min-height: 0; padding: 0.75rem 0.875rem; gap: 0.5rem; }
+.m3-stat-compact .m3-stat-value { font-size: 1.375rem; line-height: 1.2; }
+.m3-stat-compact .m3-stat-label { font-size: 0.625rem; }
+.m3-stat-compact .m3-stat-hint { font-size: 0.75rem; line-height: 1.35; }
+.m3-stat-compact .m3-stat-icon { width: 2.25rem; height: 2.25rem; }
+
+/* Barra de filtros fija bajo la barra de la app (components/FiltrosFijos). */
+.m3-filtros-fijos {
+  position: sticky;
+  top: calc(var(--alto-cabecera, 0px) + 8px);
+  z-index: 19;
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+/* ---------------------------------------------------------------------------
+   MAPA DE CALOR: espectro por producto
+   -------------------------------------------------------------------------*/
+.m3-espectro-cabecera, .m3-espectro-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 24px;
+  align-items: center;
+  padding: 12px 16px;
+}
+@media (min-width: 768px) {
+  .m3-espectro-cabecera, .m3-espectro-fila { grid-template-columns: minmax(200px, 1fr) minmax(280px, 2.2fr) 150px; }
+}
+.m3-espectro-cabecera {
+  background-color: var(--md-sys-color-surface-container-low);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.m3-espectro-fila { width: 100%; text-align: left; transition: background-color 150ms; }
+.m3-espectro-fila:hover { background-color: var(--md-sys-color-surface-container-high); }
+.m3-espectro-fila:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -2px; }
+
+.m3-espectro { min-width: 0; }
+.m3-espectro-pista { position: relative; height: 22px; }
+.m3-espectro-pista > div { position: absolute; }
+.m3-espectro-zona-barata, .m3-espectro-zona-pareja, .m3-espectro-zona-cara { top: 7px; height: 8px; }
+.m3-espectro-zona-barata { background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-1) 45%, transparent); border-radius: 8px 0 0 8px; }
+.m3-espectro-zona-pareja { background-color: color-mix(in srgb, var(--md-sys-color-data-div-mid) 45%, transparent); }
+.m3-espectro-zona-cara { background-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-1) 45%, transparent); border-radius: 0 8px 8px 0; }
+/* Donde hay precios de la competencia: raya fina y oscura sobre la franja. */
+.m3-espectro-competencia { top: 10px; height: 2px; background-color: var(--md-sys-color-on-surface-variant); opacity: 0.55; }
+.m3-espectro-promedio { top: 2px; width: 2px; height: 18px; margin-left: -1px; background-color: var(--md-sys-color-on-surface); }
+.m3-espectro-punto {
+  top: 3px; width: 16px; height: 16px; margin-left: -8px; border-radius: 999px;
+  border: 3px solid var(--md-sys-color-surface-container-lowest);
+  box-shadow: 0 0 0 1px var(--md-sys-color-on-surface);
+}
+.m3-calor-punto-muy_barato { background-color: var(--md-sys-color-data-div-cheap-2); }
+.m3-calor-punto-barato { background-color: var(--md-sys-color-data-div-cheap-1); }
+.m3-calor-punto-parejo { background-color: var(--md-sys-color-data-div-mid); }
+.m3-calor-punto-caro { background-color: var(--md-sys-color-data-div-dear-1); }
+.m3-calor-punto-muy_caro { background-color: var(--md-sys-color-data-div-dear-2); }
+.m3-espectro-etiquetas {
+  display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;
+  font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); font-variant-numeric: tabular-nums;
+}
+.m3-espectro-etiquetas span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.m3-espectro-estado {
+  font-size: 0.75rem; font-weight: 500; padding: 2px 8px; border-radius: 8px;
+  border: 1px solid var(--md-sys-color-outline-variant); color: var(--md-sys-color-on-surface-variant);
+}
+.m3-espectro-estado.is-barato { background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-1) 22%, transparent); }
+.m3-espectro-estado.is-parejo { background-color: color-mix(in srgb, var(--md-sys-color-data-div-mid) 22%, transparent); }
+.m3-espectro-estado.is-caro { background-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-1) 22%, transparent); }
+.m3-espectro-leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); }
+.m3-espectro-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.m3-espectro-leyenda i { position: static; width: 16px; height: 8px; border-radius: 4px; display: inline-block; }
+.m3-espectro-punto-leyenda {
+  width: 12px; height: 12px; border-radius: 999px; display: inline-block;
+  background-color: var(--md-sys-color-on-surface-variant); box-shadow: 0 0 0 1px var(--md-sys-color-on-surface);
+}
+/* Titulo de una tabla que se va con el scroll; lo fijo es solo el buscador. */
+.m3-data-table-titulo { padding: 16px 16px 0; background-color: var(--md-sys-color-surface-container-lowest); }
+.m3-data-table-titulo + .m3-data-table-toolbar { padding-top: 12px; }

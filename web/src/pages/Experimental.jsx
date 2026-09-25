@@ -4,6 +4,7 @@ import RevisionCapturas from './RevisionCapturas';
 import Simulador from './Simulador';
 import CanibalizacionInterna from '../components/CanibalizacionInterna';
 import BrechaHistoricaUsd from '../components/BrechaHistoricaUsd';
+import MapaPorCadena from '../components/MapaPorCadena';
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'devaluacion', nombre: 'Devaluación vs subida real', icono: 'currency_exchange', desc: 'Separa cuánto de una subida de precio fue la tasa BCV y cuánto una decisión de la cadena.' },
   { id: 'canibalizacion', nombre: 'Canibalización de marcas', icono: 'compare_arrows', desc: 'Tus genéricos y tus marcas de la misma molécula: brechas invertidas o demasiado cortas.' },
   { id: 'brecha_usd', nombre: 'Brechas USD diarias', icono: 'payments', desc: 'La brecha de cada producto día a día, con la tasa oficial de cada día.' },
+  { id: 'mapa_cadenas', nombre: 'Mapa por cadena', icono: 'grid_on', desc: 'Productos × cadenas: en qué cadenas eres más caro o más barato, celda por celda.' },
   { id: 'simulador', nombre: 'Simulador de precios', icono: 'calculate', desc: 'Qué pasaría con tu posición si subes o bajas tus precios.' },
 ];
 
@@ -50,6 +52,7 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'devaluacion' && <DevaluacionReal />}
         {activa === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activa === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
+        {activa === 'mapa_cadenas' && <MapaPorCadena />}
         {activa === 'simulador' && <Simulador user={user} userDoc={userDoc} />}
       </div>
     </div>

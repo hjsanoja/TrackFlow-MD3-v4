@@ -145,6 +145,11 @@ async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
     const marca = String(item.marca || '').trim();
     if (marca) cambios.nombre = marca.slice(0, 255);
     if (String(item.laboratorio || '').trim()) cambios.laboratorio_id = await resolverLaboratorioId(item.laboratorio);
+    // Unidades del empaque: solo si vienen (vacio = se conserva lo guardado).
+    if (Number(item.unidades_empaque) > 0) {
+      cambios.cantidad_contenido = Number(item.unidades_empaque);
+      if (['unidad', 'ml', 'g'].includes(item.unidad_contenido)) cambios.unidad_contenido = item.unidad_contenido;
+    }
     if (Object.keys(cambios).length > 0) {
       const { error } = await supabase.from('dim_productos').update(cambios).eq('id', prod.id);
       if (error) throw new Error(`No se pudo actualizar el competidor: ${error.message}`);
@@ -252,9 +257,10 @@ export async function guardarEnlaceCompetencia(item) {
         id_interno: idInterno,
         nombre: (item.marca || item.ultimo_nombre || 'Producto Competidor').trim().slice(0, 255),
         laboratorio_id: labId,
-        // cantidad_contenido es NOT NULL con CHECK (> 0)
-        cantidad_contenido: Number(item.unidosis) > 0 ? Number(item.unidosis) : 1,
-        unidad_contenido: 'unidad',
+        // cantidad_contenido es NOT NULL con CHECK (> 0). Sin dato se guarda
+        // 1, que el panel lee como "no se sabe".
+        cantidad_contenido: Number(item.unidades_empaque || item.unidosis) > 0 ? Number(item.unidades_empaque || item.unidosis) : 1,
+        unidad_contenido: ['unidad', 'ml', 'g'].includes(item.unidad_contenido) ? item.unidad_contenido : 'unidad',
         activo: item.activo !== false
       }, { onConflict: 'id_interno' })
       .select('id')
@@ -922,6 +928,8 @@ export async function dbUpsertProductoCompetencia(data) {
     concentracion: data.concentracion?.trim() || '',
     tamano: data.tamano?.trim() || '',
     unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null,
+    unidades_empaque: Number(data.unidades_empaque) > 0 ? Number(data.unidades_empaque) : null,
+    unidad_contenido: data.unidad_contenido || null,
     ultimo_precio_full_bs: data.ultimo_precio_full_bs ?? null,
     ultimo_precio_desc_bs: data.ultimo_precio_desc_bs ?? null,
     ultimo_nombre: data.ultimo_nombre ?? null,
@@ -1038,6 +1046,8 @@ export async function dbUpsertCompetenciaBulk(compList) {
     concentracion: data.concentracion?.trim() || '',
     tamano: data.tamano?.trim() || '',
     unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null,
+    unidades_empaque: Number(data.unidades_empaque) > 0 ? Number(data.unidades_empaque) : null,
+    unidad_contenido: data.unidad_contenido || null,
     ultimo_precio_full_bs: data.ultimo_precio_full_bs ?? null,
     ultimo_precio_desc_bs: data.ultimo_precio_desc_bs ?? null,
     ultimo_nombre: data.ultimo_nombre ?? null,

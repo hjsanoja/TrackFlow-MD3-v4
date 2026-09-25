@@ -1,507 +1,202 @@
-import { useState, useMemo } from 'react';
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine
-} from 'recharts';
+import { useMemo, useState } from 'react';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import ModalWrapper from './ModalWrapper';
+import StatCard from './StatCard';
+import Select from './Select';
+import { exportToCSV } from '../utils/exportUtils';
+import { tokensGrafico } from '../utils/chartTokens';
+import { leerColor, pct } from './dashboard/comun';
+
+// Tasa BCV: historia, variacion y cambio manual. Mismo lenguaje que el resto
+// del panel: indicadores compactos, un grafico, una tabla y un formulario.
+const PERIODOS = [['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días'], ['todo', 'Toda la historia']];
+const bs = (v, dec = 2) => (v == null || isNaN(v) ? '—' : `Bs ${Number(v).toLocaleString('es-VE', { minimumFractionDigits: dec, maximumFractionDigits: dec })}`);
+const fechaCorta = (d) => new Date(d).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
+const fechaLarga = (d) => new Date(d).toLocaleDateString('es-VE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const FUENTES = { manual: 'Manual', auto: 'Automática', oficial: 'BCV', BCV: 'BCV' };
 
 export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRate, bcv }) {
-  const [timeRange, setTimeRange] = useState('30d'); // '7d', '30d', '90d', 'all'
-  const [searchTerm, setSearchTerm] = useState('');
-  const [editingManual, setEditingManual] = useState(false);
-  const [manualVal, setManualVal] = useState('');
+  const [periodo, setPeriodo] = useState('30');
+  const [cambiando, setCambiando] = useState(false);
+  const [valor, setValor] = useState('');
+  const [guardando, setGuardando] = useState(false);
 
-  // Ensure rates are sorted chronologically ascending
-  const sortedRatesAsc = useMemo(() => {
-    if (!rates || rates.length === 0) return [];
-    const clone = [...rates];
-    clone.sort((a, b) => {
-      const dA = a.rawDate ? new Date(a.rawDate) : new Date(0);
-      const dB = b.rawDate ? new Date(b.rawDate) : new Date(0);
-      return dA - dB;
-    });
-    return clone;
-  }, [rates]);
+  const orden = useMemo(() => [...(rates || [])]
+    .filter(r => Number(r.valor) > 0)
+    .sort((a, b) => new Date(a.rawDate || 0) - new Date(b.rawDate || 0)), [rates]);
 
-  // Latest rate
-  const latestRate = useMemo(() => {
-    if (currentRate && currentRate > 0) return currentRate;
-    if (sortedRatesAsc.length > 0) return sortedRatesAsc[sortedRatesAsc.length - 1].valor;
-    return 0;
-  }, [currentRate, sortedRatesAsc]);
+  const actual = currentRate > 0 ? currentRate : orden.at(-1)?.valor || null;
+  const anterior = orden.length >= 2 ? orden.at(-2).valor : null;
+  const hace30 = useMemo(() => {
+    const limite = Date.now() - 30 * 864e5;
+    return [...orden].reverse().find(r => new Date(r.rawDate).getTime() <= limite) || orden[0];
+  }, [orden]);
 
-  // Previous rate (for daily variation)
-  const prevRateObj = useMemo(() => {
-    if (sortedRatesAsc.length < 2) return null;
-    return sortedRatesAsc[sortedRatesAsc.length - 2];
-  }, [sortedRatesAsc]);
+  const serie = useMemo(() => (periodo === 'todo' ? orden : orden.slice(-Number(periodo))), [orden, periodo]);
+  const valores = serie.map(r => Number(r.valor));
+  const minimo = valores.length ? Math.min(...valores) : null;
+  const maximo = valores.length ? Math.max(...valores) : null;
+  const promedio = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
 
-  // Daily variation %
-  const dailyVar = useMemo(() => {
-    if (!prevRateObj || !prevRateObj.valor) return { pct: 0, diff: 0, prevVal: latestRate };
-    const prevVal = prevRateObj.valor;
-    const diff = latestRate - prevVal;
-    const pct = (diff / prevVal) * 100;
-    return { pct, diff, prevVal };
-  }, [latestRate, prevRateObj]);
-
-  // Monthly rate (approx 30 days ago or earliest rate in last 30 days)
-  const monthRateObj = useMemo(() => {
-    if (sortedRatesAsc.length === 0) return null;
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    // Find rate closest to 30 days ago
-    const candidates = sortedRatesAsc.filter(r => {
-      const d = r.rawDate ? new Date(r.rawDate) : null;
-      return d && d <= thirtyDaysAgo;
-    });
-
-    if (candidates.length > 0) {
-      return candidates[candidates.length - 1];
+  // Tabla: del mas reciente al mas viejo, con el cambio frente al dia anterior.
+  const filas = useMemo(() => {
+    const lista = [];
+    for (let i = orden.length - 1; i >= 0; i--) {
+      const r = orden[i];
+      const previo = orden[i - 1];
+      lista.push({ ...r, cambio: previo?.valor > 0 ? (r.valor / previo.valor - 1) * 100 : null });
     }
-    // Fallback: earliest available rate in array
-    return sortedRatesAsc[0];
-  }, [sortedRatesAsc]);
+    return lista;
+  }, [orden]);
 
-  // Monthly variation %
-  const monthlyVar = useMemo(() => {
-    if (!monthRateObj || !monthRateObj.valor) return { pct: 0, diff: 0, monthVal: latestRate };
-    const monthVal = monthRateObj.valor;
-    const diff = latestRate - monthVal;
-    const pct = (diff / monthVal) * 100;
-    return { pct, diff, monthVal };
-  }, [latestRate, monthRateObj]);
-
-  // Filtered rates for chart based on selected time range
-  const chartData = useMemo(() => {
-    if (sortedRatesAsc.length === 0) return [];
-    if (timeRange === '7d') return sortedRatesAsc.slice(-7);
-    if (timeRange === '30d') return sortedRatesAsc.slice(-30);
-    if (timeRange === '90d') return sortedRatesAsc.slice(-90);
-    return sortedRatesAsc;
-  }, [sortedRatesAsc, timeRange]);
-
-  // Metrics for filtered range
-  const rangeStats = useMemo(() => {
-    if (chartData.length === 0) return { min: 0, max: 0, avg: 0 };
-    const vals = chartData.map(d => Number(d.valor)).filter(v => !isNaN(v) && v > 0);
-    if (vals.length === 0) return { min: 0, max: 0, avg: 0 };
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    const sum = vals.reduce((a, b) => a + b, 0);
-    const avg = sum / vals.length;
-    return { min, max, avg };
-  }, [chartData]);
-
-  // Data table (sorted descending by date) with item-by-item variation
-  const tableRows = useMemo(() => {
-    if (sortedRatesAsc.length === 0) return [];
-    const rows = [];
-    for (let i = sortedRatesAsc.length - 1; i >= 0; i--) {
-      const curr = sortedRatesAsc[i];
-      const prev = i > 0 ? sortedRatesAsc[i - 1] : null;
-      const diff = prev ? curr.valor - prev.valor : 0;
-      const pct = prev && prev.valor > 0 ? (diff / prev.valor) * 100 : 0;
-      rows.push({
-        ...curr,
-        diff,
-        pct,
-        prevVal: prev?.valor || null
-      });
-    }
-
-    if (!searchTerm.trim()) return rows;
-    const term = searchTerm.toLowerCase();
-    return rows.filter(r => 
-      (r.fecha && r.fecha.toLowerCase().includes(term)) ||
-      (r.dayKey && r.dayKey.toLowerCase().includes(term)) ||
-      (r.valor && String(r.valor).includes(term)) ||
-      (r.source && r.source.toLowerCase().includes(term))
-    );
-  }, [sortedRatesAsc, searchTerm]);
-
-  // CSV Export handler
-  const handleExportCSV = () => {
-    if (sortedRatesAsc.length === 0) return;
-    let csv = 'Fecha,Key,Tasa_Bs_USD,Variacion_Dia_Percent,Fuente\n';
-    tableRows.forEach(r => {
-      csv += `"${r.fecha}","${r.dayKey}",${r.valor},${r.pct.toFixed(4)},"${r.source || 'oficial'}"\n`;
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `historial_bcv_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportar = () => {
+    if (!filas.length) return;
+    exportToCSV('tasa_bcv_historia', [
+      { key: 'fecha', label: 'Fecha' }, { key: 'tasa', label: 'Tasa (Bs por dólar)' },
+      { key: 'cambio', label: 'Cambio frente al día anterior (%)' }, { key: 'fuente', label: 'Fuente' },
+    ], filas.map(r => ({
+      fecha: new Date(r.rawDate).toISOString().slice(0, 10),
+      tasa: Number(r.valor).toFixed(4),
+      cambio: r.cambio == null ? '' : r.cambio.toFixed(2),
+      fuente: FUENTES[r.source] || r.source || 'BCV',
+    })));
   };
 
-  const handleSaveManual = async (e) => {
+  const guardar = async (e) => {
     e.preventDefault();
-    if (bcv && bcv.setManual) {
-      const ok = await bcv.setManual(manualVal);
-      if (ok) {
-        setEditingManual(false);
-        setManualVal('');
-      }
-    }
+    if (!bcv?.setManual) return;
+    setGuardando(true);
+    const ok = await bcv.setManual(valor);
+    setGuardando(false);
+    if (ok) { setCambiando(false); setValor(''); }
   };
+
+  const tg = tokensGrafico();
+  const color = leerColor('--md-sys-color-data-cat-1', '#2a78d6');
 
   return (
     <ModalWrapper
       isOpen={isOpen}
       onClose={onClose}
       title="Tasa BCV"
-      subtitle="Historia de la tasa oficial del Banco Central de Venezuela. Aquí también se cambia a mano."
-      icon="show_chart"
-      maxWidth="max-w-5xl"
-      footer={
-        <button
-          onClick={onClose}
-          className="m3-btn-primary h-9 px-6 text-xs"
-        >
-          Entendido / Cerrar
-        </button>
-      }
+      subtitle="Bolívares por dólar según el Banco Central de Venezuela. Se usa para pasar todos los precios a dólares."
+      icon="currency_exchange"
+      maxWidth="max-w-4xl"
+      footer={(
+        <>
+          <button type="button" onClick={exportar} className="m3-btn-text" disabled={!filas.length}>
+            <span className="material-symbols-outlined text-base">download</span>
+            <span>Exportar</span>
+          </button>
+          <button type="button" onClick={onClose} className="m3-btn-primary">Cerrar</button>
+        </>
+      )}
     >
-      <div className="space-y-6">
-        {/* Top Key Indicator Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Tasa Actual */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Tasa Actual</span>
-              <div className="text-2xl font-extrabold font-mono text-primary">
-                Bs {latestRate ? latestRate.toFixed(4) : '—'}
-              </div>
-              <p className="text-label-md text-on-surface-variant font-sans">
-                Tasa oficial BCV
-              </p>
-            </div>
-            <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 ml-3">
-              <span className="material-symbols-outlined text-xl select-none">attach_money</span>
-            </div>
-          </div>
+      <div className="space-y-5">
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3" aria-label="Indicadores de la tasa">
+          <StatCard compacto label="Tasa actual (Bs)" value={actual ? Number(actual).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'} icon="payments" tono="primary"
+            hint={bcv?.updatedAt ? `Del ${fechaCorta(bcv.updatedAt)} · ${FUENTES[bcv.source] || bcv.source || 'BCV'}` : 'Última registrada'} />
+          <StatCard compacto label="Frente al día anterior" value={pct(anterior ? (actual / anterior - 1) * 100 : null, 2)} icon="today" tono="neutral"
+            hint={anterior ? `Antes: ${bs(anterior)}` : 'Sin día anterior'} />
+          <StatCard compacto label="En 30 días" value={pct(hace30?.valor ? (actual / hace30.valor - 1) * 100 : null)} icon="date_range" tono="neutral"
+            hint={hace30 ? `El ${fechaCorta(hace30.rawDate)}: ${bs(hace30.valor)}` : 'Sin datos'} />
+          <StatCard compacto label="Subió en el periodo (Bs)" value={minimo != null ? Number(maximo - minimo).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'} icon="height" tono="neutral"
+            hint={minimo != null ? `De ${bs(minimo)} a ${bs(maximo)}` : 'Sin datos'} />
+        </section>
 
-          {/* Variación Día (%) */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Día</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`text-xl font-extrabold font-mono ${dailyVar.pct > 0 ? 'text-amber-700' : dailyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
-                  {dailyVar.pct >= 0 ? `+${dailyVar.pct.toFixed(2)}%` : `${dailyVar.pct.toFixed(2)}%`}
-                </span>
-                <span className={`text-label-sm font-bold font-mono px-1.5 py-0.5 rounded-full ${dailyVar.pct > 0 ? 'bg-amber-100 text-amber-900' : dailyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                  {dailyVar.diff >= 0 ? `+Bs ${dailyVar.diff.toFixed(2)}` : `Bs ${dailyVar.diff.toFixed(2)}`}
-                </span>
-              </div>
-              <p className="text-label-md text-on-surface-variant font-sans">
-                vs. anterior: Bs {dailyVar.prevVal ? dailyVar.prevVal.toFixed(2) : '—'}
-              </p>
+        <section className="m3-dash-card" aria-label="Historia de la tasa">
+          <header className="m3-dash-card-header flex-wrap">
+            <div className="min-w-0">
+              <h3 className="m3-title-medium text-on-surface">Historia</h3>
+              <p className="m3-body-small text-on-surface-variant">Una tasa por día. La línea punteada es el promedio del periodo ({bs(promedio)}).</p>
             </div>
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ml-3 ${dailyVar.pct > 0 ? 'bg-amber-50 border border-amber-200 text-amber-700' : dailyVar.pct < 0 ? 'bg-secondary-container/50 border border-secondary/20 text-secondary' : 'bg-surface-low border border-outline-variant/60 text-outline'}`}>
-              <span className="material-symbols-outlined text-xl select-none">
-                {dailyVar.pct > 0 ? 'trending_up' : dailyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
-              </span>
-            </div>
-          </div>
-
-          {/* Variación Mes (%) */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Var. Mes</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`text-xl font-extrabold font-mono ${monthlyVar.pct > 0 ? 'text-primary' : monthlyVar.pct < 0 ? 'text-secondary' : 'text-on-surface'}`}>
-                  {monthlyVar.pct >= 0 ? `+${monthlyVar.pct.toFixed(2)}%` : `${monthlyVar.pct.toFixed(2)}%`}
-                </span>
-                <span className={`text-label-sm font-bold font-mono px-1.5 py-0.5 rounded-full ${monthlyVar.pct > 0 ? 'bg-primary-container text-on-primary-container' : monthlyVar.pct < 0 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                  {monthlyVar.diff >= 0 ? `+Bs ${monthlyVar.diff.toFixed(2)}` : `Bs ${monthlyVar.diff.toFixed(2)}`}
-                </span>
-              </div>
-              <p className="text-label-md text-on-surface-variant font-sans">
-                vs. 30 días: Bs {monthlyVar.monthVal ? monthlyVar.monthVal.toFixed(2) : '—'}
-              </p>
-            </div>
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ml-3 ${monthlyVar.pct > 0 ? 'bg-primary/10 border border-primary/20 text-primary' : monthlyVar.pct < 0 ? 'bg-secondary-container/50 border border-secondary/20 text-secondary' : 'bg-surface-low border border-outline-variant/60 text-outline'}`}>
-              <span className="material-symbols-outlined text-xl select-none">
-                {monthlyVar.pct > 0 ? 'stacked_line_chart' : monthlyVar.pct < 0 ? 'trending_down' : 'trending_flat'}
-              </span>
-            </div>
-          </div>
-
-          {/* Rango (Mín / Max) */}
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-label-sm font-bold text-on-surface-variant uppercase font-mono tracking-wider block">Rango en Período</span>
-              <div className="text-sm font-extrabold font-mono text-on-surface flex items-center gap-1.5">
-                <span>Bs {rangeStats.min ? rangeStats.min.toFixed(2) : '—'}</span>
-                <span className="text-xs text-on-surface-variant font-normal">→</span>
-                <span>Bs {rangeStats.max ? rangeStats.max.toFixed(2) : '—'}</span>
-              </div>
-              <p className="text-label-md text-on-surface-variant font-sans">
-                Promedio: Bs {rangeStats.avg ? rangeStats.avg.toFixed(2) : '—'}
-              </p>
-            </div>
-            <div className="w-11 h-11 rounded-2xl bg-secondary-container/50 border border-secondary/20 flex items-center justify-center text-secondary shrink-0 ml-3">
-              <span className="material-symbols-outlined text-xl select-none">swap_vert</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Interactive Chart Section */}
-        <div className="p-5 rounded-2xl border border-outline-variant/60 bg-surface-container-lowest space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-base">area_chart</span>
-                Gráfico Interactivo de Evolución
-              </h3>
-              <p className="text-xs text-on-surface-variant">
-                Monitoreo de tendencia por período de tiempo
-              </p>
-            </div>
-
-            {/* Time Range Selector Buttons */}
-            <div className="flex items-center gap-1 m3-card-outlined p-1">
-              {[
-                { id: '7d', label: '7 Días' },
-                { id: '30d', label: '30 Días' },
-                { id: '90d', label: '90 Días' },
-                { id: 'all', label: 'Todo' }
-              ].map(b => (
-                <button
-                  key={b.id}
-                  onClick={() => setTimeRange(b.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition-all ${
-                    timeRange === b.id
-                      ? 'bg-primary text-on-primary shadow-xs'
-                      : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
-                  }`}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Chart Container */}
-          <div className="h-72 w-full pt-2">
-            {chartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs text-on-surface-variant italic">
-                No hay suficientes datos para graficar este período.
-              </div>
-            ) : (
+            <Select value={periodo} onChange={e => setPeriodo(e.target.value)} aria-label="Periodo" className="m3-filter-chip" leadingIcon="date_range">
+              {PERIODOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+            </Select>
+          </header>
+          {serie.length < 2 ? (
+            <div className="h-56 flex items-center justify-center text-on-surface-variant m3-body-medium">Aún no hay suficientes tasas guardadas.</div>
+          ) : (
+            <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart 
-                  key={`modal-bcv-${timeRange}-${chartData.length}`}
-                  data={chartData} 
-                  margin={{ top: 10, right: 15, left: -15, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="modalBcvGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant)" />
-                  <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: '#464650' }} />
-                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#464650' }} />
-                  <Tooltip 
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const data = payload[0].payload;
-                        const startVal = chartData[0]?.valor || data.valor;
-                        const varStartPct = startVal > 0 ? ((data.valor - startVal) / startVal) * 100 : 0;
-                        return (
-                          <div className="bg-surface-container-lowest p-3 rounded-xl shadow-elevation-3 border border-outline-variant text-xs space-y-1 font-sans">
-                            <p className="font-bold text-primary">{data.fecha} ({data.dayKey})</p>
-                            <p className="font-mono text-sm font-extrabold text-on-surface">
-                              Bs {Number(data.valor).toFixed(4)} / USD
-                            </p>
-                            <p className={`font-mono text-label-md font-bold ${varStartPct >= 0 ? 'text-amber-700' : 'text-secondary'}`}>
-                              Var. en período: {varStartPct >= 0 ? `+${varStartPct.toFixed(2)}%` : `${varStartPct.toFixed(2)}%`}
-                            </p>
-                            <p className="text-label-sm text-on-surface-variant capitalize">
-                              Fuente: {data.source || 'oficial'}
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <ReferenceLine y={rangeStats.avg} stroke="#c00100" strokeDasharray="3 3" label={{ value: `Prom: ${rangeStats.avg.toFixed(2)}`, fill: '#c00100', fontSize: 10 }} />
-                  <Area 
-                    type="monotone" 
-                    dataKey="valor" 
-                    stroke="var(--md-sys-color-primary)" 
-                    strokeWidth={2.5} 
-                    fillOpacity={1} 
-                    fill="url(#modalBcvGradient)" 
-                    isAnimationActive={true}
-                    animationDuration={750}
-                    animationBegin={0}
-                    animationEasing="ease-out"
-                  />
-                </AreaChart>
+                <LineChart data={serie.map(r => ({ fecha: r.rawDate, valor: Number(r.valor), fuente: r.source }))} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
+                  <XAxis dataKey="fecha" tickFormatter={fechaCorta} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={{ stroke: tg.rejilla }} minTickGap={28} />
+                  <YAxis domain={['auto', 'auto']} tickFormatter={v => Number(v).toLocaleString('es-VE', { maximumFractionDigits: 0 })} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} />
+                  {promedio != null && <ReferenceLine y={promedio} stroke={tg.eje} strokeDasharray="4 4" strokeOpacity={0.7} />}
+                  <Tooltip content={<TooltipTasa />} cursor={{ stroke: tg.eje, strokeOpacity: 0.3 }} />
+                  <Line type="monotone" dataKey="valor" stroke={color} strokeWidth={2} dot={serie.length <= 31 ? { r: 2.5 } : false} activeDot={{ r: 5 }} isAnimationActive={false} />
+                </LineChart>
               </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        {/* Historical Data Table Section */}
-        <div className="p-5 rounded-2xl border border-outline-variant/60 bg-surface-container-lowest space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-base">table_chart</span>
-                Detalle Histórico de Registros ({tableRows.length})
-              </h3>
-              <p className="text-xs text-on-surface-variant">
-                Lista cronológica detallada de tasas oficiales registradas
-              </p>
             </div>
+          )}
+        </section>
 
-            <div className="flex items-center gap-2">
-              {/* Search Box */}
-              <div className="relative">
-                <span className="material-symbols-outlined text-body-lg text-on-surface-variant absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none select-none">search</span>
-                <input
-                  type="text"
-                  placeholder="Buscar fecha o tasa..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-7 py-1.5 text-xs rounded-xl border border-outline-variant/60 bg-surface-container-low focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary w-44 sm:w-60 font-sans text-on-surface"
-                />
-                {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full">×</button>
-                )}
+        <section className="m3-dash-card" aria-label="Cambiar la tasa a mano">
+          {cambiando ? (
+            <form onSubmit={guardar} className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <label className="flex-1 min-w-0 space-y-1">
+                <span className="m3-label-large text-on-surface">Tasa de hoy (Bs por dólar)</span>
+                <input type="text" inputMode="decimal" autoFocus value={valor} onChange={e => setValor(e.target.value)}
+                  className="m3-input" placeholder={actual ? String(actual) : 'Ej: 150,25'} />
+                {bcv?.error && <span className="m3-body-small text-error">{bcv.error}</span>}
+              </label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setCambiando(false); setValor(''); }} className="m3-btn-text">Cancelar</button>
+                <button type="submit" className="m3-btn-primary" disabled={guardando || !valor.trim()}>{guardando ? 'Guardando…' : 'Guardar tasa'}</button>
               </div>
-
-              {/* Export CSV Button */}
-              <button
-                onClick={handleExportCSV}
-                className="m3-btn-outline h-8 px-3 text-xs"
-                title="Exportar historia a archivo CSV"
-              >
-                <span className="material-symbols-outlined text-sm">download</span>
-                <span className="hidden sm:inline">Exportar CSV</span>
+            </form>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <p className="m3-body-medium text-on-surface-variant flex-1">
+                La tasa se lee sola cada día. Si el BCV no la publicó o está mal, puedes poner la de hoy a mano.
+              </p>
+              <button type="button" onClick={() => { setCambiando(true); setValor(actual ? String(actual) : ''); }} className="m3-btn-outline">
+                <span className="material-symbols-outlined text-base">edit</span>
+                <span>Cambiar a mano</span>
               </button>
             </div>
-          </div>
+          )}
+        </section>
 
-          {/* Table Container */}
-          <div className="max-h-64 overflow-y-auto rounded-xl border border-outline-variant/60">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-surface-container-low sticky top-0 z-10 border-b border-outline-variant/60 text-on-surface-variant font-mono font-bold">
+        <section className="m3-data-table" aria-label="Tasas guardadas">
+          <div className="overflow-auto max-h-72">
+            <table className="m3-table">
+              <thead className="m3-sticky-header">
                 <tr>
-                  <th className="p-3">Fecha</th>
-                  <th className="p-3">Tasa Oficial (Bs/USD)</th>
-                  <th className="p-3">Variación vs Anterior (%)</th>
-                  <th className="p-3 text-right">Diferencia (Bs)</th>
-                  <th className="p-3 text-center">Fuente</th>
+                  <th>Fecha</th>
+                  <th className="text-right">Tasa (Bs por dólar)</th>
+                  <th className="text-right">Frente al día anterior</th>
+                  <th>Fuente</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-outline-variant/40 font-sans">
-                {tableRows.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="p-6 text-center text-on-surface-variant italic">
-                      No se encontraron registros que coincidan con la búsqueda.
-                    </td>
+              <tbody>
+                {filas.map(r => (
+                  <tr key={r.dayKey || String(r.rawDate)}>
+                    <td className="whitespace-nowrap first-letter:uppercase">{fechaLarga(r.rawDate)}</td>
+                    <td className="text-right tabular-nums font-medium">{bs(r.valor, 4)}</td>
+                    <td className="text-right tabular-nums">{r.cambio == null ? '—' : pct(r.cambio, 2)}</td>
+                    <td><span className="m3-status">{FUENTES[r.source] || r.source || 'BCV'}</span></td>
                   </tr>
-                ) : (
-                  tableRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-surface-container-low/60 transition-colors">
-                      <td className="p-3 font-semibold text-on-surface">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-primary font-bold">{row.fecha}</span>
-                          <span className="text-label-sm text-on-surface-variant">({row.dayKey})</span>
-                        </div>
-                      </td>
-                      <td className="p-3 font-mono font-extrabold text-primary text-sm">
-                        Bs {Number(row.valor).toFixed(4)}
-                      </td>
-                      <td className="p-3">
-                        {row.prevVal ? (
-                          <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-label-md font-bold font-mono ${
-                            row.pct > 0 
-                              ? 'bg-amber-50 text-amber-900 border border-amber-200' 
-                              : row.pct < 0 
-                              ? 'bg-secondary-container text-on-secondary-container border border-secondary/20' 
-                              : 'bg-surface-container-high text-on-surface-variant'
-                          }`}>
-                            <span className="material-symbols-outlined text-xs">
-                              {row.pct > 0 ? 'arrow_drop_up' : row.pct < 0 ? 'arrow_drop_down' : 'remove'}
-                            </span>
-                            {row.pct >= 0 ? `+${row.pct.toFixed(2)}%` : `${row.pct.toFixed(2)}%`}
-                          </span>
-                        ) : (
-                          <span className="text-on-surface-variant font-mono text-label-md">—</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right font-mono font-semibold">
-                        {row.prevVal ? (
-                          <span className={row.diff > 0 ? 'text-amber-800' : row.diff < 0 ? 'text-secondary' : 'text-on-surface-variant'}>
-                            {row.diff >= 0 ? `+${row.diff.toFixed(2)}` : `${row.diff.toFixed(2)}`}
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-label-sm font-bold font-mono capitalize ${
-                          row.source === 'auto' ? 'bg-primary-container text-on-primary-container' : row.source === 'manual' ? 'bg-amber-100 text-amber-900' : 'bg-surface-container-high text-on-surface'
-                        }`}>
-                          {row.source || 'oficial'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
+                {filas.length === 0 && <tr><td colSpan={4} className="text-center text-on-surface-variant py-8">Aún no hay tasas guardadas.</td></tr>}
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Manual Rate Edit Banner / Action */}
-        {editingManual ? (
-          <form onSubmit={handleSaveManual} className="p-4 rounded-2xl bg-surface-container-low border border-primary/30 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">edit_note</span>
-              <div>
-                <div className="text-xs font-bold text-primary">Registrar Tasa Manualmente</div>
-                <div className="text-label-md text-on-surface-variant">Ingresa la nueva tasa del día en Bolívares</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Ej: 745.50"
-                value={manualVal}
-                onChange={e => setManualVal(e.target.value)}
-                className="px-3 py-1.5 text-xs font-mono font-bold rounded-xl border border-outline-variant/60 w-32 focus:outline-none focus:ring-2 focus:ring-primary bg-surface-container-lowest text-on-surface"
-                autoFocus
-              />
-              <button type="submit" className="m3-btn-primary h-8 px-3 text-xs">
-                Guardar
-              </button>
-              <button type="button" onClick={() => setEditingManual(false)} className="m3-btn-outline h-8 px-3 text-xs">
-                Cancelar
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="flex justify-between items-center text-xs text-on-surface-variant">
-            <span>* Los datos provienen del Banco Central de Venezuela y sincronizaciones automatizadas.</span>
-            <button
-              onClick={() => { setEditingManual(true); setManualVal(latestRate ? String(latestRate) : ''); }}
-              className="text-primary hover:underline font-bold flex items-center gap-1"
-            >
-              <span className="material-symbols-outlined text-sm">edit</span>
-              Ingresar Tasa Manual
-            </button>
-          </div>
-        )}
+        </section>
       </div>
     </ModalWrapper>
+  );
+}
+
+function TooltipTasa({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="m3-chart-tooltip">
+      <div className="font-medium first-letter:uppercase">{fechaLarga(d.fecha)}</div>
+      <div>{bs(d.valor, 4)} por dólar</div>
+      <div className="text-on-surface-variant">{FUENTES[d.fuente] || d.fuente || 'BCV'}</div>
+    </div>
   );
 }
