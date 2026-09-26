@@ -115,15 +115,6 @@ export default function MapaCalor() {
   useEffect(() => { setPaginaActual(1); }, [search, filtroPosicion, filtroCadena, filtroUnidad, filtroTipo, filtroCategoria, orden, itemsPorPagina]);
   const totalPaginas = Math.max(1, Math.ceil(filas.length / itemsPorPagina));
   const filasPagina = filas.slice((paginaActual - 1) * itemsPorPagina, paginaActual * itemsPorPagina);
-  // Escala comun a todas las filas, centrada en el promedio: ±limite %.
-  const limite = useMemo(() => {
-    let m = 10;
-    for (const x of filas) {
-      if (!(x.promedio > 0)) continue;
-      for (const v of [x.minimo, x.maximo, x.tuPrecio]) if (v != null) m = Math.max(m, Math.abs((v / x.promedio - 1) * 100));
-    }
-    return Math.min(50, Math.ceil(m / 5) * 5);
-  }, [filas]);
   const ordenarPor = (campo) => setOrden(o => ({ campo, dir: o.campo === campo && o.dir === 'asc' ? 'desc' : 'asc' }));
 
   const abrirFicha = (x, desde = null) => { setVolverA(desde); setDetalle(null); setFicha({ producto: x.producto, competencia: x.competencia }); };
@@ -249,12 +240,6 @@ export default function MapaCalor() {
                 </button>
               )}
             </label>
-            <div className="m3-espectro-leyenda" aria-label="Cómo se lee">
-              <span><i className="m3-espectro-zona-barata" />Más de 5 % bajo el promedio</span>
-              <span><i className="m3-espectro-zona-pareja" />±5 %</span>
-              <span><i className="m3-espectro-zona-cara" />Más de 5 % sobre el promedio</span>
-              <span><i className="m3-espectro-rango-leyenda" />Mín. a máx. de la competencia</span>
-            </div>
             <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
               {filas.length === base.length ? `${base.length} productos` : `${filas.length} de ${base.length} productos`}
             </div>
@@ -277,14 +262,13 @@ export default function MapaCalor() {
                 Precios de la competencia y el tuyo
                 <InfoGrafico
                   titulo="Cómo se lee cada franja"
-                  que={`Todas las franjas usan la misma escala, con el promedio de la competencia siempre al centro: a la izquierda hasta ${limite} % más barato y a la derecha hasta ${limite} % más caro. Así se comparan las filas entre sí.`}
+                  que="Cada franja es la escala de ese producto: en la esquina izquierda el precio más bajo de la competencia, al centro el promedio y en la esquina derecha el más alto. El punto con globo es tu precio."
                   formula={[
-                    'Raya del centro = promedio de la competencia (tu precio no entra)',
-                    'Tramo oscuro = desde el precio más bajo hasta el más alto de la competencia',
+                    'Promedio = suma de los precios de la competencia ÷ número de competidores (tu precio no entra)',
                     'Globo = tu precio y tu precio ÷ promedio − 1',
                     'Tu posición = lugar de tu precio entre todas las ofertas (1 = el más barato)',
                   ]}
-                  lectura="Zona azul: más de 5 % por debajo del promedio. Zona gris: a ±5 %. Zona roja: más de 5 % por encima. Si tu globo queda a la izquierda del tramo oscuro, eres el más barato; a la derecha, el más caro. Lo que pase del borde se dibuja en el borde, pero el globo dice el valor real. Solo cuentan las cadenas y el tipo (marca / genérico) de los filtros."
+                  lectura="Azul: más de 5 % por debajo del promedio. Gris: a ±5 % del promedio. Rojo: más de 5 % por encima. Si tu punto está pegado a la esquina izquierda eres el más barato; pegado a la derecha, el más caro (si te pasas del mínimo o del máximo, el punto se queda en la esquina y el globo dice tu precio real). Solo cuentan las cadenas y el tipo (marca / genérico) de los filtros."
                 />
               </span>
               <button type="button" onClick={() => ordenarPor('ranking')} className={`m3-sort-btn justify-self-end ${orden.campo === 'ranking' ? 'is-active' : ''}`}
@@ -304,7 +288,7 @@ export default function MapaCalor() {
                         {x.competidores} {x.competidores === 1 ? 'competidor' : 'competidores'}{x.tuPrecio == null ? ' · sin tu precio' : ''}
                       </div>
                     </div>
-                    <Espectro x={x} fmt={fmtModo} nombreCadena={nombreCadena} limite={limite} />
+                    <Espectro x={x} fmt={fmtModo} nombreCadena={nombreCadena} />
                     <div className="flex flex-col items-end gap-1">
                       {x.ranking ? (
                         <span className="m3-espectro-ranking" title="Lugar de tu precio entre todas las ofertas: 1 = el más barato">
@@ -385,37 +369,34 @@ function subtituloProducto(p, conId = true) {
   return [conId ? p.id_interno : null, tipo, p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ');
 }
 
-// Espectro: escala comun centrada en el promedio de la competencia
-// (−limite % a +limite %), con tres zonas de color: barata (< −5 %), pareja
-// (±5 %) y cara (> +5 %). Tramo oscuro = minimo a maximo de la competencia;
-// tu precio es el punto con globo.
-function Espectro({ x, fmt, nombreCadena, limite }) {
+// Espectro: la escala propia de cada producto. Esquina izquierda = minimo de
+// la competencia, centro = promedio, esquina derecha = maximo (cada mitad es
+// lineal). Zonas: barata (< −5 % del promedio), pareja (±5 %) y cara (> +5 %).
+// Tu precio es el punto con globo; si se sale del rango queda en la esquina.
+function Espectro({ x, fmt, nombreCadena }) {
   const { minimo: min, maximo: max, promedio: prom, tuPrecio: tuyo, difProm } = x;
   if (min == null || max == null || !(prom > 0)) {
     return <div className="m3-body-small text-on-surface-variant">Sin precios de la competencia para comparar.</div>;
   }
-  const pos = (v) => Math.max(0, Math.min(100, 50 + ((v / prom - 1) * 100 / limite) * 50));
-  const pBajo = 50 - (5 / limite) * 50;
-  const pAlto = 50 + (5 / limite) * 50;
-  const pMin = pos(min);
-  const pMax = pos(max);
+  // Si todos cuestan lo mismo (minimo = promedio = maximo) esa mitad no tiene
+  // ancho: se le da el 10 % del promedio para poder dibujar.
+  const izq = prom - min > 1e-9 ? prom - min : prom * 0.1;
+  const der = max - prom > 1e-9 ? max - prom : prom * 0.1;
+  const pos = (v) => Math.max(0, Math.min(100, v <= prom ? 50 - ((prom - v) / izq) * 50 : 50 + ((v - prom) / der) * 50));
+  const pBajo = pos(prom * 0.95);
+  const pAlto = pos(prom * 1.05);
   const grupo = grupoDe(difProm ?? 0).id;
   const tono = /barato/.test(grupo) ? 'is-barato' : /caro/.test(grupo) ? 'is-caro' : 'is-parejo';
   const pTuyo = tuyo != null ? pos(tuyo) : null;
-  // Rotulos: el minimo crece hacia la izquierda desde su punto y el maximo
-  // hacia la derecha; si estan muy pegados al promedio se juntan con el.
-  const juntoMin = pMin > 50 - 13;
-  const juntoMax = pMax < 50 + 13;
-  const prefijo = [juntoMin && `Mín. ${fmt(min)}`].filter(Boolean);
-  const sufijo = [juntoMax && `Máx. ${fmt(max)}`].filter(Boolean);
   return (
     <div className="m3-espectro" role="img"
       aria-label={`Competencia de ${fmt(min)} a ${fmt(max)}, promedio ${fmt(prom)}${tuyo != null ? `; tu precio ${fmt(tuyo)} (${pct(difProm)})` : ''}`}>
       <div className="m3-espectro-pista">
-        <div className="m3-espectro-zona-barata" style={{ left: 0, width: `${pBajo}%` }} />
-        <div className="m3-espectro-zona-pareja" style={{ left: `${pBajo}%`, width: `${pAlto - pBajo}%` }} />
-        <div className="m3-espectro-zona-cara" style={{ left: `${pAlto}%`, width: `${100 - pAlto}%` }} />
-        <div className="m3-espectro-rango" style={{ left: `${pMin}%`, width: `${Math.max(0.6, pMax - pMin)}%` }} />
+        <div className="m3-espectro-barra">
+          <div className="m3-espectro-zona-barata" style={{ width: `${pBajo}%` }} />
+          <div className="m3-espectro-zona-pareja" style={{ width: `${pAlto - pBajo}%` }} />
+          <div className="m3-espectro-zona-cara" style={{ width: `${100 - pAlto}%` }} />
+        </div>
         <div className="m3-espectro-promedio" style={{ left: '50%' }} />
         {pTuyo != null && (
           <>
@@ -428,17 +409,13 @@ function Espectro({ x, fmt, nombreCadena, limite }) {
         )}
       </div>
       <div className="m3-espectro-rotulos">
-        {!juntoMin && (
-          <span style={pMin < 15 ? { left: 0 } : { right: `${100 - pMin}%` }} title={x.cadenasMin[0] ? `En ${nombreCadena(x.cadenasMin[0])}` : ''}>
-            {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" title="" />}Mín. {fmt(min)}
-          </span>
-        )}
-        <span className="is-prom" style={{ left: '50%' }}>{[...prefijo, `Prom. ${fmt(prom)}`, ...sufijo].join(' · ')}</span>
-        {!juntoMax && (
-          <span style={pMax > 85 ? { right: 0 } : { left: `${pMax}%` }} title={x.cadenaMax ? `En ${nombreCadena(x.cadenaMax)}` : ''}>
-            Máx. {fmt(max)}{x.cadenaMax && <CadenaBadge cadena={x.cadenaMax} tamano="xs" title="" />}
-          </span>
-        )}
+        <span title={x.cadenasMin[0] ? `En ${nombreCadena(x.cadenasMin[0])}` : ''}>
+          {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" title="" />}Mín. {fmt(min)}
+        </span>
+        <span className="is-prom">Prom. {fmt(prom)}</span>
+        <span title={x.cadenaMax ? `En ${nombreCadena(x.cadenaMax)}` : ''}>
+          Máx. {fmt(max)}{x.cadenaMax && <CadenaBadge cadena={x.cadenaMax} tamano="xs" title="" />}
+        </span>
       </div>
     </div>
   );

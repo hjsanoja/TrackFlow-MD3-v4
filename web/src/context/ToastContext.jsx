@@ -26,40 +26,19 @@ export function ToastProvider({ children }) {
       {children}
       
       {/* Floating Toast Container - z-index higher than modal cards (100000) and scrims (99999) */}
-      <div className="fixed bottom-6 right-6 z-[100005] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+      <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-[100005] flex flex-col gap-3 pointer-events-none">
         {toasts.map((t) => {
-          let bgColor = 'bg-white border-outline-variant';
-          let textColor = 'text-on-surface';
-          let icon = 'info';
-          let iconColor = 'text-primary';
-
-          if (t.type === 'success') {
-            bgColor = 'bg-emerald-50 border-emerald-200';
-            textColor = 'text-emerald-900';
-            icon = 'check_circle';
-            iconColor = 'text-emerald-600';
-          } else if (t.type === 'error') {
-            bgColor = 'bg-red-50 border-red-200';
-            textColor = 'text-red-900';
-            icon = 'error';
-            iconColor = 'text-red-600';
-          } else if (t.type === 'warning') {
-            bgColor = 'bg-amber-50 border-amber-200';
-            textColor = 'text-amber-900';
-            icon = 'warning';
-            iconColor = 'text-amber-600';
-          }
-
+          const icon = { success: 'check_circle', error: 'error', warning: 'warning' }[t.type] || 'info';
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto flex items-start gap-3 p-4 rounded-2xl border shadow-lg transition-all duration-300 transform translate-y-0 animate-fade-in-slide ${bgColor} ${textColor}`}
+              className={`m3-toast is-${t.type || 'info'} pointer-events-auto animate-fade-in-slide`}
               role="alert"
             >
-              <span className={`material-symbols-outlined select-none text-xl shrink-0 ${iconColor}`}>
+              <span className="material-symbols-outlined m3-toast-icono select-none shrink-0" aria-hidden="true">
                 {icon}
               </span>
-              <div className="flex-1 text-xs font-semibold leading-relaxed">
+              <div className="flex-1 m3-body-medium">
                 {t.message}
               </div>
               {t.accion && (

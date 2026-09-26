@@ -1,10 +1,13 @@
 import { useSearchParams } from 'react-router-dom';
-import DevaluacionReal from './DevaluacionReal';
-import RevisionCapturas from './RevisionCapturas';
-import Simulador from './Simulador';
-import CanibalizacionInterna from '../components/CanibalizacionInterna';
-import BrechaHistoricaUsd from '../components/BrechaHistoricaUsd';
-import MapaPorCadena from '../components/MapaPorCadena';
+import { lazy, Suspense } from 'react';
+
+// Cada pestana baja su codigo solo cuando se abre.
+const DevaluacionReal = lazy(() => import('./DevaluacionReal'));
+const RevisionCapturas = lazy(() => import('./RevisionCapturas'));
+const Simulador = lazy(() => import('./Simulador'));
+const CanibalizacionInterna = lazy(() => import('../components/CanibalizacionInterna'));
+const BrechaHistoricaUsd = lazy(() => import('../components/BrechaHistoricaUsd'));
+const MapaPorCadena = lazy(() => import('../components/MapaPorCadena'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -47,14 +50,14 @@ export default function Experimental({ user, userDoc }) {
         ))}
       </nav>
 
-      <div>
+      <Suspense fallback={<div className="h-64 rounded-3xl m3-skeleton" aria-busy="true" />}>
         {activa === 'revision' && <RevisionCapturas />}
         {activa === 'devaluacion' && <DevaluacionReal />}
         {activa === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activa === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
         {activa === 'mapa_cadenas' && <MapaPorCadena />}
         {activa === 'simulador' && <Simulador user={user} userDoc={userDoc} />}
-      </div>
+      </Suspense>
     </div>
   );
 }

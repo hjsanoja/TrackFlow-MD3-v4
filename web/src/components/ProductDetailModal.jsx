@@ -14,7 +14,7 @@ import { normalizar } from './formulario';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
 import { useBcvRate } from '../hooks/useBcvRate';
-import { supabase, isSupabaseActive } from '../supabase';
+import { useHistoricoProducto } from '../hooks/useHistoricoProducto';
 import { getChainColor } from '../utils/brandColors';
 import { tokensGrafico } from '../utils/chartTokens';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
@@ -35,6 +35,7 @@ import {
 
 const PERIODOS = [[7, 'Últimos 7 días'], [15, 'Últimos 15 días'], [30, 'Últimos 30 días'], [90, 'Últimos 90 días'], [180, 'Últimos 180 días']];
 const MAX_SERIES = 8;
+const COLUMNAS_HISTORIA = 'publicacion_id,cadena,marca,tipo,precio_full_bs,precio_desc_bs,tasa_bcv,fecha_local,scraped_at';
 const colorCategorico = (i) => leerColor(`--md-sys-color-data-cat-${i + 1}`, ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'][i]);
 const diaCorto = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
 
@@ -65,7 +66,6 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const [cadenaFiltro, setCadenaFiltro] = useState('todos');
   const [tipoFiltro, setTipoFiltro] = useState('todos'); // todos | GENERICO | MARCA (competidores)
   const [vistaHistoria, setVistaHistoria] = useState('resumen'); // resumen | ofertas
-  const [historia, setHistoria] = useState({ cargando: true, filas: [] });
   const [buscador, setBuscador] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [confirmBorrar, setConfirmBorrar] = useState(false);
@@ -163,27 +163,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   // ---------------------------------------------------------------------
   // Historia (solo de este producto)
   // ---------------------------------------------------------------------
-  useEffect(() => {
-    if (!pId || !isSupabaseActive()) { setHistoria({ cargando: false, filas: [] }); return undefined; }
-    let vigente = true;
-    setHistoria(h => ({ ...h, cargando: true }));
-    const desde = new Date(Date.now() - (dias + 7) * 864e5).toISOString();
-    (async () => {
-      const filas = [];
-      for (let pagina = 0; pagina < 10; pagina++) {
-        const { data, error } = await supabase.from('historico_precios')
-          .select('publicacion_id,cadena,marca,tipo,precio_full_bs,precio_desc_bs,tasa_bcv,fecha_local,scraped_at')
-          .eq('id_producto_propio', pId).gte('scraped_at', desde)
-          .order('scraped_at', { ascending: true })
-          .range(pagina * 1000, pagina * 1000 + 999);
-        if (error || !data?.length) break;
-        filas.push(...data);
-        if (data.length < 1000) break;
-      }
-      if (vigente) setHistoria({ cargando: false, filas });
-    })().catch(() => { if (vigente) setHistoria({ cargando: false, filas: [] }); });
-    return () => { vigente = false; };
-  }, [pId, dias]);
+  // Se piden 7 dias de mas para arrastrar el ultimo precio al primer dia.
+  const [historia, setHistoria] = useHistoricoProducto(pId, dias + 7, COLUMNAS_HISTORIA);
 
   const serieHistoria = useMemo(() => {
     const unidadesPorPub = new Map(enlaces.map(e => [e.publicacion_id, unidadesDe(e)]));

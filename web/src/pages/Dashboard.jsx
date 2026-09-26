@@ -403,6 +403,8 @@ export default function Dashboard({ userDoc }) {
       p_por_unidad: modoAnalisis === 'unidosis',
       p_cadena: cadenaComp === 'todos' ? null : cadenaComp,
       p_productos: productosFiltrados,
+      // Solo si se filtra: asi funciona aunque falte la fase 30.
+      ...(tipoComp !== 'todos' ? { p_tipo_mercado: tipoComp } : {}),
     });
     if (error) { addToast(`No se pudo leer ese día: ${error.message}`, 'error'); return; }
     const porId = new Map(base.map(x => [String(x.producto.id_interno), x]));
@@ -732,6 +734,7 @@ export default function Dashboard({ userDoc }) {
           conDescuento={modoPrecio === 'descuento'}
           porUnidad={modoAnalisis === 'unidosis'}
           cadena={cadenaComp === 'todos' ? null : cadenaComp}
+          tipoMercado={tipoComp === 'todos' ? null : tipoComp}
           meta={meta}
           tg={tg}
           onDia={detalleDia}

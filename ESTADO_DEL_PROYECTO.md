@@ -126,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #51, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 28**; la fase 29 va con el #52 |
+| Código en `main` | PR #52, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 29**; la fase 30 va con el #53. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -561,6 +561,33 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Ajustes del PR #53 (fase 30)
+
+- **Fase 30** (`sql/fase30_tendencia_marca_generico.sql`):
+  `fn_posicion_productos` y `fn_tendencia_posicion` reciben `p_tipo_mercado`
+  al final. Se borran las versiones viejas antes, para que no haya dos. El
+  panel solo lo manda si el filtro está puesto, así que sin la fase 30 todo
+  sigue funcionando menos ese filtro en la tendencia.
+- **Mapa de Calor**:
+  - escala propia de cada fila, lineal por mitades: esquina izquierda =
+    mínimo, centro = promedio, esquina derecha = máximo;
+  - zonas con degradado (azul hacia la izquierda, rojo hacia la derecha) que
+    crecen desde el centro al aparecer;
+  - sin el tramo gris (siempre iba de esquina a esquina);
+  - la leyenda pasó al botón (i) y el buscador recupera su ancho;
+  - "Tu posición" con letra uniforme.
+- **Experimental**:
+  - cada pestaña carga su código solo al abrirse (`lazy`);
+  - "Brechas USD" pide la historia solo del producto elegido, con el nuevo
+    `hooks/useHistoricoProducto.js` (que ahora usa también la ficha).
+    Simulador sigue bajando el histórico completo.
+- **Diseño**: avisos emergentes (`.m3-toast`) y pantalla de error con tokens
+  M3. En celular los avisos ya no se salen de la pantalla. Cadenas y
+  Dimensiones ya tenían el diseño nuevo; lo que queda del estilo viejo está
+  en Experimental (Simulador, Canibalización, Brechas).
+- **Repositorio**: los `fase*.sql` y `supabase_setup_rls.sql` pasaron a
+  `sql/`; se borró `debug/` (capturas viejas del scraper).
+
 ## Marca o genérico de cada competidor (PR #52, fase 29)
 
 - **Fase 29** (`fase29_marca_generico_competencia.sql`):
@@ -859,8 +886,8 @@ si no se sabe, y el panel toma ese 1 como "no se sabe": lee las unidades del
 nombre ("x 20 tabletas") o asume las de tu producto. Falta una forma de
 cargar el contenido real de cada competidor (idea para Competencia).
 
-**Limpieza del repo**: mover los `fase*.sql` (ya son 22) a `sql/`, borrar
-`debug/`, y borrar `recarga/` cuando termine la recarga.
+**Limpieza del repo**: hecha en el #53 (SQL en `sql/`, sin `debug/`). Falta
+borrar `recarga/` cuando termine la recarga.
 
 **Diseño (Material Design 3 Expressive)**: Productos y Competencia ya están al día. En el
 resto quedaban 71 colores hex sueltos (sobre todo gradientes y Recharts en
