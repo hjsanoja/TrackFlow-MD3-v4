@@ -1,4 +1,5 @@
-import LimpiarFiltros from '../components/LimpiarFiltros';
+import BarraFiltros from '../components/BarraFiltros';
+import Segmentado from '../components/Segmentado';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -640,37 +641,38 @@ export default function Dashboard({ userDoc }) {
       )}
 
       {/* Filtros y ajustes */}
-      <section className="m3-dash-filtros" aria-label="Filtros del Dashboard">
-        <div className="flex flex-wrap items-center gap-2">
-          <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad}
-            opciones={[['todos', 'Unidad: todas'], ...unidades]} />
-          <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo}
-            opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
-          <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria}
-            opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
-          <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={cadenaComp} onChange={setCadenaComp}
-            opciones={[['todos', 'Cadenas: todas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
-          <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
-            opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); setTipoComp('todos'); }} />
-          <AjusteChip etiqueta="Precio que se compara" icono="receipt_long" valor={modoPrecio} onChange={setModoPrecio}
-            opciones={[['lista', 'Precio de lista'], ['descuento', 'Precio con oferta']]} />
-          <AjusteChip etiqueta="Comparar por" icono="medication" valor={modoAnalisis} onChange={setModoAnalisis}
-            opciones={[['empaque', 'Por empaque'], ['unidosis', 'Por unidad']]} />
-          <AjusteChip etiqueta="Periodo de los cambios" icono="history" valor={String(ventana)} onChange={v => setVentana(Number(v))}
-            opciones={[['1', 'Cambios: 24 horas'], ['7', 'Cambios: 7 días'], ['15', 'Cambios: 15 días']]} />
-          <AjusteChip etiqueta="Tu meta de precio" icono="flag" valor={String(meta)} onChange={v => setMeta(Number(v))}
-            opciones={METAS.map(([v, t]) => [String(v), t])} />
-          <label className="m3-switch-label whitespace-nowrap ml-1" title="Moneda de todo el Dashboard">
-            <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
-            <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')}
-              className="m3-switch" aria-label="Ver los precios en bolívares" />
-            <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
-          </label>
-        </div>
-      </section>
+      <BarraFiltros
+        limpiar={{ visible: hayFiltros, onClick: () => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); setTipoComp('todos'); } }}
+        etiqueta="Filtros del Dashboard"
+        filtrar={(
+          <>
+            <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad}
+              opciones={[['todos', 'Unidad: todas'], ...unidades]} />
+            <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo}
+              opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
+            <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria}
+              opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
+            <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={cadenaComp} onChange={setCadenaComp}
+              opciones={[['todos', 'Cadenas: todas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
+            <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
+              opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+          </>
+        )}
+        comparar={(
+          <>
+            <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
+            <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
+              opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
+            <Segmentado etiqueta="Moneda" valor={moneda} onChange={setMoneda}
+              opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares a la tasa BCV']]} />
+            <Segmentado etiqueta="Periodo de los cambios" rotulo="Cambios" valor={String(ventana)} onChange={v => setVentana(Number(v))}
+              opciones={[['1', '24 h', 'Cambios de las últimas 24 horas'], ['7', '7 d', 'Cambios de los últimos 7 días'], ['15', '15 d', 'Cambios de los últimos 15 días']]} />
+            <AjusteChip etiqueta="Tu meta de precio" icono="flag" valor={String(meta)} onChange={v => setMeta(Number(v))}
+              opciones={METAS.map(([v, t]) => [String(v), t])} />
+          </>
+        )}
+      />
 
       {/* Indicadores */}
       <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3" aria-label="Indicadores">

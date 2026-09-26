@@ -1,4 +1,5 @@
-import LimpiarFiltros from './LimpiarFiltros';
+import BarraFiltros from './BarraFiltros';
+import Segmentado from './Segmentado';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -353,33 +354,31 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
       <main className="m3-ficha-contenido">
         {/* Filtros y ajustes */}
-        <section className="m3-dash-filtros" aria-label="Filtros de la ficha">
-          <div className="flex flex-wrap items-center gap-2">
-            <FiltroChip etiqueta="Relación" icono="group" valor={relacion} onChange={setRelacion}
-              opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
-            <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadenaFiltro} onChange={setCadenaFiltro}
-              opciones={[['todos', 'Cadena: todas'], ...cadenasOfertas.map(c => [c, nombreCadena(c)])]} />
-            <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoFiltro} onChange={setTipoFiltro}
-              opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
-            <LimpiarFiltros visible={relacion !== 'todos' || cadenaFiltro !== 'todos' || tipoFiltro !== 'todos'} onClick={() => { setRelacion('todos'); setCadenaFiltro('todos'); setTipoFiltro('todos'); }} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
-              <option value="lista">Precio de lista</option>
-              <option value="descuento">Precio con oferta</option>
-            </Select>
-            <Select value={modoAnalisis} onChange={e => setModoAnalisis(e.target.value)} aria-label="Comparar por" className="m3-filter-chip" leadingIcon="medication">
-              <option value="empaque">Por empaque</option>
-              <option value="unidosis">Por unidad</option>
-            </Select>
-            <label className="m3-switch-label whitespace-nowrap ml-1" title="Moneda de la ficha">
-              <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
-              <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')}
-                className="m3-switch" aria-label="Ver los precios en bolívares" />
-              <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
-            </label>
-          </div>
-        </section>
+        <BarraFiltros
+        limpiar={{ visible: relacion !== 'todos' || cadenaFiltro !== 'todos' || tipoFiltro !== 'todos', onClick: () => { setRelacion('todos'); setCadenaFiltro('todos'); setTipoFiltro('todos'); } }}
+          etiqueta="Filtros de la ficha"
+          filtrar={(
+            <>
+              <FiltroChip etiqueta="Relación" icono="group" valor={relacion} onChange={setRelacion}
+                opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
+              <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadenaFiltro} onChange={setCadenaFiltro}
+                opciones={[['todos', 'Cadena: todas'], ...cadenasOfertas.map(c => [c, nombreCadena(c)])]} />
+              <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoFiltro} onChange={setTipoFiltro}
+                opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+          
+            </>
+          )}
+          comparar={(
+            <>
+            <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
+            <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
+              opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
+            <Segmentado etiqueta="Moneda" valor={moneda} onChange={setMoneda}
+              opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares a la tasa BCV']]} />
+            </>
+          )}
+        />
 
         {/* Indicadores: sobre las ofertas que dejan ver los filtros */}
         <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3" aria-label="Indicadores del producto">

@@ -1,4 +1,5 @@
-import LimpiarFiltros from '../components/LimpiarFiltros';
+import BarraFiltros from '../components/BarraFiltros';
+import Segmentado from '../components/Segmentado';
 import { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
 import FiltroChip from '../components/FiltroChip';
@@ -202,34 +203,32 @@ export default function MapaCalor() {
         </button>
       </div>
 
-      <section className="m3-dash-filtros" aria-label="Filtros del mapa">
-        <div className="flex flex-wrap items-center gap-2">
-          <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidades]} />
-          <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
-          <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
-          <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={filtroCadena} onChange={setFiltroCadena}
-            opciones={[['todos', 'Cadenas: todas'], ...cadenasCompetencia.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
-          <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
-            opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
-          <FiltroChip etiqueta="Posición" icono="balance" valor={filtroPosicion} onChange={setFiltroPosicion} opciones={POSICIONES} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroCadena('todos'); setTipoComp('todos'); setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }} />
-          <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
-            <option value="lista">Precio de lista</option>
-            <option value="descuento">Precio con oferta</option>
-          </Select>
-          <Select value={modoAnalisis} onChange={e => setModoAnalisis(e.target.value)} aria-label="Comparar por" className="m3-filter-chip" leadingIcon="medication">
-            <option value="empaque">Por empaque</option>
-            <option value="unidosis">Por unidad</option>
-          </Select>
-          <label className="m3-switch-label whitespace-nowrap ml-1">
-            <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
-            <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')} className="m3-switch" aria-label="Ver los precios en bolívares" />
-            <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
-          </label>
-        </div>
-      </section>
+      <BarraFiltros
+        limpiar={{ visible: hayFiltros, onClick: () => { setFiltroCadena('todos'); setTipoComp('todos'); setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); } }}
+        etiqueta="Filtros del mapa"
+        filtrar={(
+          <>
+            <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidades]} />
+            <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
+            <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
+            <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={filtroCadena} onChange={setFiltroCadena}
+              opciones={[['todos', 'Cadenas: todas'], ...cadenasCompetencia.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
+            <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
+              opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+            <FiltroChip etiqueta="Posición" icono="balance" valor={filtroPosicion} onChange={setFiltroPosicion} opciones={POSICIONES} />
+          </>
+        )}
+        comparar={(
+          <>
+            <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
+            <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
+              opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
+            <Segmentado etiqueta="Moneda" valor={moneda} onChange={setMoneda}
+              opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares a la tasa BCV']]} />
+          </>
+        )}
+      />
 
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Indicadores">
         <StatCard compacto label="Más baratos que el promedio" value={`${porPosicion.barato.length} de ${comparables}`} icon="south" tono="primary"
