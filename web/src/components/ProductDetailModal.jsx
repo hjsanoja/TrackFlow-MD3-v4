@@ -20,6 +20,7 @@ import { tokensGrafico } from '../utils/chartTokens';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { dbClearHistoricoPrecioForProduct } from '../utils/dbClient';
 import { describirPresentacion } from '../utils/presentacion';
+import { esMarca } from '../utils/tipoMercado';
 import { fechaHora, haceCuanto } from '../utils/usuarios';
 import {
   crearFormato, Diferencia, AjusteMeta, calcularAjuste, pct, leerColor, textoMeta, UMBRAL_CAMBIO,
@@ -62,6 +63,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const [dias, setDias] = useState(7);
   const [relacion, setRelacion] = useState('todos'); // todos | propio | competencia
   const [cadenaFiltro, setCadenaFiltro] = useState('todos');
+  const [tipoFiltro, setTipoFiltro] = useState('todos'); // todos | GENERICO | MARCA (competidores)
   const [vistaHistoria, setVistaHistoria] = useState('resumen'); // resumen | ofertas
   const [historia, setHistoria] = useState({ cargando: true, filas: [] });
   const [buscador, setBuscador] = useState(false);
@@ -113,7 +115,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     const bs = conDescuento ? (e.ultimo_precio_desc_bs || e.ultimo_precio_full_bs) : e.ultimo_precio_full_bs;
     const unidades = unidadesDe(e);
     const tipo = String(e.tipo || '').toLowerCase();
-    const base = { id: e.id, enlace: e, tipo, cadena: idCadena(e.cadena), marca: e.marca, laboratorio: e.laboratorio, unidades, url: e.url, fecha: e.ultimo_scrape };
+    const base = { id: e.id, enlace: e, tipo, tipoMercado: esMarca(e) ? 'MARCA' : 'GENERICO', cadena: idCadena(e.cadena), marca: e.marca, laboratorio: e.laboratorio, unidades, url: e.url, fecha: e.ultimo_scrape };
     if (!bs || !bcvRate) return { ...base, sinPrecio: true };
     // Cambio en 7 dias, en dolares a la tasa de cada dia.
     const v = variacionPorPub.get(e.publicacion_id);
@@ -135,11 +137,13 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
   // Los filtros Relacion y Cadena definen que ofertas cuentan: minimo,
   // promedio, maximo, graficos y tabla se calculan solo sobre esas.
-  const pasaFiltros = (tipo, cadena) =>
+  // tm: marca o generico del competidor (tus enlaces no se filtran por esto).
+  const pasaFiltros = (tipo, cadena, tm) =>
     (relacion === 'todos' || (relacion === 'propio' ? tipo === 'propio' : tipo !== 'propio')) &&
-    (cadenaFiltro === 'todos' || cadena === cadenaFiltro);
+    (cadenaFiltro === 'todos' || cadena === cadenaFiltro) &&
+    (tipoFiltro === 'todos' || tipo === 'propio' || tm === tipoFiltro);
   const cadenasOfertas = [...new Set(ofertas.map(o => o.cadena))].sort((a, b) => nombreCadena(a).localeCompare(nombreCadena(b)));
-  const ofertasVisibles = ofertas.filter(o => pasaFiltros(o.tipo, o.cadena));
+  const ofertasVisibles = ofertas.filter(o => pasaFiltros(o.tipo, o.cadena, o.tipoMercado));
   const visibles = ofertasVisibles.filter(o => !o.sinPrecio);
   const tuyas = ofertas.filter(o => !o.sinPrecio && o.tipo === 'propio' && (cadenaFiltro === 'todos' || o.cadena === cadenaFiltro));
   const pvp = Number(activo?.pvp_propio_usd || 0) > 0 ? Number(activo.pvp_propio_usd) / (porUnidad ? unidadesPropio : 1) : null;
@@ -183,6 +187,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
 
   const serieHistoria = useMemo(() => {
     const unidadesPorPub = new Map(enlaces.map(e => [e.publicacion_id, unidadesDe(e)]));
+    const tmPorPub = new Map(enlaces.map(e => [e.publicacion_id, esMarca(e) ? 'MARCA' : 'GENERICO']));
     // Ultimo precio de cada enlace por dia.
     const porPub = new Map();
     const tasaPorDia = new Map();
@@ -194,10 +199,10 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       const unidades = unidadesPorPub.get(h.publicacion_id) || (String(h.tipo) === 'propio' ? unidadesPropio : unidadesPropio);
       const usd = bs / tasa / (porUnidad ? unidades : 1);
       const cadena = idCadena(h.cadena);
-      if (!pasaFiltros(String(h.tipo), cadena) && !(String(h.tipo) === 'propio' && (cadenaFiltro === 'todos' || cadena === cadenaFiltro))) continue;
+      if (!pasaFiltros(String(h.tipo), cadena, tmPorPub.get(h.publicacion_id)) && !(String(h.tipo) === 'propio' && (cadenaFiltro === 'todos' || cadena === cadenaFiltro))) continue;
       if (!porPub.has(h.publicacion_id)) {
         const enlace = enlaces.find(e => e.publicacion_id === h.publicacion_id);
-        porPub.set(h.publicacion_id, { tipo: h.tipo, cadena, marca: h.marca, laboratorio: enlace?.laboratorio || '', unidades: unidadesPorPub.get(h.publicacion_id) || unidadesPropio, dias: new Map() });
+        porPub.set(h.publicacion_id, { tipo: h.tipo, tm: tmPorPub.get(h.publicacion_id), cadena, marca: h.marca, laboratorio: enlace?.laboratorio || '', unidades: unidadesPorPub.get(h.publicacion_id) || unidadesPropio, dias: new Map() });
       }
       porPub.get(h.publicacion_id).dias.set(dia, usd);
       if (Number(h.tasa_bcv) > 0) tasaPorDia.set(dia, Number(h.tasa_bcv));
@@ -206,7 +211,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     const hoy = new Date();
     const fechas = Array.from({ length: dias }, (_, i) => new Date(hoy.getTime() - (dias - 1 - i) * 864e5).toISOString().slice(0, 10));
     const pubs = [...porPub.entries()];
-    const visiblesPub = pubs.filter(([, info]) => pasaFiltros(String(info.tipo), info.cadena));
+    const visiblesPub = pubs.filter(([, info]) => pasaFiltros(String(info.tipo), info.cadena, info.tm));
     const ultimoConocido = (dias, fecha) => {
       for (let k = 0; k < 7; k++) {
         const f = new Date(new Date(`${fecha}T12:00:00Z`).getTime() - k * 864e5).toISOString().slice(0, 10);
@@ -236,7 +241,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       for (const [pub, info] of pubs) {
         const v = ultimoConocido(info.dias, fecha);
         if (v == null) continue;
-        const visible = pasaFiltros(String(info.tipo), info.cadena);
+        const visible = pasaFiltros(String(info.tipo), info.cadena, info.tm);
         if (visible) { fila[`p${pub}`] = v; otros.push(v); }
         if (info.tipo === 'propio') tuyos.push(v);
       }
@@ -249,7 +254,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     }).filter(f => f.tuyo != null || f.minimo != null);
     return { puntos, lineas, ocultas: Math.max(0, pubs.length - MAX_SERIES) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historia.filas, conDescuento, porUnidad, dias, bcvRate, enlaces, cadenaPorClave, relacion, cadenaFiltro]);
+  }, [historia.filas, conDescuento, porUnidad, dias, bcvRate, enlaces, cadenaPorClave, relacion, cadenaFiltro, tipoFiltro]);
 
   // ---------------------------------------------------------------------
   // Cambiar de producto
@@ -361,7 +366,9 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
             <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadenaFiltro} onChange={setCadenaFiltro}
               opciones={[['todos', 'Cadena: todas'], ...cadenasOfertas.map(c => [c, nombreCadena(c)])]} />
-            <LimpiarFiltros visible={(relacion !== 'todos' || cadenaFiltro !== 'todos')} onClick={() => { setRelacion('todos'); setCadenaFiltro('todos'); }} />
+            <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoFiltro} onChange={setTipoFiltro}
+              opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+            <LimpiarFiltros visible={relacion !== 'todos' || cadenaFiltro !== 'todos' || tipoFiltro !== 'todos'} onClick={() => { setRelacion('todos'); setCadenaFiltro('todos'); setTipoFiltro('todos'); }} />
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
             <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
@@ -425,7 +432,9 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                     <td>
                       <div className="m3-cell-primary m3-cell-clamp max-w-[20rem]" title={o.marca}>{o.marca}</div>
                       <div className="m3-cell-secondary">
-                        {o.tipo === 'propio' ? <span className="m3-chip-propio">Tuyo</span> : (o.laboratorio || 'Competidor')}
+                        {o.tipo === 'propio' ? <span className="m3-chip-propio">Tuyo</span> : (
+                          <>{o.laboratorio || 'Competidor'} · <span className={o.tipoMercado === 'MARCA' ? 'm3-chip-marca' : 'm3-chip-generico'}>{o.tipoMercado === 'MARCA' ? 'Marca' : 'Genérico'}</span></>
+                        )}
                       </div>
                     </td>
                     <td className="whitespace-nowrap" data-label="Cadena">

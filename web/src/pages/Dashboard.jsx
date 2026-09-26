@@ -66,6 +66,7 @@ export default function Dashboard({ userDoc }) {
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
   // Comparar solo contra una cadena ('todos' = todas).
   const [cadenaComp, setCadenaComp] = useState('todos');
+  const [tipoComp, setTipoComp] = useState('todos'); // todos | GENERICO | MARCA
 
   // Tabla
   const [search, setSearch] = useState('');
@@ -99,7 +100,7 @@ export default function Dashboard({ userDoc }) {
   const enlacesActivos = useMemo(() => productosCompetencia.filter(e => e.activo !== false), [productosCompetencia]);
 
   const { analizados, idCadena, nombreCadena } = useAnalisisPrecios({
-    productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis, ventana, cadenaComp,
+    productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis, ventana, cadenaComp, tipoComp,
   });
 
   const ajusteDe = useCallback((x) => calcularAjuste(x.tuPrecio, x.promedio, meta), [meta]);
@@ -121,7 +122,7 @@ export default function Dashboard({ userDoc }) {
     (filtroCategoria === 'todos' || p.categoria === filtroCategoria)
   ), [analizados, filtroUnidad, filtroTipo, filtroCategoria]);
 
-  const hayFiltros = filtroUnidad !== 'todos' || filtroTipo !== 'todos' || filtroCategoria !== 'todos' || cadenaComp !== 'todos';
+  const hayFiltros = filtroUnidad !== 'todos' || filtroTipo !== 'todos' || filtroCategoria !== 'todos' || cadenaComp !== 'todos' || tipoComp !== 'todos';
 
   // ------------------------------------------------------------------------
   // Indicadores
@@ -299,6 +300,29 @@ export default function Dashboard({ userDoc }) {
     setMostrar(valor);
     setTimeout(() => tablaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
+
+  // Cruces genérico/marca: tu genérico cuesta más que una marca de la
+  // competencia, o tu marca cuesta menos que un genérico.
+  const cruces = useMemo(() => base.filter(x => x.cruce), [base]);
+  const detalleCruces = () => abrirDetalle({
+    titulo: 'Cruces genérico / marca',
+    subtitulo: 'Tus genéricos que cuestan más que una marca de la competencia, y tus marcas que cuestan menos que un genérico. Mismo producto y mismo empaque (o por unidad).',
+    icono: 'swap_vert',
+    filas: [...cruces].sort((a, b) => Math.abs(b.cruce.dif) - Math.abs(a.cruce.dif)),
+    columnas: [
+      colProducto,
+      colTuPrecio,
+      { titulo: 'Frente a', celda: x => (
+        <span className="inline-flex items-center gap-1.5">
+          <CadenaBadge cadena={x.cruce.ref.cadena} tamano="xs" title={nombreCadena(x.cruce.ref.cadena)} />
+          <span>{x.cruce.ref.marca} <span className="text-on-surface-variant">({x.cruce.tipo === 'generico_caro' ? 'marca' : 'genérico'})</span></span>
+        </span>
+      ) },
+      { titulo: 'Su precio', alinear: 'right', celda: x => fmt(x.cruce.ref.priceUsd) },
+      { titulo: 'Tu diferencia', alinear: 'right', celda: x => <Diferencia valor={x.cruce.dif} /> },
+    ],
+    vacio: 'No hay cruces con estos filtros.',
+  });
 
   const detalleFrentePromedio = () => abrirDetalle({
     titulo: 'Tu precio frente al promedio',
@@ -599,6 +623,20 @@ export default function Dashboard({ userDoc }) {
         </div>
       )}
 
+      {cruces.length > 0 && (
+        <div className="m3-banner m3-banner-warning" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">swap_vert</span>
+          <span className="m3-body-medium flex-1 min-w-0">
+            <strong>Cruces genérico / marca:</strong>{' '}
+            {[
+              cruces.filter(x => x.cruce.tipo === 'generico_caro').length && `${cruces.filter(x => x.cruce.tipo === 'generico_caro').length} de tus genéricos cuestan más que una marca de la competencia`,
+              cruces.filter(x => x.cruce.tipo === 'marca_barata').length && `${cruces.filter(x => x.cruce.tipo === 'marca_barata').length} de tus marcas cuestan menos que un genérico`,
+            ].filter(Boolean).join(' · ')}.
+          </span>
+          <button type="button" onClick={detalleCruces} className="m3-btn-text">Ver cuáles</button>
+        </div>
+      )}
+
       {/* Filtros y ajustes */}
       <section className="m3-dash-filtros" aria-label="Filtros del Dashboard">
         <div className="flex flex-wrap items-center gap-2">
@@ -610,7 +648,9 @@ export default function Dashboard({ userDoc }) {
             opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
           <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={cadenaComp} onChange={setCadenaComp}
             opciones={[['todos', 'Competencia: todas las cadenas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
-          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); }} />
+          <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
+            opciones={[['todos', 'Competidores: marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); setTipoComp('todos'); }} />
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
           <AjusteChip etiqueta="Precio que se compara" icono="receipt_long" valor={modoPrecio} onChange={setModoPrecio}

@@ -1,3 +1,4 @@
+import { esMarca, leerTipoMercado, sugerirTipoMercado } from '../utils/tipoMercado';
 import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { validarCsv } from '../utils/validarCsv';
@@ -40,7 +41,7 @@ import {
 // va aparte. Nombre, PVP, precios y captura son informativos: al importar se
 // ignoran.
 const COLUMNAS_CSV_ENLACES = [
-  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio_competidor', 'unidades_empaque', 'url', 'activo',
+  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio_competidor', 'unidades_empaque', 'tipo_mercado', 'url', 'activo',
   'pvp_propio_usd', 'precio_usd', 'precio_bs', 'precio_oferta_bs', 'ultima_captura',
 ].map(key => ({ label: key, key }));
 const ARCHIVO_REPORTE = 'competencia_enlaces_reporte';
@@ -515,6 +516,7 @@ export default function Competencia() {
       laboratorio_competidor: esPropio(it) ? '' : (it.laboratorio || ''),
       // 1 es el valor por defecto ("no se sabe"): se deja vacio.
       unidades_empaque: !esPropio(it) && Number(it.unidades_empaque) > 1 ? String(Number(it.unidades_empaque)) : '',
+      tipo_mercado: esPropio(it) ? '' : (esMarca(it) ? 'marca' : 'generico'),
       url: it.url || '',
       activo: it.activo === false ? 'no' : 'si',
       pvp_propio_usd: pvp ? pvp.toFixed(2) : '',
@@ -601,6 +603,9 @@ export default function Competencia() {
         const marca = celdaExacta(row, 'competidor', 'marca', 'marca_competencia');
         const laboratorio = getRowValue(row, 'laboratorio_competidor', 'laboratorio', 'fabricante').trim();
         const unidades = Number(getRowValue(row, 'unidades_empaque', 'unidades_por_empaque').trim().replace(',', '.'));
+        // Marca o generico: vacio = se conserva lo guardado; en uno nuevo se
+        // deduce del nombre (si empieza con la molecula es generico).
+        const tipoMercadoLeido = leerTipoMercado(getRowValue(row, 'tipo_mercado', 'marca_o_generico'));
         const urlSlug = normalizarUrl(url).replace(/[^a-z0-9]/gi, '_');
 
         lista.push({
@@ -615,6 +620,8 @@ export default function Competencia() {
           activo: activoRaw ? !['no', 'false', '0'].includes(activoRaw) : (existente ? existente.activo !== false : true),
           laboratorio: laboratorio || (existente && !esPropio(existente) ? existente.laboratorio || '' : ''),
           unidades_empaque: !propio && unidades > 0 ? unidades : null,
+          tipo_mercado: propio ? null
+            : tipoMercadoLeido || (existente ? null : sugerirTipoMercado(marca, productoPorId.get(id_producto)?.principio_activo)),
         });
       });
       if (lista.length === 0) throw new Error('No hay filas con producto y URL.');
@@ -1135,6 +1142,7 @@ export default function Competencia() {
               <div>id_interno, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
               <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio_competidor</div>
               <div>unidades_empaque <span className="text-on-surface-variant font-sans font-medium">(tabletas, cápsulas o ml del competidor)</span></div>
+              <div>tipo_mercado <span className="text-on-surface-variant font-sans font-medium">(marca / generico; vacío en uno nuevo = se deduce del nombre)</span></div>
               <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
               <div className="font-sans font-medium text-on-surface-variant pt-1">
                 nombre, pvp_propio_usd y las columnas de precio y captura son informativas: al importar se ignoran. Una celda vacía no cambia nada.
@@ -1263,6 +1271,8 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
     // 1 es el valor por defecto ("no se sabe"): el campo sale vacio.
     unidades: item && String(item.tipo) !== 'propio' && Number(item.unidades_empaque) > 1 ? String(Number(item.unidades_empaque)) : '',
     medida: ['ml', 'g'].includes(item?.unidad_contenido) ? item.unidad_contenido : 'unidad',
+    // Vacio = se usa lo que sugiere el nombre (se ve en el desplegable).
+    tipoMercado: ['MARCA', 'GENERICO'].includes(item?.tipo_mercado) ? item.tipo_mercado : '',
     url: item?.url || '',
     activo: item?.activo ?? true,
   });
@@ -1272,6 +1282,8 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
 
   const cambiar = (k, v) => { setErrorGeneral(null); setErrores(e => ({ ...e, [k]: undefined })); setForm(f => ({ ...f, [k]: v })); };
   const producto = productoDesdeTexto(productoTexto);
+  const tipoSugerido = sugerirTipoMercado(form.marca, producto?.principio_activo);
+  const tipoMercado = form.tipoMercado || tipoSugerido;
 
   // Enlaces que ya tiene el producto elegido: se ven antes de guardar, para
   // no vincular dos veces lo mismo.
@@ -1339,6 +1351,7 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
       laboratorio: form.tipo === 'propio' ? producto.laboratorio || '' : form.laboratorio.trim(),
       unidades_empaque: form.tipo !== 'propio' && form.unidades.trim() ? Number(form.unidades.replace(',', '.')) : null,
       unidad_contenido: form.tipo !== 'propio' && form.unidades.trim() ? form.medida : null,
+      tipo_mercado: form.tipo !== 'propio' ? tipoMercado : null,
       url: form.url.trim(),
       activo: form.activo,
     }, isNew);
@@ -1460,6 +1473,13 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
                     <option value="g">g</option>
                   </Select>
                 </div>
+              </Field>
+              <Field label="Marca o genérico"
+                hint={form.tipoMercado ? 'Elegido a mano.' : `Sugerido por el nombre: ${tipoSugerido === 'MARCA' ? 'marca' : 'genérico'}. Cámbialo si no es así.`}>
+                <Select value={tipoMercado} onChange={e => cambiar('tipoMercado', e.target.value)} className="m3-select" aria-label="Marca o genérico">
+                  <option value="GENERICO">Genérico</option>
+                  <option value="MARCA">Marca</option>
+                </Select>
               </Field>
             </div>
           </FormSection>
