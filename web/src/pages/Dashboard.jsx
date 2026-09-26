@@ -54,10 +54,10 @@ export default function Dashboard({ userDoc }) {
   const isAdmin = userDoc?.rol === 'administrador';
 
   // Vista
-  const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs']);
-  const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis']);
-  const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento']);
-  const [ventana, setVentana] = usePreferencia('trackflow_pref_ventana_variacion', 1, [1, 7, 15]);
+  const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs'], { sesion: true });
+  const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis'], { sesion: true });
+  const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento'], { sesion: true });
+  const [ventana, setVentana] = usePreferencia('trackflow_pref_ventana_variacion', 1, [1, 7, 15], { sesion: true });
   // Meta: promedio del mercado ± X %. Dice cuanto subir o bajar.
   const [meta, setMeta] = usePreferencia('dashboard.meta', 0, METAS.map(([v]) => v));
 
@@ -648,14 +648,14 @@ export default function Dashboard({ userDoc }) {
           <>
             <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad}
               opciones={[['todos', 'Unidad: todas'], ...unidades]} />
-            <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo}
-              opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
+            <FiltroChip etiqueta="Tipo de tus productos" icono="category" valor={filtroTipo} onChange={setFiltroTipo}
+              opciones={[['todos', 'Tus productos: todos'], ['generico', 'Tus genéricos'], ['marca', 'Tus marcas']]} />
             <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria}
               opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
             <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={cadenaComp} onChange={setCadenaComp}
               opciones={[['todos', 'Cadenas: todas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
             <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
-              opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+              opciones={[['todos', 'Competidores: todos'], ['GENERICO', 'Competidores genéricos'], ['MARCA', 'Competidores de marca']]} />
           </>
         )}
         comparar={(
@@ -664,7 +664,7 @@ export default function Dashboard({ userDoc }) {
               opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
-            <Segmentado etiqueta="Moneda" valor={moneda} onChange={setMoneda}
+            <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={setMoneda}
               opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares a la tasa BCV']]} />
             <Segmentado etiqueta="Periodo de los cambios" rotulo="Cambios" valor={String(ventana)} onChange={v => setVentana(Number(v))}
               opciones={[['1', '24 h', 'Cambios de las últimas 24 horas'], ['7', '7 d', 'Cambios de los últimos 7 días'], ['15', '15 d', 'Cambios de los últimos 15 días']]} />

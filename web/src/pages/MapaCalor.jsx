@@ -36,9 +36,9 @@ export default function MapaCalor() {
   const { productos = [], productosCompetencia = [], cadenas = [], variaciones = [], loadingInitial: loading } = useData();
   const bcv = useBcvRate();
 
-  const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs']);
-  const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis']);
-  const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento']);
+  const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs'], { sesion: true });
+  const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis'], { sesion: true });
+  const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento'], { sesion: true });
   const [filtroCadena, setFiltroCadena] = useState('todos');
   const [tipoComp, setTipoComp] = useState('todos'); // todos | GENERICO | MARCA
   const [filtroUnidad, setFiltroUnidad] = useState('todos');
@@ -209,12 +209,12 @@ export default function MapaCalor() {
         filtrar={(
           <>
             <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidades]} />
-            <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
+            <FiltroChip etiqueta="Tipo de tus productos" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tus productos: todos'], ['generico', 'Tus genéricos'], ['marca', 'Tus marcas']]} />
             <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
             <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={filtroCadena} onChange={setFiltroCadena}
               opciones={[['todos', 'Cadenas: todas'], ...cadenasCompetencia.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
             <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
-              opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+              opciones={[['todos', 'Competidores: todos'], ['GENERICO', 'Competidores genéricos'], ['MARCA', 'Competidores de marca']]} />
             <FiltroChip etiqueta="Posición" icono="balance" valor={filtroPosicion} onChange={setFiltroPosicion} opciones={POSICIONES} />
           </>
         )}
@@ -224,7 +224,7 @@ export default function MapaCalor() {
               opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
-            <Segmentado etiqueta="Moneda" valor={moneda} onChange={setMoneda}
+            <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={setMoneda}
               opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares a la tasa BCV']]} />
           </>
         )}

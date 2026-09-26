@@ -126,7 +126,7 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #55, desplegado (GitHub Pages sale solo de `main`) |
+| Código en `main` | PR #56, desplegado (GitHub Pages sale solo de `main`) |
 | SQL corrido en Supabase | **Hasta la fase 32**. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
@@ -560,6 +560,32 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Ajustes del PR #57 (sin SQL)
+
+- **Barra de filtros**:
+  - rótulo "Moneda" en $ | Bs, como los demás segmentados;
+  - Precio, Por, Moneda y Cambios se recuerdan solo mientras la pestaña está
+    abierta (`usePreferencia(..., { sesion: true })`, sessionStorage): al
+    entrar se arranca en Lista, Empaque, $ y 24 h;
+  - la meta y las filas por página se siguen recordando siempre.
+- **Los dos filtros de tipo, con textos distintos**:
+  - "Tus productos: todos / Tus genéricos / Tus marcas" filtra TUS
+    productos (`tipo_mercado` del producto propio);
+  - "Competidores: todos / genéricos / de marca" decide contra qué
+    competidores se compara (`tipo_mercado` del competidor).
+- **CSV de Competencia**:
+  - la **plantilla de carga** lleva solo la relación: id_interno, nombre,
+    cadena, tipo, competidor, laboratorio, unidades_empaque, **medida**
+    (unidad/ml/g, nueva), tipo_mercado, url y activo;
+  - el **reporte** agrega pvp_propio_usd, precio_usd, precio_bs,
+    precio_oferta_bs y ultima_captura;
+  - `laboratorio_competidor` pasa a llamarse `laboratorio` (se sigue
+    aceptando el nombre viejo);
+  - en las filas "propio", laboratorio, unidades, medida y tipo_mercado salen
+    de Productos y al importar se ignoran (se cambian en Productos);
+  - los precios manuales del formulario (normal y oferta) no van en la
+    plantilla: son capturas, no relación.
 
 ## Barra de filtros con Material 3 (PR #56, sin SQL)
 

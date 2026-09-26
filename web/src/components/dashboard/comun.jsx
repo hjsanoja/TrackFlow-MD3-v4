@@ -22,10 +22,13 @@ export const METAS = [
 export const textoMeta = (meta) => (meta === 0 ? 'el promedio' : `${Math.abs(meta)} % ${meta < 0 ? 'bajo' : 'sobre'} el promedio`);
 
 // Preferencias de vista que se recuerdan en el navegador.
-export function usePreferencia(clave, inicial, validos) {
+// Con { sesion: true } la eleccion vale solo mientras la pestana este abierta
+// (sessionStorage): al volver a entrar se arranca en el valor inicial.
+export function usePreferencia(clave, inicial, validos, { sesion = false } = {}) {
+  const almacen = () => (sesion ? sessionStorage : localStorage);
   const [valor, setValor] = useState(() => {
     try {
-      const guardado = localStorage.getItem(clave);
+      const guardado = almacen().getItem(clave);
       if (guardado == null) return inicial;
       const v = typeof inicial === 'number' ? Number(guardado) : guardado;
       return !validos || validos.includes(v) ? v : inicial;
@@ -33,8 +36,9 @@ export function usePreferencia(clave, inicial, validos) {
   });
   const cambiar = useCallback((v) => {
     setValor(v);
-    try { localStorage.setItem(clave, String(v)); } catch { /* sin almacenamiento */ }
-  }, [clave]);
+    try { almacen().setItem(clave, String(v)); } catch { /* sin almacenamiento */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave, sesion]);
   return [valor, cambiar];
 }
 

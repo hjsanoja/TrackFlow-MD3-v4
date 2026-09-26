@@ -364,7 +364,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadenaFiltro} onChange={setCadenaFiltro}
                 opciones={[['todos', 'Cadena: todas'], ...cadenasOfertas.map(c => [c, nombreCadena(c)])]} />
               <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoFiltro} onChange={setTipoFiltro}
-                opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
+                opciones={[['todos', 'Competidores: todos'], ['GENERICO', 'Competidores genéricos'], ['MARCA', 'Competidores de marca']]} />
           
             </>
           )}
@@ -374,7 +374,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
-            <Segmentado etiqueta="Moneda" valor={moneda} onChange={setMoneda}
+            <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={setMoneda}
               opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares a la tasa BCV']]} />
             </>
           )}

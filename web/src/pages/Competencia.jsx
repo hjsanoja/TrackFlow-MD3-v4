@@ -1,3 +1,4 @@
+import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { esMarca, leerTipoMercado, sugerirTipoMercado } from '../utils/tipoMercado';
 import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
@@ -34,15 +35,20 @@ import {
   normalizarUrl,
 } from '../utils/dbClient';
 
-// Un solo formato de CSV de enlaces para exportar, para la plantilla y para
-// importar (igual que en Productos). Donde el dato es el mismo que en el CSV
-// de productos, la columna se llama igual (id_interno, nombre, activo,
-// pvp_propio_usd). El laboratorio es el del competidor, no el tuyo, y por eso
-// va aparte. Nombre, PVP, precios y captura son informativos: al importar se
-// ignoran.
-const COLUMNAS_CSV_ENLACES = [
-  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio_competidor', 'unidades_empaque', 'tipo_mercado', 'url', 'activo',
-  'pvp_propio_usd', 'precio_usd', 'precio_bs', 'precio_oferta_bs', 'ultima_captura',
+// CSV de enlaces. La PLANTILLA de carga solo lleva lo que relaciona tu
+// producto con su enlace o su competidor (lo mismo que el formulario "Vincular
+// enlace"). El REPORTE agrega PVP, precios y fecha de captura, que son
+// informativos. Donde el dato es el mismo que en el CSV de productos, la
+// columna se llama igual (id_interno, nombre, laboratorio, tipo_mercado,
+// activo). En las filas "propio", laboratorio, unidades, medida y tipo_mercado
+// salen de Productos para que el archivo no tenga huecos; al importar se
+// ignoran (se cambian en Productos).
+const COLUMNAS_PLANTILLA = [
+  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio', 'unidades_empaque', 'medida', 'tipo_mercado', 'url', 'activo',
+];
+const COLUMNAS_CSV_PLANTILLA = COLUMNAS_PLANTILLA.map(key => ({ label: key, key }));
+const COLUMNAS_CSV_REPORTE = [
+  ...COLUMNAS_PLANTILLA, 'pvp_propio_usd', 'precio_usd', 'precio_bs', 'precio_oferta_bs', 'ultima_captura',
 ].map(key => ({ label: key, key }));
 const ARCHIVO_REPORTE = 'competencia_enlaces_reporte';
 const ARCHIVO_PLANTILLA = 'competencia_enlaces_plantilla_carga';
@@ -513,10 +519,9 @@ export default function Competencia() {
       cadena: nombreCadena(it.cadena),
       tipo: esPropio(it) ? 'propio' : 'competidor',
       competidor: esPropio(it) ? '' : (it.marca || ''),
-      laboratorio_competidor: esPropio(it) ? '' : (it.laboratorio || ''),
-      // 1 es el valor por defecto ("no se sabe"): se deja vacio.
-      unidades_empaque: !esPropio(it) && Number(it.unidades_empaque) > 1 ? String(Number(it.unidades_empaque)) : '',
-      tipo_mercado: esPropio(it) ? '' : (esMarca(it) ? 'marca' : 'generico'),
+      laboratorio: esPropio(it) ? (p?.laboratorio || '') : (it.laboratorio || ''),
+      ...contenidoCsv(it, p),
+      tipo_mercado: (esPropio(it) ? esMarca(p) : esMarca(it)) ? 'marca' : 'generico',
       url: it.url || '',
       activo: it.activo === false ? 'no' : 'si',
       pvp_propio_usd: pvp ? pvp.toFixed(2) : '',
@@ -527,8 +532,22 @@ export default function Competencia() {
     };
   };
 
+  // Unidades y medida del empaque: las de tu producto en las filas propias;
+  // en las del competidor, las suyas (1 = "no se sabe": se deja vacio).
+  const contenidoCsv = (it, p) => {
+    if (esPropio(it)) {
+      const unidades = Number(p?.unidosis) || parseUnidosisCount(p?.tamano, p?.nombre, null) || '';
+      const medida = /\bml\b/i.test(p?.tamano || '') ? 'ml' : /\bg\b/i.test(p?.tamano || '') ? 'g' : 'unidad';
+      return { unidades_empaque: unidades ? String(unidades) : '', medida: unidades ? medida : '' };
+    }
+    const n = Number(it.unidades_empaque);
+    return n > 1
+      ? { unidades_empaque: String(n), medida: ['ml', 'g'].includes(it.unidad_contenido) ? it.unidad_contenido : 'unidad' }
+      : { unidades_empaque: '', medida: '' };
+  };
+
   const handleExportar = () => {
-    exportToCSV(ARCHIVO_REPORTE, COLUMNAS_CSV_ENLACES, filtrados.map(filaCsvEnlace));
+    exportToCSV(ARCHIVO_REPORTE, COLUMNAS_CSV_REPORTE, filtrados.map(filaCsvEnlace));
     addToast(`Exportados ${filtrados.length} enlaces a CSV.`, 'success');
   };
 
@@ -536,10 +555,10 @@ export default function Competencia() {
     const filas = items.length > 0
       ? items.map(filaCsvEnlace)
       : [
-          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', laboratorio_competidor: '', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
-          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel 500 mg x 20', laboratorio_competidor: 'CALOX', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', laboratorio: 'LA SANTE', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'generico', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel 500 mg x 20', laboratorio: 'CALOX', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'marca', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
         ];
-    exportToCSV(items.length > 0 ? ARCHIVO_PLANTILLA : `${ARCHIVO_PLANTILLA}_ejemplo`, COLUMNAS_CSV_ENLACES, filas);
+    exportToCSV(items.length > 0 ? ARCHIVO_PLANTILLA : `${ARCHIVO_PLANTILLA}_ejemplo`, COLUMNAS_CSV_PLANTILLA, filas);
   };
 
   // Paso 1: leer y validar. No se escribe nada todavia.
@@ -603,6 +622,8 @@ export default function Competencia() {
         const marca = celdaExacta(row, 'competidor', 'marca', 'marca_competencia');
         const laboratorio = getRowValue(row, 'laboratorio_competidor', 'laboratorio', 'fabricante').trim();
         const unidades = Number(getRowValue(row, 'unidades_empaque', 'unidades_por_empaque').trim().replace(',', '.'));
+        const medidaLeida = getRowValue(row, 'medida', 'unidad_contenido').trim().toLowerCase();
+        const medida = ['ml', 'g'].includes(medidaLeida) ? medidaLeida : ['unidad', 'unidades', 'und', 'u'].includes(medidaLeida) ? 'unidad' : null;
         // Marca o generico: vacio = se conserva lo guardado; en uno nuevo se
         // deduce del nombre (si empieza con la molecula es generico).
         const tipoMercadoLeido = leerTipoMercado(getRowValue(row, 'tipo_mercado', 'marca_o_generico'));
@@ -618,8 +639,11 @@ export default function Competencia() {
           url,
           // Sin la columna o vacia se conserva lo guardado (activo por defecto en uno nuevo).
           activo: activoRaw ? !['no', 'false', '0'].includes(activoRaw) : (existente ? existente.activo !== false : true),
-          laboratorio: laboratorio || (existente && !esPropio(existente) ? existente.laboratorio || '' : ''),
+          // En filas propias laboratorio, unidades, medida y tipo son de
+          // Productos: se ignoran.
+          laboratorio: propio ? '' : laboratorio || (existente && !esPropio(existente) ? existente.laboratorio || '' : ''),
           unidades_empaque: !propio && unidades > 0 ? unidades : null,
+          unidad_contenido: !propio && unidades > 0 ? (medida || 'unidad') : null,
           tipo_mercado: propio ? null
             : tipoMercadoLeido || (existente ? null : sugerirTipoMercado(marca, productoPorId.get(id_producto)?.principio_activo)),
         });
@@ -1140,9 +1164,10 @@ export default function Competencia() {
                 Columnas del CSV
               </div>
               <div>id_interno, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
-              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio_competidor</div>
-              <div>unidades_empaque <span className="text-on-surface-variant font-sans font-medium">(tabletas, cápsulas o ml del competidor)</span></div>
+              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio</div>
+              <div>unidades_empaque, medida <span className="text-on-surface-variant font-sans font-medium">(unidad / ml / g)</span></div>
               <div>tipo_mercado <span className="text-on-surface-variant font-sans font-medium">(marca / generico; vacío en uno nuevo = se deduce del nombre)</span></div>
+              <div className="font-sans text-on-surface-variant pt-1">En las filas «propio», laboratorio, unidades, medida y tipo_mercado vienen de Productos y al importar se ignoran: se cambian en Productos.</div>
               <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
               <div className="font-sans font-medium text-on-surface-variant pt-1">
                 nombre, pvp_propio_usd y las columnas de precio y captura son informativas: al importar se ignoran. Una celda vacía no cambia nada.
