@@ -81,6 +81,9 @@ export default function Layout({ user, userDoc, children }) {
       { to: '/experimental?tab=canibalizacion', label: 'Canibalización de marcas (Experimental)', icon: 'compare_arrows' },
       { to: '/experimental?tab=brecha_usd', label: 'Brechas USD diarias (Experimental)', icon: 'payments' },
       { to: '/experimental?tab=mapa_cadenas', label: 'Mapa por cadena (Experimental)', icon: 'grid_on' },
+      { to: '/experimental?tab=periodos', label: 'Comparador de períodos (Experimental)', icon: 'compare' },
+      { to: '/experimental?tab=indice', label: 'Índice por molécula (Experimental)', icon: 'query_stats' },
+      { to: '/experimental?tab=reaccion', label: 'Velocidad de reacción (Experimental)', icon: 'bolt' },
       { to: '/experimental?tab=simulador', label: 'Simulador de precios (Experimental)', icon: 'calculate' }
     ] : [])
   ];

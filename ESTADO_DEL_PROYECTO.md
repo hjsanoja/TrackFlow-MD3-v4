@@ -126,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #53, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 30**. Todos los SQL están en `sql/` |
+| Código en `main` | PR #54, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 30**; las fases 31 y 32 van con el #55. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -561,6 +561,38 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Promedio del mercado y tres análisis nuevos (PR #55, fases 31 y 32)
+
+- **Promedio del mercado en todo el panel** (lo pidió Hernando): el promedio
+  cuenta tu precio, (suma de la competencia + tu precio) ÷ (competidores + 1).
+  El mínimo sigue siendo solo de la competencia ("Eres el más barato" no
+  cambia).
+  - `useAnalisisPrecios` devuelve `promedio` (mercado) y `promedioComp`.
+  - La meta se despeja exacta, porque al mover tu precio también se mueve el
+    promedio: t = (1 + m)·S / (n − m), en `calcularAjuste(..., competidores)`.
+    Con meta 0 da el promedio de la competencia.
+  - En la ficha, con "Relación: todas", el promedio y su línea en la historia
+    son del mercado ("Promedio (mercado)").
+  - **Fase 31**: `fn_posicion_productos` devuelve `promedio_usd` y
+    `dif_promedio` del mercado, y con eso la tendencia. Misma firma que la
+    fase 30.
+- **Historial del PVP** en la ficha lateral de Productos (`FichaProducto`):
+  cada tramo de `pvp_propio`, con fechas y el % frente al anterior. Sin SQL.
+- **Fase 32** y tres pestañas nuevas en Experimental
+  (`components/analisis/`, con `hooks/useRpc.js`):
+  - **Comparador de períodos** (`fn_comparar_periodos`): tu posición en los
+    últimos 7/15/30 días frente a los anteriores, por producto, y si el
+    cambio vino de tu precio o del mercado.
+  - **Índice por molécula** (`fn_indice_molecula`): índice base 100 del precio
+    del mercado por unidad, en $ a la tasa de cada día. Promedia los índices
+    de cada producto de la molécula, con una minilínea por molécula.
+  - **Velocidad de reacción** (`fn_velocidad_reaccion`): un cambio es
+    reacción si el cambio anterior en ese producto lo hizo otra cadena en los
+    30 días previos. Por cadena muestra la mediana de días, las reacciones,
+    cuántas van en la misma dirección y cuántas veces la siguieron. Se hace
+    con una sola pasada ordenada: la primera versión (cruzando cada cambio con
+    todos los demás) tardaba 75 s en la base de prueba; esta, 2 s.
+
 ## Ajustes del PR #54 (sin SQL)
 
 - **Mapa de Calor con el MERCADO**: mínimo, promedio y máximo cuentan tu
@@ -887,13 +919,13 @@ No volver a tropezar con estas:
 **Funciones del bloque 5** (menú Experimental). Hechas: bandeja de revisión de
 capturas y devaluación vs subida real. Faltan:
 
-- Mapa de cobertura
+- Mapa de cobertura (en parte: "Cobertura por cadena" en Competencia)
 - Precio efectivo de promoción
-- Índice de precios por molécula
-- Comparador de períodos
-- Velocidad de reacción competitiva
-- Alertas por correo
-- Reporte semanal
+- Alertas por correo (espera Brevo)
+- Reporte semanal (espera Brevo)
+
+Hechas en el #55: índice por molécula, comparador de períodos y velocidad
+de reacción.
 
 **Competencia**: historial y "Nombre en la tienda" de la ficha del enlace, hechos en el #54.
 

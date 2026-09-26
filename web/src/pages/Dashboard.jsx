@@ -57,7 +57,7 @@ export default function Dashboard({ userDoc }) {
   const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis']);
   const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento']);
   const [ventana, setVentana] = usePreferencia('trackflow_pref_ventana_variacion', 1, [1, 7, 15]);
-  // Meta: promedio de la competencia ± X %. Dice cuanto subir o bajar.
+  // Meta: promedio del mercado ± X %. Dice cuanto subir o bajar.
   const [meta, setMeta] = usePreferencia('dashboard.meta', 0, METAS.map(([v]) => v));
 
   // Filtros de todo el panel
@@ -103,7 +103,7 @@ export default function Dashboard({ userDoc }) {
     productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis, ventana, cadenaComp, tipoComp,
   });
 
-  const ajusteDe = useCallback((x) => calcularAjuste(x.tuPrecio, x.promedio, meta), [meta]);
+  const ajusteDe = useCallback((x) => calcularAjuste(x.tuPrecio, x.promedio, meta, x.precios.filter(o => o.tipo !== 'propio').length), [meta]);
 
   // ------------------------------------------------------------------------
   // Filtros de todo el panel (indicadores, graficos y tabla)
@@ -388,7 +388,7 @@ export default function Dashboard({ userDoc }) {
   });
   const detalleGrupo = (g) => abrirDetalle({
     titulo: `Tu precio: ${g.corto.toLowerCase()}`,
-    subtitulo: 'Productos en este grupo, según la diferencia de tu precio con el promedio de la competencia.',
+    subtitulo: 'Productos en este grupo, según la diferencia de tu precio con el promedio del mercado.',
     icono: 'balance',
     filas: [...g.items].sort((a, b) => a.difProm - b.difProm),
     columnas: [colProducto, colTuPrecio, colPromedio, colDifProm, colAjuste],
@@ -414,7 +414,7 @@ export default function Dashboard({ userDoc }) {
       .sort((a, b) => Number(a.dif_promedio) - Number(b.dif_promedio));
     abrirDetalle({
       titulo: `Tu posición el ${diaLargo(fecha)}`,
-      subtitulo: 'Tu precio y el promedio de la competencia ese día (el último precio leído de cada enlace), en dólares a la tasa de ese día.',
+      subtitulo: 'Tu precio y el promedio del mercado (la competencia y tú) ese día, con el último precio leído de cada enlace, en dólares a la tasa de ese día.',
       icono: 'show_chart',
       filas: filasDia,
       clave: f => String(f.id_interno),
@@ -506,7 +506,7 @@ export default function Dashboard({ userDoc }) {
       { key: 'tu', label: `Tu precio (${sufijoMoneda})` },
       { key: 'min', label: `Mínimo competencia (${sufijoMoneda})` },
       { key: 'cadMin', label: 'Cadena del mínimo' },
-      { key: 'prom', label: `Promedio competencia (${sufijoMoneda})` },
+      { key: 'prom', label: `Promedio del mercado, con tu precio (${sufijoMoneda})` },
       { key: 'difMin', label: 'Tú frente al mínimo (%)' },
       { key: 'posicion', label: 'Posición (1 = el más barato)' },
       { key: 'difProm', label: 'Tú frente al promedio (%)' },
@@ -682,7 +682,7 @@ export default function Dashboard({ userDoc }) {
           icon="balance"
           tono={kpi.frentePromedio == null ? 'neutral' : kpi.frentePromedio > 5 ? 'negative' : kpi.frentePromedio < -UMBRAL_EMPATE ? 'primary' : 'neutral'}
           onClick={detalleFrentePromedio}
-          title="La diferencia típica (mediana) de tu precio con el promedio de la competencia. Toca para ver cada producto y cuánto subir o bajar para llegar a tu meta."
+          title="La diferencia típica (mediana) de tu precio con el promedio del mercado. Toca para ver cada producto y cuánto subir o bajar para llegar a tu meta."
         />
         <StatCard
           compacto
@@ -745,9 +745,10 @@ export default function Dashboard({ userDoc }) {
               <h2 className="m3-title-medium text-on-surface">¿Dónde está tu precio?</h2>
               <InfoGrafico
                 titulo="¿Dónde está tu precio?"
-                que="Cuántos de tus productos caen en cada rango frente al promedio de la competencia. Toca una barra para ver la lista."
+                que="Cuántos de tus productos caen en cada rango frente al promedio del mercado. Toca una barra para ver la lista."
                 formula={[
-                  'Diferencia = tu precio ÷ promedio de la competencia − 1',
+                  'Diferencia = tu precio ÷ promedio del mercado − 1',
+                  'Promedio del mercado = (suma de la competencia + tu precio) ÷ (competidores + 1)',
                   'Rangos: −15 % o menos · −15 a −5 % · parejo (±5 %) · +5 a +15 % · +15 % o más',
                 ]}
                 lectura="Azul a la izquierda: más barato que el mercado. Gris al centro: parejo. Rojo a la derecha: más caro. Mientras más productos en rojo, más caro estás frente a la competencia."
@@ -897,10 +898,10 @@ export default function Dashboard({ userDoc }) {
                       </th>
                     ))}
                     <th className="text-right m3-dash-col-sep"><BotonOrden campo="minimo" orden={orden} onClick={ordenarPor}>Mínimo</BotonOrden></th>
-                    <th className="text-right"><BotonOrden campo="promedio" orden={orden} onClick={ordenarPor}>Promedio</BotonOrden></th>
+                    <th className="text-right" title="Promedio del mercado: la competencia y tu precio"><BotonOrden campo="promedio" orden={orden} onClick={ordenarPor}>Promedio</BotonOrden></th>
                     <th className="text-right m3-dash-col-sep"><BotonOrden campo="tuPrecio" orden={orden} onClick={ordenarPor}>Tu precio</BotonOrden></th>
                     <th className="text-right" title="Lugar de tu precio entre todas las ofertas, del más barato (1) al más caro"><BotonOrden campo="posicion" orden={orden} onClick={ordenarPor}>Posición</BotonOrden></th>
-                    <th className="text-right" title="Cuánto más caro (rojo) o más barato (azul) es tu precio que el mínimo y que el promedio de la competencia">
+                    <th className="text-right" title="Cuánto más caro (rojo) o más barato (azul) es tu precio que el mínimo de la competencia y que el promedio del mercado">
                       <div className="flex flex-col items-end">
                         <span>Tu diferencia</span>
                         <span className="inline-flex gap-3">

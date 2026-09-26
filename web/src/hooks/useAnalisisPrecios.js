@@ -6,7 +6,8 @@ import { esMarca } from '../utils/tipoMercado';
 // Precios de cada producto propio frente a la competencia, con el mismo
 // criterio en el Dashboard y en el Mapa de Calor:
 //   - "Tu precio": el mas bajo de tus enlaces; si no hay, el PVP de la ficha.
-//   - Minimo y promedio: SOLO de la competencia.
+//   - Minimo: SOLO de la competencia. Promedio: del MERCADO (la competencia
+//     mas tu precio); promedioComp es el de la competencia sola.
 //   - Cambios: en dolares, cada precio a la tasa de su dia (v_variacion).
 //   - Por unidad: el precio entre las unidades del empaque.
 //   - tipoComp: comparar contra toda la competencia, solo genericos o solo
@@ -104,13 +105,16 @@ export function useAnalisisPrecios({
       const competidores = precios.filter(x => x.tipo !== 'propio');
       const valores = competidores.map(x => x.priceUsd);
       const minimo = valores.length ? Math.min(...valores) : null;
-      const promedio = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
+      const promedioComp = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
       const cadenasMin = minimo == null ? [] : [...new Set(competidores.filter(x => Math.abs(x.priceUsd - minimo) < 0.0005).map(x => x.cadena))];
 
       const pvpUsd = Number(p.pvp_propio_usd || 0) > 0 ? Number(p.pvp_propio_usd) : null;
       const tuPrecio = propios.length ? Math.min(...propios.map(x => x.priceUsd)) : (pvpUsd != null ? pvpUsd / (porUnidad ? unidadesPropio : 1) : null);
       const tuUnidad = propios.length ? Math.min(...propios.map(x => x.unitUsd)) : (pvpUsd != null ? pvpUsd / unidadesPropio : null);
       const fuenteTuPrecio = propios.length ? 'enlace' : pvpUsd ? 'pvp' : null;
+      // Promedio del mercado: la competencia mas tu precio (como el Mapa de Calor).
+      const promedio = promedioComp == null ? null
+        : tuPrecio != null ? (promedioComp * valores.length + tuPrecio) / (valores.length + 1) : promedioComp;
       const difMin = tuPrecio != null && minimo > 0 ? ((tuPrecio - minimo) / minimo) * 100 : null;
       const difProm = tuPrecio != null && promedio > 0 ? ((tuPrecio - promedio) / promedio) * 100 : null;
       // Posicion: el lugar de tu precio entre todas las ofertas (la tuya mas
@@ -150,6 +154,7 @@ export function useAnalisisPrecios({
         porCadena,
         minimo,
         promedio,
+        promedioComp,
         cadenasMin,
         tuPrecio,
         tuUnidad,

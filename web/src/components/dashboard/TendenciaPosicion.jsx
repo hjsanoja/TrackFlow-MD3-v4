@@ -11,7 +11,7 @@ const diaCorto = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { 
 const diaLargo = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long' });
 
 // Tendencia de tu posicion: la diferencia tipica (mediana) de tu precio con el
-// promedio de la competencia, dia por dia. La calcula Postgres
+// promedio del mercado, dia por dia. La calcula Postgres
 // (fn_tendencia_posicion, fase 28); al navegador llegan ~90 puntos.
 export default function TendenciaPosicion({ productos, conDescuento, porUnidad, cadena, tipoMercado, meta, tg, onDia }) {
   const [dias, setDias] = useState(() => {
@@ -67,9 +67,10 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
           <h2 className="m3-title-medium text-on-surface">Tendencia de tu posición</h2>
           <InfoGrafico
             titulo="Tendencia de tu posición"
-            que="Tu precio frente al promedio de la competencia, día a día, para el producto típico (la mediana). Toca un día para ver cada producto."
+            que="Tu precio frente al promedio del mercado, día a día, para el producto típico (la mediana). Toca un día para ver cada producto."
             formula={[
-              'Por producto: tu precio ÷ promedio de la competencia − 1',
+              'Por producto: tu precio ÷ promedio del mercado − 1',
+              'Promedio del mercado = (suma de la competencia + tu precio) ÷ (competidores + 1)',
               'Línea: la mediana de esas diferencias en el día',
             ]}
             lectura="Por encima de 0 eres más caro que el mercado; por debajo, más barato. Si sube, te estás encareciendo frente a la competencia. La línea punteada es tu meta. Cada día se usa el último precio de cada enlace (hasta 7 días atrás), en dólares a la tasa de ese día."

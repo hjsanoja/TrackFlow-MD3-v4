@@ -1,5 +1,6 @@
 import CadenaBadge from './CadenaBadge';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase, isSupabaseActive } from '../supabase';
 import { createPortal } from 'react-dom';
 
 /**
@@ -110,6 +111,8 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
             </div>
           </section>
 
+          <HistorialPvp productoId={p.db_id} />
+
           <section aria-labelledby="ficha-datos">
             <h3 id="ficha-datos" className="m3-title-small text-on-surface-variant mb-1">Ficha</h3>
             <dl className="divide-y divide-outline-variant">
@@ -197,5 +200,60 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
       </aside>
     </div>,
     document.body
+  );
+}
+
+// Historial del PVP: cada precio con desde cuando rige y cuanto cambio
+// frente al anterior (tabla pvp_propio, un tramo por cada cambio).
+const fechaPvp = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function HistorialPvp({ productoId }) {
+  const [tramos, setTramos] = useState(null);
+
+  useEffect(() => {
+    if (!productoId || !isSupabaseActive()) { setTramos([]); return undefined; }
+    let vigente = true;
+    supabase.from('pvp_propio')
+      .select('id, pvp_usd, vigente_desde, vigente_hasta')
+      .eq('producto_id', productoId)
+      .order('vigente_desde', { ascending: false })
+      .limit(24)
+      .then(({ data }) => { if (vigente) setTramos(data || []); });
+    return () => { vigente = false; };
+  }, [productoId]);
+
+  if (tramos === null) return null;
+  return (
+    <section aria-labelledby="ficha-pvp">
+      <h3 id="ficha-pvp" className="m3-title-small text-on-surface-variant mb-2">Historial del PVP</h3>
+      {tramos.length === 0 ? (
+        <p className="m3-body-medium text-on-surface-variant">Todavía no hay PVP guardados para este producto.</p>
+      ) : (
+        <ul className="divide-y divide-outline-variant">
+          {tramos.map((t, i) => {
+            const anterior = tramos[i + 1];
+            const cambio = anterior && Number(anterior.pvp_usd) > 0 ? (Number(t.pvp_usd) / Number(anterior.pvp_usd) - 1) * 100 : null;
+            return (
+              <li key={t.id} className="flex items-center gap-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="m3-body-medium text-on-surface">
+                    {t.vigente_hasta ? `${fechaPvp(t.vigente_desde)} – ${fechaPvp(t.vigente_hasta)}` : `Desde ${fechaPvp(t.vigente_desde)}`}
+                  </div>
+                  <div className="m3-body-small text-on-surface-variant">
+                    {!t.vigente_hasta ? 'Vigente' : anterior ? 'Anterior' : 'Primer PVP registrado'}
+                  </div>
+                </div>
+                {cambio != null && Math.abs(cambio) >= 0.05 && (
+                  <span className={`m3-body-small tabular-nums ${cambio > 0 ? 'text-error' : 'text-primary'}`}>
+                    {cambio > 0 ? '+' : '−'}{Math.abs(cambio).toFixed(1).replace('.', ',')} %
+                  </span>
+                )}
+                <span className="m3-title-small tabular-nums text-on-surface">${Number(t.pvp_usd).toFixed(2)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
