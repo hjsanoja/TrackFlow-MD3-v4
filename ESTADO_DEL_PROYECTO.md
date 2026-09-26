@@ -126,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #54, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 30**; las fases 31 y 32 van con el #55. Todos los SQL están en `sql/` |
+| Código en `main` | PR #55, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 32**. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -560,6 +560,23 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Barra de filtros con Material 3 (PR #56, sin SQL)
+
+Dashboard, Mapa de Calor, ficha del producto y Mapa por cadena usan la misma
+barra (`components/BarraFiltros.jsx`):
+- **Dos filas alineadas con rótulo**:
+  - "Filtrar": chips de filtro que acotan la lista;
+  - "Comparar": cómo se calcula.
+- **Botones segmentados de M3** (`components/Segmentado.jsx`, selección única,
+  con check y flechas del teclado) para las opciones fijas: Precio
+  Lista/Oferta, Por Empaque/Unidad, $/Bs y Cambios 24 h/7 d/15 d. El switch
+  $/Bs se reemplazó: en M3 el switch es para encender/apagar, no para elegir
+  entre dos valores. La meta (muchas opciones) sigue como menú.
+- **"Limpiar"**: en pantalla ancha va al extremo derecho de la fila Filtrar,
+  en un espacio reservado; en celular, junto al rótulo. Así nunca empuja los
+  chips. `LimpiarFiltros` ya solo se usa en las tablas de Productos,
+  Competencia, Cadenas y Usuarios.
 
 ## Promedio del mercado y tres análisis nuevos (PR #55, fases 31 y 32)
 
