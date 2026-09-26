@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { supabase, isSupabaseActive } from '../supabase';
 import { publicacionIdDe } from '../utils/dbClient';
 import { enlaceCaido, describirPresentacion } from '../utils/presentacion';
+import { limpiarNombreCapturado } from '../context/DataContext';
 
 /**
  * Ficha de un enlace de competencia (side sheet), hermana de FichaProducto:
@@ -53,7 +54,7 @@ export default function FichaEnlace({
     if (!isSupabaseActive() || !pubId) { setHistorial([]); return undefined; }
     supabase
       .from('fact_precios')
-      .select('id, fecha_captura, precio_full_bs, precio_desc_bs, tasa_bcv, origen, estado, sospechoso')
+      .select('id, fecha_captura, precio_full_bs, precio_desc_bs, tasa_bcv, origen, estado, sospechoso, nombre_capturado')
       .eq('publicacion_id', pubId)
       .order('fecha_captura', { ascending: false })
       .limit(15)
@@ -150,7 +151,11 @@ export default function FichaEnlace({
                 {producto ? `${producto.id_interno} · ${producto.nombre}${producto.concentracion ? ` ${producto.concentracion}` : ''} · ${describirPresentacion(producto)}` : e.id_producto_propio}
               </Dato>
               {!propio && <Dato etiqueta="Laboratorio">{e.laboratorio}</Dato>}
-              <Dato etiqueta="Nombre en la tienda">{e.ultimo_nombre}</Dato>
+              {/* El que leyo el robot en la pagina (no el que se le puso al
+                  competidor): si no se parece, el enlace apunta a otro producto. */}
+              <Dato etiqueta="Nombre en la tienda">
+                {historial === null ? 'Cargando…' : (limpiarNombreCapturado(historial.find(h => h.nombre_capturado)?.nombre_capturado) || 'El robot aún no lo ha leído')}
+              </Dato>
               <Dato etiqueta="Última captura">
                 <span className={caido ? 'm3-count-stale' : ''}>{haceCuanto(e.ultimo_scrape)}</span>
                 {caido && e.activo && <span className="m3-chip-caido ml-2">Sin precio reciente</span>}
@@ -187,7 +192,7 @@ export default function FichaEnlace({
                       </div>
                       <div className="text-right shrink-0 pr-2">
                         <div className="m3-cell-primary tabular-nums">{usd(enUsd)}</div>
-                        <div className="m3-cell-secondary tabular-nums">{bs(precioBs)}</div>
+                        <div className="m3-cell-secondary tabular-nums">{bs(precioBs)}{Number(h.precio_desc_bs) > 0 && Number(h.precio_desc_bs) < Number(h.precio_full_bs) ? ' · oferta' : ''}</div>
                       </div>
                     </li>
                   );

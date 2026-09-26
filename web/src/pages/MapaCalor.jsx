@@ -81,10 +81,24 @@ export default function MapaCalor() {
       (filtroTipo === 'todos' || (p.market_type || 'GENERICO').toLowerCase() === filtroTipo) &&
       (filtroCategoria === 'todos' || p.categoria === filtroCategoria))
     .map(x => {
+      // En el Mapa de Calor minimo, promedio y maximo son del MERCADO: la
+      // competencia mas tu precio (en el Dashboard son solo de la competencia).
       const comp = x.precios.filter(o => o.tipo !== 'propio');
-      const maximo = comp.length ? Math.max(...comp.map(o => o.priceUsd)) : null;
-      const ofertaMax = comp.find(o => o.priceUsd === maximo);
-      return { ...x, maximo, cadenaMax: ofertaMax?.cadena, competidores: comp.length, ranking: x.posicion, posicion: posicionDe(x) };
+      const valores = [...comp.map(o => o.priceUsd), ...(x.tuPrecio != null ? [x.tuPrecio] : [])];
+      if (!comp.length) return { ...x, maximo: null, competidores: 0, ranking: x.posicion, posicion: 'sin_comparar' };
+      const minimo = Math.min(...valores);
+      const maximo = Math.max(...valores);
+      const promedio = valores.reduce((a, b) => a + b, 0) / valores.length;
+      const difProm = x.tuPrecio != null ? (x.tuPrecio / promedio - 1) * 100 : null;
+      const tuyo = (v) => x.tuPrecio != null && Math.abs(x.tuPrecio - v) < 0.0005;
+      const conMercado = {
+        ...x, minimo, maximo, promedio, difProm,
+        minEsTuyo: tuyo(minimo), maxEsTuyo: tuyo(maximo),
+        cadenasMin: comp.filter(o => Math.abs(o.priceUsd - minimo) < 0.0005).map(o => o.cadena),
+        cadenaMax: comp.find(o => Math.abs(o.priceUsd - maximo) < 0.0005)?.cadena,
+        competidores: comp.length, ranking: x.posicion,
+      };
+      return { ...conMercado, posicion: posicionDe(conMercado) };
     }), [analizados, filtroUnidad, filtroTipo, filtroCategoria]);
   const hayFiltros = [filtroCadena, tipoComp, filtroUnidad, filtroTipo, filtroCategoria, filtroPosicion].some(v => v !== 'todos');
 
@@ -128,7 +142,7 @@ export default function MapaCalor() {
       ? [colProducto, { titulo: 'Qué falta', celda: x => (x.tuPrecio == null ? 'Tu precio' : 'Precio de la competencia') }]
       : [colProducto,
         { titulo: 'Tu precio', alinear: 'right', celda: x => fmtModo(x.tuPrecio) },
-        { titulo: 'Promedio', alinear: 'right', celda: x => fmtModo(x.promedio) },
+        { titulo: 'Promedio del mercado', alinear: 'right', celda: x => fmtModo(x.promedio) },
         { titulo: 'Tú frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> }],
     posicion: clave,
   });
@@ -153,9 +167,9 @@ export default function MapaCalor() {
     if (!datos.length) return;
     exportToCSV(`mapa_de_calor${filtroCadena !== 'todos' ? `_${filtroCadena}` : ''}${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`, [
       { key: 'id', label: 'ID' }, { key: 'producto', label: 'Producto' }, { key: 'presentacion', label: 'Presentación' },
-      { key: 'tu', label: `Tu precio (${suf})` }, { key: 'min', label: `Mínimo competencia (${suf})` },
-      { key: 'prom', label: `Promedio competencia (${suf})` }, { key: 'max', label: `Máximo competencia (${suf})` },
-      { key: 'dif', label: 'Tú frente al promedio (%)' }, { key: 'posicion', label: 'Posición' },
+      { key: 'tu', label: `Tu precio (${suf})` }, { key: 'min', label: `Mínimo del mercado (${suf})` },
+      { key: 'prom', label: `Promedio del mercado (${suf})` }, { key: 'max', label: `Máximo del mercado (${suf})` },
+      { key: 'dif', label: 'Tú frente al promedio del mercado (%)' }, { key: 'posicion', label: 'Posición' },
     ], datos);
   };
 
@@ -179,7 +193,7 @@ export default function MapaCalor() {
             <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Mapa de calor</h1>
           </div>
           <p className="text-xs text-on-surface-variant">
-            Para cada producto, los precios de la competencia del más barato al más caro y dónde cae el tuyo.
+            Para cada producto, los precios del mercado (la competencia y el tuyo) del más barato al más caro, y dónde cae el tuyo.
           </p>
         </div>
         <button onClick={exportar} className="m3-btn-outline self-start lg:self-auto" title="Descargar en CSV lo que se ve, con los filtros actuales">
@@ -190,17 +204,17 @@ export default function MapaCalor() {
 
       <section className="m3-dash-filtros" aria-label="Filtros del mapa">
         <div className="flex flex-wrap items-center gap-2">
-          <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={filtroCadena} onChange={setFiltroCadena}
-            opciones={[['todos', 'Competencia: todas las cadenas'], ...cadenasCompetencia.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
-          <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
-            opciones={[['todos', 'Competidores: marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
           <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidades]} />
           <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
           <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
+          <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={filtroCadena} onChange={setFiltroCadena}
+            opciones={[['todos', 'Cadenas: todas'], ...cadenasCompetencia.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
+          <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
+            opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
           <FiltroChip etiqueta="Posición" icono="balance" valor={filtroPosicion} onChange={setFiltroPosicion} opciones={POSICIONES} />
-          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroCadena('todos'); setTipoComp('todos'); setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }} />
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroCadena('todos'); setTipoComp('todos'); setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }} />
           <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
             <option value="lista">Precio de lista</option>
             <option value="descuento">Precio con oferta</option>
@@ -259,16 +273,17 @@ export default function MapaCalor() {
                 <span className="material-symbols-outlined" aria-hidden="true">{orden.campo === 'nombre' ? (orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}</span>
               </button>
               <span className="hidden md:flex items-center gap-1">
-                Precios de la competencia y el tuyo
+                Precios del mercado (competencia y tú)
                 <InfoGrafico
                   titulo="Cómo se lee cada franja"
-                  que="Cada franja es la escala de ese producto: en la esquina izquierda el precio más bajo de la competencia, al centro el promedio y en la esquina derecha el más alto. El punto con globo es tu precio."
+                  que="Cada franja es la escala de ese producto con TODO el mercado (la competencia y tú): en la esquina izquierda el precio más bajo, al centro el promedio y en la esquina derecha el más alto. El punto con globo es tu precio."
                   formula={[
-                    'Promedio = suma de los precios de la competencia ÷ número de competidores (tu precio no entra)',
+                    'Mínimo y máximo = el precio más bajo y el más alto, contando el tuyo',
+                    'Promedio = suma de todos los precios (competencia + tuyo) ÷ número de precios',
                     'Globo = tu precio y tu precio ÷ promedio − 1',
                     'Tu posición = lugar de tu precio entre todas las ofertas (1 = el más barato)',
                   ]}
-                  lectura="Azul: más de 5 % por debajo del promedio. Gris: a ±5 % del promedio. Rojo: más de 5 % por encima. Si tu punto está pegado a la esquina izquierda eres el más barato; pegado a la derecha, el más caro (si te pasas del mínimo o del máximo, el punto se queda en la esquina y el globo dice tu precio real). Solo cuentan las cadenas y el tipo (marca / genérico) de los filtros."
+                  lectura="Azul: más de 5 % por debajo del promedio. Gris: a ±5 %. Rojo: más de 5 % por encima. Si tu punto está en la esquina izquierda eres el más barato; en la derecha, el más caro (el rótulo dice «Tú»). Ojo: en el Dashboard el promedio es solo de la competencia, por eso el % puede ser distinto. Solo cuentan las cadenas y el tipo (marca / genérico) de los filtros."
                 />
               </span>
               <button type="button" onClick={() => ordenarPor('ranking')} className={`m3-sort-btn justify-self-end ${orden.campo === 'ranking' ? 'is-active' : ''}`}
@@ -390,7 +405,7 @@ function Espectro({ x, fmt, nombreCadena }) {
   const pTuyo = tuyo != null ? pos(tuyo) : null;
   return (
     <div className="m3-espectro" role="img"
-      aria-label={`Competencia de ${fmt(min)} a ${fmt(max)}, promedio ${fmt(prom)}${tuyo != null ? `; tu precio ${fmt(tuyo)} (${pct(difProm)})` : ''}`}>
+      aria-label={`Mercado de ${fmt(min)} a ${fmt(max)}, promedio ${fmt(prom)}${tuyo != null ? `; tu precio ${fmt(tuyo)} (${pct(difProm)})` : ''}`}>
       <div className="m3-espectro-pista">
         <div className="m3-espectro-barra">
           <div className="m3-espectro-zona-barata" style={{ width: `${pBajo}%` }} />
@@ -410,11 +425,11 @@ function Espectro({ x, fmt, nombreCadena }) {
       </div>
       <div className="m3-espectro-rotulos">
         <span title={x.cadenasMin[0] ? `En ${nombreCadena(x.cadenasMin[0])}` : ''}>
-          {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" title="" />}Mín. {fmt(min)}
+          {x.minEsTuyo ? <span className="m3-chip-propio">Tú</span> : x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" title="" />}Mín. {fmt(min)}
         </span>
         <span className="is-prom">Prom. {fmt(prom)}</span>
         <span title={x.cadenaMax ? `En ${nombreCadena(x.cadenaMax)}` : ''}>
-          Máx. {fmt(max)}{x.cadenaMax && <CadenaBadge cadena={x.cadenaMax} tamano="xs" title="" />}
+          Máx. {fmt(max)}{x.maxEsTuyo ? <span className="m3-chip-propio">Tú</span> : x.cadenaMax && <CadenaBadge cadena={x.cadenaMax} tamano="xs" title="" />}
         </span>
       </div>
     </div>
