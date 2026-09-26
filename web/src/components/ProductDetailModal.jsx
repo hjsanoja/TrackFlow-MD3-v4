@@ -151,12 +151,20 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const valores = visibles.map(o => o.priceUsd);
   const minimo = valores.length ? Math.min(...valores) : null;
   const maximo = valores.length ? Math.max(...valores) : null;
-  const promedio = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
+  // Con "Relación: todas" el promedio es el del mercado, como en el Dashboard:
+  // la competencia visible mas tu precio (uno solo, el mas bajo). Con un
+  // filtro de relacion es el promedio simple de las ofertas que se ven.
+  const valoresComp = visibles.filter(o => o.tipo !== 'propio').map(o => o.priceUsd);
+  const deMercado = relacion === 'todos' && tuPrecio != null && valoresComp.length > 0;
+  const promedio = deMercado
+    ? (valoresComp.reduce((a, b) => a + b, 0) + tuPrecio) / (valoresComp.length + 1)
+    : valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
   const ofertaMin = visibles.find(o => o.priceUsd === minimo);
   const ofertaMax = visibles.find(o => o.priceUsd === maximo);
   const difProm = tuPrecio != null && promedio > 0 ? (tuPrecio / promedio - 1) * 100 : null;
-  const ajuste = calcularAjuste(tuPrecio, promedio, meta);
+  const ajuste = calcularAjuste(tuPrecio, promedio, meta, deMercado ? valoresComp.length : 0);
   const sufijoGrupo = relacion === 'propio' ? '(tuyos)' : relacion === 'competencia' ? '(competencia)' : '(todas)';
+  const sufijoPromedio = deMercado ? '(mercado)' : sufijoGrupo;
   const { fmt, fmtUnidad } = crearFormato(moneda, bcvRate);
   const fmtModo = porUnidad ? fmtUnidad : fmt;
 
@@ -219,17 +227,21 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       const fila = { fecha, tasa: tasaPorDia.get(fecha) ?? null };
       const tuyos = [];
       const otros = [];
+      const comp = [];
       for (const [pub, info] of pubs) {
         const v = ultimoConocido(info.dias, fecha);
         if (v == null) continue;
         const visible = pasaFiltros(String(info.tipo), info.cadena, info.tm);
-        if (visible) { fila[`p${pub}`] = v; otros.push(v); }
+        if (visible) { fila[`p${pub}`] = v; otros.push(v); if (info.tipo !== 'propio') comp.push(v); }
         if (info.tipo === 'propio') tuyos.push(v);
       }
       if (tuyos.length) fila.tuyo = Math.min(...tuyos);
       if (otros.length) {
         fila.minimo = Math.min(...otros);
-        fila.promedio = otros.reduce((a, b) => a + b, 0) / otros.length;
+        // Con "todas": promedio del mercado (competencia + tu precio).
+        fila.promedio = relacion === 'todos' && tuyos.length && comp.length
+          ? (comp.reduce((a, b) => a + b, 0) + fila.tuyo) / (comp.length + 1)
+          : otros.reduce((a, b) => a + b, 0) / otros.length;
       }
       return fila;
     }).filter(f => f.tuyo != null || f.minimo != null);
@@ -375,7 +387,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             hint={tuyas.length ? (tuyas.length === 1 ? 'Tu enlace' : `El más bajo de tus ${tuyas.length} enlaces`) : pvp ? 'PVP cargado en Productos' : 'Sin precio tuyo'} />
           <StatCard compacto label={`Mínimo ${sufijoGrupo}`} value={fmtModo(minimo)} icon="south" tono="neutral"
             hint={ofertaMin ? `${nombreCorto(ofertaMin.marca)} en ${nombreCadena(ofertaMin.cadena)}` : 'Sin precios'} />
-          <StatCard compacto label={`Promedio ${sufijoGrupo}`} value={fmtModo(promedio)} icon="balance" tono="neutral"
+          <StatCard compacto label={`Promedio ${sufijoPromedio}`} value={fmtModo(promedio)} icon="balance" tono="neutral"
             hint={`${visibles.length} ${visibles.length === 1 ? 'oferta' : 'ofertas'}`} />
           <StatCard compacto label={`Máximo ${sufijoGrupo}`} value={fmtModo(maximo)} icon="north" tono="neutral"
             hint={ofertaMax ? `${nombreCorto(ofertaMax.marca)} en ${nombreCadena(ofertaMax.cadena)}` : 'Sin precios'} />
@@ -538,7 +550,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                       [
                         <Line key="tuyo" type="monotone" dataKey="tuyo" name="Tu precio" stroke={colorCategorico(0)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
                         <Line key="minimo" type="monotone" dataKey="minimo" name={`Mínimo ${sufijoGrupo}`} stroke={colorCategorico(1)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
-                        <Line key="promedio" type="monotone" dataKey="promedio" name={`Promedio ${sufijoGrupo}`} stroke={colorCategorico(2)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
+                        <Line key="promedio" type="monotone" dataKey="promedio" name={`Promedio ${relacion === 'todos' ? '(mercado)' : sufijoGrupo}`} stroke={colorCategorico(2)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
                       ]
                     ) : (
                       serieHistoria.lineas.map(l => (

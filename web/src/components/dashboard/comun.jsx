@@ -87,9 +87,16 @@ export function Diferencia({ valor }) {
 }
 
 // Cuanto subir o bajar tu precio para quedar en la meta (promedio ± X %).
-export function calcularAjuste(tuPrecio, promedio, meta) {
+// Con `competidores` (n), `promedio` es el del MERCADO (incluye tu precio) y
+// el objetivo se despeja exacto: al cambiar tu precio tambien cambia ese
+// promedio. Con S = suma de la competencia y m = meta / 100:
+//   t = (1 + m) * (S + t) / (n + 1)  =>  t = (1 + m) * S / (n - m)
+export function calcularAjuste(tuPrecio, promedio, meta, competidores = 0) {
   if (tuPrecio == null || !(tuPrecio > 0) || !(promedio > 0)) return null;
-  const objetivo = promedio * (1 + meta / 100);
+  const m = meta / 100;
+  const objetivo = competidores > 0
+    ? (1 + m) * (promedio * (competidores + 1) - tuPrecio) / (competidores - m)
+    : promedio * (1 + m);
   const porcentaje = (objetivo / tuPrecio - 1) * 100;
   return {
     objetivo,

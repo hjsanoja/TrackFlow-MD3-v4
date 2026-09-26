@@ -8,6 +8,9 @@ const Simulador = lazy(() => import('./Simulador'));
 const CanibalizacionInterna = lazy(() => import('../components/CanibalizacionInterna'));
 const BrechaHistoricaUsd = lazy(() => import('../components/BrechaHistoricaUsd'));
 const MapaPorCadena = lazy(() => import('../components/MapaPorCadena'));
+const ComparadorPeriodos = lazy(() => import('../components/analisis/ComparadorPeriodos'));
+const IndiceMolecula = lazy(() => import('../components/analisis/IndiceMolecula'));
+const VelocidadReaccion = lazy(() => import('../components/analisis/VelocidadReaccion'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -19,6 +22,9 @@ const TABS = [
   { id: 'canibalizacion', nombre: 'Canibalización de marcas', icono: 'compare_arrows', desc: 'Tus genéricos y tus marcas de la misma molécula: brechas invertidas o demasiado cortas.' },
   { id: 'brecha_usd', nombre: 'Brechas USD diarias', icono: 'payments', desc: 'La brecha de cada producto día a día, con la tasa oficial de cada día.' },
   { id: 'mapa_cadenas', nombre: 'Mapa por cadena', icono: 'grid_on', desc: 'Productos × cadenas: en qué cadenas eres más caro o más barato, celda por celda.' },
+  { id: 'periodos', nombre: 'Comparador de períodos', icono: 'compare', desc: 'Tu precio frente al mercado en los últimos días y en los anteriores: qué productos se volvieron más o menos competitivos, y si fue por ti o por el mercado.' },
+  { id: 'indice', nombre: 'Índice por molécula', icono: 'query_stats', desc: 'Cuánto subió o bajó en dólares el precio del mercado de cada molécula.' },
+  { id: 'reaccion', nombre: 'Velocidad de reacción', icono: 'bolt', desc: 'Cuántos días tarda cada cadena en responder cuando otra cambia un precio.' },
   { id: 'simulador', nombre: 'Simulador de precios', icono: 'calculate', desc: 'Qué pasaría con tu posición si subes o bajas tus precios.' },
 ];
 
@@ -57,6 +63,9 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
         {activa === 'mapa_cadenas' && <MapaPorCadena />}
         {activa === 'simulador' && <Simulador user={user} userDoc={userDoc} />}
+        {activa === 'periodos' && <ComparadorPeriodos />}
+        {activa === 'indice' && <IndiceMolecula />}
+        {activa === 'reaccion' && <VelocidadReaccion />}
       </Suspense>
     </div>
   );
