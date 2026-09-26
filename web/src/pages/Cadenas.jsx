@@ -1,3 +1,4 @@
+import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -238,11 +239,7 @@ export default function Cadenas() {
                 opciones={[['todos', 'Robot: todos'], ['probado', 'Lector probado'], ['sin_probar', 'Sin probar']]} />
               <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
                 opciones={[['todos', 'Revisar: todas'], ['fallos', 'Fallos en la última lectura'], ['otra_web', 'Con enlaces de otra web'], ['sin_enlaces', 'Activas sin enlaces']]} />
-              {hayFiltros && (
-                <button type="button" onClick={() => { setFiltroEstado('todos'); setFiltroRobot('todos'); setFiltroRevisar('todos'); }} className="m3-btn-text">
-                  Limpiar filtros
-                </button>
-              )}
+              <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroEstado('todos'); setFiltroRobot('todos'); setFiltroRevisar('todos'); }} />
             </div>
           </div>
         </div>

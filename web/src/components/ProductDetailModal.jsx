@@ -1,3 +1,4 @@
+import LimpiarFiltros from './LimpiarFiltros';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -320,7 +321,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                       <button type="button" onClick={() => irA(p)} role="option" aria-selected={String(p.id_interno) === pId}
                         className={`m3-menu-item w-full ${String(p.id_interno) === pId ? 'text-primary' : ''}`}>
                         <span className="font-mono text-on-surface-variant w-16 shrink-0 text-left">{p.id_interno}</span>
-                        <span className="truncate text-left">{p.nombre}</span>
+                        <span className="min-w-0 text-left">
+                          <span className="block truncate">{p.nombre}</span>
+                          <span className="block truncate m3-body-small text-on-surface-variant">
+                            {[p.concentracion, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ')}
+                          </span>
+                        </span>
                       </button>
                     </li>
                   ))}
@@ -355,9 +361,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
             <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadenaFiltro} onChange={setCadenaFiltro}
               opciones={[['todos', 'Cadena: todas'], ...cadenasOfertas.map(c => [c, nombreCadena(c)])]} />
-            {(relacion !== 'todos' || cadenaFiltro !== 'todos') && (
-              <button type="button" className="m3-btn-text" onClick={() => { setRelacion('todos'); setCadenaFiltro('todos'); }}>Limpiar filtros</button>
-            )}
+            <LimpiarFiltros visible={(relacion !== 'todos' || cadenaFiltro !== 'todos')} onClick={() => { setRelacion('todos'); setCadenaFiltro('todos'); }} />
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
             <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
@@ -402,7 +406,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             </span>
           </div>
           <div className="overflow-x-auto">
-            <table className="m3-table m3-table-ficha">
+            <table className="m3-table m3-table-ficha m3-table-apilada">
               <thead>
                 <tr>
                   <th>Producto</th>
@@ -424,16 +428,16 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                         {o.tipo === 'propio' ? <span className="m3-chip-propio">Tuyo</span> : (o.laboratorio || 'Competidor')}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap">
+                    <td className="whitespace-nowrap" data-label="Cadena">
                       <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={o.cadena} tamano="xs" title="" />{nombreCadena(o.cadena)}</span>
                     </td>
-                    <td className="text-right tabular-nums">{o.unidades}</td>
-                    <td className="text-right whitespace-nowrap tabular-nums font-medium">{o.sinPrecio ? <span className="text-on-surface-variant font-normal">Sin precio</span> : fmtModo(o.priceUsd)}</td>
-                    <td className="text-right whitespace-nowrap">
+                    <td className="text-right tabular-nums" data-label="Unidades">{o.unidades}</td>
+                    <td className="text-right whitespace-nowrap tabular-nums font-medium" data-label={porUnidad ? 'Precio por unidad' : 'Precio'}>{o.sinPrecio ? <span className="text-on-surface-variant font-normal">Sin precio</span> : fmtModo(o.priceUsd)}</td>
+                    <td className="text-right whitespace-nowrap" data-label="Tú frente a esta">
                       {o.sinPrecio || o.tipo === 'propio' || tuPrecio == null ? '—' : <Diferencia valor={(tuPrecio / o.priceUsd - 1) * 100} />}
                     </td>
-                    <td className="text-right whitespace-nowrap">{o.cambio != null && Math.abs(o.cambio) > UMBRAL_CAMBIO ? <Diferencia valor={o.cambio} /> : <span className="text-on-surface-variant">Sin cambio</span>}</td>
-                    <td className="whitespace-nowrap m3-body-small text-on-surface-variant" title={o.fecha ? fechaHora(o.fecha) : ''}>{o.fecha ? haceCuanto(o.fecha) : 'Nunca'}</td>
+                    <td className="text-right whitespace-nowrap" data-label="Cambio 7 días">{o.cambio != null && Math.abs(o.cambio) > UMBRAL_CAMBIO ? <Diferencia valor={o.cambio} /> : <span className="text-on-surface-variant">Sin cambio</span>}</td>
+                    <td className="whitespace-nowrap m3-body-small text-on-surface-variant" data-label="Última lectura" title={o.fecha ? fechaHora(o.fecha) : ''}>{o.fecha ? haceCuanto(o.fecha) : 'Nunca'}</td>
                     <td className="m3-sticky-actions">
                       {o.url && (
                         <a href={o.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn" title="Abrir en la tienda" aria-label={`Abrir ${o.marca} en ${nombreCadena(o.cadena)}`}>
@@ -479,13 +483,13 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             ) : (
               <div className="h-72" role="img" aria-label="Precio de cada oferta">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={datosBarras} margin={{ top: 20, right: 8, left: 0, bottom: 0 }} barCategoryGap="22%">
+                  <BarChart data={datosBarras} margin={{ top: 20, right: 64, left: 0, bottom: 0 }} barCategoryGap="22%">
                     <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
                     <XAxis dataKey="etiqueta" interval={0} tick={<TickOferta color={tg.eje} />} tickLine={false} axisLine={{ stroke: tg.rejilla }} height={40} />
                     <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} />
                     {promedio > 0 && (
                       <ReferenceLine y={promedio} stroke={tg.eje} strokeOpacity={0.7}
-                        label={{ value: 'Promedio', position: 'insideBottomLeft', fill: tg.eje, fontSize: 11 }} />
+                        label={<EtiquetaPromedio valor={fmtModo(promedio)} color={tg.texto} />} />
                     )}
                     <Tooltip cursor={{ fill: tg.rejilla, fillOpacity: 0.25 }} content={<TooltipOferta fmt={fmtModo} nombreCadena={nombreCadena} />} />
                     <Bar dataKey="priceUsd" radius={[4, 4, 0, 0]} maxBarSize={48}>
@@ -609,6 +613,19 @@ function TooltipHistoria({ active, payload, label, fmt }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Etiqueta de la linea del promedio: a la derecha de la zona de columnas
+// (en el margen), asi nunca se monta sobre una columna.
+function EtiquetaPromedio({ viewBox, valor, color }) {
+  if (!viewBox) return null;
+  const x = viewBox.x + viewBox.width + 6;
+  return (
+    <text x={x} y={viewBox.y} fill={color} fontSize={11}>
+      <tspan x={x} dy={-2}>Promedio</tspan>
+      <tspan x={x} dy={13} fontWeight={600}>{valor}</tspan>
+    </text>
   );
 }
 

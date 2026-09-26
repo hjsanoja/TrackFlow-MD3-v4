@@ -1699,6 +1699,7 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
   inset: 0;
   z-index: 60;
   overflow-y: auto;
+  overflow-x: hidden;
   background-color: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
   animation: m3-ficha-entrar 200ms cubic-bezier(0.2, 0, 0, 1);
@@ -1831,7 +1832,7 @@ td.m3-calor-celda {
 .m3-espectro-fila:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -2px; }
 
 .m3-espectro { min-width: 0; }
-.m3-espectro-pista { position: relative; height: 22px; }
+.m3-espectro-pista { position: relative; height: 22px; margin-top: 24px; }
 .m3-espectro-pista > div { position: absolute; }
 .m3-espectro-zona-barata, .m3-espectro-zona-pareja, .m3-espectro-zona-cara { top: 7px; height: 8px; }
 .m3-espectro-zona-barata { background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-1) 45%, transparent); border-radius: 8px 0 0 8px; }
@@ -1907,4 +1908,44 @@ td.m3-calor-celda {
   background-color: var(--md-sys-color-surface-container-lowest);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; line-height: 1.45;
   white-space: normal; color: var(--md-sys-color-on-surface);
+}
+
+/* Dashboard: "Tu diferencia" frente al minimo y al promedio en una columna. */
+.m3-dif-doble { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.m3-dif-doble > span { display: inline-flex; align-items: baseline; gap: 6px; }
+.m3-dif-doble small { font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant); }
+
+/* Tablas de los modales en pantalla pequena: cada fila pasa a ser una tarjeta
+   (la primera celda de titulo y el resto como "etiqueta: valor"), sin scroll
+   horizontal. Cada <td> lleva su etiqueta en data-label. */
+@media (max-width: 899px) {
+  .m3-table.m3-table-apilada { min-width: 0; }
+  .m3-table-apilada thead { display: none; }
+  .m3-table-apilada, .m3-table-apilada tbody { display: block; width: 100%; }
+  .m3-table-apilada tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px;
+    padding: 12px 16px; border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+  }
+  .m3-table-apilada td {
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px;
+    height: auto; min-height: 0; padding: 0; border: 0; text-align: left !important; white-space: normal;
+    position: static; box-shadow: none; background: transparent;
+  }
+  .m3-table-apilada td::before {
+    content: attr(data-label);
+    font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .m3-table-apilada td:first-child, .m3-table-apilada td[colspan] { grid-column: 1 / -1; }
+  .m3-table-apilada td:first-child::before, .m3-table-apilada td:not([data-label])::before { display: none; }
+  .m3-table-apilada td.m3-sticky-actions { position: static; grid-column: 1 / -1; align-items: flex-end; margin-top: -8px; }
+  .m3-table-apilada td > * { max-width: 100%; }
+}
+
+/* Globo con tu precio y la diferencia, sobre el punto del Mapa de Calor. */
+.m3-espectro-globo {
+  bottom: calc(100% + 2px); white-space: nowrap; pointer-events: none;
+  padding: 1px 6px; border-radius: 6px; font-size: 0.6875rem; font-weight: 600; line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  background-color: var(--md-sys-color-on-surface); color: var(--md-sys-color-surface);
 }

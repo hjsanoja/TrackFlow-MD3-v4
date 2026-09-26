@@ -1,3 +1,4 @@
+import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { validarCsv } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
@@ -888,7 +889,7 @@ export default function Competencia() {
                   opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
                 <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
                   opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web']]} />
-                {hayFiltros && <button type="button" onClick={limpiarFiltros} className="m3-btn-text">Limpiar filtros</button>}
+                <LimpiarFiltros visible={hayFiltros} onClick={limpiarFiltros} />
               </div>
             </div>
           )}

@@ -75,7 +75,7 @@ export default function CoberturaCadenas({ productos, cadenas, enlaces, idCadena
         </div>
 
         <div className="overflow-auto max-h-[60vh] rounded-2xl border border-outline-variant">
-          <table className="m3-table m3-table-cobertura">
+          <table className="m3-table m3-table-cobertura m3-table-apilada">
             <thead className="m3-sticky-header">
               <tr>
                 <th className="m3-cobertura-producto">Producto</th>
@@ -100,7 +100,7 @@ export default function CoberturaCadenas({ productos, cadenas, enlaces, idCadena
                   {cadenasActivas.map(c => {
                     const { propio, competidores } = celda(p, c);
                     return (
-                      <td key={c.id} className="text-center">
+                      <td key={c.id} className="text-center" data-label={c.nombre}>
                         <div className="inline-flex items-center justify-center gap-1.5">
                           {propio ? (
                             <span className="material-symbols-outlined text-[20px] text-primary" title="Tu producto tiene enlace en esta cadena">check_circle</span>

@@ -1,3 +1,4 @@
+import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase, isSupabaseActive } from '../supabase';
@@ -220,11 +221,7 @@ export default function Usuarios({ userDoc }) {
                 opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
               <FiltroChip etiqueta="Correos" icono="mail" valor={filtroCorreos} onChange={setFiltroCorreos}
                 opciones={[['todos', 'Correos: todos'], ['alertas', 'Reciben alertas'], ['resumen', 'Reciben resumen'], ['ninguno', 'No reciben correos']]} />
-              {hayFiltros && (
-                <button type="button" onClick={() => { setFiltroRol('todos'); setFiltroEstado('todos'); setFiltroCorreos('todos'); }} className="m3-btn-text">
-                  Limpiar filtros
-                </button>
-              )}
+              <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroRol('todos'); setFiltroEstado('todos'); setFiltroCorreos('todos'); }} />
             </div>
           </div>
         </div>
