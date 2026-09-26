@@ -1,0 +1,1 @@
+import{g as e,j as n,b as i}from"./index-GUpix08c.js";function d({cadena:a,tamano:s="md",title:o}){const r=e(a);return n.jsx("span",{className:`m3-cadena-badge is-${s}`,style:{backgroundColor:r},title:o??a,"aria-hidden":o===""?"true":void 0,children:i(a)})}export{d as C};
