@@ -33,7 +33,7 @@ export default function DetalleLista({ titulo, subtitulo, icono, filas, columnas
         </div>
       ) : (
         <div className="overflow-auto max-h-[60vh] rounded-2xl border border-outline-variant">
-          <table className="m3-table m3-table-detalle">
+          <table className="m3-table m3-table-detalle m3-table-apilada">
             <thead className="m3-sticky-header">
               <tr>
                 {columnas.map(c => (
@@ -46,7 +46,7 @@ export default function DetalleLista({ titulo, subtitulo, icono, filas, columnas
                 <tr key={claveFila(f)} onClick={() => onFila(f)} className="cursor-pointer"
                   tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onFila(f); }}>
                   {columnas.map(c => (
-                    <td key={c.titulo} className={c.alinear === 'right' ? 'text-right whitespace-nowrap' : ''}>{c.celda(f)}</td>
+                    <td key={c.titulo} data-label={c.titulo} className={c.alinear === 'right' ? 'text-right whitespace-nowrap' : ''}>{c.celda(f)}</td>
                   ))}
                 </tr>
               ))}

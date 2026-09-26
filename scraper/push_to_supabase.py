@@ -192,76 +192,20 @@ def main():
                     "run_id": run_id
                 })
 
-    # SINCRONIZAR A SUPABASE (DUAL-WRITE)
+    # SINCRONIZAR A SUPABASE
+    fallo_guardado = False
     try:
         from supabase_client import is_supabase_configured, upsert, insert, select
         if is_supabase_configured():
             print("\n[SUPABASE] Sincronizando datos con Supabase...")
 
-            # -----------------------------------------------------------------
-            # 1. ACTUALIZAR MODELO LEGACY (productos_competencia e historico_precios)
-            # -----------------------------------------------------------------
-            records_to_upsert = []
-            for item, es_err, r in cambios:
-                records_to_upsert.append({
-                    "id": item["id"],
-                    "id_producto_propio": item.get("id_producto_propio") or r.get("id_producto_propio"),
-                    "cadena": item.get("cadena") or r.get("cadena"),
-                    "marca": item.get("marca") or r.get("marca"),
-                    "tipo": item.get("tipo") or r.get("tipo", "alternativa"),
-                    "url": item.get("url") or r.get("url"),
-                    "laboratorio": r.get("laboratorio") or "",
-                    "concentracion": r.get("concentracion") or "",
-                    "tamano": r.get("tamano") or "",
-                    "activo": r.get("activo", True) if isinstance(r.get("activo"), bool) else True,
-                    "ultimo_scrape": item.get("ultimo_scrape"),
-                    "estado": item.get("estado"),
-                    "ultimo_error": item.get("ultimo_error"),
-                    "ultimo_precio_full_bs": item.get("ultimo_precio_full_bs"),
-                    "ultimo_precio_desc_bs": item.get("ultimo_precio_desc_bs"),
-                    "ultimo_precio_full_usd": item.get("ultimo_precio_full_usd"),
-                    "ultimo_precio_desc_usd": item.get("ultimo_precio_desc_usd"),
-                    "ultimo_nombre": item.get("ultimo_nombre"),
-                    "tiene_descuento": bool(item.get("tiene_descuento", False)),
-                    "tipo_promo": item.get("tipo_promo"),
-                    "porcentaje_descuento": item.get("porcentaje_descuento"),
-                    "promo_condicionada": bool(item.get("promo_condicionada", False)),
-                    "metodo_extraccion": item.get("metodo_extraccion"),
-                })
-
-            if records_to_upsert:
-                for i in range(0, len(records_to_upsert), 100):
-                    upsert("productos_competencia", records_to_upsert[i:i+100])
-                print(f"[SUPABASE-LEGACY] ✅ Actualizados {len(records_to_upsert)} productos en productos_competencia.")
-
-            supabase_historico = []
-            for h in historico_items:
-                supabase_historico.append({
-                    "prod_comp_id": h.get("prod_comp_id"),
-                    "id_producto_propio": h.get("id_producto_propio"),
-                    "cadena": h.get("cadena"),
-                    "marca": h.get("marca"),
-                    "nombre": h.get("nombre"),
-                    "precio_full_bs": h.get("precio_full_bs"),
-                    "precio_desc_bs": h.get("precio_desc_bs"),
-                    "precio_full_usd": h.get("precio_full_usd"),
-                    "precio_desc_usd": h.get("precio_desc_usd"),
-                    "tiene_descuento": bool(h.get("tiene_descuento", False)),
-                    "tipo_promo": h.get("tipo_promo"),
-                    "porcentaje_descuento": h.get("porcentaje_descuento"),
-                    "promo_condicionada": bool(h.get("promo_condicionada", False)),
-                    "metodo_extraccion": h.get("metodo_extraccion"),
-                    "scraped_at": h.get("scraped_at"),
-                    "run_id": h.get("run_id")
-                })
-
-            if supabase_historico:
-                for i in range(0, len(supabase_historico), 100):
-                    insert("historico_precios", supabase_historico[i:i+100])
-                print(f"[SUPABASE-LEGACY] ✅ Insertados {len(supabase_historico)} registros en historico_precios.")
+            # productos_competencia e historico_precios son VISTAS de solo
+            # lectura sobre fact_precios desde la fase 5: no se escribe en
+            # ellas. Antes se intentaba y el error cortaba todo antes de
+            # guardar en fact_precios, asi que los precios no se guardaban.
 
             # -----------------------------------------------------------------
-            # 2. ACTUALIZAR NUEVO MODELO RELACIONAL (scrape_runs y fact_precios)
+            # ACTUALIZAR MODELO RELACIONAL (scrape_runs y fact_precios)
             # -----------------------------------------------------------------
             try:
                 # A. Cargar catálogos auxiliares
@@ -311,6 +255,7 @@ def main():
 
                 # C. Preparar e insertar hechos en fact_precios
                 fact_records = []
+                sin_publicacion = 0
                 for r in resultados:
                     url_raw = r.get("url") or ""
                     url_norm = re.sub(r'\?.*$', '', url_raw).strip().lower()
@@ -318,6 +263,7 @@ def main():
 
                     pub_id = r.get("publicacion_id") or map_pubs.get((c_id.lower(), url_norm)) or map_urls.get(url_norm)
                     if not pub_id:
+                        sin_publicacion += 1
                         continue
 
                     es_err = bool(r.get("error") or not r.get("precio_full_bs") or r.get("precio_full_bs") <= 0.01)
@@ -347,14 +293,19 @@ def main():
                     for i in range(0, len(fact_records), 100):
                         insert("fact_precios", fact_records[i:i+100])
                     print(f"[RELACIONAL] ✅ Insertados {len(fact_records)} hechos de precios en fact_precios.")
+                if sin_publicacion:
+                    print(f"[RELACIONAL] ⚠️  {sin_publicacion} resultados sin enlace (publicación) en Supabase: no se guardaron.")
 
             except Exception as ex_rel:
-                print(f"[RELACIONAL] Aviso sincronización nuevo modelo: {ex_rel}")
+                print(f"[RELACIONAL] ❌ No se pudieron guardar los precios: {ex_rel}")
+                fallo_guardado = True
 
-            print("[SUPABASE] ✅ Sincronización Dual-Write finalizada con éxito.")
+            if not fallo_guardado:
+                print("[SUPABASE] ✅ Precios guardados.")
 
     except Exception as e:
-        print(f"[SUPABASE] Aviso: No se pudo completar la sincronización ({e})")
+        print(f"[SUPABASE] ❌ No se pudo completar la sincronización ({e})")
+        fallo_guardado = True
 
     # Actualizar caché local en disco
     try:
@@ -368,6 +319,11 @@ def main():
     print("Trigger: " + trigger)
     print("Run ID: " + str(run_id))
     print("=" * 60)
+
+    # Si no se guardo en Supabase, la corrida debe salir en rojo en Actions
+    # (antes decia "OK" aunque no se hubiera guardado nada).
+    if fallo_guardado:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

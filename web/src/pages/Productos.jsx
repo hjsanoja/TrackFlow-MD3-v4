@@ -1,3 +1,4 @@
+import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { validarCsv, resolverUnidadNegocio } from '../utils/validarCsv';
@@ -845,11 +846,7 @@ export default function Productos() {
                   opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
                 <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUn} onChange={setFiltroUn}
                   opciones={[['todos', 'Unidad: todas'], ...unidadesDisponibles]} />
-                {hayFiltros && (
-                  <button type="button" onClick={limpiarFiltros} className="m3-btn-text">
-                    Limpiar filtros
-                  </button>
-                )}
+                <LimpiarFiltros visible={hayFiltros} onClick={limpiarFiltros} />
               </div>
             </div>
           )}

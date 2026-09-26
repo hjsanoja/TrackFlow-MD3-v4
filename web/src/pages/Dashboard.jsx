@@ -1,3 +1,4 @@
+import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -609,12 +610,7 @@ export default function Dashboard({ userDoc }) {
             opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
           <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={cadenaComp} onChange={setCadenaComp}
             opciones={[['todos', 'Competencia: todas las cadenas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
-          {hayFiltros && (
-            <button type="button" className="m3-btn-text"
-              onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); }}>
-              Limpiar filtros
-            </button>
-          )}
+          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); }} />
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
           <AjusteChip etiqueta="Precio que se compara" icono="receipt_long" valor={modoPrecio} onChange={setModoPrecio}
@@ -861,8 +857,15 @@ export default function Dashboard({ userDoc }) {
                     <th className="text-right"><BotonOrden campo="promedio" orden={orden} onClick={ordenarPor}>Promedio</BotonOrden></th>
                     <th className="text-right m3-dash-col-sep"><BotonOrden campo="tuPrecio" orden={orden} onClick={ordenarPor}>Tu precio</BotonOrden></th>
                     <th className="text-right" title="Lugar de tu precio entre todas las ofertas, del más barato (1) al más caro"><BotonOrden campo="posicion" orden={orden} onClick={ordenarPor}>Posición</BotonOrden></th>
-                    <th className="text-right"><BotonOrden campo="difMin" orden={orden} onClick={ordenarPor}>Tú frente al mínimo</BotonOrden></th>
-                    <th className="text-right"><BotonOrden campo="difProm" orden={orden} onClick={ordenarPor}>Tú frente al promedio</BotonOrden></th>
+                    <th className="text-right" title="Cuánto más caro (rojo) o más barato (azul) es tu precio que el mínimo y que el promedio de la competencia">
+                      <div className="flex flex-col items-end">
+                        <span>Tu diferencia</span>
+                        <span className="inline-flex gap-3">
+                          <BotonOrden campo="difMin" orden={orden} onClick={ordenarPor}>vs mín.</BotonOrden>
+                          <BotonOrden campo="difProm" orden={orden} onClick={ordenarPor}>vs prom.</BotonOrden>
+                        </span>
+                      </div>
+                    </th>
                     <th className="text-right"><BotonOrden campo="ajuste" orden={orden} onClick={ordenarPor}>Para la meta</BotonOrden></th>
                   </tr>
                 </thead>
@@ -895,8 +898,7 @@ export default function Dashboard({ userDoc }) {
                           {cambioPropio && <div className="m3-dash-cambio"><Diferencia valor={cambioPropio.cambio} /></div>}
                         </td>
                         <td className="text-right whitespace-nowrap"><Posicion p={x.posicion} /></td>
-                        <td className="text-right whitespace-nowrap"><Diferencia valor={x.difMin} /></td>
-                        <td className="text-right whitespace-nowrap"><Diferencia valor={x.difProm} /></td>
+                        <td className="text-right whitespace-nowrap"><DiferenciaDoble min={x.difMin} prom={x.difProm} /></td>
                         <td className="text-right whitespace-nowrap"><AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} /></td>
                       </tr>
                     );
@@ -995,6 +997,17 @@ function AjusteChip({ etiqueta, icono, valor, onChange, opciones }) {
       className="m3-filter-chip" leadingIcon={icono}>
       {opciones.map(([v, texto]) => <option key={v} value={v}>{texto}</option>)}
     </Select>
+  );
+}
+
+// Una sola columna con las dos diferencias: frente al minimo y al promedio.
+function DiferenciaDoble({ min, prom }) {
+  if (min == null && prom == null) return <span className="text-on-surface-variant">—</span>;
+  return (
+    <div className="m3-dif-doble">
+      <span><small>vs mín.</small><Diferencia valor={min} /></span>
+      <span><small>vs prom.</small><Diferencia valor={prom} /></span>
+    </div>
   );
 }
 

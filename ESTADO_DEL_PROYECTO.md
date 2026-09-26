@@ -126,7 +126,7 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #48, desplegado (GitHub Pages sale solo de `main`) |
+| Código en `main` | PR #49, desplegado (GitHub Pages sale solo de `main`) |
 | SQL corrido en Supabase | **Hasta la fase 28** (el #48 no trae SQL) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
@@ -560,6 +560,36 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Ajustes del PR #50 (sin SQL)
+
+- **Robot: los precios no se guardaban desde la fase 5.**
+  `push_to_supabase.py` seguía escribiendo en `productos_competencia` e
+  `historico_precios`, que desde la fase 5 son vistas de solo lectura. El
+  error (55000) cortaba la sincronización antes de insertar en `fact_precios`,
+  y el job terminaba en verde. Se quitó esa escritura (las vistas se calculan
+  solas desde `fact_precios`). Si ahora falla el guardado, el job sale en rojo
+  (`exit 1`). También avisa cuántos resultados no tienen publicación.
+- **Dashboard**: "Tú frente al mínimo" y "Tú frente al promedio" pasan a una
+  sola columna, **Tu diferencia** (vs mín. / vs prom.), que se ordena por
+  cualquiera de las dos.
+- **"Limpiar filtros" siempre ocupa su lugar** (`components/LimpiarFiltros.jsx`):
+  cuando no hay filtros queda invisible, así los chips no saltan de fila al
+  aplicar uno. Aplicado en las 8 pantallas que lo tenían.
+- **Tablas de los modales sin scroll horizontal** en pantallas de menos de
+  900 px (`.m3-table-apilada`, con `data-label` en cada celda): cada fila
+  pasa a ser una tarjeta. Aplicado en DetalleLista, la ficha y Cobertura por
+  cadena. La ficha además tiene `overflow-x: hidden`.
+- **Ficha**:
+  - la línea del promedio de "Precios de hoy" lleva su valor, en el margen
+    derecho, para que no se monte sobre las columnas;
+  - la lista de "Cambiar producto" muestra concentración y empaque.
+- **Mapa de Calor**:
+  - escala común centrada en el promedio (±límite %, entre 10 y 50 según los
+    datos), así la raya del promedio siempre queda al centro y las zonas miden
+    lo mismo en todas las filas;
+  - un globo sobre el punto muestra tu precio y la diferencia con el promedio;
+  - leyenda con los umbrales (±5 %).
 
 ## Ajustes del PR #49 (sin SQL)
 

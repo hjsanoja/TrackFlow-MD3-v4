@@ -1,3 +1,4 @@
+import LimpiarFiltros from './LimpiarFiltros';
 import { useEffect, useMemo, useState } from 'react';
 import StatCard from './StatCard';
 import FiltroChip from './FiltroChip';
@@ -180,12 +181,7 @@ export default function MapaPorCadena() {
           <FiltroChip etiqueta="Tipo" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
           <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
           <FiltroChip etiqueta="Posición" icono="balance" valor={filtroPosicion} onChange={setFiltroPosicion} opciones={POSICIONES} />
-          {hayFiltros && (
-            <button type="button" className="m3-btn-text"
-              onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }}>
-              Limpiar filtros
-            </button>
-          )}
+          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); }} />
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
           <Select value={modoPrecio} onChange={e => setModoPrecio(e.target.value)} aria-label="Precio que se compara" className="m3-filter-chip" leadingIcon="receipt_long">
