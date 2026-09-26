@@ -1,0 +1,1 @@
+import{j as i}from"./index-B-QijAvJ.js";function a({visible:t,onClick:r}){return i.jsx("button",{type:"button",onClick:r,className:`m3-btn-text ${t?"":"invisible"}`,"aria-hidden":!t,tabIndex:t?0:-1,children:"Limpiar filtros"})}export{a as L};
