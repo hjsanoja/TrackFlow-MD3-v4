@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import Select from '../Select';
+import InfoGrafico from '../InfoGrafico';
 import { supabase, isSupabaseActive } from '../../supabase';
 import { leerColor, pct, textoMeta } from './comun';
 
@@ -59,12 +60,18 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
 
   return (
     <div className="m3-dash-card">
-      <header className="m3-dash-card-header">
-        <div className="min-w-0">
+      <header className="m3-dash-card-header items-center">
+        <div className="min-w-0 flex items-center gap-1">
           <h2 className="m3-title-medium text-on-surface">Tendencia de tu posición</h2>
-          <p className="m3-body-small text-on-surface-variant">
-            Tu precio frente al promedio de la competencia, día a día. Por encima de 0 eres más caro; por debajo, más barato. Toca un día.
-          </p>
+          <InfoGrafico
+            titulo="Tendencia de tu posición"
+            que="Tu precio frente al promedio de la competencia, día a día, para el producto típico (la mediana). Toca un día para ver cada producto."
+            formula={[
+              'Por producto: tu precio ÷ promedio de la competencia − 1',
+              'Línea: la mediana de esas diferencias en el día',
+            ]}
+            lectura="Por encima de 0 eres más caro que el mercado; por debajo, más barato. Si sube, te estás encareciendo frente a la competencia. La línea punteada es tu meta. Cada día se usa el último precio de cada enlace (hasta 7 días atrás), en dólares a la tasa de ese día."
+          />
         </div>
         <Select value={String(dias)} onChange={e => cambiarDias(Number(e.target.value))} aria-label="Periodo de la tendencia"
           className="m3-filter-chip shrink-0" leadingIcon="date_range">

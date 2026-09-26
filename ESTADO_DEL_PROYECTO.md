@@ -126,7 +126,7 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #47, desplegado (GitHub Pages sale solo de `main`) |
+| Código en `main` | PR #48, desplegado (GitHub Pages sale solo de `main`) |
 | SQL corrido en Supabase | **Hasta la fase 28** (el #48 no trae SQL) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
@@ -560,6 +560,25 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Ajustes del PR #49 (sin SQL)
+
+- **Filtros fijos retirados**: a Hernando no le gustó que bajaran al hacer
+  scroll. Se borró `components/FiltrosFijos.jsx`; los filtros del Dashboard y
+  del Mapa de Calor vuelven a ser una barra normal. `main` vuelve a
+  `overflow-x-auto`, la barra de la app ya no publica `--alto-cabecera` y el
+  buscador de las tablas vuelve a `top: 0`.
+- **Ficha del producto**: la tabla de ofertas va **primero** y los gráficos
+  después. Nueva tarjeta **Tasa BCV** (la tasa con que se pasan los Bs a $,
+  con su fecha); las tarjetas van en 3 columnas (6 solo en pantallas muy
+  anchas). En la historia, el tooltip muestra la tasa BCV de ese día.
+- **Explicación de los gráficos en un botón (i)** (`components/InfoGrafico.jsx`):
+  el texto que iba fijo bajo cada título se movió a un panel que se abre al
+  tocar el ícono, con qué muestra, la fórmula y cómo leerlo. Escape o tocar
+  fuera lo cierra (sin cerrar la ficha o el modal). Está en: Tendencia de tu
+  posición, ¿Dónde está tu precio?, ¿Qué cadena tiene el precio más bajo?,
+  Precios de hoy e Historia de precios (ficha), Historia de la tasa (modal BCV)
+  y la franja del Mapa de Calor.
 
 ## Rendimiento (PR #47)
 

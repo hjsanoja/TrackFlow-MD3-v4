@@ -24,7 +24,7 @@ import { exportToCSV } from '../utils/exportUtils';
 import { fechaHora, haceCuanto } from '../utils/usuarios';
 import { normalizar } from '../components/formulario';
 import TendenciaPosicion, { diaLargo } from '../components/dashboard/TendenciaPosicion';
-import FiltrosFijos from '../components/FiltrosFijos';
+import InfoGrafico from '../components/InfoGrafico';
 import { describirPresentacion } from '../utils/presentacion';
 import {
   UMBRAL_CAMBIO, UMBRAL_EMPATE, VENTANAS, METAS, textoMeta, usePreferencia, leerColor, mediana, pct,
@@ -598,8 +598,8 @@ export default function Dashboard({ userDoc }) {
         </div>
       )}
 
-      {/* Filtros y ajustes: fijos arriba al bajar por la pagina */}
-      <FiltrosFijos etiqueta="Filtros del Dashboard">
+      {/* Filtros y ajustes */}
+      <section className="m3-dash-filtros" aria-label="Filtros del Dashboard">
         <div className="flex flex-wrap items-center gap-2">
           <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad}
             opciones={[['todos', 'Unidad: todas'], ...unidades]} />
@@ -632,7 +632,7 @@ export default function Dashboard({ userDoc }) {
             <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
           </label>
         </div>
-      </FiltrosFijos>
+      </section>
 
       {/* Indicadores */}
       <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3" aria-label="Indicadores">
@@ -701,10 +701,18 @@ export default function Dashboard({ userDoc }) {
           onDia={detalleDia}
         />
         <div className="m3-dash-card">
-          <header className="m3-dash-card-header">
-            <div>
+          <header className="m3-dash-card-header items-center">
+            <div className="min-w-0 flex items-center gap-1">
               <h2 className="m3-title-medium text-on-surface">¿Dónde está tu precio?</h2>
-              <p className="m3-body-small text-on-surface-variant">Cuántos productos tienes en cada rango frente al promedio de la competencia. Toca una barra.</p>
+              <InfoGrafico
+                titulo="¿Dónde está tu precio?"
+                que="Cuántos de tus productos caen en cada rango frente al promedio de la competencia. Toca una barra para ver la lista."
+                formula={[
+                  'Diferencia = tu precio ÷ promedio de la competencia − 1',
+                  'Rangos: −15 % o menos · −15 a −5 % · parejo (±5 %) · +5 a +15 % · +15 % o más',
+                ]}
+                lectura="Azul a la izquierda: más barato que el mercado. Gris al centro: parejo. Rojo a la derecha: más caro. Mientras más productos en rojo, más caro estás frente a la competencia."
+              />
             </div>
           </header>
           {kpi.comparables.length === 0 ? (
@@ -735,10 +743,16 @@ export default function Dashboard({ userDoc }) {
         </div>
 
         {cadenaComp === 'todos' && <div className="m3-dash-card">
-          <header className="m3-dash-card-header">
-            <div>
+          <header className="m3-dash-card-header items-center">
+            <div className="min-w-0 flex items-center gap-1">
               <h2 className="m3-title-medium text-on-surface">¿Qué cadena tiene el precio más bajo?</h2>
-              <p className="m3-body-small text-on-surface-variant">En cuántos productos cada cadena tiene el precio más bajo de la competencia. Toca una barra.</p>
+              <InfoGrafico
+                titulo="¿Qué cadena tiene el precio más bajo?"
+                que="En cuántos productos cada cadena tiene el precio más bajo de la competencia. Toca una barra para ver la lista."
+                formula="Por producto: la cadena con el precio mínimo de la competencia suma 1"
+                lectura="La barra más larga es la cadena más agresiva en precio. Tus propios enlaces no cuentan aquí."
+                alinear="derecha"
+              />
             </div>
           </header>
           {lideres.length === 0 ? (

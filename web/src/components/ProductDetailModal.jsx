@@ -8,9 +8,11 @@ import FiltroChip from './FiltroChip';
 import Select from './Select';
 import CadenaBadge from './CadenaBadge';
 import ConfirmModal from './ConfirmModal';
+import InfoGrafico from './InfoGrafico';
 import { normalizar } from './formulario';
 import { useData } from '../context/DataContext';
 import { useToast } from '../context/ToastContext';
+import { useBcvRate } from '../hooks/useBcvRate';
 import { supabase, isSupabaseActive } from '../supabase';
 import { getChainColor } from '../utils/brandColors';
 import { tokensGrafico } from '../utils/chartTokens';
@@ -50,6 +52,7 @@ function leerMeta() {
 export default function ProductDetailModal({ producto, competencia, currency, bcvRate, onClose, initialPriceMode = 'lista', initialAnalisisMode = 'empaque' }) {
   const { productos = [], productosCompetencia = [], cadenas = [], variaciones = [] } = useData() || {};
   const { addToast } = useToast();
+  const tasaBcv = useBcvRate();
 
   const [activo, setActivo] = useState(producto);
   const [moneda, setMoneda] = useState(currency || 'usd');
@@ -181,6 +184,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     const unidadesPorPub = new Map(enlaces.map(e => [e.publicacion_id, unidadesDe(e)]));
     // Ultimo precio de cada enlace por dia.
     const porPub = new Map();
+    const tasaPorDia = new Map();
     for (const h of historia.filas) {
       const bs = conDescuento ? (h.precio_desc_bs ?? h.precio_full_bs) : h.precio_full_bs;
       const tasa = Number(h.tasa_bcv) || bcvRate;
@@ -195,6 +199,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
         porPub.set(h.publicacion_id, { tipo: h.tipo, cadena, marca: h.marca, laboratorio: enlace?.laboratorio || '', unidades: unidadesPorPub.get(h.publicacion_id) || unidadesPropio, dias: new Map() });
       }
       porPub.get(h.publicacion_id).dias.set(dia, usd);
+      if (Number(h.tasa_bcv) > 0) tasaPorDia.set(dia, Number(h.tasa_bcv));
     }
     // Dias del periodo; cada enlace arrastra su ultimo precio hasta 7 dias.
     const hoy = new Date();
@@ -224,7 +229,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       if (repetidos.has(l.nombre)) l.nombre = `${l.nombre} (${l.detalle.split(' · ')[1]})`;
     }
     const puntos = fechas.map(fecha => {
-      const fila = { fecha };
+      const fila = { fecha, tasa: tasaPorDia.get(fecha) ?? null };
       const tuyos = [];
       const otros = [];
       for (const [pub, info] of pubs) {
@@ -363,7 +368,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <option value="empaque">Por empaque</option>
               <option value="unidosis">Por unidad</option>
             </Select>
-            <label className="m3-switch-label whitespace-nowrap ml-1" title={`Tasa BCV: Bs ${bcvRate ? bcvRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}`}>
+            <label className="m3-switch-label whitespace-nowrap ml-1" title="Moneda de la ficha">
               <span className={moneda === 'bs' ? 'text-on-surface-variant' : 'font-medium'}>$</span>
               <input type="checkbox" role="switch" checked={moneda === 'bs'} onChange={e => setMoneda(e.target.checked ? 'bs' : 'usd')}
                 className="m3-switch" aria-label="Ver los precios en bolívares" />
@@ -373,7 +378,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
         </section>
 
         {/* Indicadores: sobre las ofertas que dejan ver los filtros */}
-        <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3" aria-label="Indicadores del producto">
+        <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3" aria-label="Indicadores del producto">
           <StatCard compacto label={`Tu precio${porUnidad ? ' por unidad' : ''}`} value={fmtModo(tuPrecio)} icon="sell" tono="primary"
             hint={tuyas.length ? (tuyas.length === 1 ? 'Tu enlace' : `El más bajo de tus ${tuyas.length} enlaces`) : pvp ? 'PVP cargado en Productos' : 'Sin precio tuyo'} />
           <StatCard compacto label={`Mínimo ${sufijoGrupo}`} value={fmtModo(minimo)} icon="south" tono="neutral"
@@ -384,101 +389,13 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             hint={ofertaMax ? `${nombreCorto(ofertaMax.marca)} en ${nombreCadena(ofertaMax.cadena)}` : 'Sin precios'} />
           <StatCard compacto label="Tú frente al promedio" value={pct(difProm)} icon="percent" tono={difProm > 5 ? 'negative' : difProm < -0.5 ? 'primary' : 'neutral'}
             hint={ajuste ? (ajuste.estado === 'en_meta' ? `En tu meta (${textoMeta(meta)})` : `${ajuste.estado === 'bajar' ? 'Bajar' : 'Subir'} ${fmtModo(Math.abs(ajuste.usd))} para tu meta`) : 'Falta tu precio o el promedio'} />
-        </section>
-
-        {/* Graficos juntos */}
-        <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Gráficos">
-          <div className="m3-dash-card">
-            <header className="m3-dash-card-header">
-              <div className="min-w-0">
-                <h2 className="m3-title-medium text-on-surface">Precios de hoy</h2>
-                <p className="m3-body-small text-on-surface-variant">
-                  El último precio de cada oferta{porUnidad ? ', por unidad' : ''}, del más barato al más caro. Color de la cadena; la línea es el promedio.
-                </p>
-              </div>
-            </header>
-            {visibles.length === 0 ? (
-              <div className="h-72 flex items-center justify-center text-on-surface-variant m3-body-medium">No hay precios con estos filtros.</div>
-            ) : (
-              <div className="h-72" role="img" aria-label="Precio de cada oferta">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={datosBarras} margin={{ top: 20, right: 8, left: 0, bottom: 0 }} barCategoryGap="22%">
-                    <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
-                    <XAxis dataKey="etiqueta" interval={0} tick={<TickOferta color={tg.eje} />} tickLine={false} axisLine={{ stroke: tg.rejilla }} height={40} />
-                    <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} />
-                    {promedio > 0 && (
-                      <ReferenceLine y={promedio} stroke={tg.eje} strokeOpacity={0.7}
-                        label={{ value: 'Promedio', position: 'insideBottomLeft', fill: tg.eje, fontSize: 11 }} />
-                    )}
-                    <Tooltip cursor={{ fill: tg.rejilla, fillOpacity: 0.25 }} content={<TooltipOferta fmt={fmtModo} nombreCadena={nombreCadena} />} />
-                    <Bar dataKey="priceUsd" radius={[4, 4, 0, 0]} maxBarSize={48}>
-                      {datosBarras.map(o => <Cell key={o.id} fill={o.color} stroke={o.tipo === 'propio' ? tg.texto : undefined} strokeWidth={o.tipo === 'propio' ? 2 : 0} />)}
-                      <LabelList dataKey="priceUsd" position="top" formatter={fmtModo} fill={tg.texto} stroke="none" fontSize={11} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-
-          <div className="m3-dash-card">
-            <header className="m3-dash-card-header flex-wrap">
-              <div className="min-w-0 basis-full">
-                <h2 className="m3-title-medium text-on-surface">Historia de precios</h2>
-                <p className="m3-body-small text-on-surface-variant">
-                  En dólares a la tasa de cada día{porUnidad ? ' y por unidad' : ''}. Pasa el mouse por la leyenda para ver el detalle.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={vistaHistoria} onChange={e => setVistaHistoria(e.target.value)} aria-label="Qué ver" className="m3-filter-chip" leadingIcon="stacked_line_chart">
-                  <option value="resumen">Tuyo, mínimo y promedio</option>
-                  <option value="ofertas">Cada oferta</option>
-                </Select>
-                <Select value={String(dias)} onChange={e => setDias(Number(e.target.value))} aria-label="Periodo" className="m3-filter-chip" leadingIcon="date_range">
-                  {PERIODOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
-                </Select>
-              </div>
-            </header>
-            {historia.cargando && serieHistoria.puntos.length === 0 ? (
-              <div className="h-72 rounded-2xl m3-skeleton" aria-busy="true" />
-            ) : serieHistoria.puntos.length < 2 ? (
-              <div className="h-72 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
-                <span className="material-symbols-outlined text-3xl" aria-hidden="true">show_chart</span>
-                <span className="m3-body-medium">Aún no hay historia de precios en este periodo.</span>
-              </div>
-            ) : (
-              <div className={`h-72 ${historia.cargando ? 'opacity-60' : ''}`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={serieHistoria.puntos} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                    <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
-                    <XAxis dataKey="fecha" tickFormatter={diaCorto} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={{ stroke: tg.rejilla }} minTickGap={24} />
-                    <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} domain={['auto', 'auto']} />
-                    <Tooltip content={<TooltipHistoria fmt={fmtModo} />} cursor={{ stroke: tg.eje, strokeOpacity: 0.3 }} />
-                    <Legend content={<LeyendaHistoria color={tg.eje} />} />
-                    {vistaHistoria === 'resumen' ? (
-                      [
-                        <Line key="tuyo" type="monotone" dataKey="tuyo" name="Tu precio" stroke={colorCategorico(0)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
-                        <Line key="minimo" type="monotone" dataKey="minimo" name={`Mínimo ${sufijoGrupo}`} stroke={colorCategorico(1)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
-                        <Line key="promedio" type="monotone" dataKey="promedio" name={`Promedio ${sufijoGrupo}`} stroke={colorCategorico(2)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
-                      ]
-                    ) : (
-                      serieHistoria.lineas.map(l => (
-                        <Line key={l.clave} type="monotone" dataKey={l.clave} name={l.nombre} detalle={l.detalle} stroke={l.color} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />
-                      ))
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-            {vistaHistoria === 'ofertas' && serieHistoria.ocultas > 0 && (
-              <p className="m3-body-small text-on-surface-variant mt-2">Se muestran {MAX_SERIES} ofertas; {serieHistoria.ocultas} más no caben en el gráfico.</p>
-            )}
-          </div>
+          <StatCard compacto label="Tasa BCV (Bs por dólar)" value={bcvRate ? bcvRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'} icon="currency_exchange" tono="neutral"
+            hint={tasaBcv.updatedAt ? `Del ${new Date(tasaBcv.updatedAt).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' })} · la historia usa la de cada día` : 'La historia usa la de cada día'} />
         </section>
 
         {/* Ofertas */}
         <section className="m3-data-table" aria-label="Ofertas">
-          <div className="m3-data-table-toolbar flex flex-wrap items-center gap-2">
+          <div className="m3-data-table-titulo pb-3 border-b border-outline-variant flex flex-wrap items-center gap-2">
             <h2 className="m3-title-medium text-on-surface">Ofertas</h2>
             <span className="m3-body-small text-on-surface-variant">
               {ofertasVisibles.length} {ofertasVisibles.length === 1 ? 'oferta' : 'ofertas'}{porUnidad ? ' · precios por unidad' : ''}
@@ -539,6 +456,110 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             </p>
           )}
         </section>
+
+        {/* Graficos juntos */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Gráficos">
+          <div className="m3-dash-card">
+            <header className="m3-dash-card-header items-center">
+              <div className="min-w-0 flex items-center gap-1">
+                <h2 className="m3-title-medium text-on-surface">Precios de hoy</h2>
+                <InfoGrafico
+                  titulo="Precios de hoy"
+                  que={`El último precio leído de cada oferta${porUnidad ? ', por unidad' : ''}, del más barato al más caro. Solo las ofertas que dejan ver los filtros Relación y Cadena.`}
+                  formula={[
+                    `Precio en $ = precio en Bs ÷ tasa BCV de hoy${porUnidad ? ' ÷ unidades del empaque' : ''}`,
+                    'Promedio = suma de los precios ÷ número de ofertas',
+                  ]}
+                  lectura="Cada columna tiene el color de su cadena; la tuya va con borde. La línea horizontal es el promedio: si tu columna queda por encima, estás más caro que el promedio."
+                />
+              </div>
+            </header>
+            {visibles.length === 0 ? (
+              <div className="h-72 flex items-center justify-center text-on-surface-variant m3-body-medium">No hay precios con estos filtros.</div>
+            ) : (
+              <div className="h-72" role="img" aria-label="Precio de cada oferta">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={datosBarras} margin={{ top: 20, right: 8, left: 0, bottom: 0 }} barCategoryGap="22%">
+                    <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
+                    <XAxis dataKey="etiqueta" interval={0} tick={<TickOferta color={tg.eje} />} tickLine={false} axisLine={{ stroke: tg.rejilla }} height={40} />
+                    <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} />
+                    {promedio > 0 && (
+                      <ReferenceLine y={promedio} stroke={tg.eje} strokeOpacity={0.7}
+                        label={{ value: 'Promedio', position: 'insideBottomLeft', fill: tg.eje, fontSize: 11 }} />
+                    )}
+                    <Tooltip cursor={{ fill: tg.rejilla, fillOpacity: 0.25 }} content={<TooltipOferta fmt={fmtModo} nombreCadena={nombreCadena} />} />
+                    <Bar dataKey="priceUsd" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                      {datosBarras.map(o => <Cell key={o.id} fill={o.color} stroke={o.tipo === 'propio' ? tg.texto : undefined} strokeWidth={o.tipo === 'propio' ? 2 : 0} />)}
+                      <LabelList dataKey="priceUsd" position="top" formatter={fmtModo} fill={tg.texto} stroke="none" fontSize={11} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          <div className="m3-dash-card">
+            <header className="m3-dash-card-header flex-wrap items-center">
+              <div className="min-w-0 flex items-center gap-1 mr-auto">
+                <h2 className="m3-title-medium text-on-surface">Historia de precios</h2>
+                <InfoGrafico
+                  titulo="Historia de precios"
+                  que="Cómo se movieron los precios día a día. Con «Tuyo, mínimo y promedio» ves las tres líneas resumen; con «Cada oferta», una línea por enlace (pasa el mouse por la leyenda para ver el detalle)."
+                  formula={[
+                    `Precio del día en $ = precio en Bs ÷ tasa BCV de ese día${porUnidad ? ' ÷ unidades' : ''}`,
+                    'Si un día no hubo lectura, se usa el último precio de hasta 7 días antes',
+                    'Tuyo = el más bajo de tus enlaces · Mínimo y promedio = de las ofertas filtradas',
+                  ]}
+                  lectura="Si tu línea se separa hacia arriba del promedio, te estás encareciendo frente a la competencia. Como se usa la tasa de cada día, la subida del dólar no se ve como subida de precio."
+                  alinear="derecha"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select value={vistaHistoria} onChange={e => setVistaHistoria(e.target.value)} aria-label="Qué ver" className="m3-filter-chip" leadingIcon="stacked_line_chart">
+                  <option value="resumen">Tuyo, mínimo y promedio</option>
+                  <option value="ofertas">Cada oferta</option>
+                </Select>
+                <Select value={String(dias)} onChange={e => setDias(Number(e.target.value))} aria-label="Periodo" className="m3-filter-chip" leadingIcon="date_range">
+                  {PERIODOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                </Select>
+              </div>
+            </header>
+            {historia.cargando && serieHistoria.puntos.length === 0 ? (
+              <div className="h-72 rounded-2xl m3-skeleton" aria-busy="true" />
+            ) : serieHistoria.puntos.length < 2 ? (
+              <div className="h-72 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+                <span className="material-symbols-outlined text-3xl" aria-hidden="true">show_chart</span>
+                <span className="m3-body-medium">Aún no hay historia de precios en este periodo.</span>
+              </div>
+            ) : (
+              <div className={`h-72 ${historia.cargando ? 'opacity-60' : ''}`}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={serieHistoria.puntos} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} stroke={tg.rejilla} strokeOpacity={0.6} />
+                    <XAxis dataKey="fecha" tickFormatter={diaCorto} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={{ stroke: tg.rejilla }} minTickGap={24} />
+                    <YAxis tickFormatter={v => fmtModo(v)} tick={{ fill: tg.eje, fontSize: 11 }} tickLine={false} axisLine={false} width={64} domain={['auto', 'auto']} />
+                    <Tooltip content={<TooltipHistoria fmt={fmtModo} />} cursor={{ stroke: tg.eje, strokeOpacity: 0.3 }} />
+                    <Legend content={<LeyendaHistoria color={tg.eje} />} />
+                    {vistaHistoria === 'resumen' ? (
+                      [
+                        <Line key="tuyo" type="monotone" dataKey="tuyo" name="Tu precio" stroke={colorCategorico(0)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
+                        <Line key="minimo" type="monotone" dataKey="minimo" name={`Mínimo ${sufijoGrupo}`} stroke={colorCategorico(1)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
+                        <Line key="promedio" type="monotone" dataKey="promedio" name={`Promedio ${sufijoGrupo}`} stroke={colorCategorico(2)} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />,
+                      ]
+                    ) : (
+                      serieHistoria.lineas.map(l => (
+                        <Line key={l.clave} type="monotone" dataKey={l.clave} name={l.nombre} detalle={l.detalle} stroke={l.color} strokeWidth={2} dot={serieHistoria.puntos.length <= 15} connectNulls isAnimationActive={false} />
+                      ))
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {vistaHistoria === 'ofertas' && serieHistoria.ocultas > 0 && (
+              <p className="m3-body-small text-on-surface-variant mt-2">Se muestran {MAX_SERIES} ofertas; {serieHistoria.ocultas} más no caben en el gráfico.</p>
+            )}
+          </div>
+        </section>
       </main>
 
       <ConfirmModal
@@ -572,7 +593,7 @@ function TooltipHistoria({ active, payload, label, fmt }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="m3-chart-tooltip max-w-xs">
-      <div className="font-medium">{new Date(`${label}T12:00:00`).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+      <div className="font-medium first-letter:uppercase">{new Date(`${label}T12:00:00`).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       {payload.filter(p => p.value != null).sort((a, b) => a.value - b.value).map(p => (
         <div key={p.dataKey} className="flex items-center justify-between gap-4">
           <span className="inline-flex items-center gap-1.5 min-w-0">
@@ -582,6 +603,11 @@ function TooltipHistoria({ active, payload, label, fmt }) {
           <span className="tabular-nums font-medium">{fmt(p.value)}</span>
         </div>
       ))}
+      {payload[0]?.payload?.tasa > 0 && (
+        <div className="text-on-surface-variant border-t border-outline-variant mt-1 pt-1">
+          Tasa BCV del día: Bs {payload[0].payload.tasa.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+      )}
     </div>
   );
 }

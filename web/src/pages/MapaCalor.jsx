@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
 import FiltroChip from '../components/FiltroChip';
-import FiltrosFijos from '../components/FiltrosFijos';
 import Select from '../components/Select';
+import InfoGrafico from '../components/InfoGrafico';
 import CadenaBadge from '../components/CadenaBadge';
 import DetalleLista from '../components/DetalleLista';
 import ProductDetailModal from '../components/ProductDetailModal';
@@ -185,7 +185,7 @@ export default function MapaCalor() {
         </button>
       </div>
 
-      <FiltrosFijos etiqueta="Filtros del mapa">
+      <section className="m3-dash-filtros" aria-label="Filtros del mapa">
         <div className="flex flex-wrap items-center gap-2">
           <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={filtroCadena} onChange={setFiltroCadena}
             opciones={[['todos', 'Competencia: todas las cadenas'], ...cadenasCompetencia.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
@@ -215,7 +215,7 @@ export default function MapaCalor() {
             <span className={moneda === 'bs' ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
           </label>
         </div>
-      </FiltrosFijos>
+      </section>
 
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Indicadores">
         <StatCard compacto label="Más baratos que el promedio" value={`${porPosicion.barato.length} de ${comparables}`} icon="south" tono="primary"
@@ -264,7 +264,19 @@ export default function MapaCalor() {
                 Producto
                 <span className="material-symbols-outlined" aria-hidden="true">{orden.campo === 'nombre' ? (orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}</span>
               </button>
-              <span className="hidden md:block">Precios de la competencia y el tuyo</span>
+              <span className="hidden md:flex items-center gap-1">
+                Precios de la competencia y el tuyo
+                <InfoGrafico
+                  titulo="Cómo se lee cada franja"
+                  que="Una franja por producto, del precio más barato al más caro de la competencia (solo las cadenas del filtro «Competencia»)."
+                  formula={[
+                    'Rayita = promedio de la competencia',
+                    'Punto = tu precio (el más bajo de tus enlaces, o tu PVP)',
+                    'Tú frente al promedio = tu precio ÷ promedio − 1',
+                  ]}
+                  lectura="Zona azul: más de 5 % por debajo del promedio (barato). Zona gris: a ±5 % (parejo). Zona roja: más de 5 % por encima (caro). Si tu punto está a la derecha, hay competidores más baratos que tú."
+                />
+              </span>
               <button type="button" onClick={() => ordenarPor('difProm')} className={`m3-sort-btn justify-self-end ${orden.campo === 'difProm' ? 'is-active' : ''}`}>
                 Tú frente al promedio
                 <span className="material-symbols-outlined" aria-hidden="true">{orden.campo === 'difProm' ? (orden.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}</span>

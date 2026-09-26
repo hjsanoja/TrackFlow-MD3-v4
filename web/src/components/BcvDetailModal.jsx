@@ -3,6 +3,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import ModalWrapper from './ModalWrapper';
 import StatCard from './StatCard';
 import Select from './Select';
+import InfoGrafico from './InfoGrafico';
 import { exportToCSV } from '../utils/exportUtils';
 import { tokensGrafico } from '../utils/chartTokens';
 import { leerColor, pct } from './dashboard/comun';
@@ -105,10 +106,18 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
         </section>
 
         <section className="m3-dash-card" aria-label="Historia de la tasa">
-          <header className="m3-dash-card-header flex-wrap">
-            <div className="min-w-0">
+          <header className="m3-dash-card-header flex-wrap items-center">
+            <div className="min-w-0 flex items-center gap-1">
               <h3 className="m3-title-medium text-on-surface">Historia</h3>
-              <p className="m3-body-small text-on-surface-variant">Una tasa por día. La línea punteada es el promedio del periodo ({bs(promedio)}).</p>
+              <InfoGrafico
+                titulo="Historia de la tasa"
+                que="Una tasa por día, en bolívares por dólar, según el BCV (o la que se puso a mano)."
+                formula={[
+                  `Promedio del periodo = suma de las tasas ÷ número de días (${bs(promedio)})`,
+                  'Cambio frente al día anterior = tasa de hoy ÷ tasa del día anterior − 1',
+                ]}
+                lectura="Si la línea sube, el bolívar se devalúa: el mismo precio en Bs vale menos dólares. Por eso los precios se comparan en $ a la tasa de cada día. La línea punteada es el promedio del periodo."
+              />
             </div>
             <Select value={periodo} onChange={e => setPeriodo(e.target.value)} aria-label="Periodo" className="m3-filter-chip" leadingIcon="date_range">
               {PERIODOS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
