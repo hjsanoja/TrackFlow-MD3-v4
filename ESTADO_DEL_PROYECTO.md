@@ -126,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #52, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 29**; la fase 30 va con el #53. Todos los SQL están en `sql/` |
+| Código en `main` | PR #53, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 30**. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -561,6 +561,26 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Ajustes del PR #54 (sin SQL)
+
+- **Mapa de Calor con el MERCADO**: mínimo, promedio y máximo cuentan tu
+  precio (competencia + tú). El globo, el estado (Más barato / Parejo / Más
+  caro), los indicadores, el orden y el CSV usan ese promedio. Si el mínimo o
+  el máximo eres tú, el rótulo dice "Tú". En el Dashboard el promedio sigue
+  siendo solo de la competencia; la ayuda (i) del mapa lo advierte.
+- **Filtros ordenados**:
+  - misma secuencia en Dashboard y Mapa (Unidad, Tipo, Categoría, Cadenas,
+    Marcas y genéricos, Posición);
+  - nombres más cortos ("Cadenas: todas", "Marcas y genéricos");
+  - en pantalla ancha los ajustes bajan enteros a su fila, a la derecha (CSS
+    de `.m3-dash-filtros`), en vez de apilarse en una columna;
+  - "Limpiar filtros" va al inicio del grupo de ajustes, así su espacio
+    invisible no deja una fila vacía.
+- **Ficha del enlace (Competencia)**: "Nombre en la tienda" muestra el nombre
+  que leyó el robot (`fact_precios.nombre_capturado` de la última captura
+  que lo tenga), no el del competidor. "Últimas capturas" ya existía; ahora
+  marca las que tenían oferta.
+
 ## Ajustes del PR #53 (fase 30)
 
 - **Fase 30** (`sql/fase30_tendencia_marca_generico.sql`):
@@ -875,9 +895,7 @@ capturas y devaluación vs subida real. Faltan:
 - Alertas por correo
 - Reporte semanal
 
-**Competencia**, para luego: el historial de precios en la ficha del enlace y
-el "Nombre en la tienda" de la ficha (la vista pone el nombre del competidor,
-no el que lee el robot: `fact_precios.nombre_capturado`; es un SQL pequeño).
+**Competencia**: historial y "Nombre en la tienda" de la ficha del enlace, hechos en el #54.
 
 **Unidades por empaque de los competidores** (para comparar por unidad):
 tras la fase 28 salen de la ficha del producto competidor

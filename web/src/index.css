@@ -1634,8 +1634,13 @@ thead .m3-sticky-actions { background-color: var(--md-sys-color-surface-containe
   border: 1px solid var(--md-sys-color-outline-variant);
   background-color: var(--md-sys-color-surface-container-lowest);
 }
+/* En pantalla ancha: filtros a la izquierda y ajustes a la derecha. Si no
+   caben juntos, los ajustes bajan ENTEROS a su propia fila (a la derecha), en
+   vez de apilarse en una columna estrecha. */
 @media (min-width: 1024px) {
-  .m3-dash-filtros { flex-direction: row; align-items: center; }
+  .m3-dash-filtros { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 24px; }
+  .m3-dash-filtros > :first-child { flex: 0 1 auto; min-width: 0; }
+  .m3-dash-filtros > :last-child:not(:first-child) { flex: 0 0 auto; flex-wrap: nowrap; margin-left: auto; }
 }
 
 /* Tarjeta de grafico: misma superficie que la tabla. */

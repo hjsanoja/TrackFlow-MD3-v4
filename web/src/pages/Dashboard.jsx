@@ -649,12 +649,12 @@ export default function Dashboard({ userDoc }) {
           <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria}
             opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
           <FiltroChip etiqueta="Comparar contra" icono="storefront" valor={cadenaComp} onChange={setCadenaComp}
-            opciones={[['todos', 'Competencia: todas las cadenas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
+            opciones={[['todos', 'Cadenas: todas'], ...cadenasComparables.map(c => [c, `Solo ${nombreCadena(c)}`])]} />
           <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoComp} onChange={setTipoComp}
-            opciones={[['todos', 'Competidores: marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
-          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); setTipoComp('todos'); }} />
+            opciones={[['todos', 'Marcas y genéricos'], ['GENERICO', 'Solo genéricos'], ['MARCA', 'Solo marcas']]} />
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setCadenaComp('todos'); setTipoComp('todos'); }} />
           <AjusteChip etiqueta="Precio que se compara" icono="receipt_long" valor={modoPrecio} onChange={setModoPrecio}
             opciones={[['lista', 'Precio de lista'], ['descuento', 'Precio con oferta']]} />
           <AjusteChip etiqueta="Comparar por" icono="medication" valor={modoAnalisis} onChange={setModoAnalisis}
