@@ -13,7 +13,7 @@ const diaLargo = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { 
 // Tendencia de tu posicion: la diferencia tipica (mediana) de tu precio con el
 // promedio de la competencia, dia por dia. La calcula Postgres
 // (fn_tendencia_posicion, fase 28); al navegador llegan ~90 puntos.
-export default function TendenciaPosicion({ productos, conDescuento, porUnidad, cadena, meta, tg, onDia }) {
+export default function TendenciaPosicion({ productos, conDescuento, porUnidad, cadena, tipoMercado, meta, tg, onDia }) {
   const [dias, setDias] = useState(() => {
     try { return [7, 15, 30, 90].includes(Number(localStorage.getItem('dashboard.tendencia.dias'))) ? Number(localStorage.getItem('dashboard.tendencia.dias')) : 7; } catch { return 7; }
   });
@@ -31,13 +31,15 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
       p_por_unidad: porUnidad,
       p_cadena: cadena || null,
       p_productos: productos,
+      // Solo si se filtra: asi funciona aunque falte la fase 30.
+      ...(tipoMercado ? { p_tipo_mercado: tipoMercado } : {}),
     }).then(({ data, error }) => {
       if (!vigente) return;
       setEstado({ cargando: false, filas: error ? [] : (data || []).map(f => ({ ...f, mediana: Number(f.mediana) })), error });
     });
     return () => { vigente = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dias, conDescuento, porUnidad, cadena, claveProductos]);
+  }, [dias, conDescuento, porUnidad, cadena, tipoMercado, claveProductos]);
 
   const cambiarDias = (v) => {
     setDias(v);
@@ -95,7 +97,7 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
       ) : faltaSql ? (
         <div className="h-44 flex flex-col items-center justify-center gap-2 text-on-surface-variant text-center px-6">
           <span className="material-symbols-outlined text-3xl" aria-hidden="true">database</span>
-          <span className="m3-body-medium">Falta correr la fase 28 en Supabase para ver la tendencia.</span>
+          <span className="m3-body-medium">{tipoMercado ? 'Falta correr la fase 30 en Supabase para filtrar la tendencia por marca o genérico.' : 'Falta correr la fase 28 en Supabase para ver la tendencia.'}</span>
         </div>
       ) : filas.length < 2 ? (
         <div className="h-44 flex flex-col items-center justify-center gap-2 text-on-surface-variant">

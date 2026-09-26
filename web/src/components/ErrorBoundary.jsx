@@ -22,25 +22,19 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-[400px] flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 m-4">
+        <div className="min-h-[400px] flex items-center justify-center p-6 m-4 rounded-3xl border border-outline-variant bg-surface-container-low">
           <div className="text-center max-w-md">
-            <div className="w-14 h-14 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
-              ⚠️
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-error-container text-on-error-container">
+              <span className="material-symbols-outlined text-3xl" aria-hidden="true">error</span>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">
-              Ocurrió un error inesperado
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-              Ha sucedido un inconveniente al procesar los datos de esta vista. Puedes recargar para intentar restablecer la interfaz.
+            <h3 className="m3-title-large text-on-surface mb-2">Ocurrió un error inesperado</h3>
+            <p className="m3-body-medium text-on-surface-variant mb-6">
+              Algo falló al mostrar esta pantalla. Recarga para intentarlo de nuevo.
             </p>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={this.handleReset}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-xl transition-all shadow-md shadow-blue-500/20"
-              >
-                Recargar Aplicación
-              </button>
-            </div>
+            <button type="button" onClick={this.handleReset} className="m3-btn-primary mx-auto">
+              <span className="material-symbols-outlined text-base" aria-hidden="true">refresh</span>
+              <span>Recargar</span>
+            </button>
           </div>
         </div>
       );

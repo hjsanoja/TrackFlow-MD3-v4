@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import {
@@ -14,11 +14,10 @@ import {
   ReferenceLine
 } from 'recharts';
 import Select from './Select';
+import { useHistoricoProducto } from '../hooks/useHistoricoProducto';
 
 export default function BrechaHistoricaUsd({ user, userDoc }) {
-  const { productos = [], productosCompetencia = [], historicoPrecios = [], bcvRates = [], cargarHistorico } = useData();
-  // El historico no se baja al abrir el panel: se pide al entrar aqui.
-  useEffect(() => { cargarHistorico?.(); }, [cargarHistorico]);
+  const { productos = [], productosCompetencia = [], bcvRates = [] } = useData();
   const bcv = useBcvRate();
   const currentBcv = bcv?.rate || 853.5;
 
@@ -70,23 +69,12 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
 
   // Filtrar lista de productos propios disponibles
   const productosPropiosConDatos = useMemo(() => {
-    // Buscar qué IDs tienen histórico de precios
-    const idsConHistorico = new Set();
-    historicoPrecios.forEach(h => {
-      if (h.id_producto_propio) idsConHistorico.add(String(h.id_producto_propio).trim());
-    });
-
-    const lista = productos.filter(p => {
-      const pId = String(p.id_interno || p.id).trim();
-      return idsConHistorico.has(pId) || true; // Incluir todos los productos
-    });
-
     if (busquedaProd.trim()) {
       const q = busquedaProd.toLowerCase();
-      return lista.filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.principio_activo || '').toLowerCase().includes(q));
+      return productos.filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.principio_activo || '').toLowerCase().includes(q));
     }
-    return lista;
-  }, [productos, historicoPrecios, busquedaProd]);
+    return productos;
+  }, [productos, busquedaProd]);
 
   // Si no hay producto seleccionado, seleccionar el primero
   const prodActivo = useMemo(() => {
@@ -95,6 +83,11 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
     }
     return productos[0] || null;
   }, [productos, productoSeleccionadoId]);
+
+  // Solo la historia del producto elegido (antes se bajaba la de todos los
+  // productos y la pestana tardaba varios segundos en abrir).
+  const [{ filas: filasHistoria }] = useHistoricoProducto(String(prodActivo?.id_interno || prodActivo?.id || '').trim(), 365);
+  const historicoPrecios = useMemo(() => filasHistoria.map(d => ({ ...d, scraped_at: d.scraped_at ? new Date(d.scraped_at) : null })), [filasHistoria]);
 
   // Obtener cadenas presentes en el histórico para este producto
   const cadenasDisponibles = useMemo(() => {
