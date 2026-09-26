@@ -150,6 +150,8 @@ async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
       cambios.cantidad_contenido = Number(item.unidades_empaque);
       if (['unidad', 'ml', 'g'].includes(item.unidad_contenido)) cambios.unidad_contenido = item.unidad_contenido;
     }
+    // Marca o generico: solo si viene (vacio = se conserva lo guardado).
+    if (['MARCA', 'GENERICO'].includes(item.tipo_mercado)) cambios.tipo_mercado = item.tipo_mercado;
     if (Object.keys(cambios).length > 0) {
       const { error } = await supabase.from('dim_productos').update(cambios).eq('id', prod.id);
       if (error) throw new Error(`No se pudo actualizar el competidor: ${error.message}`);
@@ -261,6 +263,7 @@ export async function guardarEnlaceCompetencia(item) {
         // 1, que el panel lee como "no se sabe".
         cantidad_contenido: Number(item.unidades_empaque || item.unidosis) > 0 ? Number(item.unidades_empaque || item.unidosis) : 1,
         unidad_contenido: ['unidad', 'ml', 'g'].includes(item.unidad_contenido) ? item.unidad_contenido : 'unidad',
+        ...(['MARCA', 'GENERICO'].includes(item.tipo_mercado) ? { tipo_mercado: item.tipo_mercado } : {}),
         activo: item.activo !== false
       }, { onConflict: 'id_interno' })
       .select('id')
@@ -930,6 +933,7 @@ export async function dbUpsertProductoCompetencia(data) {
     unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null,
     unidades_empaque: Number(data.unidades_empaque) > 0 ? Number(data.unidades_empaque) : null,
     unidad_contenido: data.unidad_contenido || null,
+    tipo_mercado: ['MARCA', 'GENERICO'].includes(data.tipo_mercado) ? data.tipo_mercado : null,
     ultimo_precio_full_bs: data.ultimo_precio_full_bs ?? null,
     ultimo_precio_desc_bs: data.ultimo_precio_desc_bs ?? null,
     ultimo_nombre: data.ultimo_nombre ?? null,
@@ -1048,6 +1052,7 @@ export async function dbUpsertCompetenciaBulk(compList) {
     unidosis: data.unidosis ? parseInt(data.unidosis, 10) : null,
     unidades_empaque: Number(data.unidades_empaque) > 0 ? Number(data.unidades_empaque) : null,
     unidad_contenido: data.unidad_contenido || null,
+    tipo_mercado: ['MARCA', 'GENERICO'].includes(data.tipo_mercado) ? data.tipo_mercado : null,
     ultimo_precio_full_bs: data.ultimo_precio_full_bs ?? null,
     ultimo_precio_desc_bs: data.ultimo_precio_desc_bs ?? null,
     ultimo_nombre: data.ultimo_nombre ?? null,
@@ -1152,14 +1157,8 @@ export async function dbDeleteProductoCompetencia(enlace) {
     }
   }
 
-  if (db && id) {
-    try {
-      await deleteDoc(doc(db, 'productos_competencia', id));
-    } catch (e) {
-      console.warn('[Firestore] Error en deleteProductoCompetencia:', e?.message || String(e));
-    }
-  }
-
+  // (Antes aqui se borraba tambien en Firestore con variables que ya no
+  // existen: lanzaba "db is not defined" despues de borrar bien en Supabase.)
   limpiarCacheDatos();
 
   if (anyError && isSupabaseActive()) {

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { UMBRAL_CAMBIO } from '../components/dashboard/comun';
+import { esMarca } from '../utils/tipoMercado';
 
 // Precios de cada producto propio frente a la competencia, con el mismo
 // criterio en el Dashboard y en el Mapa de Calor:
@@ -8,9 +9,13 @@ import { UMBRAL_CAMBIO } from '../components/dashboard/comun';
 //   - Minimo y promedio: SOLO de la competencia.
 //   - Cambios: en dolares, cada precio a la tasa de su dia (v_variacion).
 //   - Por unidad: el precio entre las unidades del empaque.
+//   - tipoComp: comparar contra toda la competencia, solo genericos o solo
+//     marcas (tipo_mercado de cada competidor, fase 29).
+//   - cruce: tu generico cuesta mas que una marca de la competencia, o tu
+//     marca cuesta menos que un generico (mismo empaque, o por unidad).
 export function useAnalisisPrecios({
   productos = [], productosCompetencia = [], cadenas = [], variaciones = [], tasa,
-  modoPrecio = 'lista', modoAnalisis = 'empaque', ventana = 1, cadenaComp = 'todos',
+  modoPrecio = 'lista', modoAnalisis = 'empaque', ventana = 1, cadenaComp = 'todos', tipoComp = 'todos',
 }) {
   // Cadenas: los enlaces viejos traen el nombre en vez del id.
   const cadenaPorClave = useMemo(() => {
@@ -46,7 +51,7 @@ export function useAnalisisPrecios({
       const competencia = enlacesPorProducto.get(pId) || [];
       const unidadesPropio = Math.max(parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis || p.unidades_empaque), 1);
 
-      const precios = competencia.map(c => {
+      const todos = competencia.map(c => {
         const bs = conDescuento ? (c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs) : c.ultimo_precio_full_bs;
         if (!bs || !tasa) return null;
         const tipo = String(c.tipo || '').toLowerCase();
@@ -83,6 +88,7 @@ export function useAnalisisPrecios({
         return {
           id: c.id,
           tipo,
+          tipoMercado: esMarca(c) ? 'MARCA' : 'GENERICO',
           cadena,
           marca: c.marca,
           unidades,
@@ -92,6 +98,7 @@ export function useAnalisisPrecios({
           cambio,
         };
       }).filter(v => v && v.priceUsd > 0);
+      const precios = tipoComp === 'todos' ? todos : todos.filter(x => x.tipo === 'propio' || x.tipoMercado === tipoComp);
 
       const propios = precios.filter(x => x.tipo === 'propio');
       const competidores = precios.filter(x => x.tipo !== 'propio');
@@ -119,8 +126,25 @@ export function useAnalisisPrecios({
         if (!previo || x.priceUsd < previo.priceUsd) porCadena.set(x.cadena, x);
       }
 
+      // Cruce con el otro tipo de mercado (misma molecula por el vinculo; mismo
+      // empaque salvo que se compare por unidad).
+      let cruce = null;
+      if (tuPrecio != null) {
+        const soyMarca = esMarca(p);
+        const opuestos = todos.filter(x => x.tipo !== 'propio' && x.tipoMercado !== (soyMarca ? 'MARCA' : 'GENERICO')
+          && (porUnidad || x.unidades === unidadesPropio));
+        if (opuestos.length) {
+          const ref = soyMarca
+            ? opuestos.reduce((a, b) => (b.priceUsd > a.priceUsd ? b : a))
+            : opuestos.reduce((a, b) => (b.priceUsd < a.priceUsd ? b : a));
+          const dif = (tuPrecio / ref.priceUsd - 1) * 100;
+          if (soyMarca ? dif < -0.5 : dif > 0.5) cruce = { tipo: soyMarca ? 'marca_barata' : 'generico_caro', ref, dif };
+        }
+      }
+
       return {
         producto: p,
+        cruce,
         competencia,
         precios,
         porCadena,
@@ -139,7 +163,7 @@ export function useAnalisisPrecios({
         sinPrecio: precios.length === 0 && tuPrecio == null,
       };
     });
-  }, [productos, productosCompetencia, tasa, modoPrecio, modoAnalisis, ventana, variaciones, idCadena, cadenaComp]);
+  }, [productos, productosCompetencia, tasa, modoPrecio, modoAnalisis, ventana, variaciones, idCadena, cadenaComp, tipoComp]);
 
   return { analizados, idCadena, nombreCadena, cadenaPorClave };
 }

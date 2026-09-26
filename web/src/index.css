@@ -1849,11 +1849,6 @@ td.m3-calor-celda {
 .m3-calor-punto-parejo { background-color: var(--md-sys-color-data-div-mid); }
 .m3-calor-punto-caro { background-color: var(--md-sys-color-data-div-dear-1); }
 .m3-calor-punto-muy_caro { background-color: var(--md-sys-color-data-div-dear-2); }
-.m3-espectro-etiquetas {
-  display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;
-  font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); font-variant-numeric: tabular-nums;
-}
-.m3-espectro-etiquetas span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .m3-espectro-estado {
   font-size: 0.75rem; font-weight: 500; padding: 2px 8px; border-radius: 8px;
   border: 1px solid var(--md-sys-color-outline-variant); color: var(--md-sys-color-on-surface-variant);
@@ -1940,23 +1935,17 @@ td.m3-calor-celda {
   .m3-table-apilada td > * { max-width: 100%; }
 }
 
-/* Mapa de Calor: recta de precios (linea, rango de la competencia, un punto
-   por competidor, raya del promedio y tu punto con globo). */
-.m3-espectro-linea { left: 0; right: 0; top: 10px; height: 2px; border-radius: 2px; background-color: var(--md-sys-color-surface-container-highest); }
-.m3-espectro-competencia { top: 9px; height: 4px; border-radius: 4px; background-color: var(--md-sys-color-outline-variant); }
+/* Mapa de Calor: escala centrada en el promedio con zonas de color, tramo
+   minimo-maximo de la competencia, raya del promedio y tu punto con globo. */
+.m3-espectro-rango { top: 9px; height: 4px; border-radius: 4px; background-color: var(--md-sys-color-on-surface-variant); opacity: 0.75; }
+.m3-espectro-rotulos { position: relative; height: 18px; margin-top: 4px; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); font-variant-numeric: tabular-nums; }
+.m3-espectro-rotulos > span { position: absolute; top: 0; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.m3-espectro-rotulos > .is-prom { transform: translateX(-50%); color: var(--md-sys-color-on-surface); font-weight: 500; }
+.m3-espectro-leyenda i.m3-espectro-rango-leyenda { width: 16px; height: 4px; border-radius: 4px; background-color: var(--md-sys-color-on-surface-variant); opacity: 0.75; }
+.m3-espectro-ranking { font-size: 0.8125rem; color: var(--md-sys-color-on-surface-variant); white-space: nowrap; }
+.m3-espectro-ranking strong { font-size: 1.125rem; font-weight: 700; color: var(--md-sys-color-on-surface); }
 .m3-espectro-promedio { top: 1px; width: 2px; height: 20px; margin-left: -1px; border-radius: 2px; background-color: var(--md-sys-color-on-surface); }
-.m3-espectro-comp {
-  top: 6px; width: 10px; height: 10px; margin-left: -5px; border-radius: 999px;
-  border: 2px solid var(--md-sys-color-surface-container-lowest);
-}
 .m3-espectro-punto { z-index: 2; }
-.m3-espectro-etiqueta-prom {
-  position: relative; display: inline-block; margin-top: 2px; white-space: nowrap;
-  font-size: 0.6875rem; font-weight: 500; color: var(--md-sys-color-on-surface); font-variant-numeric: tabular-nums;
-}
-.m3-espectro-etiquetas small { font-size: 0.6875rem; opacity: 0.8; }
-.m3-espectro-comp-leyenda { width: 10px; height: 10px; border-radius: 999px; display: inline-block; background-color: var(--md-sys-color-on-surface-variant); }
-.m3-espectro-leyenda i.m3-espectro-prom-leyenda { width: 2px; height: 14px; border-radius: 2px; background-color: var(--md-sys-color-on-surface); }
 
 /* Globo de tu precio: color segun como estas frente al promedio, con pico
    hacia el punto y una entrada con rebote. */
@@ -1988,3 +1977,11 @@ td.m3-calor-celda {
 .m3-espectro-fila:hover .m3-espectro-punto { animation: m3-punto-latido 900ms ease-out; }
 @keyframes m3-punto-latido { 0% { box-shadow: 0 0 0 1px var(--md-sys-color-on-surface), 0 0 0 0 rgb(0 0 0 / 0.25); } 100% { box-shadow: 0 0 0 1px var(--md-sys-color-on-surface), 0 0 0 10px rgb(0 0 0 / 0); } }
 @media (prefers-reduced-motion: reduce) { .m3-espectro-globo, .m3-espectro-fila:hover .m3-espectro-punto { animation: none; } }
+
+/* Marca o generico de un competidor (fase 29). */
+.m3-chip-marca, .m3-chip-generico {
+  display: inline-block; padding: 0 6px; border-radius: 6px;
+  font-size: 0.6875rem; font-weight: 600; line-height: 18px;
+  border: 1px solid var(--md-sys-color-outline-variant); color: var(--md-sys-color-on-surface-variant);
+}
+.m3-chip-marca { background-color: color-mix(in srgb, var(--md-sys-color-tertiary-container) 70%, transparent); color: var(--md-sys-color-on-tertiary-container); border-color: transparent; }

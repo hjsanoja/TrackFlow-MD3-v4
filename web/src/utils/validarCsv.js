@@ -1,3 +1,4 @@
+import { leerTipoMercado } from './tipoMercado';
 import { getRowValue } from './csvParser';
 
 /**
@@ -51,6 +52,8 @@ export const ESQUEMAS = {
         alias: ['laboratorio', 'fabricante'] },
       { campo: 'unidades_empaque', etiqueta: 'Unidades por empaque', obligatorio: false,
         alias: ['unidades', 'unidades_por_empaque'] },
+      { campo: 'tipo_mercado', etiqueta: 'Marca o genérico', obligatorio: false,
+        alias: ['marca_o_generico'] },
       { campo: 'activo', etiqueta: 'Activo', obligatorio: false, tipo: 'booleano', exacto: true },
     ],
   },
@@ -199,6 +202,11 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
       const unidades = getRowValue(fila, 'unidades_empaque', 'unidades_por_empaque').trim();
       if (unidades && !(Number(unidades.replace(',', '.')) > 0)) {
         avisos.push({ fila: numero, campo: 'Unidades por empaque', mensaje: `"${unidades}" no es un número: se ignora` });
+      }
+
+      const tipoMercado = getRowValue(fila, 'tipo_mercado', 'marca_o_generico').trim();
+      if (leerTipoMercado(tipoMercado) === undefined) {
+        avisos.push({ fila: numero, campo: 'Marca o genérico', mensaje: `"${tipoMercado}" no es "marca" ni "generico": se ignora` });
       }
 
       const tipo = getRowValue(fila, 'tipo').toLowerCase().trim();

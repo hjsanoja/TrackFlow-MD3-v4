@@ -126,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #50, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 28** (el #48 no trae SQL) |
+| Código en `main` | PR #51, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 28**; la fase 29 va con el #52 |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -560,6 +560,44 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Marca o genérico de cada competidor (PR #52, fase 29)
+
+- **Fase 29** (`fase29_marca_generico_competencia.sql`):
+  - clasifica una sola vez `dim_productos.tipo_mercado` de los `COMP_`: si el
+    nombre empieza con la molécula del producto propio es GENERICO; si no,
+    MARCA;
+  - no toca nada si ya hay algún competidor en MARCA;
+  - agrega `tipo_mercado` al final de la vista `productos_competencia`,
+    conservando sus opciones.
+- **Carga**: campo "Marca o genérico" en el formulario del competidor (sugerido
+  por el nombre, se puede cambiar) y columna `tipo_mercado` en la plantilla
+  (marca / generico; vacío = se conserva, o se deduce en uno nuevo).
+  `utils/tipoMercado.js` tiene la regla, la lectura y `esMarca`.
+- **Análisis** (`useAnalisisPrecios`):
+  - parámetro `tipoComp` (todos / GENERICO / MARCA) para comparar solo contra
+    un tipo;
+  - `cruce` por producto: tu genérico cuesta más que una marca de la
+    competencia, o tu marca cuesta menos que un genérico. Cuenta solo el mismo
+    empaque (o todo si se compara por unidad); el mismo producto lo da el
+    vínculo.
+- **Dashboard**: filtro "Competidores: marcas y genéricos / solo genéricos /
+  solo marcas" y aviso "Cruces genérico / marca" con su lista. La tendencia
+  (SQL) todavía no aplica este filtro.
+- **Ficha**: el mismo filtro, más la etiqueta Marca / Genérico en cada oferta.
+- **Mapa de Calor**:
+  - vuelve la escala común centrada en el promedio, con zonas de color;
+  - tramo oscuro del mínimo al máximo de la competencia, con rótulos en su
+    lugar real (se juntan con el promedio si están pegados);
+  - sin puntos por competidor;
+  - se quitaron "Tu precio" bajo el nombre y la columna "Tú frente al
+    promedio"; ahora la columna dice **Tu posición** ("2.º de 5", ordenable),
+    el estado y, si hay, el cruce con marca/genérico;
+  - mismo filtro de competidores.
+- Arreglo: borrar un enlace lanzaba "db is not defined" (restos de Firestore)
+  después de borrar bien en Supabase.
+- Pendiente anotado: Experimental tarda 5-10 s porque "Brechas USD" pide el
+  histórico completo de todos los productos (`cargarHistorico`). No se tocó.
 
 ## Mapa de Calor: recta de precios (PR #51, sin SQL)
 
