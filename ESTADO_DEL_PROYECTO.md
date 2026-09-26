@@ -126,7 +126,7 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #49, desplegado (GitHub Pages sale solo de `main`) |
+| Código en `main` | PR #50, desplegado (GitHub Pages sale solo de `main`) |
 | SQL corrido en Supabase | **Hasta la fase 28** (el #48 no trae SQL) |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
@@ -560,6 +560,19 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Mapa de Calor: recta de precios (PR #51, sin SQL)
+
+La franja con zonas (PR #49/#50) confundía: la escala no incluía tu precio,
+los rótulos Mín/Máx quedaban en los bordes aunque la línea no llegara, y el
+promedio parecía "mal" porque es solo de la competencia. Ahora cada fila es
+una **recta de precios**:
+- de izquierda (más barato) a derecha (más caro), **contando tu precio**;
+- un punto pequeño por competidor, con el color de su cadena;
+- raya del promedio de la competencia con su valor debajo;
+- tu punto con un globo de color (azul más de 5 % bajo el promedio, gris
+  ±5 %, rojo más de 5 % encima) que entra con una animación;
+- abajo: el más barato y el más caro (dice "Tú" si eres tú).
 
 ## Ajustes del PR #50 (sin SQL)
 

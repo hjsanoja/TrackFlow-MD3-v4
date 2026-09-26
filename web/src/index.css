@@ -1832,15 +1832,13 @@ td.m3-calor-celda {
 .m3-espectro-fila:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -2px; }
 
 .m3-espectro { min-width: 0; }
-.m3-espectro-pista { position: relative; height: 22px; margin-top: 24px; }
+.m3-espectro-pista { position: relative; height: 22px; margin-top: 34px; }
 .m3-espectro-pista > div { position: absolute; }
 .m3-espectro-zona-barata, .m3-espectro-zona-pareja, .m3-espectro-zona-cara { top: 7px; height: 8px; }
 .m3-espectro-zona-barata { background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-1) 45%, transparent); border-radius: 8px 0 0 8px; }
 .m3-espectro-zona-pareja { background-color: color-mix(in srgb, var(--md-sys-color-data-div-mid) 45%, transparent); }
 .m3-espectro-zona-cara { background-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-1) 45%, transparent); border-radius: 0 8px 8px 0; }
 /* Donde hay precios de la competencia: raya fina y oscura sobre la franja. */
-.m3-espectro-competencia { top: 10px; height: 2px; background-color: var(--md-sys-color-on-surface-variant); opacity: 0.55; }
-.m3-espectro-promedio { top: 2px; width: 2px; height: 18px; margin-left: -1px; background-color: var(--md-sys-color-on-surface); }
 .m3-espectro-punto {
   top: 3px; width: 16px; height: 16px; margin-left: -8px; border-radius: 999px;
   border: 3px solid var(--md-sys-color-surface-container-lowest);
@@ -1942,10 +1940,51 @@ td.m3-calor-celda {
   .m3-table-apilada td > * { max-width: 100%; }
 }
 
-/* Globo con tu precio y la diferencia, sobre el punto del Mapa de Calor. */
-.m3-espectro-globo {
-  bottom: calc(100% + 2px); white-space: nowrap; pointer-events: none;
-  padding: 1px 6px; border-radius: 6px; font-size: 0.6875rem; font-weight: 600; line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-  background-color: var(--md-sys-color-on-surface); color: var(--md-sys-color-surface);
+/* Mapa de Calor: recta de precios (linea, rango de la competencia, un punto
+   por competidor, raya del promedio y tu punto con globo). */
+.m3-espectro-linea { left: 0; right: 0; top: 10px; height: 2px; border-radius: 2px; background-color: var(--md-sys-color-surface-container-highest); }
+.m3-espectro-competencia { top: 9px; height: 4px; border-radius: 4px; background-color: var(--md-sys-color-outline-variant); }
+.m3-espectro-promedio { top: 1px; width: 2px; height: 20px; margin-left: -1px; border-radius: 2px; background-color: var(--md-sys-color-on-surface); }
+.m3-espectro-comp {
+  top: 6px; width: 10px; height: 10px; margin-left: -5px; border-radius: 999px;
+  border: 2px solid var(--md-sys-color-surface-container-lowest);
 }
+.m3-espectro-punto { z-index: 2; }
+.m3-espectro-etiqueta-prom {
+  position: relative; display: inline-block; margin-top: 2px; white-space: nowrap;
+  font-size: 0.6875rem; font-weight: 500; color: var(--md-sys-color-on-surface); font-variant-numeric: tabular-nums;
+}
+.m3-espectro-etiquetas small { font-size: 0.6875rem; opacity: 0.8; }
+.m3-espectro-comp-leyenda { width: 10px; height: 10px; border-radius: 999px; display: inline-block; background-color: var(--md-sys-color-on-surface-variant); }
+.m3-espectro-leyenda i.m3-espectro-prom-leyenda { width: 2px; height: 14px; border-radius: 2px; background-color: var(--md-sys-color-on-surface); }
+
+/* Globo de tu precio: color segun como estas frente al promedio, con pico
+   hacia el punto y una entrada con rebote. */
+.m3-espectro-globo {
+  z-index: 3; bottom: calc(100% + 6px); white-space: nowrap; pointer-events: none;
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; line-height: 1.35;
+  font-variant-numeric: tabular-nums; color: #fff;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.18);
+  transform: translateX(var(--corrimiento, -50%));
+  animation: m3-globo-entrar 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.m3-espectro-globo strong { font-weight: 700; font-size: 0.8125rem; }
+.m3-espectro-globo.is-barato { background-color: var(--md-sys-color-data-div-cheap-2); }
+.m3-espectro-globo.is-parejo { background-color: var(--md-sys-color-on-surface-variant); }
+.m3-espectro-globo.is-caro { background-color: var(--md-sys-color-data-div-dear-2); }
+.m3-espectro-globo-pico {
+  position: absolute; top: 100%; width: 0; height: 0; margin-left: -5px;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid;
+  color: inherit; border-top-color: inherit;
+}
+.m3-espectro-globo.is-barato .m3-espectro-globo-pico { border-top-color: var(--md-sys-color-data-div-cheap-2); }
+.m3-espectro-globo.is-parejo .m3-espectro-globo-pico { border-top-color: var(--md-sys-color-on-surface-variant); }
+.m3-espectro-globo.is-caro .m3-espectro-globo-pico { border-top-color: var(--md-sys-color-data-div-dear-2); }
+@keyframes m3-globo-entrar {
+  from { opacity: 0; transform: translateX(var(--corrimiento, -50%)) translateY(6px) scale(0.6); }
+  to { opacity: 1; transform: translateX(var(--corrimiento, -50%)); }
+}
+.m3-espectro-fila:hover .m3-espectro-punto { animation: m3-punto-latido 900ms ease-out; }
+@keyframes m3-punto-latido { 0% { box-shadow: 0 0 0 1px var(--md-sys-color-on-surface), 0 0 0 0 rgb(0 0 0 / 0.25); } 100% { box-shadow: 0 0 0 1px var(--md-sys-color-on-surface), 0 0 0 10px rgb(0 0 0 / 0); } }
+@media (prefers-reduced-motion: reduce) { .m3-espectro-globo, .m3-espectro-fila:hover .m3-espectro-punto { animation: none; } }
