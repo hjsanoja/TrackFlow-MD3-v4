@@ -561,6 +561,32 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Revisión de capturas: corregir enlace y volver a revisar (PR #62, fase 34)
+
+- **SQL** `sql/fase34_revision_capturas.sql` (solo vistas, no cambia datos):
+  - `v_capturas_revision`: pendientes y ya revisadas, con `estado_revision`
+    (pendiente / valida / erronea), la lectura anterior buena y la SIGUIENTE
+    del mismo enlace, el producto propio con el que se compara y cuántas
+    capturas pendientes tiene ese enlace;
+  - revisada por la bandeja = `revisado_manual` con `motivo_sospecha`; los
+    precios cargados a mano (también `revisado_manual`) no entran;
+  - `v_calidad_datos`: `revisadas` ya no cuenta los precios manuales y suma
+    `validas` al final.
+- **Pantalla** (`RevisionCapturas.jsx`):
+  - Pendientes / Válidas / Erróneas (segmentado); en Válidas y Erróneas,
+    "Volver a revisar" la regresa a pendientes; toda decisión tiene
+    "Deshacer" en el aviso;
+  - "Corregir enlace" abre `/competencia?editar=<publicacion>&volver=revision`:
+    Competencia abre el formulario de ese enlace y al cerrarlo vuelve a la
+    bandeja;
+  - pista por captura a partir de la lectura siguiente (±5 %): si vuelve al
+    precio anterior, "parece un error de lectura"; si lo repite, "cambio
+    real";
+  - filtros Motivo, Cadena y Relación en `BarraFiltros`, buscador y
+    "Mostrar más" (30 por página);
+  - sin la fase 34 se ven solo las pendientes (de `v_capturas_sospechosas`)
+    con un aviso.
+
 ## Mínimo del mercado y extremos por cadena (PR #61, sin SQL)
 
 - **Mínimo del mercado** (`useAnalisisPrecios`):

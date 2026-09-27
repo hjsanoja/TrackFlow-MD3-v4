@@ -2093,3 +2093,46 @@ td.m3-calor-celda {
 }
 .m3-chip-extremo.is-bajo { color: var(--md-sys-color-data-div-cheap-2); border-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-2) 40%, transparent); background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-1) 14%, transparent); }
 .m3-chip-extremo.is-alto { color: var(--md-sys-color-data-div-dear-2); border-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-2) 40%, transparent); background-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-1) 14%, transparent); }
+
+/* Revision de capturas: lista con precio anterior -> capturado -> siguiente. */
+.m3-revision-lista > li + li { border-top: 1px solid var(--md-sys-color-outline-variant); }
+.m3-revision-item {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px;
+}
+@media (min-width: 1024px) {
+  .m3-revision-item { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 24px; }
+}
+.m3-revision-item:hover { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 3%, transparent); }
+.m3-revision-precios { display: flex; align-items: center; justify-content: space-between; gap: 10px; white-space: nowrap; }
+@media (min-width: 1024px) { .m3-revision-precios { justify-content: flex-end; } }
+.m3-revision-decision { display: flex; align-items: center; gap: 8px; width: 100%; }
+.m3-revision-decision > button { flex: 1; }
+@media (min-width: 1024px) { .m3-revision-decision { width: auto; } .m3-revision-decision > button { flex: none; } }
+.m3-revision-acciones { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+@media (min-width: 1024px) { .m3-revision-acciones { flex-wrap: nowrap; justify-content: flex-end; } }
+.m3-chip-motivo {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px 0 6px; border-radius: 8px;
+  font-size: 0.75rem; font-weight: 600;
+  background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);
+}
+.m3-chip-motivo .material-symbols-outlined { font-size: 16px; }
+.m3-revision-pista {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; padding: 6px 10px; border-radius: 8px;
+  font-size: 0.8125rem; line-height: 1.35; width: fit-content; max-width: 100%;
+  background-color: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant);
+}
+.m3-revision-pista .material-symbols-outlined { font-size: 18px; }
+.m3-revision-pista.is-valida { background-color: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent); color: var(--md-sys-color-on-surface); }
+.m3-revision-pista.is-valida .material-symbols-outlined { color: var(--md-sys-color-primary); }
+.m3-revision-pista.is-erronea { background-color: color-mix(in srgb, var(--md-sys-color-error) 10%, transparent); color: var(--md-sys-color-on-surface); }
+.m3-revision-pista.is-erronea .material-symbols-outlined { color: var(--md-sys-color-error); }
+.m3-revision-estado { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; font-weight: 600; padding: 0 8px; }
+.m3-revision-estado .material-symbols-outlined { font-size: 18px; }
+.m3-revision-estado.is-valida { color: var(--md-sys-color-primary); }
+.m3-revision-estado.is-erronea { color: var(--md-sys-color-error); }
+@media (max-width: 639px) {
+  .m3-revision-precios { gap: 6px; }
+  .m3-revision-precios > .material-symbols-outlined { display: none; }
+  .m3-revision-precios .m3-body-medium { font-size: 0.8125rem; }
+  .m3-revision-precios .m3-body-large { font-size: 0.9375rem; }
+}
