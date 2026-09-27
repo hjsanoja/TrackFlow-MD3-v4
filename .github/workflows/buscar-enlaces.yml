@@ -1,0 +1,42 @@
+name: Buscador de enlaces (beta)
+
+# Busca en otras cadenas los productos que ya estan en Competencia y deja
+# sugerencias para aceptar en el panel (Experimental > Sugerencias de enlaces).
+# No abre navegador: usa el buscador publico de cada tienda.
+on:
+  workflow_dispatch:        # boton "Run workflow" en GitHub
+    inputs:
+      forzar:
+        description: "Buscar todo otra vez y volver a detectar las tiendas (1 = si)"
+        required: false
+        default: ""
+  repository_dispatch:      # boton "Buscar enlaces" del panel
+    types: [buscar-enlaces]
+
+concurrency:
+  group: buscar-enlaces
+  cancel-in-progress: false
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Buscar enlaces
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FORZAR: ${{ github.event.inputs.forzar || github.event.client_payload.forzar }}
+          SOLO_PRODUCTOS: ${{ github.event.client_payload.productos }}
+          SOLO_CADENAS: ${{ github.event.client_payload.cadenas }}
+          MAX_PRODUCTOS: ${{ github.event.client_payload.max_productos }}
+        run: python scraper/buscar_enlaces.py

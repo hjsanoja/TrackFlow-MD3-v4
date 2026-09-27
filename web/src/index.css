@@ -2175,3 +2175,33 @@ td.m3-calor-celda {
   position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 9999px;
   background-color: var(--md-sys-color-error);
 }
+
+/* Sugerencias de enlaces (beta). */
+.m3-tienda {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 6px; border-radius: 8px;
+  font-size: 0.8125rem; border: 1px solid var(--md-sys-color-outline-variant); background-color: var(--md-sys-color-surface);
+}
+.m3-tienda-estado { font-size: 0.6875rem; font-weight: 600; padding: 0 6px; border-radius: 6px; line-height: 18px; }
+.m3-tienda.is-si .m3-tienda-estado { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.m3-tienda.is-no .m3-tienda-estado { background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); }
+.m3-tienda.is-duda .m3-tienda-estado { background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+.m3-sugerencias-grupo + .m3-sugerencias-grupo { border-top: 1px solid var(--md-sys-color-outline-variant); }
+.m3-sugerencias-producto { padding: 14px 16px 6px; background-color: var(--md-sys-color-surface-container-low); }
+.m3-sugerencia {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 20px; padding: 12px 16px;
+  border-top: 1px dashed var(--md-sys-color-outline-variant);
+}
+.m3-sugerencias-producto + ul > .m3-sugerencia:first-child { border-top: none; }
+@media (min-width: 900px) { .m3-sugerencia { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; } }
+.m3-sugerencia-acciones { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.m3-puntaje {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 22px; padding: 0 6px;
+  border-radius: 9999px; font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface);
+}
+.m3-puntaje.is-medio { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.m3-puntaje.is-alto { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.m3-criterio { display: inline-flex; align-items: center; gap: 2px; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); }
+.m3-criterio .material-symbols-outlined { font-size: 16px; }
+.m3-criterio.is-si .material-symbols-outlined { color: var(--md-sys-color-primary); }
+.m3-criterio.is-no { color: var(--md-sys-color-error); }
