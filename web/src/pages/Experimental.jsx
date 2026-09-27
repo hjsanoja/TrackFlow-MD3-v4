@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { usePendientesRevision } from '../hooks/usePendientesRevision';
 
 // Cada pestana baja su codigo solo cuando se abre.
 const DevaluacionReal = lazy(() => import('./DevaluacionReal'));
@@ -33,6 +34,7 @@ export default function Experimental({ user, userDoc }) {
   const pedida = searchParams.get('tab');
   const activa = TABS.some(t => t.id === pedida) ? pedida : 'canibalizacion';
   const tab = TABS.find(t => t.id === activa);
+  const pendientes = usePendientesRevision();
 
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
@@ -52,6 +54,9 @@ export default function Experimental({ user, userDoc }) {
             className={`m3-tab ${activa === t.id ? 'is-active' : ''}`}>
             <span className="material-symbols-outlined" aria-hidden="true">{t.icono}</span>
             {t.nombre}
+            {t.id === 'revision' && pendientes > 0 && (
+              <span className="m3-nav-contador" title={`${pendientes} capturas por revisar`}>{pendientes > 99 ? '99+' : pendientes}</span>
+            )}
           </button>
         ))}
       </nav>

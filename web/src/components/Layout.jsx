@@ -5,6 +5,7 @@ import { supabase } from '../supabase';
 import { registrarAcceso } from '../utils/accesos';
 import { limpiarCacheDatos } from '../utils/cacheDatos';
 import { useData } from '../context/DataContext';
+import { usePendientesRevision } from '../hooks/usePendientesRevision';
 
 export default function Layout({ user, userDoc, children }) {
   const { isRefreshing, refreshData, productos = [] } = useData();
@@ -45,6 +46,11 @@ export default function Layout({ user, userDoc, children }) {
     }
     window.location.reload();
   };
+
+  // Capturas dudosas por revisar: contador junto a Experimental.
+  const pendientesRevision = usePendientesRevision();
+  const contadorDe = (item) => (item.to === '/experimental' && pendientesRevision > 0 ? pendientesRevision : 0);
+  const textoContador = (n) => (n > 99 ? '99+' : String(n));
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
@@ -191,11 +197,17 @@ export default function Layout({ user, userDoc, children }) {
                   }
                 >
                   <div className={`flex items-center min-w-0 ${menuColapsado ? 'gap-0' : 'gap-3.5'}`}>
-                    <span className="material-symbols-outlined select-none text-[22px] leading-none shrink-0">
+                    <span className="material-symbols-outlined select-none text-[22px] leading-none shrink-0 relative">
                       {item.icon}
+                      {menuColapsado && contadorDe(item) > 0 && <span className="m3-nav-punto" aria-hidden="true" />}
                     </span>
                     {!menuColapsado && <span className="truncate">{item.label}</span>}
                   </div>
+                  {!menuColapsado && contadorDe(item) > 0 && (
+                    <span className="m3-nav-contador ml-auto mr-1.5" title={`${contadorDe(item)} capturas por revisar`}>
+                      {textoContador(contadorDe(item))}
+                    </span>
+                  )}
                   {!menuColapsado && item.badge && (
                     <span className="text-label-sm font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
                       {item.badge}
@@ -400,8 +412,9 @@ export default function Layout({ user, userDoc, children }) {
                 }`
               }
             >
-              <span className="material-symbols-outlined text-xl select-none">
+              <span className="material-symbols-outlined text-xl select-none relative">
                 {item.icon}
+                {contadorDe(item) > 0 && <span className="m3-nav-contador is-icono" aria-label={`${contadorDe(item)} capturas por revisar`}>{textoContador(contadorDe(item))}</span>}
               </span>
               <span className="text-label-sm font-medium tracking-tight mt-0.5">
                 {item.label}

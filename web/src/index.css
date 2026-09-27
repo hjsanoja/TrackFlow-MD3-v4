@@ -2136,3 +2136,42 @@ td.m3-calor-celda {
   .m3-revision-precios .m3-body-medium { font-size: 0.8125rem; }
   .m3-revision-precios .m3-body-large { font-size: 0.9375rem; }
 }
+
+/* Revision de capturas (fase 35): casillas, historial, lote.
+   Movil: una columna. Escritorio: datos | precios, y las acciones debajo a
+   la derecha, para que el nombre y la pista tengan sitio. */
+.m3-revision-item { grid-template-columns: auto minmax(0, 1fr); }
+.m3-revision-item > .m3-revision-contexto, .m3-revision-item > .m3-revision-acciones { grid-column: 2; }
+@media (min-width: 1024px) {
+  .m3-revision-item { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 24px; }
+  .m3-revision-item > .m3-revision-contexto { grid-column: 3; }
+  .m3-revision-item > .m3-revision-acciones { grid-column: 2 / 4; }
+}
+.m3-revision-check { margin-top: 2px; align-self: start; }
+@media (min-width: 1024px) { .m3-revision-check { align-self: center; margin-top: 0; } }
+.m3-revision-item.is-seleccionada { background-color: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
+.m3-revision-todas {
+  display: flex; align-items: center; gap: 12px; padding: 10px 16px; font-size: 0.8125rem;
+  color: var(--md-sys-color-on-surface-variant); border-bottom: 1px solid var(--md-sys-color-outline-variant); cursor: pointer;
+}
+.m3-revision-contexto { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+@media (min-width: 1024px) { .m3-revision-contexto { align-items: flex-end; } }
+.m3-revision-historial { align-self: flex-end; overflow: visible; }
+.m3-revision-enlace {
+  font-size: 0.75rem; color: var(--md-sys-color-primary); padding: 0 6px; border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 35%, transparent);
+}
+.m3-revision-enlace:hover { background-color: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
+.m3-deslizador { width: 100%; margin: 6px 0 4px; accent-color: var(--md-sys-color-primary); }
+
+/* Contador de pendientes en el menu y en la pestana. */
+.m3-nav-contador {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 9999px; font-size: 0.6875rem; font-weight: 700; line-height: 1; font-family: inherit;
+  background-color: var(--md-sys-color-error); color: var(--md-sys-color-on-error);
+}
+.m3-nav-contador.is-icono { position: absolute; top: -6px; right: -12px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 0.625rem; }
+.m3-nav-punto {
+  position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 9999px;
+  background-color: var(--md-sys-color-error);
+}
