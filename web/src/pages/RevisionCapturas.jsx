@@ -9,14 +9,21 @@ import Segmentado from '../components/Segmentado';
 import FiltroChip from '../components/FiltroChip';
 import CadenaBadge from '../components/CadenaBadge';
 import InfoGrafico from '../components/InfoGrafico';
+import AvisoRobot from '../components/AvisoRobot';
+import GitHubConfigModal from '../components/GitHubConfigModal';
+import Sensibilidad from '../components/revision/Sensibilidad';
 import { normalizar } from '../components/formulario';
+import { useRobot } from '../hooks/useRobot';
+import { avisarCambioRevision } from '../hooks/usePendientesRevision';
+import { publicacionIdDe } from '../utils/dbClient';
 
 /**
  * Bandeja de revisión de capturas sospechosas.
  *
  * Un trigger marca como dudosa la captura cuyo nombre leído no se parece al
- * del catálogo o cuyo precio salta más que el umbral de config_calidad. Hasta
- * revisarla no entra en los promedios ni en las brechas.
+ * del catálogo, cuya dosis o tamaño no son los registrados (fase 35) o cuyo
+ * precio salta más que el umbral de config_calidad. Hasta revisarla no entra
+ * en los promedios ni en las brechas.
  *
  *   "Es válida"  -> revisado_manual, sin marca: vuelve a los análisis
  *   "Es errónea" -> revisado_manual, con marca: fuera, pero el dato se conserva
@@ -26,9 +33,10 @@ import { normalizar } from '../components/formulario';
  * solo se ven las pendientes, desde v_capturas_sospechosas (fase 12).
  */
 const MOTIVOS = {
+  presentacion: ['Dosis o tamaño distinto', 'straighten'],
   nombre: ['El nombre no coincide', 'badge'],
   variacion_precio: ['Salto de precio', 'trending_up'],
-  ambos: ['Nombre y precio', 'report'],
+  ambos: ['Varios motivos', 'report'],
   legacy: ['Dato migrado', 'history'],
 };
 const VISTAS = { pendiente: 'Pendientes', valida: 'Válidas', erronea: 'Erróneas' };
@@ -38,12 +46,39 @@ const faltaVista = (e) => /42P01|PGRST205|does not exist|Could not find/i.test(`
 const bs = (v) => (v == null ? '—' : `Bs ${Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const fecha = (v) => (v ? new Date(v).toLocaleString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 const cerca = (a, b) => a > 0 && b > 0 && Math.abs(a - b) / b <= 0.05;
+const num = (v) => (v == null ? null : Number(v));
+const decimal = (v) => String(Number(v)).replace('.', ',');
 
-// Pista para decidir, a partir de la lectura siguiente del mismo enlace.
+// "50 mg x 30", "x 120 ml"... a partir de dosis (mg) y tamaño.
+function presentacion(dosis, tamano, unidad) {
+  const partes = [];
+  if (dosis != null) partes.push(Number(dosis) >= 1000 && Number(dosis) % 1000 === 0 ? `${Number(dosis) / 1000} g` : `${decimal(dosis)} mg`);
+  if (tamano != null) partes.push(`x ${decimal(tamano)}${unidad === 'ml' ? ' ml' : unidad === 'g' ? ' g' : ''}`);
+  return partes.join(' ');
+}
+
+// Lo leído en la tienda contra lo registrado: solo cuenta lo que hay en los dos lados.
+function diferenciaPresentacion(c) {
+  const ld = num(c.leida_dosis_mg); const rd = num(c.registrada_dosis_mg);
+  const lt = num(c.leida_tamano); const rt = num(c.registrada_tamano);
+  const dosis = ld != null && rd != null && Math.abs(ld - rd) > 0.001;
+  const tamano = lt != null && rt != null && (c.leida_unidad || 'unidad') === (c.registrada_unidad || 'unidad') && Math.abs(lt - rt) > 0.001;
+  if (!dosis && !tamano) return null;
+  return {
+    leida: presentacion(dosis ? ld : null, tamano ? lt : null, c.leida_unidad),
+    registrada: presentacion(dosis ? rd : null, tamano ? rt : null, c.registrada_unidad),
+  };
+}
+
+// Pista para decidir: la presentación, y la lectura siguiente del mismo enlace.
 function sugerencia(c) {
+  const pres = diferenciaPresentacion(c);
+  if (pres) {
+    return { tipo: 'erronea', texto: `La tienda muestra ${pres.leida} y el producto está registrado como ${pres.registrada}: corrige el enlace o márcala errónea.` };
+  }
   const actual = Number(c.precio_bs);
-  const ant = c.precio_anterior_bs == null ? null : Number(c.precio_anterior_bs);
-  const sig = c.precio_siguiente_bs == null ? null : Number(c.precio_siguiente_bs);
+  const ant = num(c.precio_anterior_bs);
+  const sig = num(c.precio_siguiente_bs);
   if (sig != null && ant != null && cerca(sig, ant) && !cerca(actual, ant)) {
     return { tipo: 'erronea', texto: 'La lectura siguiente volvió al precio anterior: parece un error de lectura.' };
   }
@@ -53,29 +88,51 @@ function sugerencia(c) {
   if ((c.motivo_sospecha === 'nombre') && ant != null && cerca(actual, ant)) {
     return { tipo: 'valida', texto: 'El precio es igual al anterior: quizá la tienda solo escribe el nombre distinto.' };
   }
-  if (sig == null && 'precio_siguiente_bs' in c) return { tipo: null, texto: 'Aún no hay otra lectura de este enlace después de esta.' };
+  if (sig == null && 'precio_siguiente_bs' in c) return { tipo: null, texto: 'Aún no hay otra lectura de este enlace después de esta. Usa «Volver a leer» para comprobarlo ahora.' };
   return null;
 }
 
+// Guarda la decision de varias capturas. estado: 'valida' | 'erronea' | 'pendiente'.
+async function guardarDecision(ids, estado) {
+  const cambios = estado === 'pendiente'
+    ? { revisado_manual: false, sospechoso: true }
+    : { revisado_manual: true, sospechoso: estado === 'erronea' };
+  let hechas = 0;
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await supabase.from('fact_precios').update(cambios).in('id', ids.slice(i, i + 150)).select('id');
+    if (error) throw error;
+    hechas += data?.length || 0;
+  }
+  // Solo se pueden tocar estos campos (permiso de la fase 12).
+  if (hechas === 0) throw new Error('No se guardó el cambio. Ejecuta fase12_bandeja_revision.sql en Supabase.');
+  return hechas;
+}
+
 export default function RevisionCapturas() {
-  const { cadenas = [] } = useData() || {};
+  const { cadenas = [], productosCompetencia = [] } = useData() || {};
   const { addToast } = useToast();
   const [ver, setVer] = useState('pendiente');
   const [capturas, setCapturas] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [sinFase34, setSinFase34] = useState(false);
-  const [procesando, setProcesando] = useState(null);
+  const [procesando, setProcesando] = useState(false);
+  const [seleccion, setSeleccion] = useState(() => new Set());
   const [motivo, setMotivo] = useState('todos');
   const [cadena, setCadena] = useState('todos');
   const [relacion, setRelacion] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
   const [limite, setLimite] = useState(POR_PAGINA);
+  const [verSensibilidad, setVerSensibilidad] = useState(false);
+  const [verGithub, setVerGithub] = useState(false);
 
   const nombreCadena = useMemo(() => {
     const m = new Map(cadenas.map(c => [String(c.id).toLowerCase(), c.nombre]));
     return (id) => m.get(String(id).toLowerCase()) || id;
   }, [cadenas]);
+
+  // Enlace de Competencia de cada publicacion: lo necesita el robot.
+  const enlacePorPub = useMemo(() => new Map(productosCompetencia.map(it => [publicacionIdDe(it), it])), [productosCompetencia]);
 
   const cargarResumen = useCallback(async () => {
     const { data, error } = await supabase.from('v_calidad_datos').select('*').maybeSingle();
@@ -106,36 +163,52 @@ export default function RevisionCapturas() {
   }, [ver, addToast, cargarResumen]);
 
   useEffect(() => { cargar(); }, [cargar]);
-  useEffect(() => { setLimite(POR_PAGINA); }, [ver, motivo, cadena, relacion, busqueda]);
+  useEffect(() => { setLimite(POR_PAGINA); setSeleccion(new Set()); }, [ver, motivo, cadena, relacion, busqueda]);
 
-  // Guarda la decision. estado: 'valida' | 'erronea' | 'pendiente'.
-  const guardar = useCallback(async (c, estado) => {
-    const cambios = estado === 'pendiente'
-      ? { revisado_manual: false, sospechoso: true }
-      : { revisado_manual: true, sospechoso: estado === 'erronea' };
-    const { data, error } = await supabase.from('fact_precios').update(cambios).eq('id', c.captura_id).select('id');
-    if (error) throw error;
-    // Solo se pueden tocar estos campos (permiso de la fase 12).
-    if (!data || data.length === 0) throw new Error('No se guardó el cambio. Ejecuta fase12_bandeja_revision.sql en Supabase.');
-  }, []);
+  const robot = useRobot({
+    onTerminado: ({ leidos }) => {
+      cargar();
+      addToast(`Robot terminado: ${leidos} ${leidos === 1 ? 'enlace leído' : 'enlaces leídos'}. Mira la lectura siguiente de cada captura.`, 'success');
+    },
+    onError: (mensaje, { faltaConfig } = {}) => {
+      if (faltaConfig) setVerGithub(true);
+      addToast(mensaje, faltaConfig ? 'info' : 'error');
+    },
+  });
 
-  const decidir = async (c, estado) => {
-    setProcesando(c.captura_id);
+  // Vuelve a leer ahora los enlaces de estas capturas.
+  const releer = async (lista) => {
+    const enlaces = [...new Map(lista.map(c => [c.publicacion_id, enlacePorPub.get(Number(c.publicacion_id))])).values()].filter(Boolean);
+    if (enlaces.length === 0) { addToast('No se encontró el enlace en Competencia.', 'warning'); return false; }
+    const ok = await robot.lanzar(enlaces, []);
+    if (ok) addToast(`Robot lanzado para ${enlaces.length} ${enlaces.length === 1 ? 'enlace' : 'enlaces'}. Tarda unos minutos.`, 'info');
+    return ok;
+  };
+
+  const decidir = async (lista, estado) => {
+    const ids = lista.map(c => c.captura_id);
+    setProcesando(true);
     try {
-      await guardar(c, estado);
-      setCapturas(prev => prev.filter(x => x.captura_id !== c.captura_id));
+      const hechas = await guardarDecision(ids, estado);
+      const quitar = new Set(ids);
+      setCapturas(prev => prev.filter(x => !quitar.has(x.captura_id)));
+      setSeleccion(new Set());
       cargarResumen();
+      avisarCambioRevision();
+      const cuantas = hechas === 1 ? 'Captura' : `${hechas} capturas`;
       const textos = {
-        valida: 'Marcada como válida: vuelve a contar en los análisis.',
-        erronea: 'Marcada como errónea: deja de afectar los análisis.',
-        pendiente: 'Volvió a pendientes.',
+        valida: `${cuantas} ${hechas === 1 ? 'marcada' : 'marcadas'} como ${hechas === 1 ? 'válida' : 'válidas'}: ${hechas === 1 ? 'vuelve' : 'vuelven'} a contar en los análisis.`,
+        erronea: `${cuantas} ${hechas === 1 ? 'marcada' : 'marcadas'} como ${hechas === 1 ? 'errónea' : 'erróneas'}: ya no ${hechas === 1 ? 'afecta' : 'afectan'} los análisis.`,
+        pendiente: `${cuantas} de nuevo en pendientes.`,
       };
+      const vistaAntes = ver;
       addToast(textos[estado], 'success', {
         accion: {
           texto: 'Deshacer',
           onClick: async () => {
             try {
-              await guardar(c, ver);
+              await guardarDecision(ids, vistaAntes);
+              avisarCambioRevision();
               cargar();
             } catch (err) { addToast(`No se pudo deshacer: ${err.message}`, 'error'); }
           },
@@ -144,7 +217,7 @@ export default function RevisionCapturas() {
     } catch (err) {
       addToast(`No se pudo guardar: ${err.message}`, 'error');
     } finally {
-      setProcesando(null);
+      setProcesando(false);
     }
   };
 
@@ -161,8 +234,14 @@ export default function RevisionCapturas() {
 
   const hayFiltros = motivo !== 'todos' || cadena !== 'todos' || relacion !== 'todos' || busqueda !== '';
   const limpiar = () => { setMotivo('todos'); setCadena('todos'); setRelacion('todos'); setBusqueda(''); };
-
   const conteo = (clave) => capturas.filter(c => c.motivo_sospecha === clave).length;
+
+  const seleccionadas = visibles.filter(c => seleccion.has(c.captura_id));
+  const todasSeleccionadas = visibles.length > 0 && seleccionadas.length === visibles.length;
+  const alternar = (id) => setSeleccion(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s; });
+  const alternarTodas = () => setSeleccion(todasSeleccionadas ? new Set() : new Set(visibles.map(c => c.captura_id)));
+  // "N de este enlace": selecciona todas las capturas visibles de ese enlace.
+  const seleccionarEnlace = (pub) => setSeleccion(new Set(visibles.filter(c => c.publicacion_id === pub).map(c => c.captura_id)));
 
   return (
     <div className="space-y-4">
@@ -176,12 +255,14 @@ export default function RevisionCapturas() {
         </div>
       )}
 
+      <AvisoRobot robot={robot} />
+
       {resumen && (
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Resumen">
           <StatCard compacto label="Pendientes" value={resumen.pendientes ?? 0} icon="rule"
             tono={resumen.pendientes > 0 ? 'warning' : 'positive'} hint="Hoy no entran en los análisis"
             onClick={() => setVer('pendiente')} title="Ver las pendientes" />
-          <StatCard compacto label="Datos limpios" value={`${String(resumen.porcentaje_limpio ?? 0).replace('.', ',')} %`} icon="verified" tono="primary"
+          <StatCard compacto label="Datos limpios" value={`${decimal(resumen.porcentaje_limpio ?? 0)} %`} icon="verified" tono="primary"
             hint={`De ${Number(resumen.capturas_totales || 0).toLocaleString('es-VE')} capturas`} />
           <StatCard compacto label="Marcadas válidas" icon="check_circle" tono="neutral"
             value={resumen.validas ?? Math.max((resumen.revisadas || 0) - (resumen.descartadas || 0), 0)}
@@ -193,39 +274,82 @@ export default function RevisionCapturas() {
 
       <section className="m3-data-table" aria-label="Capturas">
         <div className="m3-data-table-toolbar flex flex-col gap-3">
-          <BarraFiltros integrada limpiar={{ visible: hayFiltros, onClick: limpiar }} filtrar={<>
-            {!sinFase34 && (
-              <Segmentado etiqueta="Qué capturas ver" valor={ver} onChange={setVer}
-                opciones={Object.entries(VISTAS).map(([v, t]) => [v, t, v === 'pendiente' ? 'Aún sin revisar' : `Las que marcaste como ${t.toLowerCase().slice(0, -1)}`])} />
-            )}
-            <FiltroChip etiqueta="Motivo" icono="filter_list" valor={motivo} onChange={setMotivo}
-              opciones={[['todos', 'Motivo: todos'], ...Object.entries(MOTIVOS).filter(([k]) => conteo(k) > 0).map(([k, [t]]) => [k, `${t} (${conteo(k)})`])]} />
-            <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadena} onChange={setCadena}
-              opciones={[['todos', 'Cadena: todas'], ...cadenasEnLista.map(id => [id, nombreCadena(id)])]} />
-            <FiltroChip etiqueta="Relación" icono="link" valor={relacion} onChange={setRelacion}
-              opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
-          </>} />
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
-            <label className="m3-search-field">
-              <span className="material-symbols-outlined" aria-hidden="true">search</span>
-              <input type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                placeholder="Buscar por ID, producto, laboratorio o nombre leído" aria-label="Buscar captura" />
-            </label>
-            <div className="flex items-center gap-1 md:ml-auto">
-              <span className="m3-label-large text-on-surface-variant mr-2">{visibles.length} de {capturas.length}</span>
-              <InfoGrafico alinear="derecha" titulo="Revisión de capturas"
-                que="El robot marca una captura como dudosa cuando el nombre leído no se parece al del catálogo o el precio salta más que el umbral. Mientras está pendiente, no cuenta en promedios ni brechas."
-                formula={[
-                  'Es válida → vuelve a contar en los análisis',
-                  'Es errónea → queda fuera, pero el dato se guarda',
-                  'Volver a revisar → regresa a pendientes (en Válidas o Erróneas)',
-                ]}
-                lectura="La pista de cada captura sale de la lectura SIGUIENTE del mismo enlace: si repite el precio, el cambio fue real; si vuelve al anterior, fue un error de lectura. Si el enlace apunta al producto equivocado, usa «Corregir enlace»." />
-              <button type="button" onClick={cargar} className="m3-icon-btn" title="Actualizar" aria-label="Actualizar">
-                <span className="material-symbols-outlined" aria-hidden="true">refresh</span>
+          {seleccion.size > 0 ? (
+            <div className="m3-selection-bar" role="toolbar" aria-label="Acciones sobre las capturas seleccionadas">
+              <button type="button" onClick={() => setSeleccion(new Set())} disabled={procesando}
+                className="m3-icon-btn" title="Quitar selección" aria-label="Quitar selección">
+                <span className="material-symbols-outlined">close</span>
               </button>
+              <div className="flex flex-col min-w-0 mr-auto">
+                <span className="m3-title-medium">
+                  {procesando ? 'Guardando…' : `${seleccionadas.length} ${seleccionadas.length === 1 ? 'seleccionada' : 'seleccionadas'}`}
+                </span>
+                {!todasSeleccionadas && (
+                  <button type="button" onClick={alternarTodas} className="self-start text-primary m3-label-medium hover:underline">
+                    Seleccionar las {visibles.length} de esta lista
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => releer(seleccionadas)} disabled={procesando || Boolean(robot.corrida)} className="m3-btn-tonal"
+                  title={robot.corrida ? 'Ya hay una lectura en curso' : 'El robot lee ahora los enlaces de estas capturas'}>
+                  <span className="material-symbols-outlined" aria-hidden="true">sync</span>
+                  Volver a leer
+                </button>
+                {ver === 'pendiente' ? (
+                  <>
+                    <button type="button" onClick={() => decidir(seleccionadas, 'erronea')} disabled={procesando} className="m3-btn-danger-outline h-10 px-4">Son erróneas</button>
+                    <button type="button" onClick={() => decidir(seleccionadas, 'valida')} disabled={procesando} className="m3-btn-primary h-10 px-4">Son válidas</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => decidir(seleccionadas, 'pendiente')} disabled={procesando} className="m3-btn-outline h-10 px-4">
+                    <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">undo</span>
+                    Volver a revisar
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              <BarraFiltros integrada limpiar={{ visible: hayFiltros, onClick: limpiar }} filtrar={<>
+                {!sinFase34 && (
+                  <Segmentado etiqueta="Qué capturas ver" valor={ver} onChange={setVer}
+                    opciones={Object.entries(VISTAS).map(([v, t]) => [v, t, v === 'pendiente' ? 'Aún sin revisar' : `Las que marcaste como ${t.toLowerCase().slice(0, -1)}`])} />
+                )}
+                <FiltroChip etiqueta="Motivo" icono="filter_list" valor={motivo} onChange={setMotivo}
+                  opciones={[['todos', 'Motivo: todos'], ...Object.entries(MOTIVOS).filter(([k]) => conteo(k) > 0).map(([k, [t]]) => [k, `${t} (${conteo(k)})`])]} />
+                <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadena} onChange={setCadena}
+                  opciones={[['todos', 'Cadena: todas'], ...cadenasEnLista.map(id => [id, nombreCadena(id)])]} />
+                <FiltroChip etiqueta="Relación" icono="link" valor={relacion} onChange={setRelacion}
+                  opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
+              </>} />
+              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                <label className="m3-search-field">
+                  <span className="material-symbols-outlined" aria-hidden="true">search</span>
+                  <input type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                    placeholder="Buscar por ID, producto, laboratorio o nombre leído" aria-label="Buscar captura" />
+                </label>
+                <div className="flex items-center gap-1 md:ml-auto">
+                  <span className="m3-label-large text-on-surface-variant mr-2">{visibles.length} de {capturas.length}</span>
+                  <button type="button" onClick={() => setVerSensibilidad(true)} className="m3-btn-text" title="Cuándo se marca una captura como dudosa">
+                    <span className="material-symbols-outlined" aria-hidden="true">tune</span>
+                    Sensibilidad
+                  </button>
+                  <InfoGrafico alinear="derecha" titulo="Revisión de capturas"
+                    que="El robot marca una captura como dudosa cuando el nombre leído no se parece al del catálogo, la dosis o el tamaño no son los registrados, o el precio salta más que el umbral. Mientras está pendiente, no cuenta en promedios ni brechas."
+                    formula={[
+                      'Es válida → vuelve a contar en los análisis',
+                      'Es errónea → queda fuera, pero el dato se guarda',
+                      'Volver a revisar → regresa a pendientes (en Válidas o Erróneas)',
+                    ]}
+                    lectura="La pista de cada captura sale de la presentación leída y de la lectura SIGUIENTE del mismo enlace: si repite el precio, el cambio fue real; si vuelve al anterior, fue un error de lectura. La línea pequeña son las últimas lecturas del enlace; el punto grande es esta captura y los rojos están marcados. Marca la casilla de varias para decidir en lote." />
+                  <button type="button" onClick={cargar} className="m3-icon-btn" title="Actualizar" aria-label="Actualizar">
+                    <span className="material-symbols-outlined" aria-hidden="true">refresh</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {cargando && capturas.length === 0 ? (
@@ -241,12 +365,23 @@ export default function RevisionCapturas() {
             {!hayFiltros && ver === 'pendiente' && <p className="m3-body-medium">Todas pasaron el control de calidad o ya fueron revisadas.</p>}
           </div>
         ) : (
-          <ul className="m3-revision-lista" aria-busy={cargando}>
-            {visibles.slice(0, limite).map(c => (
-              <FilaCaptura key={c.captura_id} captura={c} ver={ver} nombreCadena={nombreCadena}
-                procesando={procesando === c.captura_id} onDecidir={decidir} />
-            ))}
-          </ul>
+          <>
+            <label className="m3-revision-todas">
+              <input type="checkbox" className="m3-checkbox" checked={todasSeleccionadas} onChange={alternarTodas}
+                ref={el => { if (el) el.indeterminate = seleccionadas.length > 0 && !todasSeleccionadas; }} />
+              Seleccionar todas
+            </label>
+            <ul className="m3-revision-lista" aria-busy={cargando}>
+              {visibles.slice(0, limite).map(c => (
+                <FilaCaptura key={c.captura_id} captura={c} ver={ver} nombreCadena={nombreCadena}
+                  seleccionada={seleccion.has(c.captura_id)} onSeleccionar={() => alternar(c.captura_id)}
+                  onSeleccionarEnlace={() => seleccionarEnlace(c.publicacion_id)}
+                  procesando={procesando} leyendo={robot.leyendo(enlacePorPub.get(Number(c.publicacion_id)))}
+                  robotOcupado={Boolean(robot.corrida)} onReleer={() => releer([c])}
+                  onDecidir={(estado) => decidir([c], estado)} />
+              ))}
+            </ul>
+          </>
         )}
         {visibles.length > limite && (
           <div className="flex justify-center p-3 border-t border-outline-variant">
@@ -256,18 +391,26 @@ export default function RevisionCapturas() {
           </div>
         )}
       </section>
+
+      {verSensibilidad && (
+        <Sensibilidad onClose={() => setVerSensibilidad(false)}
+          onAplicado={() => { avisarCambioRevision(); if (ver === 'pendiente') cargar(); else cargarResumen(); }} />
+      )}
+      <GitHubConfigModal isOpen={verGithub} onClose={() => setVerGithub(false)} />
     </div>
   );
 }
 
-function FilaCaptura({ captura: c, ver, nombreCadena, procesando, onDecidir }) {
-  const variacion = c.variacion_pct == null ? null : Number(c.variacion_pct);
+function FilaCaptura({ captura: c, ver, nombreCadena, seleccionada, onSeleccionar, onSeleccionarEnlace, procesando, leyendo, robotOcupado, onReleer, onDecidir }) {
+  const variacion = num(c.variacion_pct);
   const [motivoTexto, motivoIcono] = MOTIVOS[c.motivo_sospecha] || [c.motivo_sospecha || 'Dudosa', 'help'];
   const pista = sugerencia(c);
   const nombreDistinto = c.nombre_capturado && normalizar(c.nombre_capturado) !== normalizar(c.producto_nombre);
 
   return (
-    <li className="m3-revision-item">
+    <li className={`m3-revision-item ${seleccionada ? 'is-seleccionada' : ''}`}>
+      <input type="checkbox" className="m3-checkbox m3-revision-check" checked={seleccionada} onChange={onSeleccionar}
+        aria-label={`Seleccionar ${c.producto_nombre}`} />
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="m3-chip-motivo"><span className="material-symbols-outlined" aria-hidden="true">{motivoIcono}</span>{motivoTexto}</span>
@@ -277,9 +420,9 @@ function FilaCaptura({ captura: c, ver, nombreCadena, procesando, onDecidir }) {
           {c.es_propio && <span className="m3-chip-propio">Tú</span>}
           <span className="m3-label-medium text-on-surface-variant tabular-nums">{fecha(c.fecha_captura)}</span>
           {c.pendientes_enlace > 1 && ver === 'pendiente' && (
-            <span className="m3-label-small text-on-surface-variant" title="Capturas pendientes de este mismo enlace">
-              · {c.pendientes_enlace} de este enlace
-            </span>
+            <button type="button" onClick={onSeleccionarEnlace} className="m3-revision-enlace" title="Seleccionar todas las capturas pendientes de este enlace">
+              {c.pendientes_enlace} de este enlace
+            </button>
           )}
         </div>
         <div className="m3-title-small text-on-surface mt-1 truncate" title={c.producto_nombre}>{c.producto_nombre}</div>
@@ -289,7 +432,7 @@ function FilaCaptura({ captura: c, ver, nombreCadena, procesando, onDecidir }) {
         {nombreDistinto && (
           <div className="m3-body-small mt-1">
             <span className="text-on-surface-variant">Se leyó: </span>
-            <span className="text-error">«{c.nombre_capturado}»</span>
+            <span className={c.motivo_sospecha === 'nombre' || c.motivo_sospecha === 'ambos' || c.motivo_sospecha === 'presentacion' ? 'text-error' : 'text-on-surface'}>«{c.nombre_capturado}»</span>
             {c.similitud_nombre != null && (
               <span className="text-on-surface-variant"> · {Math.round(c.similitud_nombre * 100)} % de parecido</span>
             )}
@@ -303,45 +446,52 @@ function FilaCaptura({ captura: c, ver, nombreCadena, procesando, onDecidir }) {
         )}
       </div>
 
-      {/* Anterior -> capturado -> siguiente: el contexto para juzgar */}
-      <div className="m3-revision-precios">
-        <Precio rotulo="Anterior" valor={c.precio_anterior_bs} />
-        <span className="material-symbols-outlined text-on-surface-variant text-[18px]" aria-hidden="true">arrow_forward</span>
-        <div className="text-right">
-          <div className="m3-label-small text-on-surface-variant">Capturado</div>
-          <div className="m3-body-large font-medium tabular-nums text-on-surface">{bs(c.precio_bs)}</div>
-          <div className="m3-label-small tabular-nums text-on-surface-variant">
-            {c.precio_usd != null && `$${Number(c.precio_usd).toFixed(2)}`}
-            {variacion != null && (
-              <span className={`ml-1 font-semibold ${variacion > 0 ? 'text-error' : 'text-primary'}`}>
-                {variacion > 0 ? '+' : variacion < 0 ? '−' : ''}{Math.abs(variacion).toLocaleString('es-VE')} %
-              </span>
-            )}
+      {/* Anterior -> capturado -> siguiente, y las ultimas lecturas del enlace */}
+      <div className="m3-revision-contexto">
+        <div className="m3-revision-precios">
+          <Precio rotulo="Anterior" valor={c.precio_anterior_bs} />
+          <span className="material-symbols-outlined text-on-surface-variant text-[18px]" aria-hidden="true">arrow_forward</span>
+          <div className="text-right">
+            <div className="m3-label-small text-on-surface-variant">Capturado</div>
+            <div className="m3-body-large font-medium tabular-nums text-on-surface">{bs(c.precio_bs)}</div>
+            <div className="m3-label-small tabular-nums text-on-surface-variant">
+              {c.precio_usd != null && `$${Number(c.precio_usd).toFixed(2)}`}
+              {variacion != null && (
+                <span className={`ml-1 font-semibold ${variacion > 0 ? 'text-error' : 'text-primary'}`}>
+                  {variacion > 0 ? '+' : variacion < 0 ? '−' : ''}{Math.abs(variacion).toLocaleString('es-VE')} %
+                </span>
+              )}
+            </div>
           </div>
+          {'precio_siguiente_bs' in c && (
+            <>
+              <span className="material-symbols-outlined text-on-surface-variant text-[18px]" aria-hidden="true">arrow_forward</span>
+              <Precio rotulo="Siguiente" valor={c.precio_siguiente_bs} />
+            </>
+          )}
         </div>
-        {'precio_siguiente_bs' in c && (
-          <>
-            <span className="material-symbols-outlined text-on-surface-variant text-[18px]" aria-hidden="true">arrow_forward</span>
-            <Precio rotulo="Siguiente" valor={c.precio_siguiente_bs} />
-          </>
-        )}
+        {Array.isArray(c.historial) && c.historial.length > 2 && <MiniHistorial lecturas={c.historial} />}
       </div>
 
       <div className="m3-revision-acciones">
         <a href={c.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn" title="Abrir la página en la tienda" aria-label="Abrir en la tienda">
           <span className="material-symbols-outlined" aria-hidden="true">open_in_new</span>
         </a>
+        <button type="button" onClick={onReleer} disabled={robotOcupado} className="m3-icon-btn"
+          title={leyendo ? 'El robot está leyendo este enlace' : robotOcupado ? 'Ya hay una lectura en curso' : 'Volver a leer ahora este enlace'} aria-label="Volver a leer">
+          <span className={`material-symbols-outlined ${leyendo ? 'animate-spin' : ''}`} aria-hidden="true">sync</span>
+        </button>
         <Link to={`/competencia?editar=${c.publicacion_id}&volver=revision`} className="m3-btn-text" title="Abrir el formulario de este enlace en Competencia">
           <span className="material-symbols-outlined" aria-hidden="true">edit</span>
           Corregir enlace
         </Link>
         {ver === 'pendiente' ? (
           <div className="m3-revision-decision">
-            <button type="button" onClick={() => onDecidir(c, 'erronea')} disabled={procesando}
+            <button type="button" onClick={() => onDecidir('erronea')} disabled={procesando}
               className="m3-btn-danger-outline h-10 px-4" title="Descartar: deja de contar en los análisis">
               Es errónea
             </button>
-            <button type="button" onClick={() => onDecidir(c, 'valida')} disabled={procesando}
+            <button type="button" onClick={() => onDecidir('valida')} disabled={procesando}
               className="m3-btn-primary h-10 px-4" title="Confirmar: vuelve a contar en los análisis">
               Es válida
             </button>
@@ -352,7 +502,7 @@ function FilaCaptura({ captura: c, ver, nombreCadena, procesando, onDecidir }) {
               <span className="material-symbols-outlined" aria-hidden="true">{ver === 'valida' ? 'check_circle' : 'block'}</span>
               {ver === 'valida' ? 'Válida' : 'Errónea'}
             </span>
-            <button type="button" onClick={() => onDecidir(c, 'pendiente')} disabled={procesando}
+            <button type="button" onClick={() => onDecidir('pendiente')} disabled={procesando}
               className="m3-btn-outline h-10 px-4" title="Quitar la decisión: vuelve a pendientes">
               <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">undo</span>
               Volver a revisar
@@ -370,5 +520,32 @@ function Precio({ rotulo, valor }) {
       <div className="m3-label-small text-on-surface-variant">{rotulo}</div>
       <div className="m3-body-medium tabular-nums text-on-surface-variant">{bs(valor)}</div>
     </div>
+  );
+}
+
+// Linea con las lecturas del enlace alrededor de la captura: el punto grande
+// es esta captura; los rojos, lecturas marcadas como dudosas.
+function MiniHistorial({ lecturas }) {
+  const ancho = 168;
+  const alto = 30;
+  const precios = lecturas.map(l => Number(l.p));
+  const min = Math.min(...precios);
+  const max = Math.max(...precios);
+  const rango = max - min || 1;
+  const x = (i) => 5 + (i / (lecturas.length - 1)) * (ancho - 10);
+  const y = (v) => (max === min ? alto / 2 : alto - 5 - ((v - min) / rango) * (alto - 10));
+  const puntos = lecturas.map((l, i) => `${x(i).toFixed(1)},${y(Number(l.p)).toFixed(1)}`).join(' ');
+  const resumen = lecturas.map(l => `${fecha(l.f)}: ${bs(l.p)}${l.a ? ' (esta)' : ''}${l.s && !l.a ? ' (marcada)' : ''}`).join('\n');
+  return (
+    <svg className="m3-revision-historial" width={ancho} height={alto} viewBox={`0 0 ${ancho} ${alto}`} role="img"
+      aria-label={`Últimas ${lecturas.length} lecturas del enlace`}>
+      <title>{resumen}</title>
+      <polyline points={puntos} fill="none" stroke="var(--md-sys-color-outline)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      {lecturas.map((l, i) => (
+        <circle key={i} cx={x(i)} cy={y(Number(l.p))} r={l.a ? 4.5 : 2.5}
+          fill={l.a || l.s ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-primary)'}
+          stroke={l.a ? 'var(--md-sys-color-surface-container-lowest)' : 'none'} strokeWidth="2" />
+      ))}
+    </svg>
   );
 }

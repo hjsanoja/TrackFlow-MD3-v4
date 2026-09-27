@@ -193,8 +193,13 @@ export default function Competencia() {
     setEditing(item.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, items, loading]);
+  // Se vuelve solo cuando el formulario abierto desde la bandeja se cierra
+  // (editing pasa de un id a null), no en el mismo render que lo abre.
+  const editingAntes = useRef(null);
   useEffect(() => {
-    if (editing !== null || !volverRef.current) return;
+    const antes = editingAntes.current;
+    editingAntes.current = editing;
+    if (editing !== null || antes === null || !volverRef.current) return;
     const destino = volverRef.current;
     volverRef.current = null;
     navigate(destino);

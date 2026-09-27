@@ -561,6 +561,42 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Revisión de capturas: dosis y tamaño, sensibilidad, lote y releer (PR #63, fase 35)
+
+- **Arreglo "Corregir enlace"**: Competencia volvía a la bandeja en el mismo
+  render en que abría el formulario (el efecto de "volver" veía `editing`
+  todavía en null). Ahora vuelve solo cuando `editing` pasa de un id a null.
+- **SQL** `sql/fase35_calidad_presentacion.sql`:
+  - `fn_leer_presentacion(texto)`: dosis en mg y tamaño (unidades, ml o g)
+    de un nombre; `fn_presentacion_registrada(producto)`: concentración
+    principal (mg/mcg/g) y `cantidad_contenido`; `fn_presentacion_distinta`
+    compara solo lo que hay en los dos lados;
+  - el trigger `fn_control_calidad_precio` marca con motivo nuevo
+    `presentacion` (CHECK ampliado); con más de un motivo, `ambos` ("Varios
+    motivos"); se apaga con `config_calidad.validar_presentacion = 0`;
+  - `fn_probar_sensibilidad(variacion, similitud, presentacion, dias,
+    aplicar)`: cuántas capturas del robot se marcarían; con aplicar marca las
+    nuevas (nunca desmarca ni toca las revisadas);
+  - `v_capturas_revision` suma `leida_*` / `registrada_*` e `historial`
+    (8 lecturas antes y 4 después, jsonb `{f, p, s, a}`);
+  - índice parcial `idx_fact_precios_pendientes` para el contador.
+- **Pantalla**:
+  - casillas y barra de selección: "Son válidas / Son erróneas / Volver a
+    revisar / Volver a leer" en lote; "N de este enlace" selecciona las del
+    mismo enlace;
+  - "Volver a leer" (icono sync): lanza el robot (`useRobot`) para esos
+    enlaces y recarga al terminar;
+  - "Sensibilidad" (`components/revision/Sensibilidad.jsx`): deslizadores de
+    salto de precio y parecido del nombre, interruptor de dosis y tamaño,
+    "Probar" con 7/30/90 días, "Guardar" y "Guardar y marcar N";
+  - mini historial (línea con el punto de la captura y las marcadas en rojo)
+    y pista de presentación ("La tienda muestra x 30 y el producto está
+    registrado como x 10");
+  - contador rojo de pendientes en el menú (Experimental, con punto si el
+    menú está plegado y en la barra del móvil) y en la pestaña
+    (`hooks/usePendientesRevision.js`; se recuenta cada 5 min y con
+    `avisarCambioRevision()`).
+
 ## Revisión de capturas: corregir enlace y volver a revisar (PR #62, fase 34)
 
 - **SQL** `sql/fase34_revision_capturas.sql` (solo vistas, no cambia datos):
