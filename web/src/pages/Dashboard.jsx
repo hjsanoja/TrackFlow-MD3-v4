@@ -104,7 +104,10 @@ export default function Dashboard({ userDoc }) {
     productos, productosCompetencia, cadenas, variaciones, tasa: bcv.rate, modoPrecio, modoAnalisis, ventana, cadenaComp, tipoComp,
   });
 
-  const ajusteDe = useCallback((x) => calcularAjuste(x.tuPrecio, x.promedio, meta, x.precios.filter(o => o.tipo !== 'propio').length), [meta]);
+  const ajusteDe = useCallback((x) => {
+    const competidores = x.precios.filter(o => o.tipo !== 'propio').length;
+    return competidores ? calcularAjuste(x.tuPrecio, x.promedio, meta, competidores) : null;
+  }, [meta]);
 
   // ------------------------------------------------------------------------
   // Filtros de todo el panel (indicadores, graficos y tabla)
@@ -156,8 +159,11 @@ export default function Dashboard({ userDoc }) {
 
   const lideres = useMemo(() => {
     const m = new Map();
+    // Solo competencia: que cadena de la competencia tiene el precio mas bajo.
     for (const x of base) {
-      for (const c of x.cadenasMin) {
+      if (x.minimoComp == null) continue;
+      const cadenas = new Set(x.precios.filter(o => o.tipo !== 'propio' && Math.abs(o.priceUsd - x.minimoComp) < 0.0005).map(o => o.cadena));
+      for (const c of cadenas) {
         if (!m.has(c)) m.set(c, []);
         m.get(c).push(x);
       }
@@ -275,13 +281,18 @@ export default function Dashboard({ userDoc }) {
     titulo: 'Mínimo', alinear: 'right',
     celda: x => (
       <span className="inline-flex items-center gap-1.5">
-        {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" title={nombreCadena(x.cadenasMin[0])} />}
+        {x.minEsTuyo ? <span className="m3-chip-propio" title="El más barato del mercado eres tú">Tú</span>
+          : x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" title={nombreCadena(x.cadenasMin[0])} />}
         {fmt(x.minimo)}
       </span>
     ),
   };
   const colPromedio = { titulo: 'Promedio', alinear: 'right', celda: x => fmt(x.promedio) };
   const colDifMin = { titulo: 'Tú frente al mínimo', alinear: 'right', celda: x => <Diferencia valor={x.difMin} /> };
+  // Frente al mas barato de la COMPETENCIA: dice cuanto mas barato eres
+  // cuando el minimo del mercado eres tu.
+  const difComp = (x) => (x.tuPrecio != null && x.minimoComp > 0 ? (x.tuPrecio / x.minimoComp - 1) * 100 : null);
+  const colDifComp = { titulo: 'Frente al más barato de la competencia', alinear: 'right', celda: x => <Diferencia valor={difComp(x)} /> };
   const colDifProm = { titulo: 'Tú frente al promedio', alinear: 'right', celda: x => <Diferencia valor={x.difProm} /> };
   const colAjuste = { titulo: 'Para la meta', alinear: 'right', celda: x => <AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} /> };
 
@@ -336,8 +347,8 @@ export default function Dashboard({ userDoc }) {
     titulo: 'Eres el más barato',
     subtitulo: 'Productos donde tu precio es igual o menor que el más bajo de la competencia.',
     icono: 'workspace_premium',
-    filas: [...kpi.masBaratos].sort((a, b) => a.difMin - b.difMin),
-    columnas: [colProducto, colTuPrecio, colMinimo, colDifMin],
+    filas: [...kpi.masBaratos].sort((a, b) => (difComp(a) ?? 0) - (difComp(b) ?? 0)),
+    columnas: [colProducto, colTuPrecio, { titulo: 'Más barato de la competencia', alinear: 'right', celda: x => fmt(x.minimoComp) }, colDifComp],
     tabla: 'mas_barato',
     vacio: 'En ningún producto eres el más barato con estos filtros.',
   });
@@ -348,7 +359,7 @@ export default function Dashboard({ userDoc }) {
     filas: kpi.masCaros,
     columnas: [colProducto, colTuPrecio, colMinimo, colDifMin],
     tabla: 'mas_caro',
-    vacio: 'Ningún producto está por encima del mínimo de la competencia.',
+    vacio: 'Ningún producto está por encima del más barato del mercado.',
   });
   const detalleCambios = () => abrirDetalle({
     titulo: 'Cambios de precio',
@@ -825,7 +836,7 @@ export default function Dashboard({ userDoc }) {
             <div>
               <h2 className="m3-title-medium text-on-surface">Precios por cadena</h2>
               <p className="m3-body-small text-on-surface-variant">
-                {`El precio más bajo de la competencia en cada cadena${porUnidad}; resaltado, el mínimo. "Posición": el lugar de tu precio del más barato al más caro. "Para la meta": cuánto subir o bajar para quedar en ${textoMeta(meta)}.`}
+                {`El precio más bajo de cada cadena${porUnidad}, contando el tuyo («Tú»); resaltado, el más barato del mercado. "Posición": el lugar de tu precio del más barato al más caro. "Para la meta": cuánto subir o bajar para quedar en ${textoMeta(meta)}.`}
               </p>
             </div>
             <div className="m3-label-large text-on-surface-variant whitespace-nowrap md:ml-auto" aria-live="polite">
@@ -881,7 +892,7 @@ export default function Dashboard({ userDoc }) {
                     <div className="m3-cell-secondary">{subtituloProducto(x.producto)}</div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 m3-body-small">
                       <span>Tu precio <strong className="font-medium">{fmt(x.tuPrecio)}</strong></span>
-                      <span className="inline-flex items-center gap-1">Mínimo {x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" />}<strong className="font-medium">{fmt(x.minimo)}</strong></span>
+                      <span className="inline-flex items-center gap-1">Mínimo {x.minEsTuyo ? <span className="m3-chip-propio">Tú</span> : x.cadenasMin[0] && <CadenaBadge cadena={x.cadenasMin[0]} tamano="xs" />}<strong className="font-medium">{fmt(x.minimo)}</strong></span>
                       <AjusteMeta ajuste={ajusteDe(x)} fmt={fmt} />
                     </div>
                   </button>
@@ -903,7 +914,7 @@ export default function Dashboard({ userDoc }) {
                     <th className="text-right" title="Promedio del mercado: la competencia y tu precio"><BotonOrden campo="promedio" orden={orden} onClick={ordenarPor}>Promedio</BotonOrden></th>
                     <th className="text-right m3-dash-col-sep"><BotonOrden campo="tuPrecio" orden={orden} onClick={ordenarPor}>Tu precio</BotonOrden></th>
                     <th className="text-right" title="Lugar de tu precio entre todas las ofertas, del más barato (1) al más caro"><BotonOrden campo="posicion" orden={orden} onClick={ordenarPor}>Posición</BotonOrden></th>
-                    <th className="text-right" title="Cuánto más caro (rojo) o más barato (azul) es tu precio que el mínimo de la competencia y que el promedio del mercado">
+                    <th className="text-right" title="Cuánto más caro (rojo) o más barato (azul) es tu precio que el más barato del mercado (0 % si eres tú) y que el promedio del mercado">
                       <div className="flex flex-col items-end">
                         <span>Tu diferencia</span>
                         <span className="inline-flex gap-3">
@@ -930,8 +941,8 @@ export default function Dashboard({ userDoc }) {
                           if (!p) return <td key={c} className="text-right text-on-surface-variant">—</td>;
                           const esMin = x.cadenasMin.includes(c);
                           return (
-                            <td key={c} className={`text-right whitespace-nowrap ${esMin ? 'm3-dash-min' : ''}`} title={`${p.marca} en ${nombreCadena(c)}${esMin ? ' · el más barato' : ''}`}>
-                              <div className="tabular-nums">{fmt(p.priceUsd)}</div>
+                            <td key={c} className={`text-right whitespace-nowrap ${esMin ? 'm3-dash-min' : ''}`} title={`${p.tipo === 'propio' ? 'Tu producto' : p.marca} en ${nombreCadena(c)}${esMin ? ' · el más barato' : ''}`}>
+                              <div className="tabular-nums">{p.tipo === 'propio' && <span className="m3-chip-propio mr-1">Tú</span>}{fmt(p.priceUsd)}</div>
                               {Math.abs(p.cambio) > UMBRAL_CAMBIO && <div className="m3-dash-cambio"><Diferencia valor={p.cambio} /></div>}
                             </td>
                           );

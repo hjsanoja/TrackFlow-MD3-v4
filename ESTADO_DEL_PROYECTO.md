@@ -126,7 +126,7 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #59, desplegado (GitHub Pages sale solo de `main`) |
+| Código en `main` | PR #60, desplegado (GitHub Pages sale solo de `main`) |
 | SQL corrido en Supabase | **Hasta la fase 33**. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
@@ -560,6 +560,25 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Mínimo del mercado y extremos por cadena (PR #61, sin SQL)
+
+- **Mínimo del mercado** (`useAnalisisPrecios`):
+  - `minimo` cuenta tu precio, como el promedio; `minimoComp` es el de la
+    competencia sola;
+  - sin competencia, mínimo y promedio son tu precio, y las diferencias y la
+    meta muestran "—";
+  - las columnas por cadena del Dashboard incluyen tu enlace en esa cadena
+    (marcado "Tú"); si el más barato eres tú, el Mínimo también dice "Tú";
+  - "Tu diferencia vs mín." es 0 % si el más barato eres tú; el detalle de
+    "Eres el más barato" muestra cuánto más barato eres que la competencia;
+  - el gráfico "¿Qué cadena tiene el precio más bajo?" sigue siendo solo de
+    competencia.
+- **Ficha, tabla Ofertas**:
+  - el precio más bajo y el más alto de cada cadena, en color y con etiqueta
+    ("Más bajo" / "Más alto"), cuando la cadena tiene al menos dos precios;
+  - tu producto con nombre completo: nombre + concentración + unidades, como
+    los competidores.
 
 ## Robot para Locatel y SAAS, fichas incompletas y "Relación" (PR #60, sin SQL)
 
