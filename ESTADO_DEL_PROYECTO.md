@@ -126,7 +126,7 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #58, desplegado (GitHub Pages sale solo de `main`) |
+| Código en `main` | PR #59, desplegado (GitHub Pages sale solo de `main`) |
 | SQL corrido en Supabase | **Hasta la fase 33**. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
@@ -560,6 +560,39 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Robot para Locatel y SAAS, fichas incompletas y "Relación" (PR #60, sin SQL)
+
+- **Robot, tiendas VTEX** (Locatel y Farmacia SAAS, `es_vtex` / `leer_vtex`
+  en `scraper/farmatodo.py`):
+  - se leen por la API pública del catálogo
+    (`/api/catalog_system/pub/products/search/<slug>/p`): precio de venta,
+    precio de lista (oferta si es mayor) y existencia, sin abrir la página;
+  - la moneda de la tienda se lee una vez por corrida (meta
+    `product:price:currency`): Locatel publica en VES y SAAS en USD (Ref.).
+    Todo se guarda en Bs; si la tienda publica en $ se pasa con la tasa BCV
+    del día, que es la que usa SAAS para mostrar sus Bs (966,90 = 1,13 ×
+    855,66);
+  - si la API falla, se usa la página como antes (JSON-LD);
+  - agotado o sin precio = error "no disponible";
+  - la espera entre consultas a esas tiendas bajó de 2 s a 1 s.
+- **Tasa BCV** (`scraper/update_bcv.py`):
+  - si la de hoy (fecha de Caracas) ya está en `dim_tasa_bcv`, no se busca en
+    internet ni se escribe nada;
+  - ya no se inserta en `bcv_rates` (vista de `dim_tasa_bcv`: ese insert era
+    el error 409) ni en Firestore;
+  - no ocupaba espacio: siempre fue una fila por día.
+- **Productos**: aviso "N productos activos tienen la ficha incompleta"
+  (molécula, dosis, forma, tamaño, laboratorio o PVP; `camposFaltantes`) con
+  "Ver cuáles" → filtro Ficha: incompletas. Los enlaces tienen su propio
+  aviso.
+- **Ficha del producto, tabla Ofertas**: Cadena va primero; se ordena por
+  cadena, tu enlace primero en cada una y luego de mayor a menor precio.
+- **"Relación" en todas partes**: el filtro de Competencia y el de la ficha
+  dicen "Relación: todas / Mis productos / Competidores"; el campo del
+  formulario se llama "Relación"; la columna de la plantilla pasa de `tipo` a
+  `relacion` (se sigue aceptando `tipo`, buscado exacto para no confundirlo
+  con `tipo_mercado`).
 
 ## Carga masiva rápida, marca/genérico en la revisión y robot para otras cadenas (PR #59, sin SQL)
 

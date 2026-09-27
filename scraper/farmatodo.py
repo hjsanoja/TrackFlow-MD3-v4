@@ -180,11 +180,110 @@ def cargar_filas_de_csv():
 LAST_REQUEST_TIME = {}
 DOMAIN_MIN_DELAY = {
     "farmatodo": 6.0,
-    "locatel": 2.0,
-    "saas": 2.0,
-    "farmaciasaas": 2.0,
+    # Locatel y SAAS se leen por su API (una consulta liviana): basta 1 s.
+    "locatel": 1.0,
+    "saas": 1.0,
+    "farmaciasaas": 1.0,
     "default": 1.5
 }
+
+
+
+# ---------------------------------------------------------------------------
+# Tiendas VTEX (Locatel, Farmacia SAAS): via rapida por su API publica de
+# catalogo. Una consulta liviana trae precio normal, precio con oferta y
+# existencia, sin abrir la pagina en el navegador. Si algo falla se usa la
+# pagina como antes (JSON-LD).
+# ---------------------------------------------------------------------------
+VTEX_DOMINIOS = ("locatel.com.ve", "farmaciasaas.com")
+MONEDA_VTEX: dict = {}  # dominio -> "VES" / "USD", se lee una vez por corrida
+
+
+def es_vtex(url: str) -> bool:
+    u = url.lower()
+    return any(d in u for d in VTEX_DOMINIOS) and bool(re.search(r"/p/?(?:[?#].*)?$", u))
+
+
+async def moneda_vtex(request, base: str, url: str) -> str | None:
+    """Moneda en que la tienda publica sus precios (meta product:price:currency)."""
+    if base in MONEDA_VTEX:
+        return MONEDA_VTEX[base]
+    try:
+        r = await request.get(url, timeout=20000)
+        if r.ok:
+            html = await r.text()
+            m = (re.search(r'product:price:currency"\s+content="([A-Za-z]{3})"', html)
+                 or re.search(r'"priceCurrency"\s*:\s*"([A-Za-z]{3})"', html))
+            if m:
+                MONEDA_VTEX[base] = m.group(1).upper()
+                return MONEDA_VTEX[base]
+    except Exception:
+        pass
+    return None
+
+
+async def leer_vtex(page, url: str, bcv_rate: float) -> dict | None:
+    """Precio de una tienda VTEX por su API. None = usar la pagina."""
+    m = re.match(r"^(https?://[^/]+)/(.+?)/p/?(?:[?#].*)?$", url.strip(), re.IGNORECASE)
+    if not m:
+        return None
+    base, slug = m.group(1).lower(), m.group(2)
+    request = page.context.request
+    try:
+        r = await request.get(f"{base}/api/catalog_system/pub/products/search/{slug}/p",
+                              timeout=15000, headers={"Accept": "application/json"})
+        if not r.ok:
+            return None
+        productos = await r.json()
+    except Exception:
+        return None
+    if not isinstance(productos, list):
+        return None
+    if not productos:
+        return {"error": "Producto no disponible o enlace roto (404 / Agotado)."}
+
+    prod = productos[0]
+    ofertas = []
+    for item in prod.get("items") or []:
+        for vendedor in item.get("sellers") or []:
+            o = vendedor.get("commertialOffer") or {}
+            if (o.get("Price") or 0) > 0:
+                ofertas.append(o)
+    if not ofertas:
+        return {"error": "Producto no disponible o enlace roto (404 / Agotado).", "nombre": prod.get("productName")}
+    o = next((x for x in ofertas if x.get("IsAvailable") or (x.get("AvailableQuantity") or 0) > 0), ofertas[0])
+    if not (o.get("IsAvailable") or (o.get("AvailableQuantity") or 0) > 0):
+        return {"error": "Producto agotado en la tienda.", "nombre": prod.get("productName")}
+
+    moneda = await moneda_vtex(request, base, url)
+    if not moneda:
+        return None
+    # Siempre en bolivares: si la tienda publica en dolares (Ref.) se pasa con
+    # la tasa BCV del dia, que es la misma que usa la tienda para mostrar Bs.
+    factor = 1.0 if moneda in ("VES", "VEF", "BS") else (bcv_rate if bcv_rate > 0 else 0)
+    if not factor:
+        return None
+    venta = float(o["Price"]) * factor
+    lista = float(o.get("ListPrice") or o.get("PriceWithoutDiscount") or 0) * factor
+    return {
+        "nombre": prod.get("productName"),
+        "precio_lista": round(max(venta, lista), 2),
+        "precio_oferta": round(venta, 2) if lista > venta + 0.01 else None,
+        "moneda_tienda": moneda,
+    }
+
+
+def llenar_resultado(result: dict, lista_bs: float, oferta_bs: float | None, metodo: str, bcv_rate: float) -> dict:
+    """Completa el resultado con precios ya en Bs (misma forma que la via de la pagina)."""
+    tiene_desc = bool(oferta_bs and (lista_bs - oferta_bs) > 0.05)
+    result["precio_full_bs"] = round(lista_bs, 2)
+    result["precio_desc_bs"] = round(oferta_bs, 2) if tiene_desc else None
+    result["precio_full_usd"] = round(lista_bs / bcv_rate, 2) if bcv_rate > 0 else None
+    result["precio_desc_usd"] = round(oferta_bs / bcv_rate, 2) if (tiene_desc and bcv_rate > 0) else None
+    result["tiene_descuento"] = tiene_desc
+    result["porcentaje_descuento"] = round((lista_bs - oferta_bs) / lista_bs * 100, 1) if tiene_desc else None
+    result["metodo_extraccion"] = metodo
+    return result
 
 
 async def wait_for_domain_rate_limit(url: str):
@@ -592,6 +691,19 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         result["descarte_motivo"] = None
 
         await wait_for_domain_rate_limit(url)
+
+        # Via rapida para tiendas VTEX (Locatel, SAAS): sin abrir la pagina.
+        if es_vtex(url):
+            rapido = await leer_vtex(page, url, bcv_rate)
+            if rapido and rapido.get("error"):
+                result["error"] = rapido["error"]
+                result["nombre"] = limpiar_nombre(rapido.get("nombre"))
+                return result
+            if rapido and rapido.get("precio_lista"):
+                result["nombre"] = limpiar_nombre(rapido.get("nombre"))
+                if DIAGNOSTICO:
+                    print(f"\n   🔎 [{task_id}] API VTEX {url}: lista={rapido['precio_lista']} oferta={rapido.get('precio_oferta')} (tienda en {rapido.get('moneda_tienda')})", flush=True)
+                return llenar_resultado(result, rapido["precio_lista"], rapido.get("precio_oferta"), "vtex_api", bcv_rate)
 
         api_captured_data = {}
         api_urls_vistas = []
