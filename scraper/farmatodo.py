@@ -195,8 +195,32 @@ DOMAIN_MIN_DELAY = {
 # existencia, sin abrir la pagina en el navegador. Si algo falla se usa la
 # pagina como antes (JSON-LD).
 # ---------------------------------------------------------------------------
-VTEX_DOMINIOS = ("locatel.com.ve", "farmaciasaas.com")
+VTEX_DOMINIOS = {"locatel.com.ve", "farmaciasaas.com"}
 MONEDA_VTEX: dict = {}  # dominio -> "VES" / "USD", se lee una vez por corrida
+# Tiendas WooCommerce (Farmadon...): via rapida por su Store API publica.
+WOO_DOMINIOS: set = set()
+
+
+def dominio_de(url: str) -> str:
+    m = re.match(r"^(?:https?://)?(?:www\.)?([^/]+)", (url or "").strip().lower())
+    return m.group(1) if m else ""
+
+
+def cargar_plataformas():
+    """Suma las tiendas VTEX y WooCommerce que detecto el robot buscador
+    (dim_cadenas.plataforma, fase 36): asi una cadena nueva usa la via rapida
+    sin tocar el codigo."""
+    try:
+        from supabase_client import is_supabase_configured, select
+        if not is_supabase_configured():
+            return
+        for c in select("dim_cadenas", "select=website,plataforma&plataforma=in.(vtex,woocommerce)"):
+            d = dominio_de(c.get("website"))
+            if d:
+                (VTEX_DOMINIOS if c["plataforma"] == "vtex" else WOO_DOMINIOS).add(d)
+        print(f"Tiendas VTEX: {sorted(VTEX_DOMINIOS)} · WooCommerce: {sorted(WOO_DOMINIOS)}", flush=True)
+    except Exception as e:
+        print(f"Aviso: no se leyeron las plataformas de las cadenas ({e})", flush=True)
 
 
 def es_vtex(url: str) -> bool:
@@ -269,6 +293,53 @@ async def leer_vtex(page, url: str, bcv_rate: float) -> dict | None:
         "nombre": prod.get("productName"),
         "precio_lista": round(max(venta, lista), 2),
         "precio_oferta": round(venta, 2) if lista > venta + 0.01 else None,
+        "moneda_tienda": moneda,
+    }
+
+
+def es_woo(url: str) -> bool:
+    return dominio_de(url) in WOO_DOMINIOS
+
+
+async def leer_woo(page, url: str, bcv_rate: float) -> dict | None:
+    """Precio de una tienda WooCommerce por su Store API. None = usar la pagina."""
+    m = re.match(r"^(https?://[^/]+)/(.*?)/?(?:[?#].*)?$", url.strip(), re.IGNORECASE)
+    if not m:
+        return None
+    base = m.group(1).lower()
+    slug = [x for x in m.group(2).split("/") if x][-1:] or [""]
+    if not slug[0]:
+        return None
+    try:
+        r = await page.context.request.get(f"{base}/wp-json/wc/store/v1/products?slug={urllib.parse.quote(slug[0])}",
+                                           timeout=15000, headers={"Accept": "application/json"})
+        if not r.ok:
+            return None
+        productos = await r.json()
+    except Exception:
+        return None
+    if not isinstance(productos, list) or not productos:
+        return None
+    prod = productos[0]
+    precios = prod.get("prices") or {}
+    try:
+        div = 10 ** int(precios.get("currency_minor_unit") or 0)
+        venta = int(precios.get("price") or 0) / div
+        regular = int(precios.get("regular_price") or 0) / div
+    except (TypeError, ValueError):
+        return None
+    if venta <= 0:
+        return None
+    if prod.get("is_in_stock") is False:
+        return {"error": "Producto agotado en la tienda.", "nombre": prod.get("name")}
+    moneda = str(precios.get("currency_code") or "VES").upper()
+    factor = 1.0 if moneda in ("VES", "VEF", "BS") else (bcv_rate if bcv_rate > 0 else 0)
+    if not factor:
+        return None
+    return {
+        "nombre": re.sub(r"<[^>]+>", "", prod.get("name") or ""),
+        "precio_lista": round(max(venta, regular) * factor, 2),
+        "precio_oferta": round(venta * factor, 2) if regular > venta + 0.001 else None,
         "moneda_tienda": moneda,
     }
 
@@ -581,22 +652,36 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
             }
 
             if (!precio_lista) {
+                // JSON-LD: tambien dentro de @graph (WooCommerce/Yoast) y con
+                // @type en lista; la oferta puede traer priceSpecification.
+                const aplanar = (x, out) => {
+                    if (!x || typeof x !== 'object') return out;
+                    if (Array.isArray(x)) { x.forEach(y => aplanar(y, out)); return out; }
+                    out.push(x);
+                    if (x['@graph']) aplanar(x['@graph'], out);
+                    return out;
+                };
+                const esProducto = (it) => [].concat(it['@type'] || []).some(t => String(t).toLowerCase() === 'product');
                 const scripts = document.querySelectorAll('script[type="application/ld+json"]');
                 for (const s of scripts) {
                     try {
-                        const parsed = JSON.parse(s.textContent || '{}');
-                        const items = Array.isArray(parsed) ? parsed : [parsed];
+                        const items = aplanar(JSON.parse(s.textContent || '{}'), []);
                         for (const it of items) {
-                            if (it['@type'] === 'Product' && it.offers) {
+                            if (esProducto(it) && it.offers) {
                                 if (!nombre && it.name) nombre = it.name;
-                                const off = Array.isArray(it.offers) ? it.offers[0] : it.offers;
+                                const ofertas = [].concat(it.offers);
+                                let off = ofertas.find(o => o && (o.price || o.lowPrice || (o.priceSpecification && [].concat(o.priceSpecification)[0]?.price))) || ofertas[0];
+                                if (off && !off.price && off.priceSpecification) {
+                                    const ps = [].concat(off.priceSpecification)[0] || {};
+                                    off = { ...off, price: ps.price, priceCurrency: off.priceCurrency || ps.priceCurrency };
+                                }
                                 // AggregateOffer (tiendas VTEX y similares) trae lowPrice
                                 // en vez de price. La moneda se guarda: si es USD se pasa
                                 // a Bs en Python con la tasa del dia.
                                 if (off && !off.price && off.lowPrice) off.price = off.lowPrice;
                                 if (off && off.priceCurrency) precio_moneda = String(off.priceCurrency).toUpperCase();
                                 if (off && off.price) {
-                                    precio_lista = parseFloat(off.price);
+                                    precio_lista = parseFloat(String(off.price).replace(',', '.'));
                                     metodo_extraccion = metodo_extraccion || "jsonld";
                                     // En AggregateOffer high/low es el rango entre vendedores,
                                     // no un descuento: solo cuenta en una oferta simple.
@@ -606,10 +691,60 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                                         metodo_extraccion = "dom";
                                     }
                                 }
+                                if (precio_lista) break;
                             }
                         }
                     } catch(e) {}
+                    if (precio_lista) break;
                 }
+            }
+
+            // Metadatos de producto (Open Graph / microdatos): muchas tiendas
+            // los traen aunque no tengan JSON-LD.
+            if (!precio_lista && !isFarmatodo) {
+                try {
+                    const meta = (sel) => {
+                        const el = document.querySelector(sel);
+                        return el ? (el.getAttribute('content') || el.textContent || '').trim() : '';
+                    };
+                    const monto = meta('meta[property="product:price:amount"]') || meta('meta[property="og:price:amount"]')
+                        || meta('[itemprop="price"]');
+                    const val = parsePriceText(monto);
+                    if (val && val > 0.01) {
+                        precio_lista = /^\d+(\.\d+)?$/.test(monto) ? parseFloat(monto) : val;
+                        metodo_extraccion = "meta";
+                        const mon = meta('meta[property="product:price:currency"]') || meta('meta[property="og:price:currency"]')
+                            || meta('[itemprop="priceCurrency"]');
+                        if (mon) precio_moneda = mon.toUpperCase();
+                    }
+                } catch(e) {}
+            }
+
+            // Ultimo recurso en otras tiendas: el primer precio visible de la
+            // ficha (fuera de carruseles). Con precio tachado + precio nuevo
+            // (WooCommerce: del / ins) se toma como oferta.
+            if (!precio_lista && !isFarmatodo) {
+                try {
+                    const zona = document.querySelector('main .product, .product, [class*="product-detail" i], [class*="productDetail" i], main') || document.body;
+                    const cands = [...zona.querySelectorAll('p.price, .price, .product-price, [class*="price" i]')]
+                        .filter(el => isVisible(el) && !isInsideCarouselOrRelated(el) && /\d/.test(el.textContent || ''));
+                    const el = cands[0];
+                    if (el) {
+                        const viejo = el.querySelector('del, s, [class*="old" i], [class*="regular" i], [class*="before" i]');
+                        const nuevo = el.querySelector('ins, [class*="sale" i], [class*="special" i], [class*="offer" i]');
+                        const txt = (x) => (x.innerText || x.textContent || '');
+                        if (viejo && nuevo) {
+                            const l = parsePriceText(txt(viejo));
+                            const o = parsePriceText(txt(nuevo));
+                            if (l && o && l > o) { precio_lista = l; precio_oferta = o; }
+                        }
+                        if (!precio_lista) precio_lista = parsePriceText(txt(el));
+                        if (precio_lista) {
+                            metodo_extraccion = "dom_generico";
+                            if (/\$|USD|REF/i.test(txt(el))) precio_moneda = 'USD';
+                        }
+                    }
+                } catch(e) {}
             }
 
             if (!nombre) {
@@ -704,6 +839,19 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
                 if DIAGNOSTICO:
                     print(f"\n   🔎 [{task_id}] API VTEX {url}: lista={rapido['precio_lista']} oferta={rapido.get('precio_oferta')} (tienda en {rapido.get('moneda_tienda')})", flush=True)
                 return llenar_resultado(result, rapido["precio_lista"], rapido.get("precio_oferta"), "vtex_api", bcv_rate)
+
+        # Via rapida para tiendas WooCommerce (Farmadon...).
+        if es_woo(url):
+            rapido = await leer_woo(page, url, bcv_rate)
+            if rapido and rapido.get("error"):
+                result["error"] = rapido["error"]
+                result["nombre"] = limpiar_nombre(rapido.get("nombre"))
+                return result
+            if rapido and rapido.get("precio_lista"):
+                result["nombre"] = limpiar_nombre(rapido.get("nombre"))
+                if DIAGNOSTICO:
+                    print(f"\n   🔎 [{task_id}] API WooCommerce {url}: lista={rapido['precio_lista']} oferta={rapido.get('precio_oferta')} (tienda en {rapido.get('moneda_tienda')})", flush=True)
+                return llenar_resultado(result, rapido["precio_lista"], rapido.get("precio_oferta"), "woo_api", bcv_rate)
 
         api_captured_data = {}
         api_urls_vistas = []
@@ -970,6 +1118,7 @@ async def main_async():
     filas = cargar_filas_de_db()
     if not filas:
         filas = cargar_filas_de_csv()
+    cargar_plataformas()
 
     if not filas:
         print("❌ No hay enlaces para procesar.", flush=True)

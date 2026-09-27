@@ -2,7 +2,8 @@ name: Buscador de enlaces (beta)
 
 # Busca en otras cadenas los productos que ya estan en Competencia y deja
 # sugerencias para aceptar en el panel (Experimental > Sugerencias de enlaces).
-# No abre navegador: usa el buscador publico de cada tienda.
+# Usa el buscador publico de cada tienda (VTEX, WooCommerce...) y, en las que
+# no tienen uno, un navegador que busca como una persona.
 on:
   workflow_dispatch:        # boton "Run workflow" en GitHub
     inputs:
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   buscar:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -29,6 +30,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar navegador (tiendas sin buscador publico)
+        run: |
+          pip install playwright==1.59.0
+          python -m playwright install --with-deps chromium
 
       - name: Buscar enlaces
         env:
