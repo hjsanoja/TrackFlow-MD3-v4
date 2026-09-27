@@ -1,3 +1,4 @@
+import BarraFiltros from '../components/BarraFiltros';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
 import { useToast } from '../context/ToastContext';
@@ -325,14 +326,19 @@ export default function Dimensiones() {
               </div>
             </div>
             {config.uso && (
-              <div className="flex flex-wrap items-center gap-2">
-                <FiltroChip etiqueta="Uso" icono="inventory_2" valor={filtroUso} onChange={setFiltroUso}
-                  opciones={[['todos', 'Uso: todos'], ['en_uso', 'En uso'], ['sin_uso', 'Sin uso']]} />
-                {activeTab === 'dim_laboratorios' && (
-                  <FiltroChip etiqueta="Tipo" icono="verified" valor={filtroTipo} onChange={setFiltroTipo}
-                    opciones={[['todos', 'Tipo: todos'], ['propios', 'Propios'], ['terceros', 'Competencia']]} />
+              <BarraFiltros
+                integrada
+                filtrar={(
+                  <>
+                    <FiltroChip etiqueta="Uso" icono="inventory_2" valor={filtroUso} onChange={setFiltroUso}
+                      opciones={[['todos', 'Uso: todos'], ['en_uso', 'En uso'], ['sin_uso', 'Sin uso']]} />
+                    {activeTab === 'dim_laboratorios' && (
+                      <FiltroChip etiqueta="Tipo" icono="verified" valor={filtroTipo} onChange={setFiltroTipo}
+                        opciones={[['todos', 'Tipo: todos'], ['propios', 'Propios'], ['terceros', 'Competencia']]} />
+                    )}
+                  </>
                 )}
-              </div>
+              />
             )}
           </div>
         </div>

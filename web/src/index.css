@@ -2074,3 +2074,5 @@ td.m3-calor-celda {
   .m3-barra-filtros-fila.con-limpiar > .m3-barra-filtros-items { padding-right: 5rem; }
   .m3-barra-filtros-fila.con-limpiar .m3-barra-filtros-limpiar { position: absolute; right: 6px; top: 4px; line-height: 24px; }
 }
+
+.m3-barra-filtros.is-integrada { padding: 0; border: 0; border-radius: 0; background: transparent; }

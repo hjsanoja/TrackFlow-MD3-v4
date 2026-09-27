@@ -1,4 +1,4 @@
-import LimpiarFiltros from '../components/LimpiarFiltros';
+import BarraFiltros from '../components/BarraFiltros';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { validarCsv, resolverUnidadNegocio } from '../utils/validarCsv';
@@ -835,19 +835,24 @@ export default function Productos() {
                     : `${filtrados.length} de ${productos.length} productos`}
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
-                  opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
-                <FiltroChip etiqueta="Enlaces" icono="link" valor={filtroUrls} onChange={setFiltroUrls}
-                  opciones={[['todos', 'Enlaces: todos'], ['con_urls', 'Con enlaces'], ['sin_urls', 'Sin enlaces'], ['caidos', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`]]} />
-                <FiltroChip etiqueta="Ficha" icono="fact_check" valor={filtroFicha} onChange={setFiltroFicha}
-                  opciones={[['todos', 'Ficha: todas'], ['incompletos', 'Incompletas'], ['completos', 'Completas']]} />
-                <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
-                  opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
-                <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUn} onChange={setFiltroUn}
-                  opciones={[['todos', 'Unidad: todas'], ...unidadesDisponibles]} />
-                <LimpiarFiltros visible={hayFiltros} onClick={limpiarFiltros} />
-              </div>
+              <BarraFiltros
+                integrada
+                limpiar={{ visible: hayFiltros, onClick: limpiarFiltros }}
+                filtrar={(
+                  <>
+                    <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
+                      opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
+                    <FiltroChip etiqueta="Enlaces" icono="link" valor={filtroUrls} onChange={setFiltroUrls}
+                      opciones={[['todos', 'Enlaces: todos'], ['con_urls', 'Con enlaces'], ['sin_urls', 'Sin enlaces'], ['caidos', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`]]} />
+                    <FiltroChip etiqueta="Ficha" icono="fact_check" valor={filtroFicha} onChange={setFiltroFicha}
+                      opciones={[['todos', 'Ficha: todas'], ['incompletos', 'Incompletas'], ['completos', 'Completas']]} />
+                    <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
+                      opciones={[['todos', 'Tipo: todos'], ['generico', 'Genéricos'], ['marca', 'Marca']]} />
+                    <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUn} onChange={setFiltroUn}
+                      opciones={[['todos', 'Unidad: todas'], ...unidadesDisponibles]} />
+                  </>
+                )}
+              />
             </div>
           )}
         </div>

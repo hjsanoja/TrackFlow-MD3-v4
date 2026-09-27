@@ -1,4 +1,4 @@
-import LimpiarFiltros from '../components/LimpiarFiltros';
+import BarraFiltros from '../components/BarraFiltros';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase, isSupabaseActive } from '../supabase';
@@ -214,15 +214,20 @@ export default function Usuarios({ userDoc }) {
                 {filtrados.length === (usuarios || []).length ? `${filtrados.length} usuarios` : `${filtrados.length} de ${(usuarios || []).length} usuarios`}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <FiltroChip etiqueta="Rol" icono="badge" valor={filtroRol} onChange={setFiltroRol}
-                opciones={[['todos', 'Rol: todos'], ['administrador', 'Administradores'], ['consulta', 'Consulta']]} />
-              <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroEstado} onChange={setFiltroEstado}
-                opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
-              <FiltroChip etiqueta="Correos" icono="mail" valor={filtroCorreos} onChange={setFiltroCorreos}
-                opciones={[['todos', 'Correos: todos'], ['alertas', 'Reciben alertas'], ['resumen', 'Reciben resumen'], ['ninguno', 'No reciben correos']]} />
-              <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroRol('todos'); setFiltroEstado('todos'); setFiltroCorreos('todos'); }} />
-            </div>
+            <BarraFiltros
+              integrada
+              limpiar={{ visible: hayFiltros, onClick: () => { setFiltroRol('todos'); setFiltroEstado('todos'); setFiltroCorreos('todos'); } }}
+              filtrar={(
+                <>
+                  <FiltroChip etiqueta="Rol" icono="badge" valor={filtroRol} onChange={setFiltroRol}
+                    opciones={[['todos', 'Rol: todos'], ['administrador', 'Administradores'], ['consulta', 'Consulta']]} />
+                  <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroEstado} onChange={setFiltroEstado}
+                    opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
+                  <FiltroChip etiqueta="Correos" icono="mail" valor={filtroCorreos} onChange={setFiltroCorreos}
+                    opciones={[['todos', 'Correos: todos'], ['alertas', 'Reciben alertas'], ['resumen', 'Reciben resumen'], ['ninguno', 'No reciben correos']]} />
+                </>
+              )}
+            />
           </div>
         </div>
 

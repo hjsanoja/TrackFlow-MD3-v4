@@ -4,9 +4,10 @@
 //   Comparar -> como se calcula (lista u oferta, empaque o unidad, $ o Bs...).
 // `limpiar` ({ visible, onClick }) va junto al rotulo "Filtrar": asi aparecer
 // o desaparecer no empuja los chips.
-export default function BarraFiltros({ etiqueta = 'Filtros', filtrar, comparar, limpiar }) {
+// `integrada`: sin borde ni fondo, para ir dentro de la barra de una tabla.
+export default function BarraFiltros({ etiqueta = 'Filtros', filtrar, comparar, limpiar, integrada = false }) {
   return (
-    <section className="m3-barra-filtros" aria-label={etiqueta}>
+    <section className={`m3-barra-filtros ${integrada ? 'is-integrada' : ''}`} aria-label={etiqueta}>
       {filtrar && (
         <div className={`m3-barra-filtros-fila ${limpiar ? 'con-limpiar' : ''}`}>
           <div className="m3-barra-filtros-rotulo">

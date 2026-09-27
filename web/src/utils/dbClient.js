@@ -156,6 +156,7 @@ async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
       const { error } = await supabase.from('dim_productos').update(cambios).eq('id', prod.id);
       if (error) throw new Error(`No se pudo actualizar el competidor: ${error.message}`);
     }
+    await guardarConcentracionCompetidor(prod.id, item);
 
     // Con que producto propio se compara (puede haber cambiado).
     const idPropio = String(item.id_producto_propio || '').trim();
@@ -271,6 +272,7 @@ export async function guardarEnlaceCompetencia(item) {
 
     if (errComp) throw new Error(`No se pudo guardar el producto competidor: ${errComp.message}`);
     productoId = comp?.id ?? null;
+    if (productoId) await guardarConcentracionCompetidor(productoId, item);
 
     // 3. Equivalencia con el producto propio.
     const idPropio = String(item.id_producto_propio || '').trim();
@@ -449,6 +451,16 @@ async function guardarPrincipiosActivos(productoDbId, principioActivo, concentra
 
   const { error } = await supabase.from('producto_principios').insert(conIds);
   if (error) throw error;
+}
+
+// Concentracion del competidor ("500 mg", "120 mg/5 ml"): se guarda como la
+// de un producto propio, con la molecula del producto propio al que se
+// vincula (item.principio_activo_propio). Vacia = se conserva lo guardado.
+async function guardarConcentracionCompetidor(productoId, item) {
+  const concentracion = String(item.concentracion || '').trim();
+  const molecula = String(item.principio_activo_propio || '').trim();
+  if (!concentracion || !molecula) return;
+  await guardarPrincipiosActivos(productoId, molecula, concentracion);
 }
 
 // Registra un PVP nuevo cerrando el anterior, en vez de insertar a ciegas.
@@ -934,6 +946,7 @@ export async function dbUpsertProductoCompetencia(data) {
     unidades_empaque: Number(data.unidades_empaque) > 0 ? Number(data.unidades_empaque) : null,
     unidad_contenido: data.unidad_contenido || null,
     tipo_mercado: ['MARCA', 'GENERICO'].includes(data.tipo_mercado) ? data.tipo_mercado : null,
+    principio_activo_propio: data.principio_activo_propio?.trim() || '',
     ultimo_precio_full_bs: data.ultimo_precio_full_bs ?? null,
     ultimo_precio_desc_bs: data.ultimo_precio_desc_bs ?? null,
     ultimo_nombre: data.ultimo_nombre ?? null,
@@ -1053,6 +1066,7 @@ export async function dbUpsertCompetenciaBulk(compList) {
     unidades_empaque: Number(data.unidades_empaque) > 0 ? Number(data.unidades_empaque) : null,
     unidad_contenido: data.unidad_contenido || null,
     tipo_mercado: ['MARCA', 'GENERICO'].includes(data.tipo_mercado) ? data.tipo_mercado : null,
+    principio_activo_propio: data.principio_activo_propio?.trim() || '',
     ultimo_precio_full_bs: data.ultimo_precio_full_bs ?? null,
     ultimo_precio_desc_bs: data.ultimo_precio_desc_bs ?? null,
     ultimo_nombre: data.ultimo_nombre ?? null,

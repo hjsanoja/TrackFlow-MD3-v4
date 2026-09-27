@@ -52,6 +52,7 @@ export const ESQUEMAS = {
         alias: ['laboratorio_competidor', 'fabricante'] },
       { campo: 'unidades_empaque', etiqueta: 'Unidades por empaque', obligatorio: false,
         alias: ['unidades', 'unidades_por_empaque'] },
+      { campo: 'concentracion', etiqueta: 'Concentración', obligatorio: false, alias: ['dosis'] },
       { campo: 'medida', etiqueta: 'Medida del empaque', obligatorio: false,
         alias: ['unidad_contenido'] },
       { campo: 'tipo_mercado', etiqueta: 'Marca o genérico', obligatorio: false,

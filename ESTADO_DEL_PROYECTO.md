@@ -126,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #56, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 32**. Todos los SQL están en `sql/` |
+| Código en `main` | PR #57, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 32**; la fase 33 va con el #58. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -560,6 +560,41 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Competidor por campos, duplicados y mercados mal armados (PR #58, fase 33)
+
+- **Misma barra de filtros en todos los menús**:
+  - Competencia, Productos, Cadenas, Usuarios y Dimensiones usan
+    `BarraFiltros` en su variante `integrada` (dentro de la tabla, sin
+    borde), con "Filtrar" y "Limpiar" en su sitio fijo;
+  - el $/Bs de Competencia pasa a segmentado;
+  - los switches que quedan (activo, correos, "solo huecos") son de
+    encender/apagar, que es su uso en M3.
+- **Competidor por campos** (como un producto propio): nombre corto,
+  concentración, laboratorio, unidades + medida y tipo.
+  - La concentración se guarda en `producto_principios`, con la molécula del
+    producto propio (`guardarConcentracionCompetidor` en dbClient).
+  - **Fase 33**:
+    - llena la concentración y las unidades que falten, leyéndolas del
+      nombre;
+    - la vista agrega `nombre_competidor` y `concentracion`, y arma `marca` =
+      nombre + concentración + "x" unidades. Si el nombre ya trae números se
+      deja igual, para no repetir. No cambia nombres: acortarlos lo hace
+      Hernando.
+  - El formulario muestra "Se verá como: …"; la plantilla tiene la columna
+    `concentracion`.
+  - `utils/competidor.js` lee dosis y unidades del nombre para los enlaces
+    viejos.
+- **Duplicados**:
+  - un competidor es el mismo si coinciden nombre, laboratorio, concentración
+    y tamaño, en la misma cadena y el mismo producto (`claveCompetidor`);
+  - un **enlace (URL) solo puede estar una vez**: el formulario no guarda uno
+    repetido, y la plantilla salta las filas cuya URL ya está en otro
+    producto (antes la movía en silencio) y lo avisa;
+  - "Posibles duplicados" también marca URLs que están en varios productos.
+- **Mercados mal armados**: en Competencia, "Revisar: Dosis o tamaño distinto
+  al tuyo" y una etiqueta "Otra dosis" / "Otro tamaño" en la fila, con el
+  detalle al pasar el mouse. Solo cuenta si se saben los dos lados.
 
 ## Ajustes del PR #57 (sin SQL)
 
