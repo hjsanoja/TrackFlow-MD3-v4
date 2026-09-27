@@ -561,6 +561,29 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Precios en Bs en todas las cadenas y tamaño "120ML" (PR #66, fase 37)
+
+- **Buscador** (`buscar_enlaces.py`):
+  - precio de cada resultado: se sube desde el enlace hasta el primer
+    contenedor con un precio (sin llegar a la grilla); la moneda tiene que
+    estar en la misma línea ("X 20" + salto + "Bs.S 8.737" ya no da 20); si la
+    tarjeta tiene Bs y $ ref, manda Bs;
+  - todo precio en dólares (VTEX de SAAS, WooCommerce, "$ ref") se guarda en
+    Bs con la última tasa de `dim_tasa_bcv`;
+  - moneda VTEX: más formas de leerla (meta en cualquier orden, JSON) y se
+    calcula en la primera búsqueda si faltaba;
+  - "Buscar todo de nuevo" (FORZAR) rebusca también lo que tiene sugerencia
+    pendiente, para actualizar su precio y puntaje.
+- **Tamaño sin "x"** ("180MG/5ML 120ML"): el último "N ml" que no sea el
+  "/5ml" de la concentración (mayor que 5). En Python y en SQL
+  (`sql/fase37_presentacion_ml.sql`, redefine `fn_leer_presentacion`).
+- **Robot de precios** (`farmatodo.py`), otras tiendas: si lo leído está en
+  dólares o no se leyó nada, manda el precio en Bs visible de la ficha
+  (método `dom_bs`): elementos con un solo precio en Bs (fuera de
+  carruseles), tachado = precio normal (del, s, clases old/regular/
+  default_price, line-through) y el otro = oferta. Probado con páginas tipo
+  Odoo (Farmatina), Farmabien y WooCommerce.
+
 ## Buscador y precios en todas las cadenas (PR #65, sin SQL)
 
 - **Buscador con navegador** (`buscar_enlaces.py`, plataforma `navegador`):
