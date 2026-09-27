@@ -99,6 +99,12 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   }, [productosCompetencia, pId, competencia, activo, producto]);
 
   const unidadesPropio = Math.max(parseUnidosisCount(activo?.tamano || activo?.presentacion, activo?.nombre, activo?.unidosis || activo?.unidades_empaque), 1);
+  // Tu producto con el mismo formato que los competidores:
+  // "ACETAMINOFEN 500 mg x 20" (nombre + concentracion + unidades).
+  const nombreCompletoPropio = /\d/.test(activo?.nombre || '') ? activo?.nombre
+    : [activo?.nombre, activo?.concentracion,
+      unidadesPropio > 1 ? `x ${unidadesPropio}${/\bml\b/i.test(activo?.tamano || '') ? ' ml' : /\bg\b/i.test(activo?.tamano || '') ? ' g' : ''}` : '']
+      .filter(Boolean).join(' ');
   const porUnidad = modoAnalisis === 'unidosis';
   const conDescuento = modoPrecio === 'descuento';
   const unidadesDe = (e) => {
@@ -116,7 +122,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     const bs = conDescuento ? (e.ultimo_precio_desc_bs || e.ultimo_precio_full_bs) : e.ultimo_precio_full_bs;
     const unidades = unidadesDe(e);
     const tipo = String(e.tipo || '').toLowerCase();
-    const base = { id: e.id, enlace: e, tipo, tipoMercado: esMarca(e) ? 'MARCA' : 'GENERICO', cadena: idCadena(e.cadena), marca: e.marca, laboratorio: e.laboratorio, unidades, url: e.url, fecha: e.ultimo_scrape };
+    const base = { id: e.id, enlace: e, tipo, tipoMercado: esMarca(e) ? 'MARCA' : 'GENERICO', cadena: idCadena(e.cadena), marca: tipo === 'propio' ? nombreCompletoPropio : e.marca, laboratorio: e.laboratorio, unidades, url: e.url, fecha: e.ultimo_scrape };
     if (!bs || !bcvRate) return { ...base, sinPrecio: true };
     // Cambio en 7 dias, en dolares a la tasa de cada dia.
     const v = variacionPorPub.get(e.publicacion_id);
@@ -134,7 +140,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
       cambio,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }).sort((a, b) => (a.sinPrecio ? 1 : 0) - (b.sinPrecio ? 1 : 0) || (a.priceUsd ?? 0) - (b.priceUsd ?? 0)), [enlaces, conDescuento, bcvRate, porUnidad, variacionPorPub, cadenaPorClave]);
+  }).sort((a, b) => (a.sinPrecio ? 1 : 0) - (b.sinPrecio ? 1 : 0) || (a.priceUsd ?? 0) - (b.priceUsd ?? 0)), [enlaces, conDescuento, bcvRate, porUnidad, variacionPorPub, cadenaPorClave, nombreCompletoPropio]);
 
   // Los filtros Relacion y Cadena definen que ofertas cuentan: minimo,
   // promedio, maximo, graficos y tabla se calculan solo sobre esas.
@@ -148,6 +154,19 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const visibles = ofertasVisibles.filter(o => !o.sinPrecio);
   // Tabla: por cadena, tu enlace primero en cada una y luego de mayor a menor
   // precio (sin precio al final de su cadena).
+  // Mas barato y mas caro de cada cadena (si tiene al menos dos precios).
+  const extremos = new Map();
+  for (const c of new Set(visibles.map(o => o.cadena))) {
+    const deCadena = visibles.filter(o => o.cadena === c);
+    if (deCadena.length < 2) continue;
+    const bajo = Math.min(...deCadena.map(o => o.priceUsd));
+    const alto = Math.max(...deCadena.map(o => o.priceUsd));
+    if (alto - bajo < 0.0005) continue;
+    for (const o of deCadena) {
+      if (Math.abs(o.priceUsd - bajo) < 0.0005) extremos.set(o.id, 'bajo');
+      else if (Math.abs(o.priceUsd - alto) < 0.0005) extremos.set(o.id, 'alto');
+    }
+  }
   const ofertasTabla = [...ofertasVisibles].sort((a, b) =>
     nombreCadena(a.cadena).localeCompare(nombreCadena(b.cadena), 'es')
     || (b.tipo === 'propio' ? 1 : 0) - (a.tipo === 'propio' ? 1 : 0)
@@ -440,7 +459,18 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                       </div>
                     </td>
                     <td className="text-right tabular-nums" data-label="Unidades">{o.unidades}</td>
-                    <td className="text-right whitespace-nowrap tabular-nums font-medium" data-label={porUnidad ? 'Precio por unidad' : 'Precio'}>{o.sinPrecio ? <span className="text-on-surface-variant font-normal">Sin precio</span> : fmtModo(o.priceUsd)}</td>
+                    <td className="text-right whitespace-nowrap tabular-nums font-medium" data-label={porUnidad ? 'Precio por unidad' : 'Precio'}>
+                      {o.sinPrecio ? <span className="text-on-surface-variant font-normal">Sin precio</span> : (
+                        <div className="inline-flex flex-col items-end gap-0.5">
+                          <span className={extremos.get(o.id) === 'bajo' ? 'm3-precio-bajo' : extremos.get(o.id) === 'alto' ? 'm3-precio-alto' : ''}>{fmtModo(o.priceUsd)}</span>
+                          {extremos.has(o.id) && (
+                            <span className={`m3-chip-extremo is-${extremos.get(o.id)}`} title={`El ${extremos.get(o.id) === 'bajo' ? 'más barato' : 'más caro'} en ${nombreCadena(o.cadena)}`}>
+                              {extremos.get(o.id) === 'bajo' ? 'Más bajo' : 'Más alto'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="text-right whitespace-nowrap" data-label="Tú frente a esta">
                       {o.sinPrecio || o.tipo === 'propio' || tuPrecio == null ? '—' : <Diferencia valor={(tuPrecio / o.priceUsd - 1) * 100} />}
                     </td>

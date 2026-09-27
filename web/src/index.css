@@ -2083,3 +2083,13 @@ td.m3-calor-celda {
 .m3-barra-avance > .is-indeterminada { width: 35%; animation: m3-avance-ir 1.2s ease-in-out infinite; }
 @keyframes m3-avance-ir { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 @media (prefers-reduced-motion: reduce) { .m3-barra-avance > .is-indeterminada { animation: none; width: 100%; opacity: 0.4; } }
+
+/* Mas barato / mas caro de cada cadena en la tabla de ofertas de la ficha. */
+.m3-precio-bajo { color: var(--md-sys-color-data-div-cheap-2); }
+.m3-precio-alto { color: var(--md-sys-color-data-div-dear-2); }
+.m3-chip-extremo {
+  display: inline-block; padding: 0 6px; border-radius: 6px; font-size: 0.625rem; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; line-height: 16px; border: 1px solid;
+}
+.m3-chip-extremo.is-bajo { color: var(--md-sys-color-data-div-cheap-2); border-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-2) 40%, transparent); background-color: color-mix(in srgb, var(--md-sys-color-data-div-cheap-1) 14%, transparent); }
+.m3-chip-extremo.is-alto { color: var(--md-sys-color-data-div-dear-2); border-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-2) 40%, transparent); background-color: color-mix(in srgb, var(--md-sys-color-data-div-dear-1) 14%, transparent); }

@@ -6,8 +6,8 @@ import { esMarca } from '../utils/tipoMercado';
 // Precios de cada producto propio frente a la competencia, con el mismo
 // criterio en el Dashboard y en el Mapa de Calor:
 //   - "Tu precio": el mas bajo de tus enlaces; si no hay, el PVP de la ficha.
-//   - Minimo: SOLO de la competencia. Promedio: del MERCADO (la competencia
-//     mas tu precio); promedioComp es el de la competencia sola.
+//   - Minimo y promedio: del MERCADO (la competencia mas tu precio);
+//     minimoComp y promedioComp son los de la competencia sola.
 //   - Cambios: en dolares, cada precio a la tasa de su dia (v_variacion).
 //   - Por unidad: el precio entre las unidades del empaque.
 //   - tipoComp: comparar contra toda la competencia, solo genericos o solo
@@ -104,28 +104,33 @@ export function useAnalisisPrecios({
       const propios = precios.filter(x => x.tipo === 'propio');
       const competidores = precios.filter(x => x.tipo !== 'propio');
       const valores = competidores.map(x => x.priceUsd);
-      const minimo = valores.length ? Math.min(...valores) : null;
+      const minimoComp = valores.length ? Math.min(...valores) : null;
       const promedioComp = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
-      const cadenasMin = minimo == null ? [] : [...new Set(competidores.filter(x => Math.abs(x.priceUsd - minimo) < 0.0005).map(x => x.cadena))];
 
       const pvpUsd = Number(p.pvp_propio_usd || 0) > 0 ? Number(p.pvp_propio_usd) : null;
       const tuPrecio = propios.length ? Math.min(...propios.map(x => x.priceUsd)) : (pvpUsd != null ? pvpUsd / (porUnidad ? unidadesPropio : 1) : null);
       const tuUnidad = propios.length ? Math.min(...propios.map(x => x.unitUsd)) : (pvpUsd != null ? pvpUsd / unidadesPropio : null);
       const fuenteTuPrecio = propios.length ? 'enlace' : pvpUsd ? 'pvp' : null;
-      // Promedio del mercado: la competencia mas tu precio (como el Mapa de Calor).
-      const promedio = promedioComp == null ? null
+      // Minimo y promedio del MERCADO: la competencia mas tu precio (como el
+      // Mapa de Calor). Sin competencia, son tu precio.
+      const minimo = tuPrecio != null ? Math.min(tuPrecio, minimoComp ?? Infinity) : minimoComp;
+      const minEsTuyo = tuPrecio != null && minimo != null && Math.abs(tuPrecio - minimo) < 0.0005;
+      const cadenasMin = minimo == null ? [] : [...new Set(precios.filter(x => Math.abs(x.priceUsd - minimo) < 0.0005).map(x => x.cadena))];
+      const promedio = promedioComp == null ? tuPrecio
         : tuPrecio != null ? (promedioComp * valores.length + tuPrecio) / (valores.length + 1) : promedioComp;
-      const difMin = tuPrecio != null && minimo > 0 ? ((tuPrecio - minimo) / minimo) * 100 : null;
-      const difProm = tuPrecio != null && promedio > 0 ? ((tuPrecio - promedio) / promedio) * 100 : null;
+      // Sin competencia no hay diferencia que medir (seria 0 % contra ti mismo).
+      const hayComp = competidores.length > 0;
+      const difMin = hayComp && tuPrecio != null && minimo > 0 ? ((tuPrecio - minimo) / minimo) * 100 : null;
+      const difProm = hayComp && tuPrecio != null && promedio > 0 ? ((tuPrecio - promedio) / promedio) * 100 : null;
       // Posicion: el lugar de tu precio entre todas las ofertas (la tuya mas
       // las de la competencia), de la mas barata (1) a la mas cara.
       const posicion = tuPrecio != null && competidores.length
         ? { lugar: 1 + competidores.filter(x => x.priceUsd < tuPrecio - 0.0005).length, de: competidores.length + 1 }
         : null;
 
-      // Precio de la competencia por cadena (el mas bajo si hay varios).
+      // Precio mas bajo de cada cadena, contando tu enlace en esa cadena.
       const porCadena = new Map();
-      for (const x of competidores) {
+      for (const x of precios) {
         const previo = porCadena.get(x.cadena);
         if (!previo || x.priceUsd < previo.priceUsd) porCadena.set(x.cadena, x);
       }
@@ -153,6 +158,8 @@ export function useAnalisisPrecios({
         precios,
         porCadena,
         minimo,
+        minimoComp,
+        minEsTuyo,
         promedio,
         promedioComp,
         cadenasMin,
