@@ -745,6 +745,21 @@ def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, al_cancelar)
 
+    # Senal de vida cada 30 s (fase 39). Si el panel marco la corrida como
+    # cancelada ("Detener"), el robot se detiene aqui mismo.
+    def latir():
+        while True:
+            try:
+                db.update("corridas_buscador", "id", corrida_id, {"latido": ahora_iso()})
+                fila = db.select("corridas_buscador", f"select=estado&id=eq.{corrida_id}&limit=1")
+                if fila and fila[0].get("estado") == "cancelada":
+                    print("Detenida desde el panel.", flush=True)
+                    os._exit(0)
+            except Exception as e:
+                print(f"Aviso latido: {e}", flush=True)
+            time.sleep(30)
+    threading.Thread(target=latir, daemon=True).start()
+
     try:
         # 1. Cadenas y su plataforma
         cadenas = [c for c in db.select("dim_cadenas", "select=id,nombre,website,activo,plataforma,plataforma_detalle,plataforma_revisada")

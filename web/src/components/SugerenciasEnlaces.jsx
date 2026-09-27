@@ -50,6 +50,7 @@ async function pedirGitHub(config, ruta, metodo = 'GET') {
   });
 }
 const MAX_HORAS = 3; // el workflow se corta a las 2,5 h: mas que esto ya no esta corriendo
+const MIN_SIN_LATIDO = 5; // minutos sin senal de vida del robot
 
 const leerLanzado = () => { try { return Number(localStorage.getItem(CLAVE_LANZADO)) || 0; } catch { return 0; } };
 const guardarLanzado = (t) => { try { if (t) localStorage.setItem(CLAVE_LANZADO, String(t)); else localStorage.removeItem(CLAVE_LANZADO); } catch { /* sin almacenamiento */ } };
@@ -123,7 +124,11 @@ export default function SugerenciasEnlaces() {
   // Una corrida "corriendo" que en GitHub ya termino o que lleva demasiado.
   const revisarViva = useCallback(async (c) => {
     if (!c || c.estado !== 'corriendo') return c;
-    if (Date.now() - new Date(c.inicio).getTime() > MAX_HORAS * 3600000) {
+    // El robot late cada 30 s (fase 39): sin latido en 5 min ya no corre.
+    const ultimoLatido = c.latido ? new Date(c.latido).getTime() : null;
+    const sinVida = ultimoLatido ? Date.now() - ultimoLatido > MIN_SIN_LATIDO * 60000
+      : Date.now() - new Date(c.inicio).getTime() > MAX_HORAS * 3600000;
+    if (sinVida) {
       await cerrarCorrida(c, 'interrumpida');
       return { ...c, estado: 'interrumpida' };
     }
@@ -146,20 +151,23 @@ export default function SugerenciasEnlaces() {
     }
   }, [cerrarCorrida]);
 
+  // Detener: se marca la corrida como cancelada; el robot lo ve en su
+  // siguiente latido (menos de un minuto) y se detiene. Si el token de GitHub
+  // puede, ademas se cancela la corrida alla.
   const detener = async () => {
     if (!corrida) return;
     setDeteniendo(true);
     try {
-      const config = await getGitHubConfig();
-      const run = idCorridaGitHub(corrida.url_github);
-      if (!config?.token || !run) throw new Error('sin acceso');
-      const res = await pedirGitHub(config, `/actions/runs/${run}/cancel`, 'POST');
-      if (!res.ok && res.status !== 409) throw new Error(String(res.status));
+      try {
+        const config = await getGitHubConfig();
+        const run = idCorridaGitHub(corrida.url_github);
+        if (config?.token && run) await pedirGitHub(config, `/actions/runs/${run}/cancel`, 'POST');
+      } catch { /* sin permiso de Actions: basta con la marca */ }
       await cerrarCorrida(corrida, 'cancelada');
-      addToast('Búsqueda detenida. Lo encontrado hasta ahora se queda.', 'success');
+      addToast('Búsqueda detenida: el robot se para en menos de un minuto. Lo encontrado hasta ahora se queda.', 'success');
       cargar();
-    } catch {
-      addToast('No se pudo detener desde aquí (el token de GitHub no tiene permiso de Actions). Detenla con «Ver en GitHub».', 'warning');
+    } catch (err) {
+      addToast(`No se pudo detener: ${err.message}`, 'error');
     } finally {
       setDeteniendo(false);
     }
