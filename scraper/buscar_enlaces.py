@@ -37,6 +37,7 @@ import html
 import json
 import os
 import re
+import signal
 import sys
 import threading
 import time
@@ -359,6 +360,15 @@ PLANTILLAS = [
     "/search?text={q}",
     "/productos?search={q}",
     "/{q}?_q={q}&map=ft",                # VTEX sin API publica
+    "/shop?search={q}",                  # Odoo
+    "/tienda?s={q}",
+    "/productos?q={q}",
+    "/products?search={q}",
+    "/catalogo?q={q}",
+    "/search/{q}",
+    "/buscar/{q}",
+    "/busqueda/{q}",
+    "/?q={q}",
 ]
 CAMPOS_BUSQUEDA = [
     "input[type=search]", "input[name=q]", "input[name=s]", "input[name=search]", "input[name=text]",
@@ -368,7 +378,7 @@ BOTONES_BUSQUEDA = ["[aria-label*='usca' i]", "button[class*='search' i]", "[cla
 
 # Productos de una pagina de resultados: enlaces de la misma tienda con un
 # nombre legible (fuera del menu y el pie) y el precio que se vea en su tarjeta.
-EXTRAER_JS = r"""() => {
+EXTRAER_JS = r"""(incluirCabecera) => {
   const origen = location.origin.replace('://www.', '://');
   const esPrecio = (t) => /^(bs\.?\s?s?\.?|\$|usd|ref\.?)?\s*[\d.,]+\s*(bs\.?\s?s?\.?|usd|ref\.?)?$/i.test(t.trim());
   const numero = (txt) => {
@@ -389,7 +399,7 @@ EXTRAER_JS = r"""() => {
   };
   const mapa = new Map();
   for (const a of document.querySelectorAll('a[href]')) {
-    if (a.closest('header, nav, footer, [role="navigation"]')) continue;
+    if (!incluirCabecera && a.closest('header, nav, footer, [role="navigation"]')) continue;
     let href;
     try { href = new URL(a.getAttribute('href'), location.href).href.split('#')[0]; } catch (e) { continue; }
     if (!href.replace('://www.', '://').startsWith(origen) || href.replace(/\/$/, '') === location.origin) continue;
@@ -418,6 +428,18 @@ EXTRAER_JS = r"""() => {
   }
   return [...mapa.values()].slice(0, 80);
 }"""
+
+
+# Lo que se ve en la pagina cuando no se encuentran productos: para ajustar
+# la tienda sin tener que abrirla.
+DIAG_JS = r"""() => ({
+  url: location.href,
+  titulo: (document.title || '').slice(0, 100),
+  enlaces: document.querySelectorAll('a[href]').length,
+  campos: [...document.querySelectorAll('input')].filter(i => i.offsetWidth > 0).map(i => i.name || i.placeholder || i.type).slice(0, 6),
+  muestras: [...document.querySelectorAll('a[href]')].map(a => (a.innerText || '').replace(/\s+/g, ' ').trim())
+    .filter(t => t.length > 8).slice(0, 8),
+})"""
 
 
 class Navegador:
@@ -453,7 +475,13 @@ class Navegador:
     def resultados_url(self, url):
         self.page.goto(url, wait_until="domcontentloaded")
         self._esperar()
-        return self.page.evaluate(EXTRAER_JS)
+        return self.page.evaluate(EXTRAER_JS, False)
+
+    def diagnostico(self):
+        try:
+            return self.page.evaluate(DIAG_JS)
+        except Exception as e:
+            return {"error": str(e)[:200]}
 
     def resultados_campo(self, base, q, selector=None):
         """Escribe en el campo de busqueda de la tienda. (candidatos, url final, selector)."""
@@ -477,9 +505,14 @@ class Navegador:
         loc, sel = campo
         loc.click()
         loc.fill(q)
+        # Muchas tiendas muestran productos mientras se escribe (desplegable).
+        self.page.wait_for_timeout(2000)
+        al_escribir = self.page.evaluate(EXTRAER_JS, True)
         loc.press("Enter")
         self._esperar()
-        return self.page.evaluate(EXTRAER_JS), self.page.url, sel
+        resultados = self.page.evaluate(EXTRAER_JS, False)
+        vistos = {c["url"] for c in resultados}
+        return resultados + [c for c in al_escribir if c["url"] not in vistos], self.page.url, sel
 
     def _campo(self, preferido=None):
         for sel in ([preferido] if preferido else []) + CAMPOS_BUSQUEDA:
@@ -540,7 +573,8 @@ def detectar_navegador(base: str) -> tuple:
             if "acetaminofen" in url_final.lower():
                 return "navegador", {"modo": "url", "busqueda_url": url_final.replace("acetaminofen", "{q}")}
             return "navegador", {"modo": "campo", "selector": sel}
-        return None, {"nota": "El navegador no encontró productos al buscar en la tienda.", "selector": sel}
+        return None, {"nota": "El navegador no encontró productos al buscar en la tienda.", "selector": sel,
+                      "diagnostico": nav.diagnostico()}
     except Exception as e:
         return None, {"nota": f"El navegador falló: {str(e)[:200]}"}
 
@@ -693,6 +727,24 @@ def main():
     corrida_id = corrida[0]["id"]
     print(f"Corrida {corrida_id}")
 
+    # Corridas anteriores que quedaron "corriendo" (cortadas sin avisar).
+    try:
+        db._request(f"corridas_buscador?estado=eq.corriendo&id=lt.{corrida_id}", method="PATCH",
+                    data={"estado": "interrumpida", "fin": ahora_iso()})
+    except Exception as e:
+        print(f"Aviso: no se cerraron corridas viejas ({e})")
+
+    # Cancelar en GitHub manda una senal: se marca la corrida y se sale ya
+    # (las hebras no se esperan), para que el panel no se quede "Buscando".
+    def al_cancelar(signum, _frame):
+        print(f"Corrida cancelada (senal {signum}).", flush=True)
+        try:
+            db.update("corridas_buscador", "id", corrida_id, {"estado": "cancelada", "fin": ahora_iso()})
+        finally:
+            os._exit(1)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, al_cancelar)
+
     try:
         # 1. Cadenas y su plataforma
         cadenas = [c for c in db.select("dim_cadenas", "select=id,nombre,website,activo,plataforma,plataforma_detalle,plataforma_revisada")
@@ -705,7 +757,8 @@ def main():
             revisada = c.get("plataforma_revisada")
             vieja = not revisada or datetime.fromisoformat(revisada.replace("Z", "+00:00")) < limite_plat
             # Las que no tenian buscador se vuelven a probar (quizas ahora con navegador).
-            if forzar or vieja or c.get("plataforma") not in BUSCADORES:
+            manual = (c.get("plataforma_detalle") or {}).get("manual")
+            if not manual and (forzar or vieja or c.get("plataforma") not in BUSCADORES):
                 try:
                     plataforma, detalle = detectar_plataforma(base_de(c["website"]))
                 finally:
@@ -731,19 +784,23 @@ def main():
             for b in db.select("busquedas_enlaces", "select=producto_id,cadena_id,fecha"):
                 if datetime.fromisoformat(b["fecha"].replace("Z", "+00:00")) >= limite:
                     recientes[(b["producto_id"], b["cadena_id"])] = True
-        # Con FORZAR tambien se rebuscan los que ya tienen sugerencia pendiente:
-        # asi se actualizan su precio y su puntaje.
-        pendientes = set() if forzar else {(s["producto_id"], s["cadena_id"])
-                      for s in db.select("sugerencias_enlaces", "select=producto_id,cadena_id&estado=eq.pendiente")}
+        # Sugerencias pendientes de cada par. Sin FORZAR, un par con sugerencia
+        # pendiente no se busca. Con FORZAR se busca primero y su resultado
+        # REEMPLAZA las pendientes: lo que ya no aparece se borra.
+        pendientes = {}
+        for sp in db.select("sugerencias_enlaces", "select=id,producto_id,cadena_id,url&estado=eq.pendiente"):
+            pendientes.setdefault((sp["producto_id"], sp["cadena_id"]), {})[sp["url"]] = sp["id"]
 
         tareas = {c["id"]: [] for c in activas}
         for p in productos:
             ya = set(p.get("cadenas_con_enlace") or [])
             for c in activas:
                 clave = (p["producto_id"], c["id"])
-                if c["id"] in ya or clave in recientes or clave in pendientes:
+                if c["id"] in ya or clave in recientes or (clave in pendientes and not forzar):
                     continue
                 tareas[c["id"]].append(p)
+        for cid in tareas:
+            tareas[cid].sort(key=lambda p, cid=cid: (p["producto_id"], cid) not in pendientes)
         total = sum(len(t) for t in tareas.values())
         db.update("corridas_buscador", "id", corrida_id, {"total": total})
         print(f"{len(productos)} productos, {total} busquedas en {len(activas)} cadenas")
@@ -775,6 +832,11 @@ def main():
                     } for s in res["sugerencias"]]
                     if sug:
                         db.upsert("sugerencias_enlaces", sug, on_conflict="producto_id,cadena_id,url")
+                    viejas = pendientes.get((p["producto_id"], cadena["id"])) or {}
+                    sobran = [str(i) for u, i in viejas.items() if u not in {x["url"] for x in sug}]
+                    if sobran:
+                        db._request(f"sugerencias_enlaces?estado=eq.pendiente&id=in.({','.join(sobran)})", method="DELETE")
+                        r["reemplazadas"] = r.get("reemplazadas", 0) + len(sobran)
                     fila.update({"resultado": "sugerido" if sug else "sin_resultado", "consultas": res["consultas"],
                                  "candidatos": res["candidatos"], "mejor_puntaje": res["mejor"], "error": None})
                     r["sugeridos" if sug else "sin_resultado"] += 1

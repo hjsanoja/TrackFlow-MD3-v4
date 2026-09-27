@@ -2205,3 +2205,7 @@ td.m3-calor-celda {
 .m3-criterio .material-symbols-outlined { font-size: 16px; }
 .m3-criterio.is-si .material-symbols-outlined { color: var(--md-sys-color-primary); }
 .m3-criterio.is-no { color: var(--md-sys-color-error); }
+.m3-tienda { padding: 0; }
+.m3-tienda-boton { display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 10px 0 6px; border-radius: 8px; white-space: nowrap; }
+button.m3-tienda-boton:hover { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, transparent); }
+.m3-tienda-editar { font-size: 14px; color: var(--md-sys-color-on-surface-variant); }

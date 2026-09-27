@@ -10,6 +10,8 @@ import FiltroChip from './FiltroChip';
 import CadenaBadge from './CadenaBadge';
 import InfoGrafico from './InfoGrafico';
 import GitHubConfigModal from './GitHubConfigModal';
+import ConfirmModal from './ConfirmModal';
+import ModalWrapper from './ModalWrapper';
 import { normalizar } from './formulario';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
@@ -39,6 +41,16 @@ function precio(v, moneda) {
   const n = Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return moneda === 'USD' ? `$${n}` : moneda === 'VES' || moneda === 'VEF' ? `Bs ${n}` : `${n}${moneda ? ` ${moneda}` : ''}`;
 }
+// Corrida de GitHub de una fila de corridas_buscador (url .../actions/runs/<id>).
+const idCorridaGitHub = (url) => (/\/actions\/runs\/(\d+)/.exec(url || '') || [])[1] || null;
+async function pedirGitHub(config, ruta, metodo = 'GET') {
+  return fetch(`https://api.github.com/repos/${config.repo_owner}/${config.repo_name}${ruta}`, {
+    method: metodo,
+    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${config.token}`, 'X-GitHub-Api-Version': '2022-11-28' },
+  });
+}
+const MAX_HORAS = 3; // el workflow se corta a las 2,5 h: mas que esto ya no esta corriendo
+
 const leerLanzado = () => { try { return Number(localStorage.getItem(CLAVE_LANZADO)) || 0; } catch { return 0; } };
 const guardarLanzado = (t) => { try { if (t) localStorage.setItem(CLAVE_LANZADO, String(t)); else localStorage.removeItem(CLAVE_LANZADO); } catch { /* sin almacenamiento */ } };
 
@@ -58,6 +70,9 @@ export default function SugerenciasEnlaces() {
   const [busqueda, setBusqueda] = useState('');
   const [limite, setLimite] = useState(POR_PAGINA);
   const [verGithub, setVerGithub] = useState(false);
+  const [confirmarTodo, setConfirmarTodo] = useState(false);
+  const [configurar, setConfigurar] = useState(null);
+  const [deteniendo, setDeteniendo] = useState(false);
 
   const nombreCadena = useCallback((id) => cadenas.find(c => String(c.id).toLowerCase() === String(id).toLowerCase())?.nombre || id, [cadenas]);
 
@@ -93,7 +108,62 @@ export default function SugerenciasEnlaces() {
   }, [ver, addToast, cargarEstado]);
 
   useEffect(() => { cargar(); }, [cargar]);
+  // Al abrir: si la ultima corrida figura "corriendo" pero ya no corre, se cierra.
+  useEffect(() => { if (corrida?.estado === 'corriendo') revisarViva(corrida); }, [corrida?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setLimite(POR_PAGINA); }, [ver, cadena, nivel, busqueda]);
+
+  // Marca como terminada una corrida que ya no corre (cancelada en GitHub o
+  // cortada). Si la base no lo permite (falta la fase 38), solo en pantalla.
+  const cerrarCorrida = useCallback(async (c, estado) => {
+    const fin = new Date().toISOString();
+    await supabase.from('corridas_buscador').update({ estado, fin }).eq('id', c.id).eq('estado', 'corriendo');
+    setCorrida(prev => (prev && prev.id === c.id ? { ...prev, estado, fin } : prev));
+  }, []);
+
+  // Una corrida "corriendo" que en GitHub ya termino o que lleva demasiado.
+  const revisarViva = useCallback(async (c) => {
+    if (!c || c.estado !== 'corriendo') return c;
+    if (Date.now() - new Date(c.inicio).getTime() > MAX_HORAS * 3600000) {
+      await cerrarCorrida(c, 'interrumpida');
+      return { ...c, estado: 'interrumpida' };
+    }
+    const run = idCorridaGitHub(c.url_github);
+    if (!run) return c;
+    try {
+      const config = await getGitHubConfig();
+      if (!config?.token) return c;
+      const res = await pedirGitHub(config, `/actions/runs/${run}`);
+      if (!res.ok) return c;
+      const gh = await res.json();
+      if (gh.status !== 'completed') return c;
+      // El robot marca su propio final; si GitHub termino y la fila sigue
+      // "corriendo", la corrida se corto (cancelada o fallo).
+      const estado = gh.conclusion === 'cancelled' ? 'cancelada' : 'interrumpida';
+      await cerrarCorrida(c, estado);
+      return { ...c, estado };
+    } catch {
+      return c;
+    }
+  }, [cerrarCorrida]);
+
+  const detener = async () => {
+    if (!corrida) return;
+    setDeteniendo(true);
+    try {
+      const config = await getGitHubConfig();
+      const run = idCorridaGitHub(corrida.url_github);
+      if (!config?.token || !run) throw new Error('sin acceso');
+      const res = await pedirGitHub(config, `/actions/runs/${run}/cancel`, 'POST');
+      if (!res.ok && res.status !== 409) throw new Error(String(res.status));
+      await cerrarCorrida(corrida, 'cancelada');
+      addToast('Búsqueda detenida. Lo encontrado hasta ahora se queda.', 'success');
+      cargar();
+    } catch {
+      addToast('No se pudo detener desde aquí (el token de GitHub no tiene permiso de Actions). Detenla con «Ver en GitHub».', 'warning');
+    } finally {
+      setDeteniendo(false);
+    }
+  };
 
   // Mientras el robot arranca o busca, se consulta su avance.
   const inicioCorrida = corrida ? new Date(corrida.inicio).getTime() : 0;
@@ -101,9 +171,16 @@ export default function SugerenciasEnlaces() {
   const buscando = corrida?.estado === 'corriendo';
   useEffect(() => {
     if (!arrancando && !buscando) return undefined;
+    let recargada = Date.now();
     const t = setInterval(async () => {
       const antes = corrida?.estado;
-      const ultima = await cargarEstado();
+      const procesadosAntes = corrida?.procesados;
+      const ultima = await revisarViva(await cargarEstado());
+      // La lista se refresca mientras busca (una vez por minuto si avanza).
+      if (ultima?.estado === 'corriendo' && ultima.procesados !== procesadosAntes && Date.now() - recargada > 60000) {
+        recargada = Date.now();
+        cargar();
+      }
       if (lanzado && ultima && new Date(ultima.inicio).getTime() >= lanzado - 60000) {
         setLanzado(0);
         guardarLanzado(0);
@@ -113,11 +190,12 @@ export default function SugerenciasEnlaces() {
         cargar();
         addToast(ultima?.estado === 'terminada'
           ? `Búsqueda terminada: ${ultima.resumen?.con_sugerencia ?? 0} con sugerencia.`
-          : 'La búsqueda terminó con un error. Revisa la corrida en GitHub.', ultima?.estado === 'terminada' ? 'success' : 'error');
+          : ultima?.estado === 'cancelada' ? 'La búsqueda se canceló. Lo encontrado hasta ahora se queda.'
+            : 'La búsqueda terminó con un error o se cortó. Revisa la corrida en GitHub.', ultima?.estado === 'terminada' ? 'success' : ultima?.estado === 'cancelada' ? 'info' : 'error');
       }
     }, CADA_MS);
     return () => clearInterval(t);
-  }, [arrancando, buscando, corrida?.estado, lanzado, cargarEstado, cargar, addToast]);
+  }, [arrancando, buscando, corrida?.estado, corrida?.procesados, lanzado, cargarEstado, revisarViva, cargar, addToast]);
 
   const lanzar = async (forzar) => {
     const config = await getGitHubConfig();
@@ -228,11 +306,11 @@ export default function SugerenciasEnlaces() {
                 lectura="Nada se vuelve enlace hasta que lo aceptas. Al aceptar, el enlace se crea activo y el robot de precios lo lee en su próxima corrida. Lo descartado no se vuelve a proponer. Un producto ya buscado en una cadena no se repite antes de 7 días (salvo «Buscar todo de nuevo»)." />
             </div>
             <ul className="flex flex-wrap gap-2 mt-2">
-              {cadenas.map(c => <EstadoCadena key={c.id} cadena={c} />)}
+              {cadenas.map(c => <EstadoCadena key={c.id} cadena={c} onConfigurar={() => setConfigurar(c)} />)}
             </ul>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end shrink-0">
-            <button type="button" onClick={() => lanzar(true)} disabled={arrancando || buscando} className="m3-btn-text"
+            <button type="button" onClick={() => setConfirmarTodo(true)} disabled={arrancando || buscando} className="m3-btn-text"
               title="Busca todos los productos otra vez, aunque se hayan buscado hace poco, y vuelve a revisar cada tienda">
               Buscar todo de nuevo
             </button>
@@ -242,7 +320,7 @@ export default function SugerenciasEnlaces() {
             </button>
           </div>
         </div>
-        <EstadoCorrida corrida={corrida} arrancando={arrancando} />
+        <EstadoCorrida corrida={corrida} arrancando={arrancando} onDetener={detener} deteniendo={deteniendo} />
       </section>
 
       <section className="grid grid-cols-3 gap-3" aria-label="Resumen">
@@ -311,11 +389,17 @@ export default function SugerenciasEnlaces() {
         )}
       </section>
       <GitHubConfigModal isOpen={verGithub} onClose={() => setVerGithub(false)} />
+      <ConfirmModal isOpen={confirmarTodo} title="¿Buscar todo de nuevo?"
+        message={'Vuelve a revisar cada tienda y a buscar todos los productos, aunque se hayan buscado hace poco.\n\nLas sugerencias por revisar se REEMPLAZAN con los resultados nuevos (precio, puntaje y enlaces que ya no aparecen). Las aceptadas y descartadas no se tocan.\n\nTarda bastante más que «Buscar enlaces».'}
+        confirmText="Buscar todo" onCancel={() => setConfirmarTodo(false)}
+        onConfirm={() => { setConfirmarTodo(false); lanzar(true); }} />
+      {configurar && <ConfigurarTienda cadena={configurar} onClose={() => setConfigurar(null)}
+        onGuardado={() => { setConfigurar(null); cargarEstado(); }} />}
     </div>
   );
 }
 
-function EstadoCadena({ cadena: c }) {
+function EstadoCadena({ cadena: c, onConfigurar }) {
   const nombre = PLATAFORMAS[c.plataforma];
   const huellas = c.plataforma_detalle?.huellas?.length ? `Se vio: ${c.plataforma_detalle.huellas.join(', ')}` : '';
   const [texto, clase, titulo] = nombre
@@ -323,20 +407,91 @@ function EstadoCadena({ cadena: c }) {
       ? `Se busca con un navegador, como una persona (${c.plataforma_detalle?.modo === 'url' ? 'con su dirección de búsqueda' : 'escribiendo en su campo Buscar'}): es más lento. Revisada el ${fecha(c.plataforma_revisada)}.`
       : `Se puede buscar (${nombre})${c.plataforma_detalle?.moneda ? `, precios en ${c.plataforma_detalle.moneda}` : ''}. Revisada el ${fecha(c.plataforma_revisada)}.`]
     : c.plataforma === 'sin_buscador'
-      ? ['Sin buscador', 'is-no', `Ni el buscador público ni el navegador lograron buscar en esta tienda. ${c.plataforma_detalle?.nota || ''} ${huellas}`.trim()]
+      ? ['Sin buscador', 'is-no', [`Ni el buscador público ni el navegador lograron buscar en esta tienda. ${c.plataforma_detalle?.nota || ''} ${huellas}`.trim(),
+          diagnostico(c.plataforma_detalle?.diagnostico), 'Toca para poner a mano su dirección de búsqueda.'].filter(Boolean).join('\n')]
       : !c.website
         ? ['Sin web', 'is-no', 'Agrega su página web en Cadenas para poder buscar en ella.']
         : ['Por revisar', 'is-duda', 'Se revisa en la primera búsqueda.'];
-  return (
-    <li className={`m3-tienda ${clase}`} title={titulo}>
+  const manual = c.plataforma_detalle?.manual;
+  const editable = c.website && (c.plataforma === 'sin_buscador' || c.plataforma === 'navegador');
+  const contenido = (
+    <>
       <CadenaBadge cadena={c.id} tamano="xs" title="" />
       <span className="text-on-surface">{c.nombre}</span>
-      <span className="m3-tienda-estado">{texto}</span>
+      <span className="m3-tienda-estado">{manual ? 'Dirección a mano' : texto}</span>
+      {editable && <span className="material-symbols-outlined m3-tienda-editar" aria-hidden="true">edit</span>}
+    </>
+  );
+  return (
+    <li className={`m3-tienda ${clase}`}>
+      {editable ? (
+        <button type="button" onClick={onConfigurar} className="m3-tienda-boton" title={`${titulo}${manual ? '' : ''}`}>{contenido}</button>
+      ) : <span className="m3-tienda-boton" title={titulo}>{contenido}</span>}
     </li>
   );
 }
 
-function EstadoCorrida({ corrida, arrancando }) {
+function diagnostico(d) {
+  if (!d) return '';
+  return [d.url ? `Página: ${d.url}` : '', d.titulo ? `Título: ${d.titulo}` : '', d.enlaces != null ? `Enlaces en la página: ${d.enlaces}` : '',
+    d.campos?.length ? `Campos: ${d.campos.join(', ')}` : '', d.muestras?.length ? `Se vio: ${d.muestras.slice(0, 4).join(' | ')}` : '']
+    .filter(Boolean).join('\n');
+}
+
+// Direccion de busqueda puesta a mano: la pagina de resultados de la tienda
+// al buscar "losartan", con esa palabra cambiada por {q}.
+function ConfigurarTienda({ cadena: c, onClose, onGuardado }) {
+  const { addToast } = useToast();
+  const actual = c.plataforma_detalle?.manual ? String(c.plataforma_detalle.busqueda_url || '').replace('{q}', 'losartan') : '';
+  const [url, setUrl] = useState(actual);
+  const [guardando, setGuardando] = useState(false);
+  const valida = /^https?:\/\//i.test(url.trim()) && /losartan/i.test(url);
+  const guardar = async (quitar) => {
+    setGuardando(true);
+    try {
+      const cambios = quitar
+        ? { plataforma: null, plataforma_detalle: null, plataforma_revisada: null }
+        : { plataforma: 'navegador', plataforma_revisada: new Date().toISOString(),
+            plataforma_detalle: { modo: 'url', busqueda_url: url.trim().replace(/losartan/i, '{q}'), manual: true } };
+      const { data, error } = await supabase.from('dim_cadenas').update(cambios).eq('id', c.id).select('id');
+      if (error) throw error;
+      if (!data?.length) throw new Error('No se guardó el cambio.');
+      addToast(quitar ? 'Dirección quitada: el robot la vuelve a averiguar en la próxima búsqueda.' : `Listo: el robot buscará en ${c.nombre} con esa dirección.`, 'success');
+      onGuardado();
+    } catch (err) {
+      addToast(`No se pudo guardar: ${err.message}`, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <ModalWrapper isOpen onClose={onClose} title={`Cómo buscar en ${c.nombre}`} icon="travel_explore" maxWidth="max-w-lg"
+      footer={
+        <div className="flex flex-wrap items-center gap-2 w-full">
+          {c.plataforma_detalle?.manual && (
+            <button type="button" onClick={() => guardar(true)} disabled={guardando} className="m3-btn-text-danger mr-auto">Quitar dirección</button>
+          )}
+          <button type="button" onClick={onClose} className="m3-btn-text ml-auto">Cancelar</button>
+          <button type="button" onClick={() => guardar(false)} disabled={!valida || guardando} className="m3-btn-primary h-10 px-5">Guardar</button>
+        </div>
+      }>
+      <ol className="m3-body-medium text-on-surface space-y-2 list-decimal pl-5">
+        <li>Abre <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{c.website}</a> y busca <strong>losartan</strong> en su buscador.</li>
+        <li>En la página de resultados, copia la dirección completa de arriba del navegador.</li>
+        <li>Pégala aquí. El robot cambia «losartan» por cada producto que busque.</li>
+      </ol>
+      <label className="block mt-4">
+        <span className="m3-label-large text-on-surface-variant">Dirección de la página de resultados</span>
+        <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder={`${c.website}/...losartan...`}
+          className="m3-input w-full mt-1" autoFocus />
+      </label>
+      {url && !valida && <p className="m3-body-small text-error mt-1">La dirección tiene que empezar por http y contener la palabra «losartan».</p>}
+      <p className="m3-body-small text-on-surface-variant mt-3">Si la dirección no cambia al buscar (la tienda no pone la búsqueda en la dirección), avísale a quien mantiene el panel.</p>
+    </ModalWrapper>
+  );
+}
+
+function EstadoCorrida({ corrida, arrancando, onDetener, deteniendo }) {
   if (arrancando) {
     return (
       <div className="m3-banner m3-banner-info" role="status">
@@ -356,6 +511,9 @@ function EstadoCorrida({ corrida, arrancando }) {
           <div className="m3-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(avance)}><div style={{ width: `${Math.max(4, avance)}%` }} /></div>
         </div>
         {corrida.url_github && <a href={corrida.url_github} target="_blank" rel="noopener noreferrer" className="m3-btn-text">Ver en GitHub</a>}
+        <button type="button" onClick={onDetener} disabled={deteniendo} className="m3-btn-outline h-9 px-4" title="Detener la búsqueda en GitHub">
+          {deteniendo ? 'Deteniendo…' : 'Detener'}
+        </button>
       </div>
     );
   }
@@ -365,6 +523,8 @@ function EstadoCorrida({ corrida, arrancando }) {
       Última búsqueda: {fecha(corrida.fin || corrida.inicio)}
       {corrida.estado === 'fallida'
         ? <span className="text-error"> · terminó con un error{r.error ? `: ${r.error}` : ''}</span>
+        : corrida.estado === 'cancelada' ? ` · se canceló en ${corrida.procesados ?? 0} de ${corrida.total ?? '?'} búsquedas`
+        : corrida.estado === 'interrumpida' ? ` · se cortó en ${corrida.procesados ?? 0} de ${corrida.total ?? '?'} búsquedas`
         : ` · ${corrida.procesados ?? 0} búsquedas · ${r.con_sugerencia ?? 0} con sugerencia`}
       {corrida.url_github && <> · <a href={corrida.url_github} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ver en GitHub</a></>}
     </p>
