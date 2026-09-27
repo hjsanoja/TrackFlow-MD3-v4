@@ -561,6 +561,30 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Buscador: detener, reemplazar sugerencias y dirección manual (PR #67, fase 38)
+
+- **Cancelar**: el robot atrapa la señal de GitHub (SIGINT/SIGTERM), marca la
+  corrida `cancelada` y sale; al arrancar, las corridas viejas que quedaron
+  `corriendo` pasan a `interrumpida`. El panel también las cierra: consulta
+  la corrida en la API de GitHub (`/actions/runs/<id>`) y, si terminó y la
+  fila sigue "corriendo", la marca cancelada/interrumpida; más de 3 h =
+  interrumpida. Botón **Detener** (`POST .../cancel`; si el token no tiene
+  permiso de Actions, avisa y remite a GitHub). `sql/fase38_corridas_buscador.sql`
+  da permiso al panel de cambiar `estado` y `fin`.
+- **"Buscar todo de nuevo" reemplaza**: busca primero los pares con
+  sugerencia pendiente; lo encontrado actualiza precio y puntaje (upsert) y
+  las pendientes de ese par que ya no aparecen se BORRAN (aceptadas y
+  descartadas no se tocan). Pide confirmación. La lista se recarga cada
+  minuto mientras avanza.
+- **Tiendas difíciles (FarmaGo)**: más direcciones de búsqueda probadas
+  (Odoo `/shop?search=`, `/tienda?s=`, `/search/<q>`, `/?q=`...); en modo
+  campo también se leen los productos del desplegable al escribir; si no
+  encuentra nada guarda `diagnostico` (url, título, enlaces, campos,
+  muestras) que se ve al pasar el mouse. **Dirección a mano**: tocar la
+  tienda en el panel permite pegar la página de resultados de "losartan";
+  queda `plataforma = navegador`, `modo = url`, `manual = true` y el robot no
+  la vuelve a detectar.
+
 ## Precios en Bs en todas las cadenas y tamaño "120ML" (PR #66, fase 37)
 
 - **Buscador** (`buscar_enlaces.py`):
