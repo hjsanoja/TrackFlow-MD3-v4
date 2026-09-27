@@ -76,19 +76,29 @@ export function normalizarUrl(url) {
 }
 
 // Devuelve el id de un laboratorio, creándolo si no existe.
-async function resolverLaboratorioId(nombre) {
+async function resolverLaboratorioId(nombre, cache = null) {
   const labNombre = String(nombre || '').toUpperCase().trim() || 'OTRO';
   // resolverDimension compara sin mayusculas ni tildes (ilike las respeta).
-  const id = await resolverDimension(null, 'dim_laboratorios', labNombre, { es_propio: LABS_PROPIOS.includes(labNombre) });
+  const id = await resolverDimension(cache, 'dim_laboratorios', labNombre, { es_propio: LABS_PROPIOS.includes(labNombre) });
   if (!id) throw new Error(`No se pudo crear el laboratorio "${labNombre}".`);
   return id;
 }
 
 // dim_cadenas.id es un VARCHAR elegido a mano (p.ej. 'farmatodo'), así que el
 // CSV puede traer tanto el id como el nombre comercial.
-async function resolverCadenaId(cadena) {
+async function resolverCadenaId(cadena, cache = null) {
   const valor = String(cadena || '').trim();
   if (!valor) throw new Error('El enlace no indica a qué cadena pertenece.');
+  // En una importacion cada cadena se busca una sola vez.
+  if (cache) {
+    const clave = `cadena|${valor.toLowerCase()}`;
+    if (!cache.has(clave)) {
+      const promesa = resolverCadenaId(valor);
+      cache.set(clave, promesa);
+      promesa.catch(() => cache.delete(clave));
+    }
+    return cache.get(clave);
+  }
 
   const { data: porId } = await supabase
     .from('dim_cadenas')
@@ -131,7 +141,7 @@ export function publicacionIdDe(item) {
 // "COMP_<id de la vista>": cada edicion (o cada activar/desactivar) creaba otro
 // producto competidor y le pasaba la URL, y el anterior quedaba huerfano.
 // Ahora se actualizan la publicacion y SU competidor.
-async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
+async function actualizarEnlaceExistente(pub, item, cadenaId, url, cache = null) {
   const { data: prod } = await supabase
     .from('dim_productos')
     .select('id, id_interno, laboratorio_id')
@@ -144,7 +154,7 @@ async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
     const cambios = {};
     const marca = String(item.marca || '').trim();
     if (marca) cambios.nombre = marca.slice(0, 255);
-    if (String(item.laboratorio || '').trim()) cambios.laboratorio_id = await resolverLaboratorioId(item.laboratorio);
+    if (String(item.laboratorio || '').trim()) cambios.laboratorio_id = await resolverLaboratorioId(item.laboratorio, cache);
     // Unidades del empaque: solo si vienen (vacio = se conserva lo guardado).
     if (Number(item.unidades_empaque) > 0) {
       cambios.cantidad_contenido = Number(item.unidades_empaque);
@@ -156,7 +166,7 @@ async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
       const { error } = await supabase.from('dim_productos').update(cambios).eq('id', prod.id);
       if (error) throw new Error(`No se pudo actualizar el competidor: ${error.message}`);
     }
-    await guardarConcentracionCompetidor(prod.id, item);
+    await guardarConcentracionCompetidor(prod.id, item, cache);
 
     // Con que producto propio se compara (puede haber cambiado).
     const idPropio = String(item.id_producto_propio || '').trim();
@@ -204,11 +214,13 @@ async function actualizarEnlaceExistente(pub, item, cadenaId, url) {
   return { producto_id: prod.id, publicacion_id: pub.id, cadena_id: cadenaId };
 }
 
-export async function guardarEnlaceCompetencia(item) {
+// `cache` (una importacion masiva): laboratorios, cadenas y moleculas se
+// buscan una sola vez para todas las filas.
+export async function guardarEnlaceCompetencia(item, cache = null) {
   const url = String(item.url || '').trim();
   if (!url) throw new Error('El enlace no tiene URL.');
 
-  const cadenaId = await resolverCadenaId(item.cadena);
+  const cadenaId = await resolverCadenaId(item.cadena, cache);
   const esPropio = String(item.tipo || '').toLowerCase() === 'propio';
 
   // 0. ¿Ya existe? Por su id de publicacion (edicion desde el panel) o por
@@ -230,7 +242,7 @@ export async function guardarEnlaceCompetencia(item) {
       .maybeSingle();
     existente = data || null;
   }
-  if (existente) return actualizarEnlaceExistente(existente, item, cadenaId, url);
+  if (existente) return actualizarEnlaceExistente(existente, item, cadenaId, url, cache);
 
   // 1. ¿De qué producto cuelga esta publicación?
   let productoId = null;
@@ -252,7 +264,7 @@ export async function guardarEnlaceCompetencia(item) {
     // 2. Producto del competidor. Se conserva el prefijo COMP_ que usó la
     //    Fase 2 para que los datos migrados y los nuevos convivan.
     const idInterno = `COMP_${item.id}`.slice(0, 150);
-    const labId = await resolverLaboratorioId(item.laboratorio);
+    const labId = await resolverLaboratorioId(item.laboratorio, cache);
 
     const { data: comp, error: errComp } = await supabase
       .from('dim_productos')
@@ -272,7 +284,7 @@ export async function guardarEnlaceCompetencia(item) {
 
     if (errComp) throw new Error(`No se pudo guardar el producto competidor: ${errComp.message}`);
     productoId = comp?.id ?? null;
-    if (productoId) await guardarConcentracionCompetidor(productoId, item);
+    if (productoId) await guardarConcentracionCompetidor(productoId, item, cache);
 
     // 3. Equivalencia con el producto propio.
     const idPropio = String(item.id_producto_propio || '').trim();
@@ -456,11 +468,11 @@ async function guardarPrincipiosActivos(productoDbId, principioActivo, concentra
 // Concentracion del competidor ("500 mg", "120 mg/5 ml"): se guarda como la
 // de un producto propio, con la molecula del producto propio al que se
 // vincula (item.principio_activo_propio). Vacia = se conserva lo guardado.
-async function guardarConcentracionCompetidor(productoId, item) {
+async function guardarConcentracionCompetidor(productoId, item, cache = null) {
   const concentracion = String(item.concentracion || '').trim();
   const molecula = String(item.principio_activo_propio || '').trim();
   if (!concentracion || !molecula) return;
-  await guardarPrincipiosActivos(productoId, molecula, concentracion);
+  await guardarPrincipiosActivos(productoId, molecula, concentracion, cache);
 }
 
 // Registra un PVP nuevo cerrando el anterior, en vez de insertar a ciegas.
@@ -1047,7 +1059,8 @@ export async function dbRegistrarPrecioManual(enlace, precioBs, precioOfertaBs =
   }
 }
 
-export async function dbUpsertCompetenciaBulk(compList) {
+// onProgreso(hechos, total): para mostrar el avance en pantalla.
+export async function dbUpsertCompetenciaBulk(compList, onProgreso = null) {
   if (!compList || compList.length === 0) return;
 
   const cleanList = compList.map(data => ({
@@ -1078,18 +1091,30 @@ export async function dbUpsertCompetenciaBulk(compList) {
   if (isSupabaseActive()) {
     let supabaseErrors = [];
 
-    // Uno por uno y no en lotes: cada enlace resuelve laboratorio, cadena,
-    // producto competidor y equivalencia, y un fallo en una fila no debe
-    // tumbar la importación completa.
-    for (const item of cleanList) {
-      try {
-        await guardarEnlaceCompetencia(item);
-      } catch (e) {
-        const msg = e?.message || String(e);
-        console.warn(`[Supabase] Enlace "${item.id}" no se pudo guardar:`, msg);
-        supabaseErrors.push(`${item.marca || item.id}: ${msg}`);
+    // Cada enlace se guarda por separado (resuelve laboratorio, cadena,
+    // producto competidor y equivalencia) y un fallo en una fila no tumba la
+    // importacion. Antes iban de uno en uno (500 filas = varios minutos sin
+    // avisar nada): ahora van 6 a la vez, con las busquedas compartidas y
+    // avisando el avance.
+    const cache = new Map();
+    let hechos = 0;
+    let siguiente = 0;
+    onProgreso?.(0, cleanList.length);
+    const trabajador = async () => {
+      while (siguiente < cleanList.length) {
+        const item = cleanList[siguiente++];
+        try {
+          await guardarEnlaceCompetencia(item, cache);
+        } catch (e) {
+          const msg = e?.message || String(e);
+          console.warn(`[Supabase] Enlace "${item.id}" no se pudo guardar:`, msg);
+          supabaseErrors.push(`${item.marca || item.id}: ${msg}`);
+        }
+        hechos++;
+        onProgreso?.(hechos, cleanList.length);
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(6, cleanList.length) }, trabajador));
 
     // Compatibilidad con proyectos sin la Fase 5 aplicada (ver comentario en
     // dbUpsertProductoCompetencia).

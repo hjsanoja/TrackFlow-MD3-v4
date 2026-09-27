@@ -52,6 +52,19 @@ export default function ImportPreview({ informe, nombreArchivo, onConfirmar, onC
           </div>
         )}
 
+        {/* Avance mientras se guarda */}
+        {importando && (
+          <div className="space-y-1.5" role="status" aria-live="polite">
+            <div className="flex justify-between m3-body-small text-on-surface-variant">
+              <span>{progreso ? `Guardando ${progreso.hechos} de ${progreso.total}…` : 'Revisando qué cambió…'}</span>
+              {progreso?.total > 0 && <span className="tabular-nums">{Math.round((progreso.hechos / progreso.total) * 100)} %</span>}
+            </div>
+            <div className="m3-barra-avance" aria-hidden="true">
+              <div className={progreso?.total ? '' : 'is-indeterminada'} style={progreso?.total ? { width: `${(progreso.hechos / progreso.total) * 100}%` } : undefined} />
+            </div>
+          </div>
+        )}
+
         {/* Recuento */}
         <div className="grid grid-cols-3 gap-3">
           <div className="m3-card-filled p-3 text-center">

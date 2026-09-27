@@ -126,8 +126,8 @@ o unidad de negocio; un competidor no tiene PVP propio.
 
 | | |
 |---|---|
-| Código en `main` | PR #57, desplegado (GitHub Pages sale solo de `main`) |
-| SQL corrido en Supabase | **Hasta la fase 32**; la fase 33 va con el #58. Todos los SQL están en `sql/` |
+| Código en `main` | PR #58, desplegado (GitHub Pages sale solo de `main`) |
+| SQL corrido en Supabase | **Hasta la fase 33**. Todos los SQL están en `sql/` |
 | Módulo Productos | **Terminado** (ver abajo) |
 | Módulo Competencia | **Terminado** (#36 a #41); quedan ideas para luego |
 | Módulo Cadenas | Color (#42) y rediseño con sigla, estado del robot, lector y enlaces de otra web (#44, fase 26) |
@@ -560,6 +560,29 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 - **Desplegables de filtro con ancho fijo** (`Select`, clases
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
+
+## Carga masiva rápida, marca/genérico en la revisión y robot para otras cadenas (PR #59, sin SQL)
+
+- **Carga masiva de Competencia**: 497 filas eran unas 5.000 consultas una
+  tras otra, sin avisar nada. Ahora:
+  - se saltan las filas que no cambian nada (`sinCambios`);
+  - se guardan 6 a la vez;
+  - laboratorios, cadenas y moléculas se buscan una sola vez (`cache` en
+    `guardarEnlaceCompetencia`);
+  - `ImportPreview` muestra una barra de avance ("Guardando 120 de 497").
+- **Revisar "Dosis, tamaño o tipo distinto al tuyo"**: suma marca contra
+  genérico (el `tipo_mercado` de tu producto frente al del competidor). La
+  etiqueta de la fila junta los motivos ("Otra dosis · Es marca").
+- **Robot, otras cadenas** (`scraper/farmatodo.py`):
+  - fuera de Farmatodo el precio sale de los datos estructurados (JSON-LD) y
+    de las llamadas internas de la tienda;
+  - ahora lee `priceCurrency` (si viene en USD se pasa a Bs con la tasa del
+    día) y `lowPrice` de AggregateOffer (sin tomar el rango como descuento);
+  - **modo diagnóstico**: con ≤ 10 enlaces y alguno que no sea de Farmatodo
+    (o `TRACKFLOW_DIAGNOSTICO=1`), el log de Actions escribe por página el
+    título, el h1, el JSON-LD, las meta de precio, los precios visibles y las
+    llamadas JSON de la tienda. Sirve para ajustar Locatel y SAAS con datos
+    reales (desde este entorno no se puede entrar a esas páginas).
 
 ## Competidor por campos, duplicados y mercados mal armados (PR #58, fase 33)
 

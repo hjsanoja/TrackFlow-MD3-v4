@@ -57,6 +57,23 @@ const ARCHIVO_PLANTILLA = 'competencia_enlaces_plantilla_carga';
 
 const esPropio = (it) => String(it.tipo || '').toLowerCase() === 'propio';
 
+// ¿La fila del CSV deja el enlace igual que como esta? Un campo vacio en el
+// CSV no cambia nada, asi que solo se comparan los que traen dato.
+function sinCambios(n, e) {
+  if (!e) return false;
+  const txt = (v) => String(v ?? '').trim().toLowerCase();
+  if (txt(n.id_producto_propio) !== txt(e.id_producto_propio)) return false;
+  if ((n.activo !== false) !== (e.activo !== false)) return false;
+  if (String(n.tipo) === 'propio') return true;
+  if (n.marca && txt(n.marca) !== txt(e.nombre_competidor || e.marca)) return false;
+  if (n.laboratorio && txt(n.laboratorio) !== txt(e.laboratorio)) return false;
+  if (n.concentracion && txt(n.concentracion).replace(/\s/g, '') !== txt(e.concentracion).replace(/\s/g, '')) return false;
+  if (n.unidades_empaque && Number(n.unidades_empaque) !== Number(e.unidades_empaque)) return false;
+  if (n.unidades_empaque && (n.unidad_contenido || 'unidad') !== (e.unidad_contenido || 'unidad')) return false;
+  if (n.tipo_mercado && n.tipo_mercado !== e.tipo_mercado) return false;
+  return true;
+}
+
 // Lecturas fallidas seguidas a partir de las cuales el enlace se marca
 // "Revisar URL" (vista v_enlaces_fallidos, fase 23).
 const FALLOS_REVISAR = 3;
@@ -119,6 +136,7 @@ export default function Competencia() {
 
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
+  const [progresoCsv, setProgresoCsv] = useState(null);
   const [previewCsv, setPreviewCsv] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -260,8 +278,9 @@ export default function Competencia() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, ocultos, cadenaPorClave]);
 
-  // Mercado mal armado: el competidor tiene otra concentracion u otro
-  // tamano que tu producto (solo si se saben los dos lados).
+  // Mercado mal armado: el competidor tiene otra concentracion, otro tamano
+  // u otro tipo (marca / generico) que tu producto. Dosis y tamano solo si se
+  // saben los dos lados.
   const mercadoDistinto = useMemo(() => {
     const m = new Map();
     for (const it of items) {
@@ -277,10 +296,16 @@ export default function Competencia() {
       const suyas = unidadesDe(it);
       const tuyas = Number(p.unidosis) > 0 ? Number(p.unidosis) : null;
       const tamano = suyas && tuyas && Math.abs(suyas - tuyas) > 0.001;
-      if (dosis || tamano) {
+      // Marca contra generico: tu producto y el competidor, cada uno con su
+      // tipo (el del competidor se carga en Competencia; fase 29).
+      const tuTipo = esMarca(p) ? 'marca' : 'genérico';
+      const suTipo = esMarca(it) ? 'marca' : 'genérico';
+      const tipo = tuTipo !== suTipo;
+      if (dosis || tamano || tipo) {
         m.set(it.id, {
-          dosis, tamano,
-          texto: `Tuyo: ${[p.concentracion, tuyas ? `x ${tuyas}` : ''].filter(Boolean).join(' ')} · este: ${[suyaDosis, suyas ? `x ${suyas}` : ''].filter(Boolean).join(' ')}`,
+          dosis, tamano, tipo,
+          etiqueta: [dosis && 'Otra dosis', tamano && 'Otro tamaño', tipo && (suTipo === 'marca' ? 'Es marca' : 'Es genérico')].filter(Boolean).join(' · '),
+          texto: `Tuyo: ${[p.concentracion, tuyas ? `x ${tuyas}` : '', tuTipo].filter(Boolean).join(' ')} · este: ${[suyaDosis, suyas ? `x ${suyas}` : '', suTipo].filter(Boolean).join(' ')}`,
         });
       }
     }
@@ -701,11 +726,16 @@ export default function Competencia() {
             : tipoMercadoLeido || (existente ? null : sugerirTipoMercado(marca, productoPorId.get(id_producto)?.principio_activo)),
         });
       });
-      if (lista.length === 0) throw new Error('No hay filas con producto y URL.');
-      await dbUpsertCompetenciaBulk(lista);
+      if (lista.length === 0 && !enOtroProducto.length) throw new Error('No hay filas con producto y URL.');
+      // Solo se guardan las filas que cambian algo: reescribir 500 enlaces
+      // iguales era lo que hacia la carga tan lenta.
+      const porId = new Map(items.map(it => [it.id, it]));
+      const aGuardar = lista.filter(n => !sinCambios(n, porId.get(n.id)));
+      const iguales = lista.length - aGuardar.length;
+      if (aGuardar.length) await dbUpsertCompetenciaBulk(aGuardar, (hechos, total) => setProgresoCsv({ hechos, total }));
       if (refreshCompetencia) refreshCompetencia();
       await cargar(true);
-      addToast(`Importación terminada: ${lista.length} enlaces${duplicados ? ` (${duplicados} repetidos en el archivo, omitidos)` : ''}.`, 'success');
+      addToast(`Importación terminada: ${aGuardar.length} ${aGuardar.length === 1 ? 'enlace guardado' : 'enlaces guardados'}${iguales ? `, ${iguales} sin cambios` : ''}${duplicados ? `, ${duplicados} repetidos en el archivo (omitidos)` : ''}.`, 'success');
       if (enOtroProducto.length) {
         addToast(`${enOtroProducto.length} ${enOtroProducto.length === 1 ? 'fila no se cargó' : 'filas no se cargaron'}: su enlace ya está en otro producto (${enOtroProducto.slice(0, 3).join('; ')}${enOtroProducto.length > 3 ? '…' : ''}). Para moverlo, edita ese enlace.`, 'warning');
       }
@@ -713,6 +743,7 @@ export default function Competencia() {
     } catch (err) {
       addToast('Error importando: ' + (err.message || String(err)), 'error');
     } finally {
+      setProgresoCsv(null);
       setIsUploadingCsv(false);
       setPreviewCsv(null);
     }
@@ -882,8 +913,8 @@ export default function Competencia() {
               )}
               {mercadoDistinto.size > 0 && (
                 <button type="button" onClick={() => setFiltroRevisar('mercado')} className="text-primary font-medium hover:underline"
-                  title="Competidores con otra concentración u otro tamaño que tu producto: la comparación por empaque no es justa">
-                  {mercadoDistinto.size} con dosis o tamaño distinto
+                  title="Competidores con otra concentración, otro tamaño u otro tipo (marca / genérico) que tu producto: no se comparan peras con peras">
+                  {mercadoDistinto.size} con dosis, tamaño o tipo distinto
                 </button>
               )}
               {caidosActivos > 0 && (
@@ -981,7 +1012,7 @@ export default function Competencia() {
                     <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
                       opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
                     <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
-                      opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['mercado', 'Dosis o tamaño distinto al tuyo'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web']]} />
+                      opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['mercado', 'Dosis, tamaño o tipo distinto al tuyo'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web']]} />
                   </>
                 )}
               />
@@ -1098,7 +1129,7 @@ export default function Competencia() {
                           <div className="m3-cell-secondary">
                             {mercadoDistinto.has(it.id) && (
                               <span className="m3-chip-caido mr-1" title={mercadoDistinto.get(it.id).texto}>
-                                {mercadoDistinto.get(it.id).dosis ? 'Otra dosis' : 'Otro tamaño'}
+                                {mercadoDistinto.get(it.id).etiqueta}
                               </span>
                             )}
                             {duplicados.has(it.id) && (
@@ -1264,6 +1295,7 @@ export default function Competencia() {
           informe={previewCsv.informe}
           nombreArchivo={previewCsv.nombre}
           importando={isUploadingCsv}
+          progreso={progresoCsv}
           nota={previewCsv.nota}
           onConfirmar={confirmarImportacion}
           onCancelar={() => setPreviewCsv(null)}
