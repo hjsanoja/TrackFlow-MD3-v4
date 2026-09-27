@@ -7,7 +7,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { validarCsv } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
 import { useDimensiones } from '../hooks/useDimensiones';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseActive } from '../supabase';
 import ConfirmModal from '../components/ConfirmModal';
 import ModalWrapper from '../components/ModalWrapper';
@@ -174,6 +174,31 @@ export default function Competencia() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // Desde Revision de capturas: ?editar=<publicacion>&volver=revision abre el
+  // formulario de ese enlace y, al cerrarlo, regresa a la bandeja.
+  const navigate = useNavigate();
+  const volverRef = useRef(null);
+  useEffect(() => {
+    const editarParam = searchParams.get('editar');
+    if (!editarParam || loading) return;
+    const item = (items || []).find(it => String(publicacionIdDe(it)) === editarParam);
+    const volver = searchParams.get('volver');
+    setSearchParams({}, { replace: true });
+    if (!item) {
+      addToast('No se encontró ese enlace en Competencia.', 'warning');
+      return;
+    }
+    volverRef.current = volver === 'revision' ? '/experimental?tab=revision' : null;
+    setEditing(item.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, items, loading]);
+  useEffect(() => {
+    if (editing !== null || !volverRef.current) return;
+    const destino = volverRef.current;
+    volverRef.current = null;
+    navigate(destino);
+  }, [editing, navigate]);
 
   const claveFiltros = [search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, filtroLab, filtroRevisar].join('|');
   useEffect(() => { setSeleccion(new Set()); }, [claveFiltros]);
