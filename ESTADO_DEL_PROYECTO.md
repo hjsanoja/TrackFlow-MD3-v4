@@ -561,6 +561,32 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Buscador y precios en todas las cadenas (PR #65, sin SQL)
+
+- **Buscador con navegador** (`buscar_enlaces.py`, plataforma `navegador`):
+  para las tiendas sin buscador público (Farmatodo, Farmabien, Farmago,
+  Farmatina según la primera corrida):
+  - aprende cómo busca la tienda: prueba direcciones de búsqueda conocidas
+    (`/?s=`, `/search?q=`, `/buscar?q=`, `/catalogsearch/result/?q=`...)
+    comprobando que los resultados cambien con lo buscado (no la portada);
+    si no, escribe en su campo "Buscar" y pulsa Enter; lo aprendido queda en
+    `plataforma_detalle` (`modo` url con `busqueda_url`, o campo con
+    `selector`);
+  - toma de la página de resultados los enlaces de la misma tienda con un
+    nombre legible (fuera de menú y pie) y el precio de su tarjeta;
+  - una instancia de Playwright por hebra; máx. 2 consultas por producto;
+    las cadenas "sin_buscador" se vuelven a probar en cada corrida;
+  - el workflow instala Playwright y Chromium (tiempo máximo 150 min).
+- **Robot de precios** (`farmatodo.py`) para cadenas nuevas:
+  - `cargar_plataformas()`: suma a la vía rápida las cadenas que el buscador
+    marcó como VTEX o WooCommerce (`dim_cadenas.plataforma`);
+  - vía rápida WooCommerce (`leer_woo`, Store API por slug): precio normal,
+    oferta, moneda (USD → Bs con la tasa) y agotado; método `woo_api`;
+  - página: JSON-LD dentro de `@graph`, `@type` en lista y
+    `priceSpecification`; luego metadatos (`product:price:amount`,
+    `itemprop=price`, método `meta`); por último, el primer precio visible
+    de la ficha, con tachado/nuevo como oferta (método `dom_generico`).
+
 ## Sugerencias de enlaces: robot buscador (PR #64, fase 36, beta)
 
 - **Qué hace**: busca los productos de Competencia (tuyos y de la

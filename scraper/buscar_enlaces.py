@@ -12,10 +12,12 @@ No abre navegador: usa el buscador publico de cada tienda.
   - WooCommerce:              /wp-json/wc/store/v1/products?search=
   - Shopify:                  /search/suggest.json?q=
   - Magento 2:                /graphql  (products(search: ...))
+  - Cualquier otra:          un navegador (Playwright) que usa la direccion
+                              de busqueda de la tienda o escribe en su campo
+                              "Buscar" (plataforma 'navegador').
 La plataforma de cada cadena se detecta sola y se guarda en
-dim_cadenas.plataforma. Si una tienda no tiene ninguno de esos buscadores
-queda como 'sin_buscador' con lo que se vio en su pagina (para programarla
-despues).
+dim_cadenas.plataforma. Si ni el navegador logra buscar, queda como
+'sin_buscador' con lo que se vio en su pagina.
 
 Puntaje de cada candidato (0 a 100), como el script de Hernando:
   laboratorio 40 (20 si no se puede saber), dosis 30, tamano 30
@@ -333,7 +335,217 @@ def buscar_magento(base, q, ctx):
     return salida
 
 
+
+# ---------------------------------------------------------------------------
+# Tiendas sin buscador publico conocido (Farmatodo, Farmabien...): se usa un
+# navegador (Playwright), como haria una persona. La primera vez el robot
+# aprende COMO busca la tienda: una direccion de busqueda (?s=, /search?q=...)
+# o, si no, escribir en su campo "Buscar". Lo aprendido se guarda en
+# dim_cadenas.plataforma_detalle y las siguientes corridas lo reutilizan.
+# ---------------------------------------------------------------------------
+PAUSA_NAVEGADOR = 1.5
+PLANTILLAS = [
+    "/?s={q}&post_type=product",        # WooCommerce / WordPress
+    "/search?q={q}",                     # Shopify y muchas otras
+    "/buscar?q={q}",
+    "/busqueda?q={q}",
+    "/catalogsearch/result/?q={q}",      # Magento
+    "/search?text={q}",
+    "/productos?search={q}",
+    "/{q}?_q={q}&map=ft",                # VTEX sin API publica
+]
+CAMPOS_BUSQUEDA = [
+    "input[type=search]", "input[name=q]", "input[name=s]", "input[name=search]", "input[name=text]",
+    "input[placeholder*='usca' i]", "input[placeholder*='roducto' i]", "input[aria-label*='usca' i]",
+]
+BOTONES_BUSQUEDA = ["[aria-label*='usca' i]", "button[class*='search' i]", "[class*='search-icon' i]", "[class*='buscador' i]"]
+
+# Productos de una pagina de resultados: enlaces de la misma tienda con un
+# nombre legible (fuera del menu y el pie) y el precio que se vea en su tarjeta.
+EXTRAER_JS = r"""() => {
+  const origen = location.origin.replace('://www.', '://');
+  const esPrecio = (t) => /^(bs\.?\s*s?\.?|\$|usd|ref\.?)?\s*[\d.,]+\s*(bs|usd)?$/i.test(t.trim());
+  const mapa = new Map();
+  for (const a of document.querySelectorAll('a[href]')) {
+    if (a.closest('header, nav, footer, [role="navigation"]')) continue;
+    let href;
+    try { href = new URL(a.getAttribute('href'), location.href).href.split('#')[0]; } catch (e) { continue; }
+    if (!href.replace('://www.', '://').startsWith(origen) || href.replace(/\/$/, '') === location.origin) continue;
+    const textos = [a.getAttribute('title'), a.getAttribute('aria-label'), a.querySelector('img') && a.querySelector('img').getAttribute('alt'),
+                    ...(a.innerText || '').split('\n')]
+      .map(t => (t || '').replace(/\s+/g, ' ').trim())
+      .filter(t => t.length >= 6 && t.length <= 220 && /[a-z]{3}/i.test(t) && !esPrecio(t));
+    if (!textos.length) continue;
+    const nombre = textos.sort((x, y) => y.length - x.length)[0];
+    const tarjeta = a.closest('li, article, [class*="product" i], [class*="card" i], [class*="item" i]') || a.parentElement;
+    const m = tarjeta ? (tarjeta.innerText || '').match(/(Bs\.?\s*S?\.?|\$|USD|REF\.?)\s*[\d.,]+|[\d.,]+\s*(Bs|USD)/i) : null;
+    const antes = mapa.get(href);
+    if (!antes || nombre.length > antes.nombre.length) mapa.set(href, { nombre, url: href, precio: m ? m[0] : (antes ? antes.precio : null) });
+  }
+  return [...mapa.values()].slice(0, 80);
+}"""
+
+
+def leer_precio_texto(texto):
+    """'Bs. 1.250,00' -> (1250.0, 'VES'); '$ 2,50' / 'REF 2.50' -> (2.5, 'USD')."""
+    if not texto:
+        return None, None
+    moneda = "USD" if re.search(r"\$|usd|ref", texto, re.I) else "VES" if re.search(r"bs", texto, re.I) else None
+    m = re.search(r"\d[\d.,]*", texto)
+    if not m:
+        return None, moneda
+    n = m.group(0).rstrip(".,")
+    if "," in n:
+        n = n.replace(".", "").replace(",", ".")
+    elif n.count(".") > 1 or (n.count(".") == 1 and len(n.split(".")[1]) == 3):
+        n = n.replace(".", "")
+    try:
+        return float(n), moneda
+    except ValueError:
+        return None, moneda
+
+
+class Navegador:
+    """Un navegador por hebra (Playwright sync no se comparte entre hebras)."""
+
+    def __init__(self):
+        from playwright.sync_api import sync_playwright
+        self._pw = sync_playwright().start()
+        self._browser = self._pw.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+        self._ctx = self._browser.new_context(user_agent=UA, locale="es-VE", viewport={"width": 1366, "height": 900})
+        self._ctx.route("**/*", lambda r: r.abort() if r.request.resource_type in ("image", "media", "font") else r.continue_())
+        self.page = self._ctx.new_page()
+        self.page.set_default_timeout(30000)
+
+    def cerrar(self):
+        for x in (self._ctx, self._browser):
+            try:
+                x.close()
+            except Exception:
+                pass
+        try:
+            self._pw.stop()
+        except Exception:
+            pass
+
+    def _esperar(self):
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            pass
+        self.page.wait_for_timeout(1200)
+
+    def resultados_url(self, url):
+        self.page.goto(url, wait_until="domcontentloaded")
+        self._esperar()
+        return self.page.evaluate(EXTRAER_JS)
+
+    def resultados_campo(self, base, q, selector=None):
+        """Escribe en el campo de busqueda de la tienda. (candidatos, url final, selector)."""
+        self.page.goto(base, wait_until="domcontentloaded")
+        self._esperar()
+        campo = self._campo(selector)
+        if campo is None:
+            for boton in BOTONES_BUSQUEDA:
+                try:
+                    b = self.page.locator(boton).first
+                    if b.is_visible(timeout=800):
+                        b.click()
+                        self.page.wait_for_timeout(600)
+                        campo = self._campo(selector)
+                        if campo is not None:
+                            break
+                except Exception:
+                    continue
+        if campo is None:
+            return [], self.page.url, None
+        loc, sel = campo
+        loc.click()
+        loc.fill(q)
+        loc.press("Enter")
+        self._esperar()
+        return self.page.evaluate(EXTRAER_JS), self.page.url, sel
+
+    def _campo(self, preferido=None):
+        for sel in ([preferido] if preferido else []) + CAMPOS_BUSQUEDA:
+            try:
+                loc = self.page.locator(sel).first
+                if loc.is_visible(timeout=800):
+                    return loc, sel
+            except Exception:
+                continue
+        return None
+
+
+_hebra = threading.local()
+
+
+def navegador() -> Navegador:
+    if getattr(_hebra, "nav", None) is None:
+        _hebra.nav = Navegador()
+    return _hebra.nav
+
+
+def cerrar_navegador():
+    nav = getattr(_hebra, "nav", None)
+    if nav is not None:
+        nav.cerrar()
+        _hebra.nav = None
+
+
+def hay_playwright() -> bool:
+    try:
+        import playwright.sync_api  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _relevantes(cands, palabra):
+    return [c for c in cands if palabra in normalizar(c.get("nombre"))]
+
+
+def detectar_navegador(base: str) -> tuple:
+    """Aprende como buscar en la tienda con el navegador. (plataforma, detalle)."""
+    nav = navegador()
+    for plantilla in PLANTILLAS:
+        try:
+            a = nav.resultados_url(base + plantilla.replace("{q}", "acetaminofen"))
+            if len(_relevantes(a, "acetaminofen")) < 2:
+                continue
+            # La pagina tiene que cambiar con lo buscado (no ser la portada).
+            b = nav.resultados_url(base + plantilla.replace("{q}", "ibuprofeno"))
+            if _relevantes(b, "ibuprofeno"):
+                return "navegador", {"modo": "url", "busqueda_url": base + plantilla}
+        except Exception:
+            continue
+    try:
+        cands, url_final, sel = nav.resultados_campo(base, "acetaminofen")
+        if len(_relevantes(cands, "acetaminofen")) >= 1:
+            if "acetaminofen" in url_final.lower():
+                return "navegador", {"modo": "url", "busqueda_url": url_final.replace("acetaminofen", "{q}")}
+            return "navegador", {"modo": "campo", "selector": sel}
+        return None, {"nota": "El navegador no encontró productos al buscar en la tienda.", "selector": sel}
+    except Exception as e:
+        return None, {"nota": f"El navegador falló: {str(e)[:200]}"}
+
+
+def buscar_navegador(base, q, ctx):
+    nav = navegador()
+    time.sleep(PAUSA_NAVEGADOR - PAUSA if PAUSA_NAVEGADOR > PAUSA else 0)
+    if ctx.get("modo") == "url" and ctx.get("busqueda_url"):
+        cands = nav.resultados_url(ctx["busqueda_url"].replace("{q}", urllib.parse.quote_plus(q)))
+    else:
+        cands = nav.resultados_campo(base, q, ctx.get("selector"))[0]
+    salida = []
+    for c in cands:
+        precio, moneda = leer_precio_texto(c.get("precio"))
+        salida.append({"nombre": c["nombre"], "marca": "", "url": c["url"], "precio": precio,
+                       "moneda": moneda, "disponible": None})
+    return salida
+
 BUSCADORES = {"vtex": buscar_vtex, "woocommerce": buscar_woo, "shopify": buscar_shopify, "magento": buscar_magento}
+BUSCADORES["navegador"] = buscar_navegador
 HUELLAS = ["vtex", "shopify", "woocommerce", "wp-content", "magento", "prestashop", "algolia",
            "__next_data__", "nuxt", "ng-version", "wix", "odoo", "jumpseller", "tiendanube"]
 
@@ -357,8 +569,13 @@ def detectar_plataforma(base: str) -> tuple:
     status, pagina = pedir(base, json_esperado=False)
     texto = (pagina or "").lower() if isinstance(pagina, str) else ""
     huellas = [h for h in HUELLAS if h in texto]
-    return "sin_buscador", {"estado_web": status, "huellas": huellas,
-                            "nota": "Ningun buscador publico conocido respondio."}
+    detalle = {"estado_web": status, "huellas": huellas, "nota": "Ningún buscador público conocido respondió."}
+    if hay_playwright():
+        plataforma, extra = detectar_navegador(base)
+        if plataforma:
+            return plataforma, {**extra, "huellas": huellas}
+        detalle.update(extra)
+    return "sin_buscador", detalle
 
 
 def moneda_vtex(base, datos) -> str | None:
@@ -379,6 +596,8 @@ def buscar_producto(prod: dict, cadena: dict) -> dict:
     base = base_de(cadena["website"])
     ctx = cadena.get("plataforma_detalle") or {}
     consultas = construir_consultas(prod)
+    if cadena["plataforma"] == "navegador":
+        consultas = consultas[:2]       # cada consulta abre una pagina: mas lento
     vistos = {}
     candidatos = 0
     for q in consultas:
@@ -442,15 +661,23 @@ def main():
         if solo_cadenas:
             cadenas = [c for c in cadenas if c["id"] in solo_cadenas]
         limite_plat = datetime.now(timezone.utc) - timedelta(days=DIAS_PLATAFORMA)
-        for c in cadenas:
+
+        def revisar(c):
             revisada = c.get("plataforma_revisada")
             vieja = not revisada or datetime.fromisoformat(revisada.replace("Z", "+00:00")) < limite_plat
-            if forzar or not c.get("plataforma") or vieja:
-                plataforma, detalle = detectar_plataforma(base_de(c["website"]))
+            # Las que no tenian buscador se vuelven a probar (quizas ahora con navegador).
+            if forzar or vieja or c.get("plataforma") not in BUSCADORES:
+                try:
+                    plataforma, detalle = detectar_plataforma(base_de(c["website"]))
+                finally:
+                    cerrar_navegador()
                 c["plataforma"], c["plataforma_detalle"] = plataforma, detalle
                 db.update("dim_cadenas", "id", c["id"], {"plataforma": plataforma, "plataforma_detalle": detalle,
                                                          "plataforma_revisada": ahora_iso()})
             print(f"  {c['nombre']}: {c['plataforma']} {json.dumps(c.get('plataforma_detalle') or {}, ensure_ascii=False)}")
+
+        with ThreadPoolExecutor(max_workers=max(1, len(cadenas))) as ex:
+            list(ex.map(revisar, cadenas))
         activas = [c for c in cadenas if c["plataforma"] in BUSCADORES]
 
         # 2. Que buscar
@@ -487,6 +714,12 @@ def main():
                              "sugeridos": 0, "sin_resultado": 0, "errores": 0} for c in cadenas}
 
         def trabajar(cadena):
+            try:
+                buscar_en(cadena)
+            finally:
+                cerrar_navegador()
+
+        def buscar_en(cadena):
             r = resumen[cadena["id"]]
             for p in tareas[cadena["id"]]:
                 fila = {"producto_id": p["producto_id"], "cadena_id": cadena["id"], "fecha": ahora_iso()}

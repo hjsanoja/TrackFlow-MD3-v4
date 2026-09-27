@@ -20,7 +20,7 @@ import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
  * que se acepta (fn_aceptar_sugerencia, fase 36).
  */
 const VISTAS = { pendiente: 'Por revisar', aceptada: 'Aceptadas', descartada: 'Descartadas' };
-const PLATAFORMAS = { vtex: 'VTEX', woocommerce: 'WooCommerce', shopify: 'Shopify', magento: 'Magento' };
+const PLATAFORMAS = { vtex: 'VTEX', woocommerce: 'WooCommerce', shopify: 'Shopify', magento: 'Magento', navegador: 'Navegador' };
 const CLAVE_LANZADO = 'sugerencias.lanzado';
 const POR_PAGINA = 20;
 const CADA_MS = 15000;
@@ -219,7 +219,7 @@ export default function SugerenciasEnlaces() {
             <div className="flex items-center gap-1">
               <h3 className="m3-title-medium text-on-surface">Tiendas donde se busca</h3>
               <InfoGrafico titulo="Sugerencias de enlaces"
-                que="Un robot en GitHub toma los productos que ya están en Competencia y los busca en las cadenas donde todavía no tienen enlace, con el buscador de cada tienda (sin abrir navegador)."
+                que="Un robot en GitHub toma los productos que ya están en Competencia y los busca en las cadenas donde todavía no tienen enlace: con el buscador público de la tienda (rápido) o, si no tiene, con un navegador que busca como una persona (más lento)."
                 formula={[
                   'Laboratorio 40 · Dosis 30 · Tamaño 30 (si falta el dato: 20 / 10 / 10)',
                   'Dosis o tamaño distintos = no se sugiere',
@@ -319,9 +319,11 @@ function EstadoCadena({ cadena: c }) {
   const nombre = PLATAFORMAS[c.plataforma];
   const huellas = c.plataforma_detalle?.huellas?.length ? `Se vio: ${c.plataforma_detalle.huellas.join(', ')}` : '';
   const [texto, clase, titulo] = nombre
-    ? [nombre, 'is-si', `Se puede buscar (${nombre})${c.plataforma_detalle?.moneda ? `, precios en ${c.plataforma_detalle.moneda}` : ''}. Revisada el ${fecha(c.plataforma_revisada)}.`]
+    ? [nombre, 'is-si', c.plataforma === 'navegador'
+      ? `Se busca con un navegador, como una persona (${c.plataforma_detalle?.modo === 'url' ? 'con su dirección de búsqueda' : 'escribiendo en su campo Buscar'}): es más lento. Revisada el ${fecha(c.plataforma_revisada)}.`
+      : `Se puede buscar (${nombre})${c.plataforma_detalle?.moneda ? `, precios en ${c.plataforma_detalle.moneda}` : ''}. Revisada el ${fecha(c.plataforma_revisada)}.`]
     : c.plataforma === 'sin_buscador'
-      ? ['Sin buscador', 'is-no', `No tiene un buscador público que el robot sepa usar. ${huellas}`.trim()]
+      ? ['Sin buscador', 'is-no', `Ni el buscador público ni el navegador lograron buscar en esta tienda. ${c.plataforma_detalle?.nota || ''} ${huellas}`.trim()]
       : !c.website
         ? ['Sin web', 'is-no', 'Agrega su página web en Cadenas para poder buscar en ella.']
         : ['Por revisar', 'is-duda', 'Se revisa en la primera búsqueda.'];
