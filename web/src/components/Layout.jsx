@@ -83,6 +83,7 @@ export default function Layout({ user, userDoc, children }) {
     ...navItems,
     ...(isNavVisible({ to: '/experimental', adminOnly: false }) ? [
       { to: '/experimental?tab=revision', label: 'Revisión de capturas (Experimental)', icon: 'rule' },
+      { to: '/experimental?tab=sugerencias', label: 'Sugerencias de enlaces (Experimental)', icon: 'travel_explore' },
       { to: '/experimental?tab=devaluacion', label: 'Devaluación vs subida real (Experimental)', icon: 'currency_exchange' },
       { to: '/experimental?tab=canibalizacion', label: 'Canibalización de marcas (Experimental)', icon: 'compare_arrows' },
       { to: '/experimental?tab=brecha_usd', label: 'Brechas USD diarias (Experimental)', icon: 'payments' },

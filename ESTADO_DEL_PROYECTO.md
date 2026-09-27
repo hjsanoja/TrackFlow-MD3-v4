@@ -561,6 +561,52 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Sugerencias de enlaces: robot buscador (PR #64, fase 36, beta)
+
+- **Qué hace**: busca los productos de Competencia (tuyos y de la
+  competencia, con al menos un enlace activo) en las cadenas donde aún no
+  tienen enlace, y deja SUGERENCIAS. Nada se vuelve enlace hasta aceptarlo.
+- **Robot** `scraper/buscar_enlaces.py` (solo librería estándar, sin
+  navegador), workflow `.github/workflows/buscar-enlaces.yml`
+  (`repository_dispatch` tipo `buscar-enlaces` desde el panel, o "Run
+  workflow" en GitHub con `forzar`):
+  - detecta la plataforma de cada cadena y la guarda en
+    `dim_cadenas.plataforma` (vtex, woocommerce, shopify, magento o
+    sin_buscador con las "huellas" vistas en su web); se revisa cada 30 días;
+  - consultas: nombre base + dosis + laboratorio, luego sin laboratorio, luego
+    principio activo (máx. 3; para en cuanto hay un candidato de 90+);
+  - puntaje: laboratorio 40 (20 si no se puede saber), dosis 30, tamaño 30
+    (10 si falta el dato); dosis o tamaño distintos descartan; se sugiere
+    desde 70, hasta 3 por producto y cadena; el nombre tiene que compartir
+    alguna palabra con el producto o su principio activo;
+  - no repite un par producto/cadena antes de 7 días ni si ya tiene una
+    sugerencia pendiente (salvo `FORZAR=1`); una hebra por cadena, 0,8 s
+    entre consultas a la misma tienda;
+  - `leer_presentacion` = misma regla que `fn_leer_presentacion`.
+- **SQL** `sql/fase36_sugerencias_enlaces.sql`:
+  - columnas `plataforma`, `plataforma_detalle`, `plataforma_revisada` en
+    `dim_cadenas`; cadenas nuevas Farmadon, Farmago, Farmabien y Farmatina
+    (sin color; sigla FD/FG/FB/FN) y web de Farmatodo, Locatel y SAAS si
+    faltaba;
+  - tablas `sugerencias_enlaces` (pendiente / aceptada / descartada),
+    `busquedas_enlaces` (última búsqueda por par) y `corridas_buscador`
+    (avance y resumen);
+  - vistas `v_buscar_enlaces` y `v_sugerencias_enlaces`;
+  - `fn_aceptar_sugerencia(id)`: crea la publicación (activa) del mismo
+    producto en esa cadena, rechaza una URL ya vinculada a otro producto y
+    descarta las otras pendientes del par;
+  - `fn_leer_presentacion` ajustada: "400mgx20" lee la dosis y la "x" de un
+    nombre ("Dolex 500 x 10") ya no se toma como tamaño;
+  - al final, bloque DESHACER comentado.
+- **Pantalla** Experimental → "Sugerencias de enlaces"
+  (`components/SugerenciasEnlaces.jsx`): tiendas con su plataforma,
+  "Buscar enlaces" / "Buscar todo de nuevo", avance de la corrida,
+  sugerencias agrupadas por producto con puntaje y lo que coincidió
+  (laboratorio, dosis, tamaño), Aceptar / Descartar / Volver a revisar.
+- **Pendiente de ver en la primera corrida real**: qué plataforma tiene cada
+  cadena nueva (desde este entorno no se llega a las tiendas) y si el robot
+  de precios lee bien las páginas de las cadenas nuevas.
+
 ## Revisión de capturas: dosis y tamaño, sensibilidad, lote y releer (PR #63, fase 35)
 
 - **Arreglo "Corregir enlace"**: Competencia volvía a la bandeja en el mismo
