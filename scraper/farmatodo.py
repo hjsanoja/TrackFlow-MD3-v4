@@ -21,6 +21,7 @@ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTim
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CSV_PATH = PROJECT_ROOT / "productos_competencia.csv"
 OUT_PATH = PROJECT_ROOT / "resultados.json"
+DIAGNOSTICO = False  # se decide en main_async
 
 
 def limpiar_nombre(nombre):
@@ -249,13 +250,13 @@ async def block_unnecessary_resources(route):
     await route.continue_()
 
 
-async def extract_product_data_from_page(page, url: str, target_product_id: str | None) -> dict:
+async def extract_product_data_from_page(page, url: str, target_product_id: str | None, diagnostico: bool = False) -> dict:
     """
     Motor de extracción con anclaje al ID de producto, resolución por especificidad,
     exclusión estricta de carruseles/productos relacionados y validación de precio unitario.
     """
     return await page.evaluate(r"""
-        ({ target_product_id }) => {
+        ({ target_product_id, diagnostico }) => {
             const bodyText = document.body ? document.body.innerText || '' : '';
             const title = document.title || '';
 
@@ -318,6 +319,7 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
             let precio_unitario = null;
             let promo_struct = null;
             let metodo_extraccion = null;
+            let precio_moneda = null;
 
             const isFarmatodo = window.location.hostname.includes('farmatodo');
 
@@ -489,9 +491,17 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                             if (it['@type'] === 'Product' && it.offers) {
                                 if (!nombre && it.name) nombre = it.name;
                                 const off = Array.isArray(it.offers) ? it.offers[0] : it.offers;
+                                // AggregateOffer (tiendas VTEX y similares) trae lowPrice
+                                // en vez de price. La moneda se guarda: si es USD se pasa
+                                // a Bs en Python con la tasa del dia.
+                                if (off && !off.price && off.lowPrice) off.price = off.lowPrice;
+                                if (off && off.priceCurrency) precio_moneda = String(off.priceCurrency).toUpperCase();
                                 if (off && off.price) {
                                     precio_lista = parseFloat(off.price);
-                                    if (off.highPrice && parseFloat(off.highPrice) > precio_lista) {
+                                    metodo_extraccion = metodo_extraccion || "jsonld";
+                                    // En AggregateOffer high/low es el rango entre vendedores,
+                                    // no un descuento: solo cuenta en una oferta simple.
+                                    if (off['@type'] !== 'AggregateOffer' && off.highPrice && parseFloat(off.highPrice) > precio_lista) {
                                         precio_oferta = precio_lista;
                                         precio_lista = parseFloat(off.highPrice);
                                         metodo_extraccion = "dom";
@@ -508,16 +518,39 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                 nombre = h1El && isVisible(h1El) ? (h1El.innerText || h1El.textContent || '').trim() : document.title.split('|')[0].trim();
             }
 
+            // Modo diagnostico: lo que se ve en la pagina, para ajustar el robot
+            // a una cadena nueva (Locatel, SAAS...). Solo si se pide.
+            let diag = null;
+            if (diagnostico) {
+                diag = {};
+                try {
+                    diag.titulo = (document.title || '').slice(0, 120);
+                    const h1 = document.querySelector('h1');
+                    diag.h1 = h1 ? (h1.innerText || '').trim().slice(0, 120) : null;
+                    diag.jsonld = [...document.querySelectorAll('script[type="application/ld+json"]')]
+                        .map(s => (s.textContent || '').replace(/\s+/g, ' ').slice(0, 500));
+                    diag.meta = [...document.querySelectorAll('meta[property*="price"], meta[itemprop*="price"], meta[property*="currency"], meta[itemprop*="Currency"]')]
+                        .map(m => `${m.getAttribute('property') || m.getAttribute('itemprop')}=${m.getAttribute('content')}`);
+                    diag.precios_visibles = [...document.querySelectorAll('body *')]
+                        .filter(el => el.children.length === 0 && /(Bs\.?|\$|REF|USD)\s*[\d.,]+|[\d.,]+\s*(Bs|\$|USD)/i.test(el.textContent || '')
+                            && isVisible(el) && !isInsideCarouselOrRelated(el))
+                        .slice(0, 12)
+                        .map(el => `${el.tagName.toLowerCase()}.${String(el.className || '').slice(0, 40)} = ${(el.textContent || '').trim().slice(0, 60)}`);
+                } catch(e) { diag.error = String(e); }
+            }
+
             return {
                 nombre,
                 precio_lista,
                 precio_oferta,
                 precio_unitario,
                 promo_struct,
-                metodo_extraccion
+                metodo_extraccion,
+                precio_moneda,
+                diag
             };
         }
-    """, {"target_product_id": target_product_id})
+    """, {"target_product_id": target_product_id, "diagnostico": diagnostico})
 
 
 async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id: str = "1") -> dict:
@@ -561,12 +594,15 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
         await wait_for_domain_rate_limit(url)
 
         api_captured_data = {}
+        api_urls_vistas = []
 
         async def handle_response(response):
             """Intercepción de red con aislamiento de sub-objeto coincidente por ID."""
             try:
                 content_type = response.headers.get("content-type", "").lower()
                 resp_url = response.url.lower()
+                if DIAGNOSTICO and not is_farmatodo and "json" in content_type and len(api_urls_vistas) < 15:
+                    api_urls_vistas.append(response.url[:140])
                 if "json" in content_type and any(kw in resp_url for kw in ("product", "item", "articulo", "promotion", "promo", "pricing", "detail")):
                     if response.status == 200:
                         json_data = await response.json()
@@ -649,7 +685,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             else:
                 await asyncio.sleep(0.8)
 
-            data = await extract_product_data_from_page(page, url, target_product_id)
+            data = await extract_product_data_from_page(page, url, target_product_id, DIAGNOSTICO and not is_farmatodo)
 
         except PlaywrightTimeout:
             result["error"] = "Timeout cargando la página"
@@ -678,6 +714,27 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             continue
 
         result["nombre"] = limpiar_nombre(data.get("nombre"))
+
+        # Precio en dolares en los datos de la pagina (JSON-LD): se pasa a Bs.
+        if str(data.get("precio_moneda") or "").upper() in ("USD", "US$") and bcv_rate > 0:
+            for k in ("precio_lista", "precio_oferta"):
+                if data.get(k):
+                    data[k] = round(float(data[k]) * bcv_rate, 2)
+
+        if DIAGNOSTICO and not is_farmatodo:
+            diag = data.get("diag") or {}
+            print(f"\n   🔎 [{task_id}] DIAGNÓSTICO {url}", flush=True)
+            print(f"      título: {diag.get('titulo')} | h1: {diag.get('h1')}", flush=True)
+            print(f"      leído: lista={data.get('precio_lista')} oferta={data.get('precio_oferta')} moneda={data.get('precio_moneda')} método={data.get('metodo_extraccion')}", flush=True)
+            print(f"      API interceptada: {api_captured_data or 'nada'}", flush=True)
+            for j in diag.get("jsonld") or []:
+                print(f"      JSON-LD: {j}", flush=True)
+            for m in diag.get("meta") or []:
+                print(f"      meta: {m}", flush=True)
+            for t in diag.get("precios_visibles") or []:
+                print(f"      en pantalla: {t}", flush=True)
+            for u in api_urls_vistas:
+                print(f"      JSON de la tienda: {u}", flush=True)
 
         # 1. Selección entre API validada y DOM anclado
         final_precio_lista = None
@@ -838,6 +895,15 @@ async def main_async():
             filas_procesar = filas_activas
     else:
         filas_procesar = filas_activas
+
+    # Modo diagnostico: con pocos enlaces de cadenas que no son Farmatodo (o
+    # con TRACKFLOW_DIAGNOSTICO=1) se escribe en el log lo que se ve en cada
+    # pagina, para ajustar el robot a una cadena nueva.
+    global DIAGNOSTICO
+    otras = [f for f in filas_procesar if "farmatodo" not in (str(f.get("cadena") or "") + str(f.get("url") or "")).lower()]
+    DIAGNOSTICO = os.environ.get("TRACKFLOW_DIAGNOSTICO") == "1" or (0 < len(otras) and len(filas_procesar) <= 10)
+    if DIAGNOSTICO:
+        print("🔎 Modo diagnóstico activo: se escribe lo que se ve en cada página que no es de Farmatodo.", flush=True)
 
     filas_procesar = interleave_filas_por_producto(filas_procesar)
     print(f"\nIniciando scraping de {len(filas_procesar)} URLs (Concurrencia Máx: 12, Farmatodo Concurrencia: 1)...\n", flush=True)
