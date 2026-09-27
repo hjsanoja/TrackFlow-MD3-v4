@@ -561,6 +561,21 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Buscador: señal de vida, Detener sin permiso de Actions y web de FarmaGo (PR #68, fase 39)
+
+- `corridas_buscador.latido`: el robot lo actualiza cada 30 s en una hebra
+  aparte y en la misma vuelta lee el estado de su corrida; si el panel la
+  marcó `cancelada`, sale (`os._exit`). Así "Detener" funciona aunque el
+  token de GitHub no tenga permiso de Actions (igual intenta cancelar en
+  GitHub si puede).
+- El panel da por muerta una corrida sin latido en 5 minutos (las viejas sin
+  latido: más de 3 h) y la marca `interrumpida`; los botones de buscar se
+  habilitan.
+- `sql/fase39_latido_farmago.sql`: agrega `latido`, cierra las corridas que
+  quedaron "corriendo" sin latido y corrige la web de FarmaGo
+  (`https://www.farmago.com.ve`, estaba farmago.com) borrando su plataforma
+  para que se vuelva a detectar (es Odoo: `/shop?search=`).
+
 ## Buscador: detener, reemplazar sugerencias y dirección manual (PR #67, fase 38)
 
 - **Cancelar**: el robot atrapa la señal de GitHub (SIGINT/SIGTERM), marca la
