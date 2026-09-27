@@ -1,5 +1,5 @@
 """
-Obtiene la tasa BCV automaticamente y la guarda en Firestore.
+Obtiene la tasa BCV del dia y la guarda en Supabase (una fila por dia).
 
 Se ejecuta antes del scraping de precios. Si pydolarve falla, intentamos
 otra fuente. Si todo falla, no rompemos: el scraper sigue, solo no actualizamos
@@ -7,7 +7,7 @@ la tasa esa corrida.
 """
 
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import urllib.request
 import urllib.error
 import json
@@ -43,8 +43,37 @@ def fetch_bcv_dolarapi():
     return None
 
 
+def fecha_caracas():
+    """Fecha de hoy en Venezuela (UTC-4): a las 9 p. m. ya es mañana en UTC."""
+    return (datetime.now(timezone.utc) - timedelta(hours=4)).strftime("%Y-%m-%d")
+
+
+def tasa_guardada_hoy():
+    """La tasa de hoy si ya esta en dim_tasa_bcv (del robot o puesta a mano)."""
+    try:
+        from supabase_client import is_supabase_configured, select
+        if not is_supabase_configured():
+            return None
+        filas = select("dim_tasa_bcv", f"select=tasa,fuente&fecha=eq.{fecha_caracas()}&limit=1")
+        if filas and float(filas[0]["tasa"]) > 0:
+            return float(filas[0]["tasa"]), filas[0].get("fuente")
+    except Exception as e:
+        print(f"  Aviso leyendo la tasa guardada: {e}")
+    return None
+
+
 def update_bcv_rate():
-    """Obtiene la tasa, la guarda en Supabase y Firestore, devuelve el valor o None."""
+    """Deja la tasa de hoy en dim_tasa_bcv y la devuelve (o None).
+
+    Una fila por dia: si la de hoy ya esta (de otra corrida o puesta a mano en
+    el panel) no se busca en internet ni se escribe nada. Antes se buscaba en
+    cada corrida y se intentaba insertar otra vez (el error 409 del log).
+    """
+    guardada = tasa_guardada_hoy()
+    if guardada:
+        print(f"Tasa BCV de hoy ya guardada: Bs {guardada[0]:,.4f} / USD ({guardada[1] or 'BCV'}). No se busca de nuevo.")
+        return guardada[0]
+
     print("Obteniendo tasa BCV...")
     rate = fetch_bcv_dolarapi()
     if rate is None:
@@ -55,40 +84,17 @@ def update_bcv_rate():
         return None
 
     print(f"  Tasa BCV: Bs {rate:,.4f} / USD")
-    now_iso = datetime.now(timezone.utc).isoformat()
-
-    # 1. Guardar en Supabase (Legacy y Modelo Relacional)
     try:
-        from supabase_client import is_supabase_configured, insert, upsert
+        from supabase_client import is_supabase_configured, upsert
         if is_supabase_configured():
-            insert("bcv_rates", [{
-                "value": rate,
-                "updated_at": now_iso
-            }])
-            # Nuevo catálogo dimensional dim_tasa_bcv
-            fecha_hoy = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             upsert("dim_tasa_bcv", [{
-                "fecha": fecha_hoy,
+                "fecha": fecha_caracas(),
                 "tasa": round(rate, 4),
                 "fuente": "BCV"
             }], on_conflict="fecha")
-            print("  ✅ Tasa BCV guardada en Supabase (bcv_rates y dim_tasa_bcv)")
+            print("  ✅ Tasa BCV guardada en Supabase (dim_tasa_bcv)")
     except Exception as e:
         print(f"  Aviso Supabase BCV: {e}")
-
-    # 2. Guardar en Firestore
-    try:
-        from firebase_client import get_db
-        db = get_db()
-        if db:
-            db.collection("bcv_rates").add({
-                "value": rate,
-                "source": "auto",
-                "updated_at": datetime.now(timezone.utc),
-            })
-            print("  ✅ Tasa BCV guardada en Firestore")
-    except Exception as e:
-        print(f"  Aviso Firestore BCV: {e}")
 
     return rate
 

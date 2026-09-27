@@ -46,7 +46,7 @@ import {
 // salen de Productos para que el archivo no tenga huecos; al importar se
 // ignoran (se cambian en Productos).
 const COLUMNAS_PLANTILLA = [
-  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'concentracion', 'laboratorio', 'unidades_empaque', 'medida', 'tipo_mercado', 'url', 'activo',
+  'id_interno', 'nombre', 'cadena', 'relacion', 'competidor', 'concentracion', 'laboratorio', 'unidades_empaque', 'medida', 'tipo_mercado', 'url', 'activo',
 ];
 const COLUMNAS_CSV_PLANTILLA = COLUMNAS_PLANTILLA.map(key => ({ label: key, key }));
 const COLUMNAS_CSV_REPORTE = [
@@ -586,7 +586,7 @@ export default function Competencia() {
       id_interno: it.id_producto_propio || '',
       nombre: p?.nombre || '',
       cadena: nombreCadena(it.cadena),
-      tipo: esPropio(it) ? 'propio' : 'competidor',
+      relacion: esPropio(it) ? 'propio' : 'competidor',
       competidor: esPropio(it) ? '' : (it.nombre_competidor || it.marca || ''),
       concentracion: esPropio(it) ? (p?.concentracion || '') : (it.concentracion || ''),
       laboratorio: esPropio(it) ? (p?.laboratorio || '') : (it.laboratorio || ''),
@@ -625,8 +625,8 @@ export default function Competencia() {
     const filas = items.length > 0
       ? items.map(filaCsvEnlace)
       : [
-          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', concentracion: '500 mg', laboratorio: 'LA SANTE', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'generico', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
-          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel', concentracion: '500 mg', laboratorio: 'CALOX', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'marca', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', relacion: 'propio', competidor: '', concentracion: '500 mg', laboratorio: 'LA SANTE', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'generico', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', relacion: 'competidor', competidor: 'Atamel', concentracion: '500 mg', laboratorio: 'CALOX', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'marca', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
         ];
     exportToCSV(items.length > 0 ? ARCHIVO_PLANTILLA : `${ARCHIVO_PLANTILLA}_ejemplo`, COLUMNAS_CSV_PLANTILLA, filas);
   };
@@ -688,7 +688,7 @@ export default function Competencia() {
         if (enOtro) { enOtroProducto.push(`${id_producto} → ya está en ${enOtro.id_producto_propio}`); return; }
         vistas.add(clave);
 
-        const tipoRaw = getRowValue(row, 'tipo', 'tipo_enlace').trim().toLowerCase();
+        const tipoRaw = celdaExacta(row, 'relacion', 'tipo', 'tipo_enlace').trim().toLowerCase();
         const propio = ['propio', 'propia', 'mi producto', 'mi marca'].includes(tipoRaw);
         const claveActivo = Object.keys(row).find(k => k.trim().toLowerCase() === 'activo');
         const activoRaw = claveActivo ? String(row[claveActivo] ?? '').trim().toLowerCase() : '';
@@ -1003,8 +1003,8 @@ export default function Competencia() {
                     <FiltroChip etiqueta="Cadena" icono="storefront" valor={filtroCadena === 'todas' ? 'todos' : filtroCadena}
                       onChange={v => setFiltroCadena(v === 'todos' ? 'todas' : v)}
                       opciones={[['todos', 'Cadena: todas'], ...(cadenas || []).map(c => [c.id, c.nombre])]} />
-                    <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
-                      opciones={[['todos', 'Tipo: todos'], ['competidor', 'Competidores'], ['propio', 'Mis productos']]} />
+                    <FiltroChip etiqueta="Relación" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
+                      opciones={[['todos', 'Relación: todas'], ['propio', 'Mis productos'], ['competidor', 'Competidores']]} />
                     <FiltroChip etiqueta="Laboratorio" icono="science" valor={filtroLab} onChange={setFiltroLab}
                       opciones={[['todos', 'Laboratorio: todos'], ...laboratoriosCompetidores.map(l => [l, l])]} />
                     <FiltroChip etiqueta="Precio" icono="payments" valor={filtroPrecio} onChange={setFiltroPrecio}
@@ -1263,7 +1263,7 @@ export default function Competencia() {
                 Columnas del CSV
               </div>
               <div>id_interno, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
-              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor <span className="text-on-surface-variant font-sans font-medium">(solo el nombre)</span>, concentracion, laboratorio</div>
+              <div>relacion <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor <span className="text-on-surface-variant font-sans font-medium">(solo el nombre)</span>, concentracion, laboratorio</div>
               <div>unidades_empaque, medida <span className="text-on-surface-variant font-sans font-medium">(unidad / ml / g)</span></div>
               <div>tipo_mercado <span className="text-on-surface-variant font-sans font-medium">(marca / generico; vacío en uno nuevo = se deduce del nombre)</span></div>
               <div className="font-sans text-on-surface-variant pt-1">En las filas «propio», concentracion, laboratorio, unidades, medida y tipo_mercado vienen de Productos y al importar se ignoran: se cambian en Productos.</div>
@@ -1569,7 +1569,7 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
             <ChoiceChips valor={form.cadena} onChange={v => cambiar('cadena', v)}
               opciones={cadenasActivas.map(c => [c.id, c.nombre])} nombre="cadena" />
           </Field>
-          <Field label="Tipo de enlace" requerido aviso={avisoTipo}>
+          <Field label="Relación" requerido aviso={avisoTipo}>
             <ChoiceChips valor={form.tipo} onChange={v => cambiar('tipo', v)}
               opciones={[['alternativa', 'Competidor'], ['propio', 'Mi producto en esta cadena']]} nombre="tipo" />
           </Field>

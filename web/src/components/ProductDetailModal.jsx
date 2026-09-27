@@ -146,6 +146,13 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
   const cadenasOfertas = [...new Set(ofertas.map(o => o.cadena))].sort((a, b) => nombreCadena(a).localeCompare(nombreCadena(b)));
   const ofertasVisibles = ofertas.filter(o => pasaFiltros(o.tipo, o.cadena, o.tipoMercado));
   const visibles = ofertasVisibles.filter(o => !o.sinPrecio);
+  // Tabla: por cadena, tu enlace primero en cada una y luego de mayor a menor
+  // precio (sin precio al final de su cadena).
+  const ofertasTabla = [...ofertasVisibles].sort((a, b) =>
+    nombreCadena(a.cadena).localeCompare(nombreCadena(b.cadena), 'es')
+    || (b.tipo === 'propio' ? 1 : 0) - (a.tipo === 'propio' ? 1 : 0)
+    || (a.sinPrecio ? 1 : 0) - (b.sinPrecio ? 1 : 0)
+    || (b.priceUsd ?? 0) - (a.priceUsd ?? 0));
   const tuyas = ofertas.filter(o => !o.sinPrecio && o.tipo === 'propio' && (cadenaFiltro === 'todos' || o.cadena === cadenaFiltro));
   const pvp = Number(activo?.pvp_propio_usd || 0) > 0 ? Number(activo.pvp_propio_usd) / (porUnidad ? unidadesPropio : 1) : null;
   const tuPrecio = tuyas.length ? Math.min(...tuyas.map(o => o.priceUsd)) : pvp;
@@ -360,7 +367,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
           filtrar={(
             <>
               <FiltroChip etiqueta="Relación" icono="group" valor={relacion} onChange={setRelacion}
-                opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
+                opciones={[['todos', 'Relación: todas'], ['propio', 'Mis productos'], ['competencia', 'Competidores']]} />
               <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadenaFiltro} onChange={setCadenaFiltro}
                 opciones={[['todos', 'Cadena: todas'], ...cadenasOfertas.map(c => [c, nombreCadena(c)])]} />
               <FiltroChip etiqueta="Competidores: marca o genérico" icono="verified" valor={tipoFiltro} onChange={setTipoFiltro}
@@ -408,8 +415,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
             <table className="m3-table m3-table-ficha m3-table-apilada">
               <thead>
                 <tr>
-                  <th>Producto</th>
                   <th>Cadena</th>
+                  <th>Producto</th>
                   <th className="text-right">Unidades</th>
                   <th className="text-right">{porUnidad ? 'Precio por unidad' : 'Precio'}</th>
                   <th className="text-right" title="Cuánto más caro (rojo) o barato (azul) es tu precio que esta oferta">Tú frente a esta</th>
@@ -419,18 +426,18 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                 </tr>
               </thead>
               <tbody>
-                {ofertasVisibles.map(o => (
+                {ofertasTabla.map(o => (
                   <tr key={o.id}>
-                    <td>
+                    <td className="whitespace-nowrap" data-label="Cadena">
+                      <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={o.cadena} tamano="xs" title="" />{nombreCadena(o.cadena)}</span>
+                    </td>
+                    <td data-label="Producto">
                       <div className="m3-cell-primary m3-cell-clamp max-w-[20rem]" title={o.marca}>{o.marca}</div>
                       <div className="m3-cell-secondary">
                         {o.tipo === 'propio' ? <span className="m3-chip-propio">Tuyo</span> : (
                           <>{o.laboratorio || 'Competidor'} · <span className={o.tipoMercado === 'MARCA' ? 'm3-chip-marca' : 'm3-chip-generico'}>{o.tipoMercado === 'MARCA' ? 'Marca' : 'Genérico'}</span></>
                         )}
                       </div>
-                    </td>
-                    <td className="whitespace-nowrap" data-label="Cadena">
-                      <span className="inline-flex items-center gap-1.5"><CadenaBadge cadena={o.cadena} tamano="xs" title="" />{nombreCadena(o.cadena)}</span>
                     </td>
                     <td className="text-right tabular-nums" data-label="Unidades">{o.unidades}</td>
                     <td className="text-right whitespace-nowrap tabular-nums font-medium" data-label={porUnidad ? 'Precio por unidad' : 'Precio'}>{o.sinPrecio ? <span className="text-on-surface-variant font-normal">Sin precio</span> : fmtModo(o.priceUsd)}</td>

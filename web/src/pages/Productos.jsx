@@ -65,11 +65,21 @@ const filaCsvProducto = p => ({
 
 // Lo que le falta a la ficha para que el seguimiento de precios funcione.
 function faltantesFicha(p, enlaces) {
+  const faltan = camposFaltantes(p);
+  if (enlaces.length === 0) faltan.push('enlaces');
+  return faltan;
+}
+
+// Campos de la ficha sin llenar (sin contar los enlaces, que tienen su propio
+// aviso). El codigo de barras es opcional y la categoria se va llenando.
+function camposFaltantes(p) {
   const faltan = [];
   if (!p.principio_activo) faltan.push('molécula');
   if (!p.concentracion) faltan.push('dosis');
+  if (!p.forma_farmaceutica) faltan.push('forma');
+  if (!(Number(p.unidosis) > 1) && !/\d/.test(p.tamano || '')) faltan.push('tamaño');
+  if (!p.laboratorio) faltan.push('laboratorio');
   if (!(Number(p.pvp_propio_usd) > 0)) faltan.push('PVP');
-  if (enlaces.length === 0) faltan.push('enlaces');
   return faltan;
 }
 
@@ -178,7 +188,7 @@ export default function Productos() {
       if (filtroUrls === 'caidos' && !links.some(enlaceCaido)) return false;
 
       if (filtroFicha !== 'todos') {
-        const incompleta = faltantesFicha(p, links).length > 0;
+        const incompleta = camposFaltantes(p).length > 0;
         if (filtroFicha === 'incompletos' && !incompleta) return false;
         if (filtroFicha === 'completos' && incompleta) return false;
       }
@@ -261,6 +271,7 @@ export default function Productos() {
     return () => window.removeEventListener('keydown', alPulsar);
   }, []);
 
+  const incompletos = useMemo(() => productos.filter(p => p.activo && camposFaltantes(p).length > 0).length, [productos]);
   const huerfanos = useMemo(() => {
     return productos.filter(p => p.activo && (urlsPorProducto.get(p.id_interno) || []).length === 0).length;
   }, [productos, urlsPorProducto]);
@@ -755,6 +766,16 @@ export default function Productos() {
             <strong>{huerfanos} {huerfanos === 1 ? 'producto activo no tiene' : 'productos activos no tienen'} enlaces</strong> de competencia: el scraper no los vigila.
           </span>
           <button type="button" onClick={() => setFiltroUrls('sin_urls')} className="m3-btn-text">Ver cuáles</button>
+        </div>
+      )}
+
+      {incompletos > 0 && filtroFicha !== 'incompletos' && (
+        <div className="m3-banner" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">fact_check</span>
+          <span className="m3-body-medium flex-1">
+            <strong>{incompletos} {incompletos === 1 ? 'producto activo tiene' : 'productos activos tienen'} la ficha incompleta</strong> (falta molécula, dosis, forma, tamaño, laboratorio o PVP): sin esos datos la comparación pierde precisión.
+          </span>
+          <button type="button" onClick={() => setFiltroFicha('incompletos')} className="m3-btn-text">Ver cuáles</button>
         </div>
       )}
 

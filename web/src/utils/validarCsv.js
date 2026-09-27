@@ -44,7 +44,7 @@ export const ESQUEMAS = {
         alias: ['id_producto_propio', 'producto_propio', 'sku_propio'] },
       { campo: 'cadena', etiqueta: 'Cadena', obligatorio: true },
       { campo: 'url', etiqueta: 'URL del Producto', obligatorio: true, tipo: 'url' },
-      { campo: 'tipo', etiqueta: 'Tipo de Enlace', obligatorio: false,
+      { campo: 'relacion', etiqueta: 'Relación', obligatorio: false, alias: ['tipo', 'tipo_enlace'],
         tipo: 'lista', valores: ['propio', 'alternativa', 'competidor'] },
       { campo: 'marca', etiqueta: 'Competidor', obligatorio: false,
         alias: ['competidor', 'marca_competencia'] },
@@ -212,7 +212,7 @@ export function validarCsv(filas, tipoEsquema, contexto = {}) {
         avisos.push({ fila: numero, campo: 'Marca o genérico', mensaje: `"${tipoMercado}" no es "marca" ni "generico": se ignora` });
       }
 
-      const tipo = getRowValue(fila, 'tipo').toLowerCase().trim();
+      const tipo = getRowValue(fila, 'relacion', 'tipo').toLowerCase().trim();
       const lab = getRowValue(fila, 'laboratorio_competidor', 'laboratorio', 'fabricante').trim();
       if (tipo !== 'propio' && !lab) {
         avisos.push({
