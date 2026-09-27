@@ -1,6 +1,8 @@
+import { claveCompetidor, claveDosis, concentracionDe, unidadesDe } from '../utils/competidor';
+import BarraFiltros from '../components/BarraFiltros';
+import Segmentado from '../components/Segmentado';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { esMarca, leerTipoMercado, sugerirTipoMercado } from '../utils/tipoMercado';
-import LimpiarFiltros from '../components/LimpiarFiltros';
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { validarCsv } from '../utils/validarCsv';
 import ImportPreview from '../components/ImportPreview';
@@ -44,7 +46,7 @@ import {
 // salen de Productos para que el archivo no tenga huecos; al importar se
 // ignoran (se cambian en Productos).
 const COLUMNAS_PLANTILLA = [
-  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'laboratorio', 'unidades_empaque', 'medida', 'tipo_mercado', 'url', 'activo',
+  'id_interno', 'nombre', 'cadena', 'tipo', 'competidor', 'concentracion', 'laboratorio', 'unidades_empaque', 'medida', 'tipo_mercado', 'url', 'activo',
 ];
 const COLUMNAS_CSV_PLANTILLA = COLUMNAS_PLANTILLA.map(key => ({ label: key, key }));
 const COLUMNAS_CSV_REPORTE = [
@@ -227,22 +229,63 @@ export default function Competencia() {
   const fallosDe = (it) => fallos.get(String(publicacionIdDe(it))) || null;
   const revisarUrl = (it) => it.activo !== false && (fallosDe(it)?.fallos_seguidos || 0) >= FALLOS_REVISAR;
 
-  // Posibles duplicados: el mismo competidor (por nombre) dos veces en la
-  // misma cadena para el mismo producto, o dos enlaces propios en una cadena.
-  const duplicados = useMemo(() => {
+  // Posibles duplicados:
+  //  - el mismo competidor (nombre, laboratorio, concentracion y tamano) dos
+  //    veces en la misma cadena para el mismo producto;
+  //  - dos enlaces propios del mismo producto en una cadena;
+  //  - el mismo enlace (URL) en mas de un producto.
+  const { duplicados, urlEnVarios } = useMemo(() => {
     const grupos = new Map();
     for (const it of items) {
       if (ocultos.has(it.id)) continue;
       const clave = [String(it.id_producto_propio).trim(), String(idCadena(it.cadena)).toLowerCase(),
-        esPropio(it) ? '#propio' : claveTexto(it.marca)].join('|');
+        esPropio(it) ? '#propio' : claveCompetidor(it)].join('|');
       if (!grupos.has(clave)) grupos.set(clave, []);
       grupos.get(clave).push(it.id);
     }
     const ids = new Set();
     for (const lista of grupos.values()) if (lista.length > 1) lista.forEach(id => ids.add(id));
-    return ids;
+    const enVarios = new Set();
+    const porUrl = new Map();
+    for (const it of items) {
+      if (ocultos.has(it.id) || !it.url) continue;
+      const u = normalizarUrl(it.url);
+      if (!porUrl.has(u)) porUrl.set(u, []);
+      porUrl.get(u).push(it);
+    }
+    for (const lista of porUrl.values()) {
+      if (new Set(lista.map(it => String(it.id_producto_propio))).size > 1) lista.forEach(it => { ids.add(it.id); enVarios.add(it.id); });
+    }
+    return { duplicados: ids, urlEnVarios: enVarios };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, ocultos, cadenaPorClave]);
+
+  // Mercado mal armado: el competidor tiene otra concentracion u otro
+  // tamano que tu producto (solo si se saben los dos lados).
+  const mercadoDistinto = useMemo(() => {
+    const m = new Map();
+    for (const it of items) {
+      if (esPropio(it)) continue;
+      const p = productoPorId.get(String(it.id_producto_propio).trim());
+      if (!p) continue;
+      const suyaDosis = concentracionDe(it);
+      // Si su dosis se leyo del nombre (una sola) y la tuya es combinada, se
+      // compara con la primera.
+      const tuyaDosis = !it.concentracion && String(p.concentracion || '').includes('+')
+        ? String(p.concentracion).split('+')[0] : p.concentracion;
+      const dosis = suyaDosis && tuyaDosis && claveDosis(suyaDosis) !== claveDosis(tuyaDosis);
+      const suyas = unidadesDe(it);
+      const tuyas = Number(p.unidosis) > 0 ? Number(p.unidosis) : null;
+      const tamano = suyas && tuyas && Math.abs(suyas - tuyas) > 0.001;
+      if (dosis || tamano) {
+        m.set(it.id, {
+          dosis, tamano,
+          texto: `Tuyo: ${[p.concentracion, tuyas ? `x ${tuyas}` : ''].filter(Boolean).join(' ')} · este: ${[suyaDosis, suyas ? `x ${suyas}` : ''].filter(Boolean).join(' ')}`,
+        });
+      }
+    }
+    return m;
+  }, [items, productoPorId]);
 
   const ORDENES = {
     producto: it => (productoPorId.get(String(it.id_producto_propio).trim())?.nombre || it.id_producto_propio || '').toLowerCase(),
@@ -269,6 +312,7 @@ export default function Competencia() {
       if (filtroLab !== 'todos' && (esPropio(it) || it.laboratorio !== filtroLab)) return false;
       if (filtroRevisar === 'fallos' && !revisarUrl(it)) return false;
       if (filtroRevisar === 'duplicados' && !duplicados.has(it.id)) return false;
+      if (filtroRevisar === 'mercado' && !mercadoDistinto.has(it.id)) return false;
       if (filtroRevisar === 'viejo' && !(it.activo && enlaceCaido(it))) return false;
       if (filtroRevisar === 'otra_web' && !esDeOtraWeb(it.url, cadenaPorClave.get(String(it.cadena || '').toLowerCase())?.website)) return false;
       if (!term) return true;
@@ -293,7 +337,7 @@ export default function Competencia() {
       return porBloque(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, filtroLab, filtroRevisar, fallos, duplicados, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
+  }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, filtroLab, filtroRevisar, fallos, duplicados, mercadoDistinto, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
 
   const hayFiltros = filtroProducto !== 'todos' || filtroCadena !== 'todas' || filtroTipo !== 'todos' || filtroPrecio !== 'todos' ||
     filtroActivo !== 'todos' || filtroLab !== 'todos' || filtroRevisar !== 'todos';
@@ -518,7 +562,8 @@ export default function Competencia() {
       nombre: p?.nombre || '',
       cadena: nombreCadena(it.cadena),
       tipo: esPropio(it) ? 'propio' : 'competidor',
-      competidor: esPropio(it) ? '' : (it.marca || ''),
+      competidor: esPropio(it) ? '' : (it.nombre_competidor || it.marca || ''),
+      concentracion: esPropio(it) ? (p?.concentracion || '') : (it.concentracion || ''),
       laboratorio: esPropio(it) ? (p?.laboratorio || '') : (it.laboratorio || ''),
       ...contenidoCsv(it, p),
       tipo_mercado: (esPropio(it) ? esMarca(p) : esMarca(it)) ? 'marca' : 'generico',
@@ -555,8 +600,8 @@ export default function Competencia() {
     const filas = items.length > 0
       ? items.map(filaCsvEnlace)
       : [
-          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', laboratorio: 'LA SANTE', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'generico', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
-          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel 500 mg x 20', laboratorio: 'CALOX', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'marca', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'propio', competidor: '', concentracion: '500 mg', laboratorio: 'LA SANTE', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'generico', url: 'https://www.farmatodo.com.ve/producto/111243559-acetaminofen-500-la-sante', activo: 'si' },
+          { id_interno: '140216', nombre: 'ACETAMINOFEN', cadena: 'Farmatodo', tipo: 'competidor', competidor: 'Atamel', concentracion: '500 mg', laboratorio: 'CALOX', unidades_empaque: '20', medida: 'unidad', tipo_mercado: 'marca', url: 'https://www.farmatodo.com.ve/producto/114592534-atamel-500', activo: 'si' },
         ];
     exportToCSV(items.length > 0 ? ARCHIVO_PLANTILLA : `${ARCHIVO_PLANTILLA}_ejemplo`, COLUMNAS_CSV_PLANTILLA, filas);
   };
@@ -603,6 +648,7 @@ export default function Competencia() {
       const lista = [];
       const vistas = new Set();
       let duplicados = 0;
+      const enOtroProducto = [];
       rows.forEach((row) => {
         const id_producto = getRowValue(row, 'id_interno', 'id_producto_propio', 'id_producto', 'sku').trim();
         const url = getRowValue(row, 'url', 'enlace', 'link', 'url_competencia').trim();
@@ -610,6 +656,11 @@ export default function Competencia() {
         const cadena = idCadena(getRowValue(row, 'cadena', 'cadena_farmacia', 'farmacia').trim());
         const clave = `${String(cadena).toLowerCase()}|${normalizarUrl(url)}`;
         if (vistas.has(clave)) { duplicados++; return; }
+        // Un enlace solo puede estar en un producto: si esta URL ya esta
+        // vinculada a otro, la fila no se carga (antes lo movia en silencio).
+        const enOtro = items.find(it => normalizarUrl(it.url || '') === normalizarUrl(url)
+          && String(it.id_producto_propio).trim() !== String(id_producto).trim());
+        if (enOtro) { enOtroProducto.push(`${id_producto} → ya está en ${enOtro.id_producto_propio}`); return; }
         vistas.add(clave);
 
         const tipoRaw = getRowValue(row, 'tipo', 'tipo_enlace').trim().toLowerCase();
@@ -644,6 +695,8 @@ export default function Competencia() {
           laboratorio: propio ? '' : laboratorio || (existente && !esPropio(existente) ? existente.laboratorio || '' : ''),
           unidades_empaque: !propio && unidades > 0 ? unidades : null,
           unidad_contenido: !propio && unidades > 0 ? (medida || 'unidad') : null,
+          concentracion: propio ? '' : getRowValue(row, 'concentracion', 'dosis').trim(),
+          principio_activo_propio: productoPorId.get(id_producto)?.principio_activo || '',
           tipo_mercado: propio ? null
             : tipoMercadoLeido || (existente ? null : sugerirTipoMercado(marca, productoPorId.get(id_producto)?.principio_activo)),
         });
@@ -653,6 +706,9 @@ export default function Competencia() {
       if (refreshCompetencia) refreshCompetencia();
       await cargar(true);
       addToast(`Importación terminada: ${lista.length} enlaces${duplicados ? ` (${duplicados} repetidos en el archivo, omitidos)` : ''}.`, 'success');
+      if (enOtroProducto.length) {
+        addToast(`${enOtroProducto.length} ${enOtroProducto.length === 1 ? 'fila no se cargó' : 'filas no se cargaron'}: su enlace ya está en otro producto (${enOtroProducto.slice(0, 3).join('; ')}${enOtroProducto.length > 3 ? '…' : ''}). Para moverlo, edita ese enlace.`, 'warning');
+      }
       setShowCsvModal(false);
     } catch (err) {
       addToast('Error importando: ' + (err.message || String(err)), 'error');
@@ -806,7 +862,7 @@ export default function Competencia() {
           </span>
           <button type="button" onClick={() => { setPreseleccion({ producto: filtroProducto, cadena: '' }); setEditing('new'); }} className="m3-btn-text">Vincular enlace</button>
         </div>
-      ) : (urlsQueFallan > 0 || duplicados.size > 0 || caidosActivos > 0) && filtroRevisar === 'todos' && (
+      ) : (urlsQueFallan > 0 || duplicados.size > 0 || mercadoDistinto.size > 0 || caidosActivos > 0) && filtroRevisar === 'todos' && (
         <div className="m3-banner" role="status">
           <span className="material-symbols-outlined" aria-hidden="true">rule</span>
           <span className="m3-body-medium flex-1 min-w-0">
@@ -822,6 +878,12 @@ export default function Competencia() {
                 <button type="button" onClick={() => setFiltroRevisar('duplicados')} className="text-primary font-medium hover:underline"
                   title="El mismo competidor dos veces en la misma cadena para un producto">
                   {duplicados.size} posibles duplicados
+                </button>
+              )}
+              {mercadoDistinto.size > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('mercado')} className="text-primary font-medium hover:underline"
+                  title="Competidores con otra concentración u otro tamaño que tu producto: la comparación por empaque no es justa">
+                  {mercadoDistinto.size} con dosis o tamaño distinto
                 </button>
               )}
               {caidosActivos > 0 && (
@@ -892,36 +954,37 @@ export default function Competencia() {
                   )}
                 </label>
                 <div className="flex items-center gap-4 md:ml-auto">
-                  <label className="m3-switch-label whitespace-nowrap" title="Moneda de la columna Precio">
-                    <span className={enBs ? 'text-on-surface-variant' : 'font-medium'}>$</span>
-                    <input type="checkbox" role="switch" checked={enBs} onChange={e => cambiarMoneda(e.target.checked)}
-                      className="m3-switch" aria-label="Ver los precios en bolívares" />
-                    <span className={enBs ? 'font-medium' : 'text-on-surface-variant'}>Bs</span>
-                  </label>
+                  <Segmentado etiqueta="Moneda de la columna Precio" rotulo="Moneda" valor={enBs ? 'bs' : 'usd'} onChange={v => cambiarMoneda(v === 'bs')}
+                    opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares']]} />
                   <div className="m3-label-large text-on-surface-variant whitespace-nowrap" aria-live="polite">
                     {filtrados.length === items.length ? `${items.length} enlaces` : `${filtrados.length} de ${items.length} enlaces`}
                   </div>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <FiltroChip etiqueta="Producto" icono="medication" valor={filtroProducto}
-                  onChange={v => { setFiltroProducto(v); if (searchParams.get('producto')) setSearchParams({}); }}
-                  opciones={opcionesProducto} />
-                <FiltroChip etiqueta="Cadena" icono="storefront" valor={filtroCadena === 'todas' ? 'todos' : filtroCadena}
-                  onChange={v => setFiltroCadena(v === 'todos' ? 'todas' : v)}
-                  opciones={[['todos', 'Cadena: todas'], ...(cadenas || []).map(c => [c.id, c.nombre])]} />
-                <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
-                  opciones={[['todos', 'Tipo: todos'], ['competidor', 'Competidores'], ['propio', 'Mis productos']]} />
-                <FiltroChip etiqueta="Laboratorio" icono="science" valor={filtroLab} onChange={setFiltroLab}
-                  opciones={[['todos', 'Laboratorio: todos'], ...laboratoriosCompetidores.map(l => [l, l])]} />
-                <FiltroChip etiqueta="Precio" icono="payments" valor={filtroPrecio} onChange={setFiltroPrecio}
-                  opciones={[['todos', 'Precio: todos'], ['con_precio', 'Con precio'], ['sin_captura', 'Sin captura']]} />
-                <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
-                  opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
-                <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
-                  opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web']]} />
-                <LimpiarFiltros visible={hayFiltros} onClick={limpiarFiltros} />
-              </div>
+              <BarraFiltros
+                integrada
+                limpiar={{ visible: hayFiltros, onClick: limpiarFiltros }}
+                filtrar={(
+                  <>
+                    <FiltroChip etiqueta="Producto" icono="medication" valor={filtroProducto}
+                      onChange={v => { setFiltroProducto(v); if (searchParams.get('producto')) setSearchParams({}); }}
+                      opciones={opcionesProducto} />
+                    <FiltroChip etiqueta="Cadena" icono="storefront" valor={filtroCadena === 'todas' ? 'todos' : filtroCadena}
+                      onChange={v => setFiltroCadena(v === 'todos' ? 'todas' : v)}
+                      opciones={[['todos', 'Cadena: todas'], ...(cadenas || []).map(c => [c.id, c.nombre])]} />
+                    <FiltroChip etiqueta="Tipo" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
+                      opciones={[['todos', 'Tipo: todos'], ['competidor', 'Competidores'], ['propio', 'Mis productos']]} />
+                    <FiltroChip etiqueta="Laboratorio" icono="science" valor={filtroLab} onChange={setFiltroLab}
+                      opciones={[['todos', 'Laboratorio: todos'], ...laboratoriosCompetidores.map(l => [l, l])]} />
+                    <FiltroChip etiqueta="Precio" icono="payments" valor={filtroPrecio} onChange={setFiltroPrecio}
+                      opciones={[['todos', 'Precio: todos'], ['con_precio', 'Con precio'], ['sin_captura', 'Sin captura']]} />
+                    <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
+                      opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
+                    <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
+                      opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['mercado', 'Dosis o tamaño distinto al tuyo'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web']]} />
+                  </>
+                )}
+              />
             </div>
           )}
         </div>
@@ -1033,9 +1096,14 @@ export default function Competencia() {
                             </a>
                           </div>
                           <div className="m3-cell-secondary">
+                            {mercadoDistinto.has(it.id) && (
+                              <span className="m3-chip-caido mr-1" title={mercadoDistinto.get(it.id).texto}>
+                                {mercadoDistinto.get(it.id).dosis ? 'Otra dosis' : 'Otro tamaño'}
+                              </span>
+                            )}
                             {duplicados.has(it.id) && (
                               <span className="material-symbols-outlined m3-count-stale align-[-2px] mr-1" style={{ fontSize: 14 }}
-                                title="Posible duplicado: hay otro enlace de este mismo competidor en esta cadena para este producto"
+                                title={urlEnVarios.has(it.id) ? 'Este mismo enlace está vinculado a más de un producto: debe quedar en uno solo' : 'Posible duplicado: hay otro enlace del mismo competidor (nombre, laboratorio, concentración y tamaño) en esta cadena para este producto'}
                                 aria-label="Posible duplicado">content_copy</span>
                             )}
                             {it.laboratorio || '—'}
@@ -1164,10 +1232,10 @@ export default function Competencia() {
                 Columnas del CSV
               </div>
               <div>id_interno, cadena, url <span className="text-on-surface-variant font-sans font-medium">(obligatorias)</span></div>
-              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor, laboratorio</div>
+              <div>tipo <span className="text-on-surface-variant font-sans font-medium">(propio / competidor)</span>, competidor <span className="text-on-surface-variant font-sans font-medium">(solo el nombre)</span>, concentracion, laboratorio</div>
               <div>unidades_empaque, medida <span className="text-on-surface-variant font-sans font-medium">(unidad / ml / g)</span></div>
               <div>tipo_mercado <span className="text-on-surface-variant font-sans font-medium">(marca / generico; vacío en uno nuevo = se deduce del nombre)</span></div>
-              <div className="font-sans text-on-surface-variant pt-1">En las filas «propio», laboratorio, unidades, medida y tipo_mercado vienen de Productos y al importar se ignoran: se cambian en Productos.</div>
+              <div className="font-sans text-on-surface-variant pt-1">En las filas «propio», concentracion, laboratorio, unidades, medida y tipo_mercado vienen de Productos y al importar se ignoran: se cambian en Productos.</div>
               <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span></div>
               <div className="font-sans font-medium text-on-surface-variant pt-1">
                 nombre, pvp_propio_usd y las columnas de precio y captura son informativas: al importar se ignoran. Una celda vacía no cambia nada.
@@ -1291,7 +1359,9 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
   const [form, setForm] = useState({
     cadena: cadenaInicial,
     tipo: item ? (String(item.tipo) === 'propio' ? 'propio' : 'alternativa') : (tipoPreseleccionado === 'propio' ? 'propio' : 'alternativa'),
-    marca: item && String(item.tipo) !== 'propio' ? item.marca || '' : '',
+    // Nombre corto: sin dosis ni tamano, que van en sus campos.
+    marca: item && String(item.tipo) !== 'propio' ? item.nombre_competidor || item.marca || '' : '',
+    concentracion: item && String(item.tipo) !== 'propio' ? item.concentracion || '' : '',
     laboratorio: item && String(item.tipo) !== 'propio' ? item.laboratorio || '' : '',
     // 1 es el valor por defecto ("no se sabe"): el campo sale vacio.
     unidades: item && String(item.tipo) !== 'propio' && Number(item.unidades_empaque) > 1 ? String(Number(item.unidades_empaque)) : '',
@@ -1325,13 +1395,23 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
   const enEstaCadena = existentes.filter(e => (cadenaDe(e.cadena)?.id || e.cadena) === form.cadena);
   const avisoTipo = form.tipo === 'propio' && enEstaCadena.some(esPropio)
     ? `Tu producto ya tiene enlace en ${cadenaDe(form.cadena)?.nombre || form.cadena}.` : null;
+  const claveForm = claveCompetidor({
+    nombre_competidor: form.marca, laboratorio: form.laboratorio, concentracion: form.concentracion,
+    unidades_empaque: Number(String(form.unidades).replace(',', '.')) || null,
+  });
   const avisoMarca = form.tipo !== 'propio' && form.marca.trim() &&
-    enEstaCadena.some(e => !esPropio(e) && claveTexto(e.marca) === claveTexto(form.marca))
-    ? `Ya hay un enlace de "${form.marca.trim()}" en ${cadenaDe(form.cadena)?.nombre || form.cadena} para este producto.` : null;
+    enEstaCadena.some(e => !esPropio(e) && claveCompetidor(e) === claveForm)
+    ? `Ya hay un enlace de "${form.marca.trim()}" del mismo laboratorio, concentración y tamaño en ${cadenaDe(form.cadena)?.nombre || form.cadena} para este producto.` : null;
+  // Nombre completo que se verá en tablas y fichas.
+  const nombreCompleto = [form.marca.trim(), form.concentracion.trim(),
+    form.unidades.trim() ? `x ${form.unidades.trim()}${form.medida === 'unidad' ? '' : ` ${form.medida}`}` : ''].filter(Boolean).join(' ');
+  // El mismo enlace (la URL, sin importar el producto ni la cadena) solo
+  // puede estar una vez: si ya existe en otro enlace, no se guarda.
   const urlRepetida = useMemo(() => {
-    if (!form.url.trim() || !form.cadena) return null;
-    return (enlaces || []).find(e => e.id !== item?.id && (cadenaDe(e.cadena)?.id || e.cadena) === form.cadena &&
-      normalizarUrl(e.url || '') === normalizarUrl(/^https?:\/\//.test(form.url) ? form.url.trim() : `https://${form.url.trim()}`)) || null;
+    if (!form.url.trim()) return null;
+    const url = normalizarUrl(/^https?:\/\//.test(form.url) ? form.url.trim() : `https://${form.url.trim()}`);
+    return (enlaces || []).find(e => e.id !== item?.id && publicacionIdDe(e) !== publicacionIdDe(item || {})
+      && normalizarUrl(e.url || '') === url) || null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.url, form.cadena, enlaces, item?.id]);
 
@@ -1358,6 +1438,7 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
     if (!form.url.trim()) e.url = 'Obligatoria';
     if (form.tipo !== 'propio' && !form.marca.trim()) e.marca = 'Escribe el nombre del competidor';
     if (form.tipo !== 'propio' && form.unidades.trim() && !(Number(form.unidades.replace(',', '.')) > 0)) e.unidades = 'Escribe un número mayor que cero';
+    if (urlRepetida) e.url = `Este enlace ya está vinculado al producto ${urlRepetida.id_producto_propio}${String(urlRepetida.id_producto_propio) !== String(producto?.id_interno) ? ' (otro producto)' : ''}. Un enlace solo puede estar una vez.`;
     setErrores(e);
     if (Object.keys(e).length > 0) {
       setTimeout(() => {
@@ -1377,6 +1458,8 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
       unidades_empaque: form.tipo !== 'propio' && form.unidades.trim() ? Number(form.unidades.replace(',', '.')) : null,
       unidad_contenido: form.tipo !== 'propio' && form.unidades.trim() ? form.medida : null,
       tipo_mercado: form.tipo !== 'propio' ? tipoMercado : null,
+      concentracion: form.tipo !== 'propio' ? form.concentracion.trim() : '',
+      principio_activo_propio: producto.principio_activo || '',
       url: form.url.trim(),
       activo: form.activo,
     }, isNew);
@@ -1480,8 +1563,12 @@ function EnlaceModal({ item, productoIdPreseleccionado, cadenaPreseleccionada = 
         {form.tipo !== 'propio' && (
           <FormSection titulo="Competidor" icono="groups">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Nombre del competidor" requerido error={errores.marca} aviso={avisoMarca} hint="Como lo vende la tienda. Ej: Atamel 500 mg x 20">
+              <Field label="Nombre del competidor" requerido error={errores.marca} aviso={avisoMarca}
+                hint={nombreCompleto ? `Se verá como: ${nombreCompleto}` : 'Solo el nombre, sin dosis ni tamaño. Ej: Atamel o Acetaminofén Calox'}>
                 <input type="text" value={form.marca} onChange={e => cambiar('marca', e.target.value)} className="m3-input" />
+              </Field>
+              <Field label="Concentración" hint={`Ej: 500 mg, 120 mg/5 ml.${producto?.concentracion ? ` La tuya: ${producto.concentracion}.` : ''}`}>
+                <input type="text" value={form.concentracion} onChange={e => cambiar('concentracion', e.target.value)} className="m3-input" placeholder={producto?.concentracion || ''} />
               </Field>
               <Field label="Laboratorio" hint="Fabricante del competidor">
                 <ComboField value={form.laboratorio} onChange={v => cambiar('laboratorio', v)}

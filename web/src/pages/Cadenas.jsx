@@ -1,4 +1,4 @@
-import LimpiarFiltros from '../components/LimpiarFiltros';
+import BarraFiltros from '../components/BarraFiltros';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -232,15 +232,20 @@ export default function Cadenas() {
                 {filtradas.length === (cadenas || []).length ? `${filtradas.length} cadenas` : `${filtradas.length} de ${(cadenas || []).length} cadenas`}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroEstado} onChange={setFiltroEstado}
-                opciones={[['todos', 'Estado: todas'], ['activas', 'Activas'], ['baja', 'De baja']]} />
-              <FiltroChip etiqueta="Robot" icono="smart_toy" valor={filtroRobot} onChange={setFiltroRobot}
-                opciones={[['todos', 'Robot: todos'], ['probado', 'Lector probado'], ['sin_probar', 'Sin probar']]} />
-              <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
-                opciones={[['todos', 'Revisar: todas'], ['fallos', 'Fallos en la última lectura'], ['otra_web', 'Con enlaces de otra web'], ['sin_enlaces', 'Activas sin enlaces']]} />
-              <LimpiarFiltros visible={hayFiltros} onClick={() => { setFiltroEstado('todos'); setFiltroRobot('todos'); setFiltroRevisar('todos'); }} />
-            </div>
+            <BarraFiltros
+              integrada
+              limpiar={{ visible: hayFiltros, onClick: () => { setFiltroEstado('todos'); setFiltroRobot('todos'); setFiltroRevisar('todos'); } }}
+              filtrar={(
+                <>
+                  <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroEstado} onChange={setFiltroEstado}
+                    opciones={[['todos', 'Estado: todas'], ['activas', 'Activas'], ['baja', 'De baja']]} />
+                  <FiltroChip etiqueta="Robot" icono="smart_toy" valor={filtroRobot} onChange={setFiltroRobot}
+                    opciones={[['todos', 'Robot: todos'], ['probado', 'Lector probado'], ['sin_probar', 'Sin probar']]} />
+                  <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
+                    opciones={[['todos', 'Revisar: todas'], ['fallos', 'Fallos en la última lectura'], ['otra_web', 'Con enlaces de otra web'], ['sin_enlaces', 'Activas sin enlaces']]} />
+                </>
+              )}
+            />
           </div>
         </div>
 
