@@ -91,6 +91,10 @@ def leer_presentacion(texto):
             dosis = valor / 1000 if m.group(2) == "mcg" else valor * 1000 if m.group(2) == "g" else valor
     if xv:
         return dosis, _num(xv.group(1)), xv.group(2)
+    # "180mg/5ml 120ml": el volumen sin "x" (no el "/5ml" de la concentracion)
+    ml = re.findall(r"(?<![/\d.])(\d+(?:\.\d+)?)\s*ml\b", s)
+    if ml and _num(ml[-1]) > 5:
+        return dosis, _num(ml[-1]), "ml"
     if xn:
         return dosis, _num(xn.group(1)), "unidad"
     if fn:
@@ -245,6 +249,8 @@ def buscar_vtex(base, q, ctx):
     status, datos = pedir(vtex_url(base, q))
     if not isinstance(datos, list):
         raise RuntimeError(f"VTEX respondio {status}")
+    if datos and not ctx.get("moneda"):
+        ctx["moneda"] = moneda_vtex(base, datos)   # una vez por cadena
     salida = []
     for p in datos:
         try:
@@ -364,7 +370,23 @@ BOTONES_BUSQUEDA = ["[aria-label*='usca' i]", "button[class*='search' i]", "[cla
 # nombre legible (fuera del menu y el pie) y el precio que se vea en su tarjeta.
 EXTRAER_JS = r"""() => {
   const origen = location.origin.replace('://www.', '://');
-  const esPrecio = (t) => /^(bs\.?\s*s?\.?|\$|usd|ref\.?)?\s*[\d.,]+\s*(bs|usd)?$/i.test(t.trim());
+  const esPrecio = (t) => /^(bs\.?\s?s?\.?|\$|usd|ref\.?)?\s*[\d.,]+\s*(bs\.?\s?s?\.?|usd|ref\.?)?$/i.test(t.trim());
+  const numero = (txt) => {
+    let c = String(txt).replace(/[^\d.,]/g, '');
+    if (c.includes(',')) c = c.replace(/\./g, '').replace(',', '.');
+    else if ((c.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(c)) c = c.replace(/\./g, '');
+    const v = parseFloat(c);
+    return isNaN(v) ? null : v;
+  };
+  // Precios de un texto: con la moneda pegada ANTES o DESPUES del numero y
+  // en la misma linea ("X 20" + salto + "Bs.S 8.737" no es un precio de 20).
+  const precios = (texto) => {
+    const out = [];
+    const t = String(texto || '');
+    for (const m of t.matchAll(/(bs\.?\s?s?\.?|\$|usd|ref\.?)[ \t]*(\d[\d.,]*)/gi)) out.push({ i: m.index, valor: numero(m[2]), moneda: /bs/i.test(m[1]) ? 'VES' : 'USD' });
+    for (const m of t.matchAll(/(\d[\d.,]*)[ \t]*(bs\.?\s?s?\.?|usd|ref\.?)(?![a-z])/gi)) out.push({ i: m.index, valor: numero(m[1]), moneda: /bs/i.test(m[2]) ? 'VES' : 'USD' });
+    return out.filter(p => p.valor && p.valor > 0).sort((x, y) => x.i - y.i);
+  };
   const mapa = new Map();
   for (const a of document.querySelectorAll('a[href]')) {
     if (a.closest('header, nav, footer, [role="navigation"]')) continue;
@@ -377,32 +399,25 @@ EXTRAER_JS = r"""() => {
       .filter(t => t.length >= 6 && t.length <= 220 && /[a-z]{3}/i.test(t) && !esPrecio(t));
     if (!textos.length) continue;
     const nombre = textos.sort((x, y) => y.length - x.length)[0];
-    const tarjeta = a.closest('li, article, [class*="product" i], [class*="card" i], [class*="item" i]') || a.parentElement;
-    const m = tarjeta ? (tarjeta.innerText || '').match(/(Bs\.?\s*S?\.?|\$|USD|REF\.?)\s*[\d.,]+|[\d.,]+\s*(Bs|USD)/i) : null;
+    // La tarjeta: se sube desde el enlace hasta el primer contenedor con un
+    // precio, sin llegar a la grilla (mas de 4 productos distintos).
+    let precio = null;
+    let nodo = a;
+    for (let i = 0; i < 7 && nodo && nodo !== document.body; i++) {
+      const lista = precios(nodo.innerText);
+      if (lista.length) {
+        const bs = lista.find(p => p.moneda === 'VES');
+        precio = bs || lista[0];
+        break;
+      }
+      nodo = nodo.parentElement;
+      if (nodo && new Set([...nodo.querySelectorAll('a[href]')].map(x => x.href.split('#')[0])).size > 4) break;
+    }
     const antes = mapa.get(href);
-    if (!antes || nombre.length > antes.nombre.length) mapa.set(href, { nombre, url: href, precio: m ? m[0] : (antes ? antes.precio : null) });
+    if (!antes || nombre.length > antes.nombre.length) mapa.set(href, { nombre, url: href, precio: precio || (antes ? antes.precio : null) });
   }
   return [...mapa.values()].slice(0, 80);
 }"""
-
-
-def leer_precio_texto(texto):
-    """'Bs. 1.250,00' -> (1250.0, 'VES'); '$ 2,50' / 'REF 2.50' -> (2.5, 'USD')."""
-    if not texto:
-        return None, None
-    moneda = "USD" if re.search(r"\$|usd|ref", texto, re.I) else "VES" if re.search(r"bs", texto, re.I) else None
-    m = re.search(r"\d[\d.,]*", texto)
-    if not m:
-        return None, moneda
-    n = m.group(0).rstrip(".,")
-    if "," in n:
-        n = n.replace(".", "").replace(",", ".")
-    elif n.count(".") > 1 or (n.count(".") == 1 and len(n.split(".")[1]) == 3):
-        n = n.replace(".", "")
-    try:
-        return float(n), moneda
-    except ValueError:
-        return None, moneda
 
 
 class Navegador:
@@ -539,7 +554,8 @@ def buscar_navegador(base, q, ctx):
         cands = nav.resultados_campo(base, q, ctx.get("selector"))[0]
     salida = []
     for c in cands:
-        precio, moneda = leer_precio_texto(c.get("precio"))
+        p = c.get("precio") or {}
+        precio, moneda = p.get("valor"), p.get("moneda")
         salida.append({"nombre": c["nombre"], "marca": "", "url": c["url"], "precio": precio,
                        "moneda": moneda, "disponible": None})
     return salida
@@ -584,8 +600,13 @@ def moneda_vtex(base, datos) -> str | None:
         return None
     link = datos[0].get("link") or f"{base}/{datos[0].get('linkText', '')}/p"
     status, pagina = pedir(link if link.startswith("http") else base + link, json_esperado=False)
-    m = re.search(r'product:price:currency"\s+content="([A-Z]{3})"', pagina or "") if isinstance(pagina, str) else None
-    return m.group(1) if m else None
+    if not isinstance(pagina, str):
+        return None
+    m = (re.search(r'product:price:currency"\s+content="([A-Za-z]{3})"', pagina)
+         or re.search(r'content="([A-Za-z]{3})"\s+property="product:price:currency"', pagina)
+         or re.search(r'"priceCurrency"\s*:\s*"([A-Za-z]{3})"', pagina)
+         or re.search(r'"currencyCode"\s*:\s*"([A-Za-z]{3})"', pagina))
+    return m.group(1).upper() if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -627,6 +648,18 @@ def buscar_producto(prod: dict, cadena: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Corrida
 # ---------------------------------------------------------------------------
+TASA_BCV = {"valor": None}
+
+
+def en_bolivares(precio, moneda):
+    """Precio en Bs: si la tienda lo da en dolares se pasa con la tasa BCV."""
+    if precio is None:
+        return None, moneda
+    if (moneda or "").upper() in ("USD", "US$") and TASA_BCV["valor"]:
+        return round(float(precio) * TASA_BCV["valor"], 2), "VES"
+    return round(float(precio), 2), moneda
+
+
 def ahora_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -649,6 +682,12 @@ def main():
     url_github = None
     if os.environ.get("GITHUB_RUN_ID"):
         url_github = f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+
+    try:
+        t = db.select("dim_tasa_bcv", "select=tasa&order=fecha.desc&limit=1")
+        TASA_BCV["valor"] = float(t[0]["tasa"]) if t else None
+    except Exception as e:
+        print(f"Aviso: sin tasa BCV ({e}); los precios en dolares quedan en dolares.")
 
     corrida = db.insert("corridas_buscador", [{"estado": "corriendo", "url_github": url_github}], return_representation=True)
     corrida_id = corrida[0]["id"]
@@ -692,7 +731,9 @@ def main():
             for b in db.select("busquedas_enlaces", "select=producto_id,cadena_id,fecha"):
                 if datetime.fromisoformat(b["fecha"].replace("Z", "+00:00")) >= limite:
                     recientes[(b["producto_id"], b["cadena_id"])] = True
-        pendientes = {(s["producto_id"], s["cadena_id"])
+        # Con FORZAR tambien se rebuscan los que ya tienen sugerencia pendiente:
+        # asi se actualizan su precio y su puntaje.
+        pendientes = set() if forzar else {(s["producto_id"], s["cadena_id"])
                       for s in db.select("sugerencias_enlaces", "select=producto_id,cadena_id&estado=eq.pendiente")}
 
         tareas = {c["id"]: [] for c in activas}
@@ -728,7 +769,8 @@ def main():
                     sug = [{
                         "producto_id": p["producto_id"], "cadena_id": cadena["id"], "url": s["url"],
                         "nombre_tienda": s["nombre"][:500], "marca_tienda": (s.get("marca") or "")[:200] or None,
-                        "precio": s.get("precio"), "moneda": s.get("moneda"), "disponible": s.get("disponible"),
+                        "precio": en_bolivares(s.get("precio"), s.get("moneda"))[0],
+                        "moneda": en_bolivares(s.get("precio"), s.get("moneda"))[1], "disponible": s.get("disponible"),
                         "puntaje": s["puntaje"], "detalle": s["detalle"], "actualizado": ahora_iso(),
                     } for s in res["sugerencias"]]
                     if sug:

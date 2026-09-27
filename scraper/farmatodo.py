@@ -720,6 +720,50 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                 } catch(e) {}
             }
 
+            // Primero bolivares (regla de Hernando): en otras tiendas, si lo leido
+            // esta en dolares o no se leyo nada, manda el precio en Bs de la
+            // ficha. Precio tachado = precio normal y el otro = oferta, como en
+            // Farmatodo. Solo los primeros precios de la ficha (no relacionados).
+            if (!isFarmatodo && (!precio_lista || precio_moneda === 'USD')) {
+                try {
+                    const zona = document.querySelector('#product_detail, .oe_website_sale #product_details, main .product, .product-detail, [class*="product-detail" i], [class*="productDetail" i], [class*="product_detail" i], main') || document.body;
+                    const esTachado = (el) => !!el.closest('del, s, strike, [class*="old" i], [class*="regular" i], [class*="before" i], [class*="default_price" i], [class*="list-price" i], [class*="listPrice" i], [class*="tachado" i]')
+                        || (getComputedStyle(el).textDecorationLine || '').includes('line-through');
+                    const reBs = /(bs\.?\s?s?\.?)[ \t]*(\d[\d.,]*)|(\d[\d.,]*)[ \t]*(bs\.?\s?s?\.?)(?![a-z])/i;
+                    const reBsTodos = new RegExp(reBs.source, 'gi');
+                    // valor -> tachado (si en algun lugar aparece tachado, lo es)
+                    const porValor = new Map();
+                    for (const el of zona.querySelectorAll('*')) {
+                        if (el.children.length > 3 || !isVisible(el) || isInsideCarouselOrRelated(el)) continue;
+                        const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > 60) continue;
+                        // Un contenedor con dos precios (tachado + nuevo) no dice cual es cual.
+                        if ((t.match(reBsTodos) || []).length !== 1) continue;
+                        const m = t.match(reBs);
+                        const valor = parsePriceText(m[2] || m[3]);
+                        if (!valor || valor <= 0.5) continue;
+                        if (!porValor.has(valor) && porValor.size >= 4) break;
+                        porValor.set(valor, (porValor.get(valor) || false) || esTachado(el));
+                    }
+                    const hallados = [...porValor.entries()].map(([valor, tach]) => ({ valor, tach }));
+                    const normales = hallados.filter(h => !h.tach);
+                    const tachados = hallados.filter(h => h.tach);
+                    if (normales.length || tachados.length) {
+                        const actual = normales.length ? normales[0].valor : null;
+                        const antes = tachados.length ? Math.max(...tachados.map(h => h.valor)) : null;
+                        if (antes && actual && antes > actual) {
+                            precio_lista = antes;
+                            precio_oferta = actual;
+                        } else {
+                            precio_lista = actual || antes;
+                            precio_oferta = null;
+                        }
+                        precio_moneda = 'VES';
+                        metodo_extraccion = "dom_bs";
+                    }
+                } catch(e) {}
+            }
+
             // Ultimo recurso en otras tiendas: el primer precio visible de la
             // ficha (fuera de carruseles). Con precio tachado + precio nuevo
             // (WooCommerce: del / ins) se toma como oferta.
