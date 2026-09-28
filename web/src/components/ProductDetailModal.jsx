@@ -368,7 +368,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
               <span className="material-symbols-outlined">more_vert</span>
             </summary>
             <div className="m3-menu-panel" role="menu">
-              <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
+              <button data-borra type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
                 onClick={() => { menuRef.current?.removeAttribute('open'); setConfirmBorrar(true); }}>
                 <span className="material-symbols-outlined">delete_sweep</span>
                 Borrar la historia de este producto

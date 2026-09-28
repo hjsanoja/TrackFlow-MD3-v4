@@ -4,7 +4,7 @@ import { registrarAcceso, mensajeAuth } from '../utils/accesos';
 
 // Pantalla a la que lleva el enlace de "recuperar contraseña": la sesion ya
 // esta abierta (la trae el enlace), falta elegir la contraseña nueva.
-export default function NuevaContrasena({ email, onListo, onCancelar }) {
+export default function NuevaContrasena({ email, onListo, onCancelar, obligatoria = false, textoCancelar = 'Cancelar' }) {
   const [clave, setClave] = useState('');
   const [repetir, setRepetir] = useState('');
   const [ver, setVer] = useState(false);
@@ -31,8 +31,13 @@ export default function NuevaContrasena({ email, onListo, onCancelar }) {
           <div className="w-12 h-12 rounded-2xl bg-primary-container text-on-primary-container flex items-center justify-center">
             <span className="material-symbols-outlined">lock_reset</span>
           </div>
-          <h1 className="m3-headline-small text-on-surface">Crea tu contraseña nueva</h1>
+          <h1 className="m3-headline-small text-on-surface">{obligatoria ? 'Crea tu propia contraseña' : 'Crea tu contraseña nueva'}</h1>
           {email && <p className="m3-body-medium text-on-surface-variant">Para {email}</p>}
+          {obligatoria && (
+            <p className="m3-body-medium text-on-surface-variant">
+              Entraste con una contraseña que te dio un administrador. Antes de seguir, pon una que solo sepas tú.
+            </p>
+          )}
         </div>
 
         <label className="m3-field">
@@ -62,7 +67,7 @@ export default function NuevaContrasena({ email, onListo, onCancelar }) {
         )}
 
         <div className="flex items-center justify-end gap-2">
-          {onCancelar && <button type="button" onClick={onCancelar} className="m3-btn-text">Cancelar</button>}
+          {onCancelar && <button type="button" onClick={onCancelar} className="m3-btn-text">{textoCancelar}</button>}
           <button type="submit" disabled={guardando} className="m3-btn-primary h-10 px-6">
             {guardando ? 'Guardando…' : 'Guardar y entrar'}
           </button>

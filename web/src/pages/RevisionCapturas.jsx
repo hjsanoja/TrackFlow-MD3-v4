@@ -291,18 +291,18 @@ export default function RevisionCapturas() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => releer(seleccionadas)} disabled={procesando || Boolean(robot.corrida)} className="m3-btn-tonal"
+                <button data-edita type="button" onClick={() => releer(seleccionadas)} disabled={procesando || Boolean(robot.corrida)} className="m3-btn-tonal"
                   title={robot.corrida ? 'Ya hay una lectura en curso' : 'El robot lee ahora los enlaces de estas capturas'}>
                   <span className="material-symbols-outlined" aria-hidden="true">sync</span>
                   Volver a leer
                 </button>
                 {ver === 'pendiente' ? (
                   <>
-                    <button type="button" onClick={() => decidir(seleccionadas, 'erronea')} disabled={procesando} className="m3-btn-danger-outline h-10 px-4">Son erróneas</button>
-                    <button type="button" onClick={() => decidir(seleccionadas, 'valida')} disabled={procesando} className="m3-btn-primary h-10 px-4">Son válidas</button>
+                    <button data-edita type="button" onClick={() => decidir(seleccionadas, 'erronea')} disabled={procesando} className="m3-btn-danger-outline h-10 px-4">Son erróneas</button>
+                    <button data-edita type="button" onClick={() => decidir(seleccionadas, 'valida')} disabled={procesando} className="m3-btn-primary h-10 px-4">Son válidas</button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => decidir(seleccionadas, 'pendiente')} disabled={procesando} className="m3-btn-outline h-10 px-4">
+                  <button data-edita type="button" onClick={() => decidir(seleccionadas, 'pendiente')} disabled={procesando} className="m3-btn-outline h-10 px-4">
                     <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">undo</span>
                     Volver a revisar
                   </button>
@@ -331,7 +331,7 @@ export default function RevisionCapturas() {
                 </label>
                 <div className="flex items-center gap-1 md:ml-auto">
                   <span className="m3-label-large text-on-surface-variant mr-2">{visibles.length} de {capturas.length}</span>
-                  <button type="button" onClick={() => setVerSensibilidad(true)} className="m3-btn-text" title="Cuándo se marca una captura como dudosa">
+                  <button data-edita type="button" onClick={() => setVerSensibilidad(true)} className="m3-btn-text" title="Cuándo se marca una captura como dudosa">
                     <span className="material-symbols-outlined" aria-hidden="true">tune</span>
                     Sensibilidad
                   </button>
@@ -477,21 +477,21 @@ function FilaCaptura({ captura: c, ver, nombreCadena, seleccionada, onSelecciona
         <a href={c.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn" title="Abrir la página en la tienda" aria-label="Abrir en la tienda">
           <span className="material-symbols-outlined" aria-hidden="true">open_in_new</span>
         </a>
-        <button type="button" onClick={onReleer} disabled={robotOcupado} className="m3-icon-btn"
+        <button data-edita type="button" onClick={onReleer} disabled={robotOcupado} className="m3-icon-btn"
           title={leyendo ? 'El robot está leyendo este enlace' : robotOcupado ? 'Ya hay una lectura en curso' : 'Volver a leer ahora este enlace'} aria-label="Volver a leer">
           <span className={`material-symbols-outlined ${leyendo ? 'animate-spin' : ''}`} aria-hidden="true">sync</span>
         </button>
-        <Link to={`/competencia?editar=${c.publicacion_id}&volver=revision`} className="m3-btn-text" title="Abrir el formulario de este enlace en Competencia">
+        <Link data-edita to={`/competencia?editar=${c.publicacion_id}&volver=revision`} className="m3-btn-text" title="Abrir el formulario de este enlace en Competencia">
           <span className="material-symbols-outlined" aria-hidden="true">edit</span>
           Corregir enlace
         </Link>
         {ver === 'pendiente' ? (
           <div className="m3-revision-decision">
-            <button type="button" onClick={() => onDecidir('erronea')} disabled={procesando}
+            <button data-edita type="button" onClick={() => onDecidir('erronea')} disabled={procesando}
               className="m3-btn-danger-outline h-10 px-4" title="Descartar: deja de contar en los análisis">
               Es errónea
             </button>
-            <button type="button" onClick={() => onDecidir('valida')} disabled={procesando}
+            <button data-edita type="button" onClick={() => onDecidir('valida')} disabled={procesando}
               className="m3-btn-primary h-10 px-4" title="Confirmar: vuelve a contar en los análisis">
               Es válida
             </button>
@@ -502,7 +502,7 @@ function FilaCaptura({ captura: c, ver, nombreCadena, seleccionada, onSelecciona
               <span className="material-symbols-outlined" aria-hidden="true">{ver === 'valida' ? 'check_circle' : 'block'}</span>
               {ver === 'valida' ? 'Válida' : 'Errónea'}
             </span>
-            <button type="button" onClick={() => onDecidir('pendiente')} disabled={procesando}
+            <button data-edita type="button" onClick={() => onDecidir('pendiente')} disabled={procesando}
               className="m3-btn-outline h-10 px-4" title="Quitar la decisión: vuelve a pendientes">
               <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">undo</span>
               Volver a revisar

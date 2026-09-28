@@ -160,7 +160,7 @@ export default function BcvDetailModal({ isOpen, onClose, rates = [], currentRat
               <p className="m3-body-medium text-on-surface-variant flex-1">
                 La tasa se lee sola cada día. Si el BCV no la publicó o está mal, puedes poner la de hoy a mano.
               </p>
-              <button type="button" onClick={() => { setCambiando(true); setValor(actual ? String(actual) : ''); }} className="m3-btn-outline">
+              <button data-edita type="button" onClick={() => { setCambiando(true); setValor(actual ? String(actual) : ''); }} className="m3-btn-outline">
                 <span className="material-symbols-outlined text-base">edit</span>
                 <span>Cambiar a mano</span>
               </button>

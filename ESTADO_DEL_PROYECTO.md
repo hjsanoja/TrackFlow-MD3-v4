@@ -561,6 +561,37 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Permisos de usuarios (PR #70, fase 41)
+
+- **Consulta no borra** (regla de Hernando: puede crear y editar, nunca
+  borrar). En la base: toda política DELETE de `public` (salvo usuarios,
+  accesos y `producto_principios`, que se borra y se reescribe al editar un
+  producto) exige `fn_es_admin()`; las políticas `ALL` se separan en leer /
+  crear / cambiar (igual que antes) y borrar (admin). En el panel: los
+  botones que borran llevan `data-borra` y se ocultan (`body.sin-borrar`).
+- **Solo lectura por menú** (`usuarios.menus_solo_lectura`): los botones de
+  crear/editar llevan `data-edita`; `Layout` pone `body.solo-lectura` según
+  el menú abierto (`utils/permisos.js`) y un aviso. Es del panel (la base no
+  distingue menús).
+- **Acceso hasta** (`usuarios.vence_el`): vencido = inactivo en
+  `fn_usuario_activo`/`fn_es_admin` y en `App` (mensaje "Tu acceso venció").
+- **Ver solo su línea** (`usuarios.alcance` = {laboratorios,
+  unidades_negocio, categorias}, por nombre): `DataProvider` filtra
+  productos y todo lo que cuelga de ellos por `id_producto_propio` (Dashboard,
+  Mapa, Productos, Competencia). Los análisis por RPC de Experimental no se
+  filtran (se avisa en el formulario).
+- **Contraseña sin correo**: `fn_admin_cambiar_clave(email, clave)` (admin,
+  no a sí mismo); botón del candado → "Poner contraseña" o "Enviar enlace".
+- **Mensaje listo para enviar** al crear o poner contraseña: copiar,
+  WhatsApp (`wa.me`) o correo (`mailto`).
+- **Cambio obligatorio en el primer ingreso** (`usuarios.debe_cambiar_clave`):
+  lo pone un trigger al crear la fila y `fn_admin_cambiar_clave`; `App`
+  muestra `NuevaContrasena` (obligatoria, "Salir" cierra sesión);
+  `fn_registrar_acceso('clave_cambiada')` lo quita.
+- **Sin entrar 30+ días**: aviso arriba, filtro de estado y marca en "Último
+  acceso"; filtro "Acceso vencido". Etiquetas por usuario (vence, solo ver,
+  su línea, cambia clave).
+
 ## Crear usuarios sin Edge Function (PR #69, fase 40)
 
 - "Nuevo usuario" daba "Failed to send a request to the Edge Function": la

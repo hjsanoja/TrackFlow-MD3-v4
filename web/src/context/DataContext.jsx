@@ -383,7 +383,10 @@ function revivirTasas(t) {
   return (Array.isArray(t) ? t : []).map(r => ({ ...r, rawDate: new Date(r.rawDate) }));
 }
 
-export function DataProvider({ children, user }) {
+// Nombres comparables: sin acentos ni mayusculas.
+const normalizarAlcance = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
+export function DataProvider({ children, user, alcance = null }) {
   // La copia local (utils/cacheDatos) se lee ANTES del primer pintado: si hay
   // una, el panel aparece al instante y los datos frescos llegan despues.
   const [cache] = useState(() => leerCache(user?.email));
@@ -609,13 +612,33 @@ export function DataProvider({ children, user }) {
     setUltimaCorrida(null);
   }, []);
 
+  // Alcance del usuario (fase 41): si esta limitado a ciertos laboratorios,
+  // unidades de negocio o categorias, solo ve esos productos propios y lo que
+  // cuelga de ellos (enlaces, precios, variaciones, historico).
+  const filtroAlcance = useMemo(() => {
+    const listas = [['laboratorio', alcance?.laboratorios], ['unidad_negocio', alcance?.unidades_negocio], ['categoria', alcance?.categorias]]
+      .filter(([, l]) => Array.isArray(l) && l.length)
+      .map(([campo, l]) => [campo, new Set(l.map(normalizarAlcance))]);
+    if (!listas.length) return null;
+    const permitidos = new Set(productos
+      .filter(p => listas.every(([campo, set]) => set.has(normalizarAlcance(p[campo]))))
+      .map(p => String(p.id_interno)));
+    return (lista) => (Array.isArray(lista)
+      ? lista.filter(x => {
+        const clave = x?.id_producto_propio ?? x?.id_interno;
+        return clave == null || permitidos.has(String(clave));
+      })
+      : lista);
+  }, [alcance, productos]);
+  const conAlcance = (lista) => (filtroAlcance ? filtroAlcance(lista) : lista);
+
   const value = useMemo(() => ({
-    productos,
-    productosCompetencia,
-    ultimosPreciosValidos,
-    variaciones,
+    productos: conAlcance(productos),
+    productosCompetencia: conAlcance(productosCompetencia),
+    ultimosPreciosValidos: conAlcance(ultimosPreciosValidos),
+    variaciones: conAlcance(variaciones),
     cadenas,
-    historicoPrecios,
+    historicoPrecios: conAlcance(historicoPrecios),
     historicoEstado,
     cargarHistorico,
     bcvRates,
@@ -624,6 +647,7 @@ export function DataProvider({ children, user }) {
     loadingInitial,
     isRefreshing,
     isLoadedOnce,
+    alcanceLimitado: Boolean(filtroAlcance),
     refreshData: cargarTodo,
     refreshProductos,
     refreshCompetencia,
@@ -655,7 +679,8 @@ export function DataProvider({ children, user }) {
     refreshCompetencia,
     refreshCadenas,
     refreshUsuarios,
-    vaciarHistorico
+    vaciarHistorico,
+    filtroAlcance
   ]);
 
   return (

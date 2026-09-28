@@ -131,7 +131,7 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
                 Enlaces que vigila el scraper ({enlaces.length})
               </h3>
               {onVincular && (
-                <button type="button" onClick={onVincular} className="m3-btn-text" title="Vincular una URL de este producto o de un competidor">
+                <button data-edita type="button" onClick={onVincular} className="m3-btn-text" title="Vincular una URL de este producto o de un competidor">
                   <span className="material-symbols-outlined">add_link</span>
                   Vincular enlace
                 </button>
@@ -180,11 +180,11 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
         </div>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-outline-variant">
-          <button type="button" onClick={onAlternarActivo} className="m3-btn-text mr-auto">
+          <button data-edita type="button" onClick={onAlternarActivo} className="m3-btn-text mr-auto">
             <span className="material-symbols-outlined">{p.activo ? 'archive' : 'unarchive'}</span>
             {p.activo ? 'Dar de baja' : 'Reactivar'}
           </button>
-          <button type="button" onClick={onDuplicar} className="m3-btn-text" title="Crear otra presentación a partir de esta ficha">
+          <button data-edita type="button" onClick={onDuplicar} className="m3-btn-text" title="Crear otra presentación a partir de esta ficha">
             <span className="material-symbols-outlined">content_copy</span>
             Duplicar
           </button>
@@ -192,7 +192,7 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
             <span className="material-symbols-outlined">monitoring</span>
             Análisis de precios
           </button>
-          <button type="button" onClick={onEditar} className="m3-btn-primary h-10">
+          <button data-edita type="button" onClick={onEditar} className="m3-btn-primary h-10">
             <span className="material-symbols-outlined text-base">edit</span>
             Editar
           </button>

@@ -180,7 +180,7 @@ export default function Cadenas() {
           </div>
           <p className="text-xs text-on-surface-variant">Las farmacias que vigila el robot: su color, su lector, sus enlaces y cómo le fue en la última lectura.</p>
         </div>
-        <button onClick={() => setEditing('new')} className="m3-btn-primary self-start lg:self-auto">
+        <button data-edita onClick={() => setEditing('new')} className="m3-btn-primary self-start lg:self-auto">
           <span className="material-symbols-outlined text-base">add_business</span>
           <span>Nueva cadena</span>
         </button>
@@ -271,7 +271,7 @@ export default function Cadenas() {
                       <div className="m3-cell-secondary">{r?.activos.length || 0} enlaces · {lectorDe(c.modulo_scraper).probado ? 'lector probado' : 'sin probar'}</div>
                       <div className="mt-1"><span className={`m3-status ${c.activo ? 'is-on' : ''}`}>{c.activo ? 'Activa' : 'De baja'}</span></div>
                     </button>
-                    <button type="button" onClick={() => setEditing(c.id)} className="m3-icon-btn" aria-label={`Editar ${c.nombre}`}>
+                    <button data-edita type="button" onClick={() => setEditing(c.id)} className="m3-icon-btn" aria-label={`Editar ${c.nombre}`}>
                       <span className="material-symbols-outlined">edit</span>
                     </button>
                   </li>
@@ -343,18 +343,18 @@ export default function Cadenas() {
                         <td><span className={`m3-status ${c.activo ? 'is-on' : ''}`}>{c.activo ? 'Activa' : 'De baja'}</span></td>
                         <td className="m3-sticky-actions">
                           <div className="flex justify-end gap-1">
-                            <button type="button" onClick={() => leerCadena(c)} disabled={Boolean(robot.corrida) || !c.activo} className="m3-icon-btn"
+                            <button data-edita type="button" onClick={() => leerCadena(c)} disabled={Boolean(robot.corrida) || !c.activo} className="m3-icon-btn"
                               title={robot.corrida ? 'Ya hay una lectura en curso' : `Leer ahora los enlaces de ${c.nombre}`} aria-label={`Leer ${c.nombre}`}>
                               <span className={`material-symbols-outlined ${leyendo ? 'animate-spin' : ''}`}>{leyendo ? 'sync' : 'smart_toy'}</span>
                             </button>
-                            <button type="button" onClick={() => setEditing(c.id)} className="m3-icon-btn" title="Editar" aria-label={`Editar ${c.nombre}`}>
+                            <button data-edita type="button" onClick={() => setEditing(c.id)} className="m3-icon-btn" title="Editar" aria-label={`Editar ${c.nombre}`}>
                               <span className="material-symbols-outlined">edit</span>
                             </button>
-                            <button type="button" onClick={() => alternarActivo(c)} className="m3-icon-btn"
+                            <button data-edita type="button" onClick={() => alternarActivo(c)} className="m3-icon-btn"
                               title={c.activo ? 'Dar de baja: el robot deja de leerla' : 'Reactivar'} aria-label={`${c.activo ? 'Dar de baja' : 'Reactivar'} ${c.nombre}`}>
                               <span className="material-symbols-outlined">{c.activo ? 'archive' : 'unarchive'}</span>
                             </button>
-                            <button type="button" onClick={() => setConfirmDelete(c)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label={`Eliminar ${c.nombre}`}>
+                            <button data-borra type="button" onClick={() => setConfirmDelete(c)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label={`Eliminar ${c.nombre}`}>
                               <span className="material-symbols-outlined">delete</span>
                             </button>
                           </div>
@@ -512,11 +512,11 @@ function FichaCadena({ cadena: c, resumen: r, robotOcupado, onClose, onEditar, o
         </div>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-outline-variant">
-          <button type="button" onClick={onLeer} disabled={robotOcupado || !c.activo} className="m3-btn-tonal mr-auto">
+          <button data-edita type="button" onClick={onLeer} disabled={robotOcupado || !c.activo} className="m3-btn-tonal mr-auto">
             <span className="material-symbols-outlined">smart_toy</span>
             Leer esta cadena
           </button>
-          <button type="button" onClick={onEditar} className="m3-btn-primary h-10">
+          <button data-edita type="button" onClick={onEditar} className="m3-btn-primary h-10">
             <span className="material-symbols-outlined text-base">edit</span>
             Editar
           </button>

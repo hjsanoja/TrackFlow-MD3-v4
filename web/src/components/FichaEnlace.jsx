@@ -203,20 +203,20 @@ export default function FichaEnlace({
         </div>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-outline-variant">
-          <button type="button" onClick={onAlternarActivo} className="m3-btn-text mr-auto">
+          <button data-edita type="button" onClick={onAlternarActivo} className="m3-btn-text mr-auto">
             <span className="material-symbols-outlined">{e.activo ? 'archive' : 'unarchive'}</span>
             {e.activo ? 'Dar de baja' : 'Reactivar'}
           </button>
-          <button type="button" onClick={onRobot} disabled={robotOcupado || !e.activo} className="m3-icon-btn"
+          <button data-edita type="button" onClick={onRobot} disabled={robotOcupado || !e.activo} className="m3-icon-btn"
             title={leyendo ? 'Leyendo el precio…' : robotOcupado ? 'Ya hay una lectura del robot en curso' : e.activo ? 'Leer el precio ahora con el robot' : 'Reactiva el enlace para usar el robot'}
             aria-label="Leer el precio con el robot">
             <span className={`material-symbols-outlined ${leyendo ? 'animate-spin' : ''}`}>{leyendo ? 'sync' : 'smart_toy'}</span>
           </button>
-          <button type="button" onClick={onPrecioManual} className="m3-btn-tonal">
+          <button data-edita type="button" onClick={onPrecioManual} className="m3-btn-tonal">
             <span className="material-symbols-outlined">edit_note</span>
             Precio manual
           </button>
-          <button type="button" onClick={onEditar} className="m3-btn-primary h-10">
+          <button data-edita type="button" onClick={onEditar} className="m3-btn-primary h-10">
             <span className="material-symbols-outlined text-base">edit</span>
             Editar
           </button>

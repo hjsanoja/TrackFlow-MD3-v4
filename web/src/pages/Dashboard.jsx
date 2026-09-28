@@ -608,7 +608,7 @@ export default function Dashboard({ userDoc }) {
                   <span className={`material-symbols-outlined ${robot.corrida ? 'animate-spin' : ''}`}>{robot.corrida ? 'sync' : 'smart_toy'}</span>
                   {robot.corrida ? 'Robot en curso…' : 'Leer todos los precios'}
                 </button>
-                <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger" disabled={borrando}
+                <button data-borra type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger" disabled={borrando}
                   onClick={() => { cerrarMenu(); setConfirmBorrar(true); }}>
                   <span className="material-symbols-outlined">delete_sweep</span>
                   {borrando ? 'Borrando…' : 'Borrar historial de precios'}
