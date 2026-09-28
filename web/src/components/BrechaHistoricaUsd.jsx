@@ -178,7 +178,7 @@ export default function BrechaHistoricaUsd({ user, userDoc }) {
     fechasOrdenadas.forEach(f => {
       const avgPropioUsd = f.propios.length > 0
         ? f.propios.reduce((acc, x) => acc + x.precio_usd, 0) / f.propios.length
-        : (prodActivo.pvp_propio_usd || null);
+        : null; // sin precio tuyo ese dia: el PVP no se usa
 
       const avgPropioBs = f.propios.length > 0
         ? f.propios.reduce((acc, x) => acc + x.precio_bs, 0) / f.propios.length

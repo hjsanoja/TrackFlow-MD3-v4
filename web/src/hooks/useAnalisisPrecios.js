@@ -5,7 +5,9 @@ import { esMarca } from '../utils/tipoMercado';
 
 // Precios de cada producto propio frente a la competencia, con el mismo
 // criterio en el Dashboard y en el Mapa de Calor:
-//   - "Tu precio": el mas bajo de tus enlaces; si no hay, el PVP de la ficha.
+//   - "Tu precio": el mas bajo de tus enlaces en las cadenas. El PVP no entra
+//     en ningun calculo (es un precio para otro cliente): sin enlace leido el
+//     producto queda sin tu precio.
 //   - Minimo y promedio: del MERCADO (la competencia mas tu precio);
 //     minimoComp y promedioComp son los de la competencia sola.
 //   - Cambios: en dolares, cada precio a la tasa de su dia (v_variacion).
@@ -107,10 +109,9 @@ export function useAnalisisPrecios({
       const minimoComp = valores.length ? Math.min(...valores) : null;
       const promedioComp = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
 
-      const pvpUsd = Number(p.pvp_propio_usd || 0) > 0 ? Number(p.pvp_propio_usd) : null;
-      const tuPrecio = propios.length ? Math.min(...propios.map(x => x.priceUsd)) : (pvpUsd != null ? pvpUsd / (porUnidad ? unidadesPropio : 1) : null);
-      const tuUnidad = propios.length ? Math.min(...propios.map(x => x.unitUsd)) : (pvpUsd != null ? pvpUsd / unidadesPropio : null);
-      const fuenteTuPrecio = propios.length ? 'enlace' : pvpUsd ? 'pvp' : null;
+      const tuPrecio = propios.length ? Math.min(...propios.map(x => x.priceUsd)) : null;
+      const tuUnidad = propios.length ? Math.min(...propios.map(x => x.unitUsd)) : null;
+      const fuenteTuPrecio = propios.length ? 'enlace' : null;
       // Minimo y promedio del MERCADO: la competencia mas tu precio (como el
       // Mapa de Calor). Sin competencia, son tu precio.
       const minimo = tuPrecio != null ? Math.min(tuPrecio, minimoComp ?? Infinity) : minimoComp;

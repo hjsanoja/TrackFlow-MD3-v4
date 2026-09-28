@@ -117,12 +117,8 @@ export default function CanibalizacionInterna({ user, userDoc }) {
           const unidosisGen = Number(prodGenerico.unidosis || 10);
           const unidosisMar = Number(prodMarca.unidosis || 10);
 
-          // Evaluar precio base de lista (PVP Propio USD)
-          const pvpGen = Number(prodGenerico.pvp_propio_usd || 0);
-          const pvpMar = Number(prodMarca.pvp_propio_usd || 0);
-
-          const costUnidosisGen = unidosisGen > 0 ? pvpGen / unidosisGen : 0;
-          const costUnidosisMar = unidosisMar > 0 ? pvpMar / unidosisMar : 0;
+          // Solo precios leidos en las cadenas: el PVP no entra en los
+          // calculos (es un precio para otro cliente).
 
           // Evaluar en anaquel por cadena si está disponible
           const cadenasAEvaluar = cadenaFiltro === 'todas' ? ['Farmatodo', 'Locatel', 'Saas'] : [cadenaFiltro];
@@ -132,8 +128,8 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             const retailMar = preciosAnaquelMap.get(`${prodMarca.id_interno || prodMarca.id}_${cad}`);
 
             // Precios a usar para el análisis
-            const precioEfectivoGen = retailGen?.precio_usd || pvpGen;
-            const precioEfectivoMar = retailMar?.precio_usd || pvpMar;
+            const precioEfectivoGen = retailGen?.precio_usd || 0;
+            const precioEfectivoMar = retailMar?.precio_usd || 0;
 
             if (precioEfectivoGen <= 0 || precioEfectivoMar <= 0) return;
 
@@ -143,7 +139,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
             // Brecha de precio (%) = (Marca - Genérico) / Genérico
             const brechaAbsUsd = precioEfectivoMar - precioEfectivoGen;
             const brechaPct = ((precioEfectivoMar - precioEfectivoGen) / precioEfectivoGen) * 100;
-            const brechaUnidosisPct = costUnidosisGen > 0 ? ((unidosisEffMar - unidosisEffGen) / unidosisEffGen) * 100 : 0;
+            const brechaUnidosisPct = unidosisEffGen > 0 ? ((unidosisEffMar - unidosisEffGen) / unidosisEffGen) * 100 : 0;
 
             // Clasificación de Alerta de Canibalización
             let nivelAlerta = 'saludable'; // saludable: Marca es 15% - 40% más cara que el genérico
@@ -163,7 +159,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
               tipoConflicto = 'Canibalización por Unidosis Invertida';
               severidad = 3;
               diagnostico = `El costo por unidad en la marca (${unidosisEffMar.toFixed(3)} $/dosis) es menor que en el genérico (${unidosisEffGen.toFixed(3)} $/dosis). Destruye la venta del genérico.`;
-              recomendacion = `Rebalancear el PVP por unidad de la presentación familiar/marca para proteger el margen del portafolio.`;
+              recomendacion = `Rebalancear el precio por unidad de la presentación familiar/marca para proteger el margen del portafolio.`;
             } else if (brechaPct >= 0 && brechaPct < 12) {
               nivelAlerta = 'moderado';
               tipoConflicto = 'Brecha Estrecha (<12%)';

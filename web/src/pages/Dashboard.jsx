@@ -388,7 +388,7 @@ export default function Dashboard({ userDoc }) {
   });
   const detalleSinComparar = () => abrirDetalle({
     titulo: 'Sin comparar',
-    subtitulo: 'Productos a los que les falta tu precio o el de la competencia. Vincula enlaces en Competencia o carga el PVP en Productos.',
+    subtitulo: 'Productos a los que les falta tu precio o el de la competencia. Vincula tus enlaces y los de la competencia en Competencia. El PVP no cuenta: es un precio para otro cliente.',
     icono: 'help',
     filas: kpi.sinComparar,
     columnas: [colProducto, {
@@ -950,8 +950,8 @@ export default function Dashboard({ userDoc }) {
                         <td className="text-right whitespace-nowrap tabular-nums m3-dash-col-sep">{fmt(x.minimo)}</td>
                         <td className="text-right whitespace-nowrap tabular-nums">{fmt(x.promedio)}</td>
                         <td className="text-right whitespace-nowrap tabular-nums m3-dash-col-sep font-medium"
-                          title={x.fuenteTuPrecio === 'pvp' ? 'PVP cargado en Productos (sin enlace propio leído)' : undefined}>
-                          {fmt(x.tuPrecio)}{x.fuenteTuPrecio === 'pvp' && <span className="text-on-surface-variant font-normal"> · PVP</span>}
+                          title={x.tuPrecio == null ? 'Sin precio tuyo leído en ninguna cadena' : undefined}>
+                          {fmt(x.tuPrecio)}
                           {cambioPropio && <div className="m3-dash-cambio"><Diferencia valor={cambioPropio.cambio} /></div>}
                         </td>
                         <td className="text-right whitespace-nowrap"><Posicion p={x.posicion} /></td>
