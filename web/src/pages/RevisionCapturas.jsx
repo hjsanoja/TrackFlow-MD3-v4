@@ -12,6 +12,7 @@ import InfoGrafico from '../components/InfoGrafico';
 import AvisoRobot from '../components/AvisoRobot';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import Sensibilidad from '../components/revision/Sensibilidad';
+import PreciosRepetidos from '../components/revision/PreciosRepetidos';
 import { normalizar } from '../components/formulario';
 import { useRobot } from '../hooks/useRobot';
 import { avisarCambioRevision } from '../hooks/usePendientesRevision';
@@ -34,6 +35,7 @@ import { publicacionIdDe } from '../utils/dbClient';
  */
 const MOTIVOS = {
   presentacion: ['Dosis o tamaño distinto', 'straighten'],
+  precio_repetido: ['Precio repetido', 'content_copy'],
   nombre: ['El nombre no coincide', 'badge'],
   variacion_precio: ['Salto de precio', 'trending_up'],
   ambos: ['Varios motivos', 'report'],
@@ -140,7 +142,7 @@ export default function RevisionCapturas() {
   }, []);
 
   const cargar = useCallback(async () => {
-    if (!isSupabaseActive()) { setCargando(false); return; }
+    if (!isSupabaseActive() || ver === 'repetidos') { setCargando(false); return; }
     setCargando(true);
     try {
       let { data, error } = await supabase.from('v_capturas_revision').select('*')
@@ -232,6 +234,15 @@ export default function RevisionCapturas() {
       && (!t || normalizar(`${c.id_producto_propio} ${c.producto_nombre} ${c.producto_propio_nombre || ''} ${c.laboratorio} ${c.nombre_capturado || ''}`).includes(t)));
   }, [capturas, motivo, cadena, relacion, busqueda]);
 
+  // Pendientes / Válidas / Erróneas y, aparte, los precios repetidos (fase 44).
+  const selectorVista = sinFase34 ? null : (
+    <Segmentado etiqueta="Qué capturas ver" valor={ver} onChange={setVer}
+      opciones={[
+        ...Object.entries(VISTAS).map(([v, t]) => [v, t, v === 'pendiente' ? 'Aún sin revisar' : `Las que marcaste como ${t.toLowerCase().slice(0, -1)}`]),
+        ['repetidos', 'Precios repetidos', 'Productos distintos de una cadena con el mismo precio exacto'],
+      ]} />
+  );
+
   const hayFiltros = motivo !== 'todos' || cadena !== 'todos' || relacion !== 'todos' || busqueda !== '';
   const limpiar = () => { setMotivo('todos'); setCadena('todos'); setRelacion('todos'); setBusqueda(''); };
   const conteo = (clave) => capturas.filter(c => c.motivo_sospecha === clave).length;
@@ -272,6 +283,9 @@ export default function RevisionCapturas() {
         </section>
       )}
 
+      {ver === 'repetidos' ? (
+        <PreciosRepetidos selector={selectorVista} nombreCadena={nombreCadena} releer={releer} robotOcupado={Boolean(robot.corrida)} />
+      ) : (
       <section className="m3-data-table" aria-label="Capturas">
         <div className="m3-data-table-toolbar flex flex-col gap-3">
           {seleccion.size > 0 ? (
@@ -312,10 +326,7 @@ export default function RevisionCapturas() {
           ) : (
             <>
               <BarraFiltros integrada limpiar={{ visible: hayFiltros, onClick: limpiar }} filtrar={<>
-                {!sinFase34 && (
-                  <Segmentado etiqueta="Qué capturas ver" valor={ver} onChange={setVer}
-                    opciones={Object.entries(VISTAS).map(([v, t]) => [v, t, v === 'pendiente' ? 'Aún sin revisar' : `Las que marcaste como ${t.toLowerCase().slice(0, -1)}`])} />
-                )}
+                {selectorVista}
                 <FiltroChip etiqueta="Motivo" icono="filter_list" valor={motivo} onChange={setMotivo}
                   opciones={[['todos', 'Motivo: todos'], ...Object.entries(MOTIVOS).filter(([k]) => conteo(k) > 0).map(([k, [t]]) => [k, `${t} (${conteo(k)})`])]} />
                 <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadena} onChange={setCadena}
@@ -391,6 +402,7 @@ export default function RevisionCapturas() {
           </div>
         )}
       </section>
+      )}
 
       {verSensibilidad && (
         <Sensibilidad onClose={() => setVerSensibilidad(false)}
