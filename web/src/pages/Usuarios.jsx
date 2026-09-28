@@ -102,17 +102,26 @@ export default function Usuarios({ userDoc }) {
     if (isNew) {
       if ((usuarios || []).some(u => u.email?.toLowerCase() === email)) throw new Error('Ya existe un usuario con ese correo.');
       if (!data.password || data.password.length < 8) throw new Error('La contraseña inicial debe tener al menos 8 caracteres.');
-      // La cuenta de acceso se crea en el servidor (Edge Function con la
-      // service role): el panel no puede crearla.
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('crear-usuario', {
-        body: {
-          email, password: data.password, nombre: data.nombre.trim(), rol, menus_permitidos: menus,
-          recibe_alertas_inmediatas: data.recibe_alertas_inmediatas, recibe_resumen_diario: data.recibe_resumen_diario,
-          activo: data.activo,
-        },
+      // La cuenta de acceso se crea en la base de datos (fn_crear_usuario,
+      // fase 40: solo un administrador). Sin esa fase se prueba la Edge
+      // Function crear-usuario, si esta desplegada.
+      const { error: rpcError } = await supabase.rpc('fn_crear_usuario', {
+        p_email: email, p_password: data.password, p_nombre: data.nombre.trim(), p_rol: rol, p_menus: menus,
+        p_recibe_alertas: data.recibe_alertas_inmediatas, p_recibe_resumen: data.recibe_resumen_diario, p_activo: data.activo,
       });
-      if (fnError) throw new Error(fnError.message || 'No se pudo comunicar con la función crear-usuario.');
-      if (fnData?.error) throw new Error(fnData.error);
+      if (rpcError) {
+        const faltaFase = rpcError.code === 'PGRST202' || /Could not find the function/i.test(rpcError.message || '');
+        if (!faltaFase) throw new Error(rpcError.message);
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('crear-usuario', {
+          body: {
+            email, password: data.password, nombre: data.nombre.trim(), rol, menus_permitidos: menus,
+            recibe_alertas_inmediatas: data.recibe_alertas_inmediatas, recibe_resumen_diario: data.recibe_resumen_diario,
+            activo: data.activo,
+          },
+        });
+        if (fnError) throw new Error('Falta correr fase40_crear_usuario.sql en Supabase para poder crear usuarios desde el panel.');
+        if (fnData?.error) throw new Error(fnData.error);
+      }
       addToast(`Usuario ${email} creado. Pásale su contraseña inicial: podrá cambiarla en "Mi cuenta".`, 'success');
     } else {
       const original = usuarios.find(u => u.id === editing);

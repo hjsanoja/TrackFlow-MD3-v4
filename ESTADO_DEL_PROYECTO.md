@@ -561,6 +561,23 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Crear usuarios sin Edge Function (PR #69, fase 40)
+
+- "Nuevo usuario" daba "Failed to send a request to the Edge Function": la
+  función `crear-usuario` (supabase/functions) nunca se desplegó.
+- `sql/fase40_crear_usuario.sql`: `fn_crear_usuario(email, clave, nombre,
+  rol, menus, alertas, resumen, activo)`, SECURITY DEFINER como
+  `fn_eliminar_usuario`; solo un administrador activo (`fn_es_admin`,
+  NULL = no). Crea `auth.users` (correo confirmado, clave con
+  `crypt(..., gen_salt('bf'))`, tokens en '' para que GoTrue no falle) y
+  `auth.identities` (provider email, provider_id = id), y la fila en
+  `usuarios` vía `jsonb_populate_record` (se adapta a los tipos reales de la
+  tabla). Si la cuenta de acceso ya existía sin fila en usuarios, le pone la
+  clave nueva y crea la fila. Todo o nada.
+- `Usuarios.jsx`: llama primero al RPC; sin la fase 40 prueba la Edge
+  Function y, si tampoco está, pide correr la fase 40.
+- Probado en Postgres local con tablas `auth` simuladas (columnas de GoTrue).
+
 ## Buscador: señal de vida, Detener sin permiso de Actions y web de FarmaGo (PR #68, fase 39)
 
 - `corridas_buscador.latido`: el robot lo actualiza cada 30 s en una hebra
