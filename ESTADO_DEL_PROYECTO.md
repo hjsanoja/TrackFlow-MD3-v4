@@ -561,6 +561,21 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Tabla usuarios completa (PR #71, fase 42)
+
+- La tabla `usuarios` del proyecto viene de la migración de Firebase
+  (`id`, `_doc_id`, `email`, `nombre`, `rol`, `recibe_*`, `activo`) y no
+  tenía `menus_permitidos`: "Nuevo usuario" fallaba con `column
+  "menus_permitidos" of relation "usuarios" does not exist` y los menús de
+  los usuarios de consulta nunca se guardaban (el panel usaba los de
+  siempre).
+- `sql/fase42_usuarios_columnas.sql`: agrega las columnas que el panel usa
+  si faltan (`menus_permitidos TEXT[]`, etc.); a los de consulta sin menús
+  les pone Dashboard y Mapa de Calor (lo que ya veían); `fn_crear_usuario`
+  inserta solo en las columnas que existan (incluye `_doc_id`), con
+  `jsonb_populate_record` para los tipos. Probado con una tabla igual a la
+  de Firebase: reproduce el error antes y crea el usuario después.
+
 ## Permisos de usuarios (PR #70, fase 41)
 
 - **Consulta no borra** (regla de Hernando: puede crear y editar, nunca
