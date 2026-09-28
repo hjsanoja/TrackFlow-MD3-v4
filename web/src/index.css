@@ -2209,3 +2209,22 @@ td.m3-calor-celda {
 .m3-tienda-boton { display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 10px 0 6px; border-radius: 8px; white-space: nowrap; }
 button.m3-tienda-boton:hover { background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, transparent); }
 .m3-tienda-editar { font-size: 14px; color: var(--md-sys-color-on-surface-variant); }
+
+/* Permisos (utils/permisos.js): Layout pone estas clases en <body>. */
+body.sin-borrar [data-borra],
+body.solo-lectura [data-borra],
+body.solo-lectura [data-edita] { display: none !important; }
+
+/* Usuarios (fase 41). */
+.m3-etiqueta {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 0.6875rem; font-weight: 600;
+  background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant);
+}
+.m3-etiqueta.is-error { background-color: color-mix(in srgb, var(--md-sys-color-error) 14%, transparent); color: var(--md-sys-color-error); }
+.m3-permisos-lista { display: flex; flex-direction: column; gap: 6px; }
+.m3-permisos-lista > li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+.m3-permisos-lista > li:last-child { border-bottom: none; }
+.m3-credenciales {
+  white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 0.9375rem; line-height: 1.5; padding: 14px 16px; border-radius: 12px;
+  background-color: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);
+}

@@ -8,7 +8,13 @@ import NuevaContrasena from './components/NuevaContrasena';
 // Se mira al cargar, antes de que Supabase limpie la direccion.
 const LLEGO_POR_RECUPERACION = typeof window !== 'undefined' &&
   /type=recovery/.test(`${window.location.hash}${window.location.search}`);
-const esActivo = (u) => Boolean(u) && (u.activo === true || u.activo === 'si' || u.activo === 'sí');
+import { accesoVencido } from './utils/permisos';
+// Activo y sin acceso vencido (fase 41: vence_el).
+const esActivo = (u) => Boolean(u) && (u.activo === true || u.activo === 'si' || u.activo === 'sí') && !accesoVencido(u);
+const fechaCorta = (f) => new Date(`${String(f).slice(0, 10)}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' });
+const motivoInactivo = (u) => (u && accesoVencido(u)
+  ? `Tu acceso venció el ${fechaCorta(u.vence_el)}. Pídele a un administrador que lo extienda.`
+  : null);
 
 // Carga bajo demanda: cada pantalla viaja en su propio archivo y solo se
 // descarga al entrar en ella. Antes todo el panel iba en un unico bundle de
@@ -74,9 +80,9 @@ function AppContent() {
         setUser(null);
         setUserDoc(null);
         setLoading(false);
-        const motivo = !uData 
-          ? 'Usuario no autorizado: no estás registrado en el sistema.' 
-          : 'Usuario no autorizado: tu cuenta se encuentra inactiva.';
+        const motivo = !uData
+          ? 'Usuario no autorizado: no estás registrado en el sistema.'
+          : motivoInactivo(uData) || 'Usuario no autorizado: tu cuenta se encuentra inactiva.';
         setAuthError(motivo);
         addToast(motivo, 'error');
         return;
@@ -156,7 +162,7 @@ function AppContent() {
         await supabase.auth.signOut();
         setUser(null);
         setUserDoc(null);
-        setAuthError(data ? 'Tu acceso fue desactivado por un administrador.' : 'Tu usuario fue eliminado del sistema.');
+        setAuthError(data ? (motivoInactivo(data) || 'Tu acceso fue desactivado por un administrador.') : 'Tu usuario fue eliminado del sistema.');
         return;
       }
       setUserDoc(prev => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data));
@@ -225,6 +231,24 @@ function AppContent() {
     );
   }
 
+  // Usuario nuevo o con contrasena puesta por un administrador (fase 41):
+  // antes de entrar pone una propia. Al guardarla, fn_registrar_acceso quita
+  // la marca.
+  if (userDoc?.debe_cambiar_clave) {
+    return (
+      <NuevaContrasena
+        email={user.email}
+        obligatoria
+        textoCancelar="Salir"
+        onListo={() => {
+          setUserDoc(prev => ({ ...prev, debe_cambiar_clave: false }));
+          addToast('Contraseña guardada. Bienvenido.', 'success');
+        }}
+        onCancelar={async () => { limpiarCacheDatos(); await supabase.auth.signOut(); }}
+      />
+    );
+  }
+
   if (!user) {
     return (
       <Routes>
@@ -259,7 +283,7 @@ function AppContent() {
   const fallbackPath = allowedMenuIds.includes('/') ? '/' : (allowedMenuIds[0] || '/mapa-calor');
 
   return (
-    <DataProvider user={user}>
+    <DataProvider user={user} alcance={isAdmin ? null : userDoc?.alcance}>
       <Layout user={user} userDoc={userDoc}>
         <Suspense fallback={
           <div className="flex items-center justify-center py-24">

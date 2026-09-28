@@ -318,11 +318,11 @@ export default function SugerenciasEnlaces() {
             </ul>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end shrink-0">
-            <button type="button" onClick={() => setConfirmarTodo(true)} disabled={arrancando || buscando} className="m3-btn-text"
+            <button data-edita type="button" onClick={() => setConfirmarTodo(true)} disabled={arrancando || buscando} className="m3-btn-text"
               title="Busca todos los productos otra vez, aunque se hayan buscado hace poco, y vuelve a revisar cada tienda">
               Buscar todo de nuevo
             </button>
-            <button type="button" onClick={() => lanzar(false)} disabled={arrancando || buscando} className="m3-btn-primary h-10 px-5">
+            <button data-edita type="button" onClick={() => lanzar(false)} disabled={arrancando || buscando} className="m3-btn-primary h-10 px-5">
               <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">travel_explore</span>
               Buscar enlaces
             </button>
@@ -519,7 +519,7 @@ function EstadoCorrida({ corrida, arrancando, onDetener, deteniendo }) {
           <div className="m3-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(avance)}><div style={{ width: `${Math.max(4, avance)}%` }} /></div>
         </div>
         {corrida.url_github && <a href={corrida.url_github} target="_blank" rel="noopener noreferrer" className="m3-btn-text">Ver en GitHub</a>}
-        <button type="button" onClick={onDetener} disabled={deteniendo} className="m3-btn-outline h-9 px-4" title="Detener la búsqueda en GitHub">
+        <button data-edita type="button" onClick={onDetener} disabled={deteniendo} className="m3-btn-outline h-9 px-4" title="Detener la búsqueda en GitHub">
           {deteniendo ? 'Deteniendo…' : 'Detener'}
         </button>
       </div>
@@ -589,18 +589,18 @@ function FilaSugerencia({ s, ver, nombreCadena, procesando, onAceptar, onDescart
           s.ya_tiene_enlace ? (
             <>
               <span className="m3-body-small text-on-surface-variant">Ya tiene enlace en esta cadena</span>
-              <button type="button" onClick={onDescartar} disabled={procesando} className="m3-btn-text">Descartar</button>
+              <button data-edita type="button" onClick={onDescartar} disabled={procesando} className="m3-btn-text">Descartar</button>
             </>
           ) : (
             <>
-              <button type="button" onClick={onDescartar} disabled={procesando} className="m3-btn-text">Descartar</button>
-              <button type="button" onClick={onAceptar} disabled={procesando} className="m3-btn-primary h-10 px-4" title="Crear el enlace en Competencia">
+              <button data-edita type="button" onClick={onDescartar} disabled={procesando} className="m3-btn-text">Descartar</button>
+              <button data-edita type="button" onClick={onAceptar} disabled={procesando} className="m3-btn-primary h-10 px-4" title="Crear el enlace en Competencia">
                 {procesando ? 'Creando…' : 'Aceptar'}
               </button>
             </>
           )
         ) : ver === 'descartada' ? (
-          <button type="button" onClick={onReabrir} disabled={procesando} className="m3-btn-outline h-10 px-4">
+          <button data-edita type="button" onClick={onReabrir} disabled={procesando} className="m3-btn-outline h-10 px-4">
             <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">undo</span>
             Volver a revisar
           </button>

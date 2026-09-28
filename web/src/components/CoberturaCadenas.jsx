@@ -105,7 +105,7 @@ export default function CoberturaCadenas({ productos, cadenas, enlaces, idCadena
                           {propio ? (
                             <span className="material-symbols-outlined text-[20px] text-primary" title="Tu producto tiene enlace en esta cadena">check_circle</span>
                           ) : (
-                            <button type="button" onClick={() => onVincular(p.id_interno, c.id)} className="m3-icon-btn m3-icon-btn-sm"
+                            <button data-edita type="button" onClick={() => onVincular(p.id_interno, c.id)} className="m3-icon-btn m3-icon-btn-sm"
                               title={`Vincular ${p.nombre} en ${c.nombre}`} aria-label={`Vincular ${p.nombre} en ${c.nombre}`}>
                               <span className="material-symbols-outlined">add_link</span>
                             </button>

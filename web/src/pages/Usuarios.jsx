@@ -7,6 +7,8 @@ import ModalWrapper from '../components/ModalWrapper';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import FiltroChip from '../components/FiltroChip';
 import { FormSection, Field, ChoiceChips, normalizar } from '../components/formulario';
+import Segmentado from '../components/Segmentado';
+import { accesoVencido, hoyCaracas } from '../utils/permisos';
 import { getGitHubConfig } from '../utils/githubClient';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
@@ -32,6 +34,11 @@ function emailToDocId(email) {
   return email.toLowerCase().replace('@', '_at_').replaceAll('.', '_');
 }
 
+const DIAS_SIN_ENTRAR = 30;
+const fechaLarga = (f) => (f ? new Date(`${String(f).slice(0, 10)}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const sumarDias = (n) => { const d = new Date(`${hoyCaracas()}T12:00:00`); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const faltaFase41 = (m) => /menus_solo_lectura|vence_el|alcance|debe_cambiar_clave|fn_admin_cambiar_clave|schema cache/i.test(m || '');
+
 // Contraseña inicial facil de dictar: 3 palabras cortas y 2 numeros.
 function generarClave() {
   const silabas = ['ma', 'lo', 'ti', 'ra', 'se', 'no', 'pa', 'vi', 'ce', 'du', 'ga', 'fe'];
@@ -55,6 +62,8 @@ export default function Usuarios({ userDoc }) {
   const [filtroRol, setFiltroRol] = useState('todos');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroCorreos, setFiltroCorreos] = useState('todos');
+  const [claveDe, setClaveDe] = useState(null);         // usuario al que se le cambia la contraseña
+  const [credenciales, setCredenciales] = useState(null); // mensaje listo para enviar
   const menuMasRef = useRef(null);
   const buscadorRef = useRef(null);
 
@@ -74,6 +83,14 @@ export default function Usuarios({ userDoc }) {
     return m;
   }, [accesos]);
 
+  // Activos que no entran hace mas de 30 dias (o nunca).
+  const sinEntrar = (u) => {
+    if (!esUsuarioActivo(u) || accesoVencido(u)) return false;
+    const ultimo = ultimoIngreso.get(String(u.email).toLowerCase());
+    return !ultimo || Date.now() - new Date(ultimo).getTime() > DIAS_SIN_ENTRAR * 86400000;
+  };
+  const cuantosSinEntrar = (usuarios || []).filter(sinEntrar).length;
+
   const filtrados = useMemo(() => {
     const term = normalizar(search);
     return [...(usuarios || [])]
@@ -82,13 +99,15 @@ export default function Usuarios({ userDoc }) {
         if (filtroRol === 'consulta' && esAdminU(u)) return false;
         if (filtroEstado === 'activos' && !esUsuarioActivo(u)) return false;
         if (filtroEstado === 'inactivos' && esUsuarioActivo(u)) return false;
+        if (filtroEstado === 'sin_entrar' && !sinEntrar(u)) return false;
+        if (filtroEstado === 'vencidos' && !accesoVencido(u)) return false;
         if (filtroCorreos === 'alertas' && !u.recibe_alertas_inmediatas) return false;
         if (filtroCorreos === 'resumen' && !u.recibe_resumen_diario) return false;
         if (filtroCorreos === 'ninguno' && (u.recibe_alertas_inmediatas || u.recibe_resumen_diario)) return false;
         return !term || normalizar(`${u.nombre} ${u.email}`).includes(term);
       })
       .sort((a, b) => (esAdminU(b) ? 1 : 0) - (esAdminU(a) ? 1 : 0) || (a.nombre || '').localeCompare(b.nombre || ''));
-  }, [usuarios, search, filtroRol, filtroEstado, filtroCorreos]);
+  }, [usuarios, search, filtroRol, filtroEstado, filtroCorreos, ultimoIngreso]); // eslint-disable-line react-hooks/exhaustive-deps
   const hayFiltros = filtroRol !== 'todos' || filtroEstado !== 'todos' || filtroCorreos !== 'todos';
 
   // ------------------------------------------------------------ acciones
@@ -98,6 +117,23 @@ export default function Usuarios({ userDoc }) {
     const rol = data.rol === 'administrador' ? 'administrador' : 'consulta';
     const menus = rol === 'administrador' ? AVAILABLE_MENUS.map(m => m.id)
       : (data.menus_permitidos?.length ? data.menus_permitidos : DEFAULT_CONSULTA_MENUS);
+
+    // Permisos finos (fase 41): solo para consulta.
+    const extras = rol === 'administrador'
+      ? { menus_solo_lectura: [], vence_el: null, alcance: null }
+      : {
+        menus_solo_lectura: (data.menus_solo_lectura || []).filter(m => menus.includes(m)),
+        vence_el: data.vence_el || null,
+        alcance: data.alcance || null,
+      };
+    const guardarExtras = async (id) => {
+      try {
+        await dbGuardarUsuario({ id, ...extras });
+      } catch (err) {
+        if (faltaFase41(err.message)) addToast('Falta correr fase41_permisos_usuarios.sql: sin ella no se guardan solo lectura, vencimiento ni productos visibles.', 'warning');
+        else throw err;
+      }
+    };
 
     if (isNew) {
       if ((usuarios || []).some(u => u.email?.toLowerCase() === email)) throw new Error('Ya existe un usuario con ese correo.');
@@ -122,7 +158,8 @@ export default function Usuarios({ userDoc }) {
         if (fnError) throw new Error('Falta correr fase40_crear_usuario.sql en Supabase para poder crear usuarios desde el panel.');
         if (fnData?.error) throw new Error(fnData.error);
       }
-      addToast(`Usuario ${email} creado. Pásale su contraseña inicial: podrá cambiarla en "Mi cuenta".`, 'success');
+      await guardarExtras(emailToDocId(email));
+      setCredenciales({ nombre: data.nombre.trim(), email, clave: data.password, nuevo: true });
     } else {
       const original = usuarios.find(u => u.id === editing);
       if (original?.email === userDoc?.email && (rol !== 'administrador' || !data.activo)) {
@@ -137,9 +174,23 @@ export default function Usuarios({ userDoc }) {
         recibe_resumen_diario: data.recibe_resumen_diario,
         activo: data.activo,
       });
+      await guardarExtras(original?.id || emailToDocId(email));
       addToast('Cambios guardados.', 'success');
     }
     setEditing(null);
+    await cargar(true);
+  };
+
+  const ponerClave = async (u, clave) => {
+    const { error } = await supabase.rpc('fn_admin_cambiar_clave', { p_email: u.email, p_password: clave });
+    if (error) {
+      if (error.code === 'PGRST202' || /Could not find the function/i.test(error.message || '')) {
+        throw new Error('Falta correr fase41_permisos_usuarios.sql en Supabase.');
+      }
+      throw new Error(error.message);
+    }
+    setClaveDe(null);
+    setCredenciales({ nombre: u.nombre || u.email, email: u.email, clave, nuevo: false });
     await cargar(true);
   };
 
@@ -205,6 +256,17 @@ export default function Usuarios({ userDoc }) {
         </div>
       </div>
 
+      {cuantosSinEntrar > 0 && filtroEstado !== 'sin_entrar' && (
+        <div className="m3-banner" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">person_alert</span>
+          <span className="m3-body-medium flex-1">
+            {cuantosSinEntrar === 1 ? '1 usuario activo no entra' : `${cuantosSinEntrar} usuarios activos no entran`} hace más de {DIAS_SIN_ENTRAR} días.
+            Revisa si todavía necesitan el acceso.
+          </span>
+          <button type="button" onClick={() => setFiltroEstado('sin_entrar')} className="m3-btn-text">Ver cuáles</button>
+        </div>
+      )}
+
       <section className="m3-data-table" aria-label="Usuarios">
         <div className="m3-data-table-toolbar">
           <div className="flex flex-col gap-3">
@@ -231,7 +293,7 @@ export default function Usuarios({ userDoc }) {
                   <FiltroChip etiqueta="Rol" icono="badge" valor={filtroRol} onChange={setFiltroRol}
                     opciones={[['todos', 'Rol: todos'], ['administrador', 'Administradores'], ['consulta', 'Consulta']]} />
                   <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroEstado} onChange={setFiltroEstado}
-                    opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos']]} />
+                    opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'Inactivos'], ['sin_entrar', `Sin entrar ${DIAS_SIN_ENTRAR}+ días`], ['vencidos', 'Acceso vencido']]} />
                   <FiltroChip etiqueta="Correos" icono="mail" valor={filtroCorreos} onChange={setFiltroCorreos}
                     opciones={[['todos', 'Correos: todos'], ['alertas', 'Reciben alertas'], ['resumen', 'Reciben resumen'], ['ninguno', 'No reciben correos']]} />
                 </>
@@ -257,6 +319,7 @@ export default function Usuarios({ userDoc }) {
                   <button type="button" onClick={() => setFichaId(u.id)} className="flex-1 min-w-0 text-left">
                     <span className="m3-cell-primary">{u.nombre || u.email}</span>
                     <div className="m3-cell-secondary">{u.email}</div>
+                    <EtiquetasUsuario u={u} />
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 m3-body-small">
                       <span>{esAdminU(u) ? 'Administrador' : 'Consulta'}</span>
                       <span className={`m3-status ${esUsuarioActivo(u) ? 'is-on' : ''}`}>{esUsuarioActivo(u) ? 'Activo' : 'Inactivo'}</span>
@@ -303,6 +366,7 @@ export default function Usuarios({ userDoc }) {
                             {yo && <span className="m3-chip-propio shrink-0">Tú</span>}
                           </div>
                           <div className="m3-cell-secondary">{u.email}</div>
+                          <EtiquetasUsuario u={u} />
                         </td>
                         <td>
                           <div className="m3-cell-primary">{esAdminU(u) ? 'Administrador' : 'Consulta'}</div>
@@ -320,6 +384,7 @@ export default function Usuarios({ userDoc }) {
                         </td>
                         <td>
                           <div className="m3-cell-primary">{haceCuanto(ultimoIngreso.get(String(u.email).toLowerCase()))}</div>
+                          {sinEntrar(u) && <div className="m3-cell-secondary m3-count-stale" title={`Activo, pero no entra hace más de ${DIAS_SIN_ENTRAR} días`}>Sin entrar {DIAS_SIN_ENTRAR}+ días</div>}
                         </td>
                         <td><span className={`m3-status ${esUsuarioActivo(u) ? 'is-on' : ''}`}>{esUsuarioActivo(u) ? 'Activo' : 'Inactivo'}</span></td>
                         <td className="m3-sticky-actions">
@@ -327,8 +392,8 @@ export default function Usuarios({ userDoc }) {
                             <button type="button" onClick={() => setEditing(u.id)} className="m3-icon-btn" title="Editar" aria-label={`Editar ${u.nombre}`}>
                               <span className="material-symbols-outlined">edit</span>
                             </button>
-                            <button type="button" onClick={() => enviarEnlaceClave(u)} className="m3-icon-btn"
-                              title="Enviarle un correo para crear una contraseña nueva" aria-label={`Enviar enlace de contraseña a ${u.nombre}`}>
+                            <button type="button" onClick={() => setClaveDe(u)} disabled={yo} className="m3-icon-btn"
+                              title={yo ? 'Tu contraseña la cambias en Mi cuenta' : 'Contraseña nueva: ponerla tú o enviarle un enlace'} aria-label={`Contraseña de ${u.nombre}`}>
                               <span className="material-symbols-outlined">lock_reset</span>
                             </button>
                             <button type="button" onClick={() => alternarActivo(u)} disabled={yo} className="m3-icon-btn"
@@ -358,7 +423,7 @@ export default function Usuarios({ userDoc }) {
           accesos={accesos.filter(a => String(a.email).toLowerCase() === String(ficha.email).toLowerCase())}
           onClose={() => setFichaId(null)}
           onEditar={() => { setFichaId(null); setEditing(ficha.id); }}
-          onClave={() => enviarEnlaceClave(ficha)}
+          onClave={() => setClaveDe(ficha)}
           onAlternarActivo={() => alternarActivo(ficha)}
         />
       )}
@@ -385,8 +450,110 @@ export default function Usuarios({ userDoc }) {
         onCancel={() => setConfirmDelete(null)}
       />
 
+      {claveDe && (
+        <ClaveModal usuario={claveDe} onClose={() => setClaveDe(null)} onPoner={(clave) => ponerClave(claveDe, clave)}
+          onEnlace={async () => { const u = claveDe; setClaveDe(null); await enviarEnlaceClave(u); }} />
+      )}
+      {credenciales && <CredencialesModal datos={credenciales} onClose={() => setCredenciales(null)} />}
+
       <GitHubConfigModal isOpen={showGithubModal} onClose={() => setShowGithubModal(false)} onSaveSuccess={setGithubInfo} />
     </div>
+  );
+}
+
+// Etiquetas de permisos bajo el correo: vencimiento, solo lectura, alcance y
+// contrasena pendiente de cambiar.
+function EtiquetasUsuario({ u }) {
+  const et = [];
+  if (u.vence_el) {
+    et.push(accesoVencido(u)
+      ? <span key="v" className="m3-etiqueta is-error" title="Ya no puede entrar">Venció el {fechaLarga(u.vence_el)}</span>
+      : <span key="v" className="m3-etiqueta" title="Después de esta fecha ya no podrá entrar">Hasta {fechaLarga(u.vence_el)}</span>);
+  }
+  if (!esAdminU(u) && (u.menus_solo_lectura || []).length) {
+    const nombres = AVAILABLE_MENUS.filter(m => u.menus_solo_lectura.includes(m.id)).map(m => m.label);
+    et.push(<span key="l" className="m3-etiqueta" title={`Solo ver: ${nombres.join(', ')}`}>Solo ver en {nombres.length}</span>);
+  }
+  const al = u.alcance || {};
+  const nAlcance = ['laboratorios', 'unidades_negocio', 'categorias'].reduce((n, k) => n + (al[k]?.length || 0), 0);
+  if (!esAdminU(u) && nAlcance) {
+    const texto = ['laboratorios', 'unidades_negocio', 'categorias'].flatMap(k => al[k] || []).join(', ');
+    et.push(<span key="a" className="m3-etiqueta" title={`Solo ve: ${texto}`}>Solo su línea</span>);
+  }
+  if (u.debe_cambiar_clave) et.push(<span key="c" className="m3-etiqueta" title="Al entrar tendrá que poner una contraseña propia">Cambia clave al entrar</span>);
+  return et.length ? <div className="flex flex-wrap gap-1 mt-1">{et}</div> : null;
+}
+
+// Contrasena nueva: ponerla ahora (sin correo) o enviar el enlace.
+function ClaveModal({ usuario: u, onClose, onPoner, onEnlace }) {
+  const [clave, setClave] = useState(generarClave);
+  const [error, setError] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  const poner = async () => {
+    if (clave.length < 8) { setError('Mínimo 8 caracteres.'); return; }
+    setGuardando(true);
+    setError(null);
+    try { await onPoner(clave); } catch (err) { setError(err.message); setGuardando(false); }
+  };
+  return (
+    <ModalWrapper isOpen onClose={onClose} title="Contraseña nueva" subtitle={`${u.nombre || ''} · ${u.email}`} icon="lock_reset" maxWidth="max-w-lg"
+      footer={
+        <div className="flex flex-wrap items-center gap-2 w-full">
+          <button type="button" onClick={onEnlace} className="m3-btn-text mr-auto" title="Le llega un correo para que la cree él mismo">Enviar enlace por correo</button>
+          <button type="button" onClick={onClose} className="m3-btn-text">Cancelar</button>
+          <button type="button" onClick={poner} disabled={guardando} className="m3-btn-primary h-10 px-5">{guardando ? 'Guardando…' : 'Poner contraseña'}</button>
+        </div>
+      }>
+      <p className="m3-body-medium text-on-surface-variant mb-3">
+        Se la pones ahora y se la pasas tú (por WhatsApp, por ejemplo). Al entrar, el panel le pedirá cambiarla por una propia.
+      </p>
+      <Field label="Contraseña" error={error}>
+        <div className="flex gap-2">
+          <input type="text" value={clave} onChange={e => { setClave(e.target.value); setError(null); }} className="m3-input flex-1 font-mono" autoComplete="new-password" />
+          <button type="button" onClick={() => setClave(generarClave())} className="m3-btn-text" title="Generar otra">
+            <span className="material-symbols-outlined">refresh</span>
+            Otra
+          </button>
+        </div>
+      </Field>
+    </ModalWrapper>
+  );
+}
+
+// Mensaje listo para enviar con el acceso: copiar, WhatsApp o correo.
+function CredencialesModal({ datos: d, onClose }) {
+  const { addToast } = useToast();
+  const mensaje = [
+    `Hola ${d.nombre}, ${d.nuevo ? 'ya tienes acceso a' : 'te puse una contraseña nueva en'} TrackFlow, el monitor de precios.`,
+    `Entra aquí: ${urlDelPanel()}`,
+    `Usuario: ${d.email}`,
+    `Contraseña: ${d.clave}`,
+    'Al entrar te pedirá cambiarla por una tuya.',
+  ].join('\n');
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(mensaje); addToast('Mensaje copiado.', 'success'); } catch { addToast('No se pudo copiar: selecciónalo y cópialo a mano.', 'warning'); }
+  };
+  return (
+    <ModalWrapper isOpen onClose={onClose} title={d.nuevo ? 'Usuario creado' : 'Contraseña puesta'} subtitle="Envíale este mensaje con su acceso" icon="send" maxWidth="max-w-lg"
+      footer={
+        <div className="flex flex-wrap items-center gap-2 w-full">
+          <a href={`mailto:${d.email}?subject=${encodeURIComponent('Tu acceso a TrackFlow')}&body=${encodeURIComponent(mensaje)}`} className="m3-btn-text mr-auto">
+            <span className="material-symbols-outlined">mail</span>
+            Correo
+          </a>
+          <a href={`https://wa.me/?text=${encodeURIComponent(mensaje)}`} target="_blank" rel="noopener noreferrer" className="m3-btn-tonal">
+            <span className="material-symbols-outlined">chat</span>
+            WhatsApp
+          </a>
+          <button type="button" onClick={copiar} className="m3-btn-primary h-10 px-5">
+            <span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
+            Copiar
+          </button>
+        </div>
+      }>
+      <pre className="m3-credenciales">{mensaje}</pre>
+      <p className="m3-body-small text-on-surface-variant mt-3">La contraseña no se vuelve a mostrar. Si se pierde, pon otra desde el botón del candado.</p>
+    </ModalWrapper>
   );
 }
 
@@ -472,10 +639,12 @@ function FichaUsuario({ usuario: u, yo, accesos, onClose, onEditar, onClave, onA
               {activo ? 'Desactivar' : 'Reactivar'}
             </button>
           )}
-          <button type="button" onClick={onClave} className="m3-btn-tonal" title="Enviarle un correo para crear una contraseña nueva">
-            <span className="material-symbols-outlined">lock_reset</span>
-            Enviar enlace
-          </button>
+          {!yo && (
+            <button type="button" onClick={onClave} className="m3-btn-tonal" title="Ponerle una contraseña nueva o enviarle un enlace">
+              <span className="material-symbols-outlined">lock_reset</span>
+              Contraseña
+            </button>
+          )}
           <button type="button" onClick={onEditar} className="m3-btn-primary h-10">
             <span className="material-symbols-outlined text-base">edit</span>
             Editar
@@ -502,7 +671,23 @@ function UsuarioModal({ usuario, yo, onSave, onClose }) {
     recibe_alertas_inmediatas: usuario?.recibe_alertas_inmediatas ?? false,
     recibe_resumen_diario: usuario?.recibe_resumen_diario ?? true,
     activo: usuario ? esUsuarioActivo(usuario) : true,
+    menus_solo_lectura: Array.isArray(usuario?.menus_solo_lectura) ? usuario.menus_solo_lectura : [],
+    vence_el: usuario?.vence_el ? String(usuario.vence_el).slice(0, 10) : '',
+    alcance: usuario?.alcance && ['laboratorios', 'unidades_negocio', 'categorias'].some(k => usuario.alcance[k]?.length) ? usuario.alcance : null,
   });
+  const { productos = [] } = useData() || {};
+  // Opciones de "que productos ve": los valores de tus productos.
+  const opcionesAlcance = useMemo(() => {
+    const valores = (campo) => [...new Set(productos.map(p => String(p[campo] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    return { laboratorios: valores('laboratorio'), unidades_negocio: valores('unidad_negocio'), categorias: valores('categoria') };
+  }, [productos]);
+  const alternarLectura = (id, soloVer) => cambiar('menus_solo_lectura',
+    soloVer ? [...new Set([...form.menus_solo_lectura, id])] : form.menus_solo_lectura.filter(m => m !== id));
+  const alternarAlcance = (clave, valor) => {
+    const actual = form.alcance?.[clave] || [];
+    const lista = actual.includes(valor) ? actual.filter(v => v !== valor) : [...actual, valor];
+    cambiar('alcance', { ...(form.alcance || {}), [clave]: lista });
+  };
   const [verClave, setVerClave] = useState(true);
   const [errores, setErrores] = useState({});
   const [errorGeneral, setErrorGeneral] = useState(null);
@@ -518,6 +703,10 @@ function UsuarioModal({ usuario, yo, onSave, onClose }) {
     if (!form.nombre.trim()) err.nombre = 'Obligatorio';
     if (isNew && form.password.length < 8) err.password = 'Mínimo 8 caracteres';
     if (form.rol === 'consulta' && form.menus_permitidos.length === 0) err.menus = 'Elige al menos un menú';
+    if (form.alcance && !['laboratorios', 'unidades_negocio', 'categorias'].some(k => form.alcance[k]?.length)) {
+      setErrorGeneral('En «Qué productos ve» marca al menos un laboratorio, unidad o categoría, o elige «Todos».');
+      return;
+    }
     setErrores(err);
     if (Object.keys(err).length) return;
     setSaving(true);
@@ -567,7 +756,7 @@ function UsuarioModal({ usuario, yo, onSave, onClose }) {
           </div>
           {isNew && (
             <Field label="Contraseña inicial" requerido error={errores.password}
-              hint="Pásasela a la persona; la cambia en Mi cuenta. También puedes enviarle el enlace de contraseña después.">
+              hint="Al crear el usuario te damos un mensaje listo para enviársela. Al entrar, el panel le pedirá cambiarla.">
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input type={verClave ? 'text' : 'password'} value={form.password} onChange={e => cambiar('password', e.target.value)}
@@ -611,6 +800,63 @@ function UsuarioModal({ usuario, yo, onSave, onClose }) {
             </Field>
           )}
         </FormSection>
+
+        {form.rol === 'consulta' && (
+          <FormSection titulo="Permisos" icono="tune">
+            <Field label="Qué puede hacer en cada menú" hint="Nadie de consulta puede borrar. «Solo ver» tampoco deja crear ni cambiar.">
+              <ul className="m3-permisos-lista">
+                {AVAILABLE_MENUS.filter(m => form.menus_permitidos.includes(m.id)).map(m => (
+                  <li key={m.id}>
+                    <span className="inline-flex items-center gap-2 m3-body-medium text-on-surface">
+                      <span className="material-symbols-outlined text-[18px] text-on-surface-variant" aria-hidden="true">{m.icon}</span>{m.label}
+                    </span>
+                    <Segmentado etiqueta={`Permiso en ${m.label}`} valor={form.menus_solo_lectura.includes(m.id) ? 'ver' : 'editar'}
+                      onChange={v => alternarLectura(m.id, v === 'ver')}
+                      opciones={[['editar', 'Ver y editar', 'Puede crear y cambiar, no borrar'], ['ver', 'Solo ver', 'Solo mira']]} />
+                  </li>
+                ))}
+              </ul>
+            </Field>
+
+            <Field label="Acceso hasta" hint="Déjalo vacío si no vence. Después de esa fecha no podrá entrar.">
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="date" value={form.vence_el} min={hoyCaracas()} onChange={e => cambiar('vence_el', e.target.value)} className="m3-input w-auto" />
+                <button type="button" onClick={() => cambiar('vence_el', sumarDias(30))} className="m3-btn-text">+30 días</button>
+                <button type="button" onClick={() => cambiar('vence_el', sumarDias(90))} className="m3-btn-text">+90 días</button>
+                {form.vence_el && <button type="button" onClick={() => cambiar('vence_el', '')} className="m3-btn-text">Sin fecha</button>}
+              </div>
+            </Field>
+
+            <Field label="Qué productos ve" hint="Limita Dashboard, Mapa de Calor, Productos y Competencia a una línea. Los análisis de Experimental muestran todo: no se lo des si limitas.">
+              <Segmentado etiqueta="Qué productos ve" valor={form.alcance ? 'algunos' : 'todos'}
+                onChange={v => cambiar('alcance', v === 'todos' ? null : { laboratorios: [], unidades_negocio: [], categorias: [] })}
+                opciones={[['todos', 'Todos'], ['algunos', 'Solo algunos']]} />
+              {form.alcance && (
+                <div className="space-y-3 mt-3">
+                  {[['laboratorios', 'Laboratorios'], ['unidades_negocio', 'Unidades de negocio'], ['categorias', 'Categorías']].map(([clave, titulo]) => (
+                    opcionesAlcance[clave].length > 0 && (
+                      <div key={clave}>
+                        <div className="m3-label-medium text-on-surface-variant mb-1">{titulo}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {opcionesAlcance[clave].map(v => {
+                            const on = (form.alcance[clave] || []).includes(v);
+                            return (
+                              <button key={v} type="button" aria-pressed={on} onClick={() => alternarAlcance(clave, v)} className={`m3-choice-chip ${on ? 'is-selected' : ''}`}>
+                                {on && <span className="material-symbols-outlined" aria-hidden="true">check</span>}
+                                {v}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )
+                  ))}
+                  <p className="m3-body-small text-on-surface-variant">Si marcas en varios grupos, verá los productos que cumplan todo a la vez.</p>
+                </div>
+              )}
+            </Field>
+          </FormSection>
+        )}
 
         <FormSection titulo="Correos" icono="mail">
           <label className="m3-switch-label">

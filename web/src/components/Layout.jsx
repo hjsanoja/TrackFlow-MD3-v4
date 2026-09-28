@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { registrarAcceso } from '../utils/accesos';
 import { limpiarCacheDatos } from '../utils/cacheDatos';
 import { useData } from '../context/DataContext';
 import { usePendientesRevision } from '../hooks/usePendientesRevision';
+import { permisosEn } from '../utils/permisos';
 
 export default function Layout({ user, userDoc, children }) {
   const { isRefreshing, refreshData, productos = [] } = useData();
@@ -46,6 +47,17 @@ export default function Layout({ user, userDoc, children }) {
     }
     window.location.reload();
   };
+
+  // Permisos del menu abierto: clases en <body> que ocultan los botones de
+  // borrar (data-borra) y, en solo lectura, los de crear o editar
+  // (data-edita). En <body> para que alcancen tambien a las ventanas.
+  const ubicacion = useLocation();
+  const permisos = permisosEn(userDoc, ubicacion.pathname);
+  useEffect(() => {
+    document.body.classList.toggle('sin-borrar', !permisos.puedeBorrar);
+    document.body.classList.toggle('solo-lectura', permisos.soloLectura);
+    return () => document.body.classList.remove('sin-borrar', 'solo-lectura');
+  }, [permisos.puedeBorrar, permisos.soloLectura]);
 
   // Capturas dudosas por revisar: contador junto a Experimental.
   const pendientesRevision = usePendientesRevision();
@@ -316,6 +328,12 @@ export default function Layout({ user, userDoc, children }) {
         </header>
 
         <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto pb-20 md:pb-8">
+          {permisos.soloLectura && (
+            <div className="m3-banner mb-4" role="status">
+              <span className="material-symbols-outlined" aria-hidden="true">visibility</span>
+              <span className="m3-body-medium flex-1">Solo lectura: puedes ver este menú pero no crear ni cambiar nada. Si necesitas editarlo, pídeselo a un administrador.</span>
+            </div>
+          )}
           {children}
         </div>
       </main>

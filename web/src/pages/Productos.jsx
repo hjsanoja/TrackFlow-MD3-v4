@@ -733,11 +733,11 @@ export default function Productos() {
             <span className="material-symbols-outlined text-base">download</span>
             <span>Exportar</span>
           </button>
-          <button onClick={() => setShowCsvModal(true)} className="m3-btn-outline" title="Crear o actualizar muchos productos con un CSV">
+          <button data-edita onClick={() => setShowCsvModal(true)} className="m3-btn-outline" title="Crear o actualizar muchos productos con un CSV">
             <span className="material-symbols-outlined text-base">upload_file</span>
             <span>Carga masiva</span>
           </button>
-          <button onClick={() => setEditing('new')} className="m3-btn-primary">
+          <button data-edita onClick={() => setEditing('new')} className="m3-btn-primary">
             <span className="material-symbols-outlined text-base">add</span>
             <span>Nuevo producto</span>
           </button>
@@ -748,7 +748,7 @@ export default function Productos() {
               <span className="material-symbols-outlined">more_vert</span>
             </summary>
             <div className="m3-menu-panel" role="menu">
-              <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
+              <button data-borra type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
                 disabled={deletingAll || productos.length === 0}
                 onClick={() => { menuMasRef.current?.removeAttribute('open'); setConfirmDeleteAll(true); }}>
                 <span className="material-symbols-outlined">delete_sweep</span>
@@ -808,16 +808,16 @@ export default function Productos() {
               </div>
               {!procesandoSel && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => cambiarActivoSeleccion(false)} className="m3-btn-primary h-10"
+                  <button data-edita type="button" onClick={() => cambiarActivoSeleccion(false)} className="m3-btn-primary h-10"
                     title="Deja de mostrarse y de vigilarse. Conserva el historial.">
                     <span className="material-symbols-outlined">archive</span>
                     Dar de baja
                   </button>
-                  <button type="button" onClick={() => cambiarActivoSeleccion(true)} className="m3-btn-text">
+                  <button data-edita type="button" onClick={() => cambiarActivoSeleccion(true)} className="m3-btn-text">
                     <span className="material-symbols-outlined">unarchive</span>
                     Reactivar
                   </button>
-                  <button type="button" onClick={() => setConfirmBorrarSel(true)} className="m3-btn-text m3-btn-text-danger">
+                  <button data-borra type="button" onClick={() => setConfirmBorrarSel(true)} className="m3-btn-text m3-btn-text-danger">
                     <span className="material-symbols-outlined">delete</span>
                     Eliminar
                   </button>
@@ -943,7 +943,7 @@ export default function Productos() {
                       <span className={`m3-status ${p.activo ? 'is-on' : ''}`}>{p.activo ? 'Activo' : 'De baja'}</span>
                     </div>
                   </button>
-                  <button type="button" onClick={() => setEditing(p.id)} className="m3-icon-btn" aria-label={`Editar ${p.nombre}`}>
+                  <button data-edita type="button" onClick={() => setEditing(p.id)} className="m3-icon-btn" aria-label={`Editar ${p.nombre}`}>
                     <span className="material-symbols-outlined">edit</span>
                   </button>
                 </li>
@@ -1055,16 +1055,16 @@ export default function Productos() {
                       </td>
                       <td className="m3-sticky-actions">
                         <div className="flex justify-end gap-1">
-                          <button type="button" onClick={() => setEditing(p.id)} className="m3-icon-btn"
+                          <button data-edita type="button" onClick={() => setEditing(p.id)} className="m3-icon-btn"
                             title="Editar" aria-label={`Editar ${p.nombre}`}>
                             <span className="material-symbols-outlined">edit</span>
                           </button>
-                          <button type="button" onClick={() => handleToggleActivo(p)} className="m3-icon-btn"
+                          <button data-edita type="button" onClick={() => handleToggleActivo(p)} className="m3-icon-btn"
                             title={p.activo ? 'Dar de baja' : 'Reactivar'}
                             aria-label={`${p.activo ? 'Dar de baja' : 'Reactivar'} ${p.nombre}`}>
                             <span className="material-symbols-outlined">{p.activo ? 'archive' : 'unarchive'}</span>
                           </button>
-                          <button type="button" onClick={() => handleDelete(p)} className="m3-icon-btn m3-icon-btn-danger"
+                          <button data-borra type="button" onClick={() => handleDelete(p)} className="m3-icon-btn m3-icon-btn-danger"
                             title="Eliminar" aria-label={`Eliminar ${p.nombre}`}>
                             <span className="material-symbols-outlined">delete</span>
                           </button>

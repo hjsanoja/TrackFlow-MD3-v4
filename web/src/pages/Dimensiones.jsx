@@ -266,7 +266,7 @@ export default function Dimensiones() {
         </div>
         <div className="flex gap-2 items-center shrink-0">
           {!config.soloLectura && (
-            <button onClick={() => setEditing({ row: null, nuevo: true })} className="m3-btn-primary">
+            <button data-edita onClick={() => setEditing({ row: null, nuevo: true })} className="m3-btn-primary">
               <span className="material-symbols-outlined text-base">add</span>
               <span>Nuevo: {config.singular}</span>
             </button>
@@ -276,7 +276,7 @@ export default function Dimensiones() {
               <span className="material-symbols-outlined">more_vert</span>
             </summary>
             <div className="m3-menu-panel" role="menu">
-              <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
+              <button data-borra type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
                 onClick={() => { menuMasRef.current?.removeAttribute('open'); setShowResetModal(true); }}>
                 <span className="material-symbols-outlined">cleaning_services</span>
                 Limpiar datos de prueba
@@ -409,16 +409,16 @@ export default function Dimensiones() {
                     <td className="m3-sticky-actions">
                       <div className="flex justify-end gap-1">
                         {!config.soloLectura && (
-                          <button type="button" onClick={() => setEditing({ row: r, nuevo: false })} className="m3-icon-btn" title="Editar" aria-label="Editar">
+                          <button data-edita type="button" onClick={() => setEditing({ row: r, nuevo: false })} className="m3-icon-btn" title="Editar" aria-label="Editar">
                             <span className="material-symbols-outlined">edit</span>
                           </button>
                         )}
                         {config.uso && (
-                          <button type="button" onClick={() => setUniendo({ row: r })} className="m3-icon-btn" title="Unir con otro (pasa sus productos y lo borra)" aria-label={`Unir ${r.nombre} con otro`}>
+                          <button data-borra type="button" onClick={() => setUniendo({ row: r })} className="m3-icon-btn" title="Unir con otro (pasa sus productos y lo borra)" aria-label={`Unir ${r.nombre} con otro`}>
                             <span className="material-symbols-outlined">merge</span>
                           </button>
                         )}
-                        <button type="button" onClick={() => pedirBorrado(r)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label="Eliminar">
+                        <button data-borra type="button" onClick={() => pedirBorrado(r)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label="Eliminar">
                           <span className="material-symbols-outlined">delete</span>
                         </button>
                       </div>

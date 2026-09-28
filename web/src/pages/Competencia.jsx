@@ -879,11 +879,11 @@ export default function Competencia() {
             <span className="material-symbols-outlined text-base">download</span>
             <span>Exportar</span>
           </button>
-          <button onClick={() => setShowCsvModal(true)} className="m3-btn-outline" title="Crear o actualizar muchos enlaces con un CSV">
+          <button data-edita onClick={() => setShowCsvModal(true)} className="m3-btn-outline" title="Crear o actualizar muchos enlaces con un CSV">
             <span className="material-symbols-outlined text-base">upload_file</span>
             <span>Carga masiva</span>
           </button>
-          <button onClick={() => { setPreseleccion(null); setEditing('new'); }} className="m3-btn-primary">
+          <button data-edita onClick={() => { setPreseleccion(null); setEditing('new'); }} className="m3-btn-primary">
             <span className="material-symbols-outlined text-base">add_link</span>
             <span>Vincular enlace</span>
           </button>
@@ -897,12 +897,12 @@ export default function Competencia() {
                 <span className="material-symbols-outlined">grid_view</span>
                 Cobertura por cadena
               </button>
-              <button type="button" role="menuitem" className="m3-menu-item" disabled={Boolean(robot.corrida)}
+              <button data-edita type="button" role="menuitem" className="m3-menu-item" disabled={Boolean(robot.corrida)}
                 onClick={() => { menuMasRef.current?.removeAttribute('open'); setConfirmRobotTodos(true); }}>
                 <span className={`material-symbols-outlined ${robot.corrida ? 'animate-spin' : ''}`}>{robot.corrida ? 'sync' : 'smart_toy'}</span>
                 {robot.corrida ? 'Robot en curso…' : 'Leer todos los precios'}
               </button>
-              <button type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
+              <button data-borra type="button" role="menuitem" className="m3-menu-item m3-menu-item-danger"
                 disabled={deletingAll || items.length === 0}
                 onClick={() => { menuMasRef.current?.removeAttribute('open'); setConfirmDeleteAll(true); }}>
                 <span className="material-symbols-outlined">delete_sweep</span>
@@ -921,7 +921,7 @@ export default function Competencia() {
           <span className="m3-body-medium flex-1">
             <strong>{productoFiltradoSinEnlaces.nombre}</strong> todavía no tiene enlaces: el robot no lo vigila.
           </span>
-          <button type="button" onClick={() => { setPreseleccion({ producto: filtroProducto, cadena: '' }); setEditing('new'); }} className="m3-btn-text">Vincular enlace</button>
+          <button data-edita type="button" onClick={() => { setPreseleccion({ producto: filtroProducto, cadena: '' }); setEditing('new'); }} className="m3-btn-text">Vincular enlace</button>
         </div>
       ) : (urlsQueFallan > 0 || duplicados.size > 0 || mercadoDistinto.size > 0 || caidosActivos > 0) && filtroRevisar === 'todos' && (
         <div className="m3-banner" role="status">
@@ -978,21 +978,21 @@ export default function Competencia() {
               </div>
               {!procesandoSel && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={async () => { if (await lanzarRobot(seleccionados)) setSeleccion(new Set()); }}
+                  <button data-edita type="button" onClick={async () => { if (await lanzarRobot(seleccionados)) setSeleccion(new Set()); }}
                     disabled={Boolean(robot.corrida)} className="m3-btn-tonal"
                     title={robot.corrida ? 'Ya hay una lectura en curso' : 'El robot lee ahora el precio de los enlaces seleccionados'}>
                     <span className="material-symbols-outlined">smart_toy</span>
                     Leer precios
                   </button>
-                  <button type="button" onClick={() => cambiarActivoSeleccion(false)} className="m3-btn-primary h-10" title="El robot deja de leerlos. Conserva el historial.">
+                  <button data-edita type="button" onClick={() => cambiarActivoSeleccion(false)} className="m3-btn-primary h-10" title="El robot deja de leerlos. Conserva el historial.">
                     <span className="material-symbols-outlined">archive</span>
                     Dar de baja
                   </button>
-                  <button type="button" onClick={() => cambiarActivoSeleccion(true)} className="m3-btn-text">
+                  <button data-edita type="button" onClick={() => cambiarActivoSeleccion(true)} className="m3-btn-text">
                     <span className="material-symbols-outlined">unarchive</span>
                     Reactivar
                   </button>
-                  <button type="button" onClick={() => setConfirmBorrarSel(true)} className="m3-btn-text m3-btn-text-danger">
+                  <button data-borra type="button" onClick={() => setConfirmBorrarSel(true)} className="m3-btn-text m3-btn-text-danger">
                     <span className="material-symbols-outlined">delete</span>
                     Eliminar
                   </button>
@@ -1087,7 +1087,7 @@ export default function Competencia() {
                         <span className={`m3-status ${it.activo ? 'is-on' : ''}`}>{it.activo ? 'Activo' : 'De baja'}</span>
                       </div>
                     </button>
-                    <button type="button" onClick={() => setEditing(it.id)} className="m3-icon-btn" aria-label={`Editar ${it.marca}`}>
+                    <button data-edita type="button" onClick={() => setEditing(it.id)} className="m3-icon-btn" aria-label={`Editar ${it.marca}`}>
                       <span className="material-symbols-outlined">edit</span>
                     </button>
                   </li>
@@ -1183,14 +1183,14 @@ export default function Competencia() {
                         <td><span className={`m3-status ${it.activo ? 'is-on' : ''}`}>{it.activo ? 'Activo' : 'De baja'}</span></td>
                         <td className="m3-sticky-actions">
                           <div className="flex justify-end gap-1">
-                            <button type="button" onClick={() => setEditing(it.id)} className="m3-icon-btn" title="Editar" aria-label={`Editar ${it.marca}`}>
+                            <button data-edita type="button" onClick={() => setEditing(it.id)} className="m3-icon-btn" title="Editar" aria-label={`Editar ${it.marca}`}>
                               <span className="material-symbols-outlined">edit</span>
                             </button>
-                            <button type="button" onClick={() => handleToggleActivo(it)} className="m3-icon-btn"
+                            <button data-edita type="button" onClick={() => handleToggleActivo(it)} className="m3-icon-btn"
                               title={it.activo ? 'Dar de baja' : 'Reactivar'} aria-label={`${it.activo ? 'Dar de baja' : 'Reactivar'} ${it.marca}`}>
                               <span className="material-symbols-outlined">{it.activo ? 'archive' : 'unarchive'}</span>
                             </button>
-                            <button type="button" onClick={() => setConfirmDelete(it)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label={`Eliminar ${it.marca}`}>
+                            <button data-borra type="button" onClick={() => setConfirmDelete(it)} className="m3-icon-btn m3-icon-btn-danger" title="Eliminar" aria-label={`Eliminar ${it.marca}`}>
                               <span className="material-symbols-outlined">delete</span>
                             </button>
                           </div>
