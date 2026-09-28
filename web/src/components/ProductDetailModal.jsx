@@ -173,8 +173,8 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     || (a.sinPrecio ? 1 : 0) - (b.sinPrecio ? 1 : 0)
     || (b.priceUsd ?? 0) - (a.priceUsd ?? 0));
   const tuyas = ofertas.filter(o => !o.sinPrecio && o.tipo === 'propio' && (cadenaFiltro === 'todos' || o.cadena === cadenaFiltro));
-  const pvp = Number(activo?.pvp_propio_usd || 0) > 0 ? Number(activo.pvp_propio_usd) / (porUnidad ? unidadesPropio : 1) : null;
-  const tuPrecio = tuyas.length ? Math.min(...tuyas.map(o => o.priceUsd)) : pvp;
+  // Solo tus enlaces: el PVP no entra en los calculos (es para otro cliente).
+  const tuPrecio = tuyas.length ? Math.min(...tuyas.map(o => o.priceUsd)) : null;
   const valores = visibles.map(o => o.priceUsd);
   const minimo = valores.length ? Math.min(...valores) : null;
   const maximo = valores.length ? Math.max(...valores) : null;
@@ -409,7 +409,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
         {/* Indicadores: sobre las ofertas que dejan ver los filtros */}
         <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3" aria-label="Indicadores del producto">
           <StatCard compacto label={`Tu precio${porUnidad ? ' por unidad' : ''}`} value={fmtModo(tuPrecio)} icon="sell" tono="primary"
-            hint={tuyas.length ? (tuyas.length === 1 ? 'Tu enlace' : `El más bajo de tus ${tuyas.length} enlaces`) : pvp ? 'PVP cargado en Productos' : 'Sin precio tuyo'} />
+            hint={tuyas.length ? (tuyas.length === 1 ? 'Tu enlace' : `El más bajo de tus ${tuyas.length} enlaces`) : 'Sin precio tuyo en cadenas'} />
           <StatCard compacto label={`Mínimo ${sufijoGrupo}`} value={fmtModo(minimo)} icon="south" tono="neutral"
             hint={ofertaMin ? `${nombreCorto(ofertaMin.marca)} en ${nombreCadena(ofertaMin.cadena)}` : 'Sin precios'} />
           <StatCard compacto label={`Promedio ${sufijoPromedio}`} value={fmtModo(promedio)} icon="balance" tono="neutral"

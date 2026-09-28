@@ -561,6 +561,19 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## El PVP no entra en ningún cálculo (PR #72, fase 43)
+
+- Regla de Hernando: el PVP es un precio para otro cliente; solo sale en
+  Productos y en los reportes. "Tu precio" es SOLO el de tus enlaces en las
+  cadenas; sin enlace leído el producto queda sin tu precio (cae en "Sin
+  comparar" y no cuenta en promedios, posiciones ni medianas).
+- Quitado el respaldo al PVP en: `useAnalisisPrecios` (Dashboard, Mapa de
+  Calor), `ProductDetailModal` (ficha), `BrechaHistoricaUsd` y
+  `CanibalizacionInterna` (solo precios de anaquel; sin ellos no evalúa).
+- `sql/fase43_sin_pvp_en_calculos.sql`: `fn_posicion_productos` sin el
+  paso `con_pvp` (misma firma que la fase 31); arrastra a
+  `fn_tendencia_posicion`, `fn_comparar_periodos` y `fn_indice_molecula`.
+
 ## Tabla usuarios completa (PR #71, fase 42)
 
 - La tabla `usuarios` del proyecto viene de la migración de Firebase
