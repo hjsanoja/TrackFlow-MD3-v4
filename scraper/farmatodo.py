@@ -58,7 +58,7 @@ def parse_price(text) -> float | None:
         return None
 
     cleaned = re.sub(r'(?i)\b(?:bs\.?s?|ves|bolivares?)\b', '', str_val)
-    cleaned = cleaned.replace('\xa0', ' ').replace('\u202f', ' ').strip()
+    cleaned = cleaned.replace('\xa0', ' ').replace(' ', ' ').strip()
 
     if ',' in cleaned:
         cleaned = cleaned.replace('.', '').replace(',', '.')
@@ -420,13 +420,13 @@ async def block_unnecessary_resources(route):
     await route.continue_()
 
 
-async def extract_product_data_from_page(page, url: str, target_product_id: str | None, diagnostico: bool = False) -> dict:
+async def extract_product_data_from_page(page, url: str, target_product_id: str | None, diagnostico: bool = False, bcv_rate: float = 0) -> dict:
     """
     Motor de extracción con anclaje al ID de producto, resolución por especificidad,
     exclusión estricta de carruseles/productos relacionados y validación de precio unitario.
     """
     return await page.evaluate(r"""
-        ({ target_product_id, diagnostico }) => {
+        ({ target_product_id, diagnostico, bcv_rate }) => {
             const bodyText = document.body ? document.body.innerText || '' : '';
             const title = document.title || '';
 
@@ -726,10 +726,21 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
             // Farmatodo. Solo los primeros precios de la ficha (no relacionados).
             if (!isFarmatodo && (!precio_lista || precio_moneda === 'USD')) {
                 try {
-                    const zona = document.querySelector('#product_detail, .oe_website_sale #product_details, main .product, .product-detail, [class*="product-detail" i], [class*="productDetail" i], [class*="product_detail" i], main') || document.body;
+                    const previo = { lista: precio_lista, oferta: precio_oferta, moneda: precio_moneda, metodo: metodo_extraccion };
+                    const reBs = /(bs\.?\s?s?\.?)[ \t]*(\d[\d.,]*)|(\d[\d.,]*)[ \t]*(bs\.?\s?s?\.?)(?![a-z])/i;
+                    // La ficha: el bloque que contiene el TITULO del producto (h1)
+                    // y un precio en Bs. Asi no se toma un monto que se repite en
+                    // todas las paginas de la tienda (envio, carrito, banner),
+                    // que dejaba a todos los productos con el mismo precio.
+                    let zona = null;
+                    const titulo = [...document.querySelectorAll('h1')].find(isVisible);
+                    for (let n = titulo && titulo.parentElement, i = 0; n && n !== document.body && i < 6; n = n.parentElement, i++) {
+                        if (reBs.test(n.innerText || '')) { zona = n; break; }
+                    }
+                    zona = zona || document.querySelector('#product_detail, .oe_website_sale #product_details, main .product, .product-detail, [class*="product-detail" i], [class*="productDetail" i], [class*="product_detail" i]');
+                    if (!zona) throw new Error('sin ficha');
                     const esTachado = (el) => !!el.closest('del, s, strike, [class*="old" i], [class*="regular" i], [class*="before" i], [class*="default_price" i], [class*="list-price" i], [class*="listPrice" i], [class*="tachado" i]')
                         || (getComputedStyle(el).textDecorationLine || '').includes('line-through');
-                    const reBs = /(bs\.?\s?s?\.?)[ \t]*(\d[\d.,]*)|(\d[\d.,]*)[ \t]*(bs\.?\s?s?\.?)(?![a-z])/i;
                     const reBsTodos = new RegExp(reBs.source, 'gi');
                     // valor -> tachado (si en algun lugar aparece tachado, lo es)
                     const porValor = new Map();
@@ -760,6 +771,15 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                         }
                         precio_moneda = 'VES';
                         metodo_extraccion = "dom_bs";
+                        // Si la pagina ya daba el precio en dolares, el de Bs tiene
+                        // que cuadrar con la tasa (±25 %); si no, manda el de dolares.
+                        if (previo.moneda === 'USD' && previo.lista > 0 && bcv_rate > 0
+                            && Math.abs(precio_lista / bcv_rate - previo.lista) / previo.lista > 0.25) {
+                            precio_lista = previo.lista;
+                            precio_oferta = previo.oferta;
+                            precio_moneda = previo.moneda;
+                            metodo_extraccion = previo.metodo;
+                        }
                     }
                 } catch(e) {}
             }
@@ -828,7 +848,7 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                 diag
             };
         }
-    """, {"target_product_id": target_product_id, "diagnostico": diagnostico})
+    """, {"target_product_id": target_product_id, "diagnostico": diagnostico, "bcv_rate": bcv_rate or 0})
 
 
 async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id: str = "1") -> dict:
@@ -989,7 +1009,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             else:
                 await asyncio.sleep(0.8)
 
-            data = await extract_product_data_from_page(page, url, target_product_id, DIAGNOSTICO and not is_farmatodo)
+            data = await extract_product_data_from_page(page, url, target_product_id, DIAGNOSTICO and not is_farmatodo, bcv_rate)
 
         except PlaywrightTimeout:
             result["error"] = "Timeout cargando la página"
@@ -1348,10 +1368,44 @@ async def main_async():
         for p in promos_no_resueltas[:10]:
             print(f"  - {p}")
 
+    repetidos = marcar_precios_repetidos(resultados)
+    if repetidos:
+        print(f"\n⚠️  PRECIO REPETIDO: {repetidos} lecturas con el mismo precio exacto que otros productos de la misma tienda. Se guardan como dudosas (Revisión de capturas).")
+
     print(f"\nResultados guardados localmente en: {OUT_PATH}")
     print("=" * 60 + "\n")
 
     OUT_PATH.write_text(json.dumps(resultados, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+MIN_REPETIDOS = 3
+
+
+def marcar_precios_repetidos(resultados: list) -> int:
+    """Si 3 o mas enlaces DISTINTOS de la misma tienda leen el mismo precio al
+    centavo en una corrida, casi seguro el robot tomo un monto que se repite
+    en todas las paginas (envio, carrito, banner) y no el del producto. Esas
+    lecturas se marcan sospecha='precio_repetido': se guardan como dudosas y
+    no entran en los calculos hasta revisarlas. Farmatodo no se marca: se lee
+    anclado al ID del producto. Devuelve cuantas se marcaron."""
+    grupos: dict = {}
+    for r in resultados:
+        url = (r.get("url") or "").lower()
+        precio = r.get("precio_full_bs")
+        if r.get("error") or not precio or "farmatodo" in url:
+            continue
+        dominio = re.sub(r"^https?://(www\.)?", "", url).split("/")[0]
+        grupos.setdefault((dominio, round(float(precio), 2)), []).append(r)
+    marcadas = 0
+    for (dominio, precio), lista in grupos.items():
+        urls = {re.sub(r"[?#].*$", "", (r.get("url") or "").lower()) for r in lista}
+        nombres = {(r.get("marca") or r.get("nombre") or "").strip().lower() for r in lista}
+        if len(urls) >= MIN_REPETIDOS and len(nombres) >= 2:
+            print(f"   • {dominio}: {len(urls)} enlaces con Bs {precio}", flush=True)
+            for r in lista:
+                r["sospecha"] = "precio_repetido"
+                marcadas += 1
+    return marcadas
 
 
 def main():

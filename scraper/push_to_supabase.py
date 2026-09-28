@@ -288,10 +288,28 @@ def main():
                         "promo_texto_raw": r.get("tipo_promo"),
                         "origen": "scraper"
                     })
+                    # Precio repetido en varios productos de la misma tienda
+                    # (farmatodo.marcar_precios_repetidos): entra como dudosa.
+                    if not es_err and r.get("sospecha") == "precio_repetido":
+                        fact_records[-1]["sospechoso"] = True
+                        fact_records[-1]["motivo_sospecha"] = "precio_repetido"
 
                 if fact_records:
                     for i in range(0, len(fact_records), 100):
-                        insert("fact_precios", fact_records[i:i+100])
+                        lote = fact_records[i:i+100]
+                        try:
+                            insert("fact_precios", lote)
+                        except Exception:
+                            # Sin la fase 44 la base no conoce el motivo
+                            # 'precio_repetido' (el error HTTP no trae el
+                            # detalle): se reintenta con el motivo generico de
+                            # salto de precio, que siempre existe.
+                            if not any(f.get("motivo_sospecha") == "precio_repetido" for f in lote):
+                                raise
+                            for f in lote:
+                                if f.get("motivo_sospecha") == "precio_repetido":
+                                    f["motivo_sospecha"] = "variacion_precio"
+                            insert("fact_precios", lote)
                     print(f"[RELACIONAL] ✅ Insertados {len(fact_records)} hechos de precios en fact_precios.")
                 if sin_publicacion:
                     print(f"[RELACIONAL] ⚠️  {sin_publicacion} resultados sin enlace (publicación) en Supabase: no se guardaron.")
