@@ -561,6 +561,49 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Precios repetidos (PR #73, fase 44)
+
+- Síntoma: en Farmabien varios productos distintos quedaban con el MISMO
+  precio al centavo. El robot de precios, en tiendas sin vía rápida, tomaba
+  el primer precio en Bs de una zona demasiado amplia (`main`/`body`): un
+  monto que se repite en todas las páginas.
+- **Robot** (`farmatodo.py`): la zona del precio en Bs (`dom_bs`) es ahora el
+  bloque que contiene el título (h1) y un precio; si no hay, los selectores
+  de ficha, y nunca `main`/`body`. Si la página ya daba precio en USD
+  (JSON-LD/meta), el de Bs tiene que cuadrar con la tasa (±25 %) o manda el
+  de USD (`bcv_rate` pasa al `evaluate`). Al final de cada corrida,
+  `marcar_precios_repetidos`: 3+ enlaces distintos de la misma tienda (no
+  Farmatodo) con el mismo precio y nombres distintos → `sospecha =
+  'precio_repetido'`; `push_to_supabase` los guarda con `sospechoso` y ese
+  motivo (sin la fase 44 reintenta con `variacion_precio`).
+- **SQL** `sql/fase44_precios_repetidos.sql`: motivo `precio_repetido` en el
+  CHECK; vista `v_precios_repetidos` (última lectura por enlace en 3 días,
+  agrupada por cadena y precio exacto; grupos de 2+ enlaces de 2+ productos
+  distintos; salen los ya revisados).
+- **Panel**: Revisión de capturas → cuarta vista "Precios repetidos"
+  (`components/revision/PreciosRepetidos.jsx`): grupos por cadena y precio,
+  abrir cada enlace, Corregir enlace, Volver a leer, "Son erróneas"
+  (`sospechoso`, `revisado_manual`, motivo) o "Son correctos"
+  (`revisado_manual`: el grupo no vuelve a salir). Motivo "Precio repetido"
+  en la lista de pendientes.
+
+## Guardado roto por "precio repetido" (PR #74, sin SQL)
+
+- Síntoma (corrida 36582439205, 1468 enlaces): `push_to_supabase` falló con
+  `400 PGRST102 "All object keys must match"` y no guardó los precios de la
+  corrida (solo los lotes de 100 anteriores al primero con un precio
+  repetido).
+- Causa: el #73 añadía `sospechoso` y `motivo_sospecha` SOLO a las filas con
+  precio repetido. PostgREST exige que todas las filas de un insert en lote
+  traigan las mismas columnas.
+- Arreglo: las dos columnas van en todas las filas (`False` / `None`, los
+  valores por defecto; el trigger de calidad sigue marcando las demás). El
+  reintento sin fase 44 se conserva.
+- **Regla para el futuro:** toda columna nueva de `fact_records` va en todas
+  las filas, con su valor por defecto cuando no aplica.
+- Además: el #73 se subió por la API de GitHub y cambió el escape `' '`
+  de `parse_price` por el carácter literal (mismo efecto); vuelve al escape.
+
 ## El PVP no entra en ningún cálculo (PR #72, fase 43)
 
 - Regla de Hernando: el PVP es un precio para otro cliente; solo sale en
