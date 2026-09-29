@@ -270,6 +270,7 @@ def main():
                     error_msg_item = r.get("error") or ("Sin precio visible" if es_err else None)
 
                     promo_id = resolver_tipo_promocion_id(r.get("tipo_promo"), promo_map)
+                    repetido = not es_err and r.get("sospecha") == "precio_repetido"
 
                     fact_records.append({
                         "publicacion_id": pub_id,
@@ -286,13 +287,17 @@ def main():
                         "tiene_promocion": bool(r.get("tiene_descuento", False)),
                         "tipo_promocion_id": promo_id,
                         "promo_texto_raw": r.get("tipo_promo"),
-                        "origen": "scraper"
+                        "origen": "scraper",
+                        # Precio repetido en varios productos de la misma tienda
+                        # (farmatodo.marcar_precios_repetidos): entra como dudosa.
+                        # Las dos columnas van en TODAS las filas: PostgREST
+                        # rechaza un lote cuyas filas no traen las mismas
+                        # columnas (PGRST102 "All object keys must match").
+                        # False/None son los valores por defecto; el trigger de
+                        # calidad igual marca las demas si hace falta.
+                        "sospechoso": repetido,
+                        "motivo_sospecha": "precio_repetido" if repetido else None,
                     })
-                    # Precio repetido en varios productos de la misma tienda
-                    # (farmatodo.marcar_precios_repetidos): entra como dudosa.
-                    if not es_err and r.get("sospecha") == "precio_repetido":
-                        fact_records[-1]["sospechoso"] = True
-                        fact_records[-1]["motivo_sospecha"] = "precio_repetido"
 
                 if fact_records:
                     for i in range(0, len(fact_records), 100):

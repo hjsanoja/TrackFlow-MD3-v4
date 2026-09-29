@@ -58,7 +58,7 @@ def parse_price(text) -> float | None:
         return None
 
     cleaned = re.sub(r'(?i)\b(?:bs\.?s?|ves|bolivares?)\b', '', str_val)
-    cleaned = cleaned.replace('\xa0', ' ').replace(' ', ' ').strip()
+    cleaned = cleaned.replace('\xa0', ' ').replace('\u202f', ' ').strip()
 
     if ',' in cleaned:
         cleaned = cleaned.replace('.', '').replace(',', '.')
