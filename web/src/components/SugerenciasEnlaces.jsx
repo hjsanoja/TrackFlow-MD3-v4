@@ -305,7 +305,7 @@ export default function SugerenciasEnlaces() {
             <div className="flex items-center gap-1">
               <h3 className="m3-title-medium text-on-surface">Tiendas donde se busca</h3>
               <InfoGrafico titulo="Sugerencias de enlaces"
-                que="Un robot en GitHub toma los productos que ya están en Competencia y los busca en las cadenas donde todavía no tienen enlace: con el buscador público de la tienda (rápido) o, si no tiene, con un navegador que busca como una persona (más lento)."
+                que="Un robot en GitHub toma los productos que ya están en Relación y los busca en las cadenas donde todavía no tienen enlace: con el buscador público de la tienda (rápido) o, si no tiene, con un navegador que busca como una persona (más lento)."
                 formula={[
                   'Laboratorio 40 · Dosis 30 · Tamaño 30 (si falta el dato: 20 / 10 / 10)',
                   'Dosis o tamaño distintos = no se sugiere',
@@ -594,7 +594,7 @@ function FilaSugerencia({ s, ver, nombreCadena, procesando, onAceptar, onDescart
           ) : (
             <>
               <button data-edita type="button" onClick={onDescartar} disabled={procesando} className="m3-btn-text">Descartar</button>
-              <button data-edita type="button" onClick={onAceptar} disabled={procesando} className="m3-btn-primary h-10 px-4" title="Crear el enlace en Competencia">
+              <button data-edita type="button" onClick={onAceptar} disabled={procesando} className="m3-btn-primary h-10 px-4" title="Crear el enlace en Relación">
                 {procesando ? 'Creando…' : 'Aceptar'}
               </button>
             </>
@@ -607,7 +607,7 @@ function FilaSugerencia({ s, ver, nombreCadena, procesando, onAceptar, onDescart
         ) : (
           <Link to={`/competencia?producto=${encodeURIComponent(s.id_producto_propio)}`} className="m3-btn-text">
             <span className="material-symbols-outlined" aria-hidden="true">link</span>
-            Ver en Competencia
+            Ver en Relación
           </Link>
         )}
       </div>

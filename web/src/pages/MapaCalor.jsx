@@ -190,8 +190,8 @@ export default function MapaCalor() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-surface-variant pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="material-symbols-outlined text-primary text-3xl">thermostat</span>
-            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Mapa de calor</h1>
+            <span className="material-symbols-outlined text-primary text-3xl">linear_scale</span>
+            <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Rango de precios</h1>
           </div>
           <p className="text-xs text-on-surface-variant">
             Para cada producto, los precios del mercado (la competencia y el tuyo) del más barato al más caro, y dónde cae el tuyo.
@@ -205,7 +205,7 @@ export default function MapaCalor() {
 
       <BarraFiltros
         limpiar={{ visible: hayFiltros, onClick: () => { setFiltroCadena('todos'); setTipoComp('todos'); setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setFiltroPosicion('todos'); } }}
-        etiqueta="Filtros del mapa"
+        etiqueta="Filtros del rango de precios"
         filtrar={(
           <>
             <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidades]} />
@@ -241,7 +241,7 @@ export default function MapaCalor() {
           hint="Falta tu precio o el de la competencia" onClick={() => abrirGrupo('sin_comparar', 'Sin comparar', 'help')} />
       </section>
 
-      <section className="m3-data-table" aria-label="Mapa de calor">
+      <section className="m3-data-table" aria-label="Rango de precios">
         <div className="m3-data-table-toolbar">
           <div className="flex flex-col md:flex-row md:items-center gap-3">
             <label className="m3-search-field">

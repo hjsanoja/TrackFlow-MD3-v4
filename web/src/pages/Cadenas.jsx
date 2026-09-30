@@ -16,11 +16,27 @@ import { useRobot } from '../hooks/useRobot';
 import { supabase, isSupabaseActive } from '../supabase';
 import { dbGuardarCadena, dbCambiarActivoCadena, dbEliminarCadena } from '../utils/dbClient';
 import { PALETA_CADENAS, siglaCadena } from '../utils/brandColors';
-import { LECTORES, lectorDe, dominio, esDeOtraWeb } from '../utils/cadenas';
+import { LECTORES, dominio, esDeOtraWeb } from '../utils/cadenas';
 import { haceCuanto, fechaHora } from '../utils/usuarios';
 
-// Cadenas con la misma estructura que Productos y Competencia: cada cadena
-// con su color y sigla, su lector del robot, sus enlaces y su ultima lectura.
+// Como le fue al robot en la ultima lectura de la cadena (scrape_runs). Antes
+// se decia "Lector probado / Sin probar" segun una lista fija, pero hoy el
+// robot lee todas las cadenas: lo que importa es si la ultima lectura salio.
+//   bien: 80 % o mas de sus enlaces con precio · fallas: menos · nada: ninguno
+export function estadoRobot(ultima) {
+  if (!ultima || !(ultima.total_urls > 0)) {
+    return { clave: 'sin_lecturas', texto: 'Sin lecturas', detalle: 'El robot aún no la ha leído', alerta: true };
+  }
+  const ok = ultima.exitosos || 0;
+  const total = ultima.total_urls;
+  const detalle = `${ok} de ${total} con precio`;
+  if (ok === 0) return { clave: 'fallas', texto: 'No leyó precios', detalle, alerta: true };
+  if (ok / total >= 0.8) return { clave: 'bien', texto: 'Lee bien', detalle, alerta: false };
+  return { clave: 'fallas', texto: 'Lee con fallas', detalle, alerta: true };
+}
+
+// Cadenas con la misma estructura que Productos y Relacion: cada cadena
+// con su color y sigla, como le va al robot, sus enlaces y su ultima lectura.
 export default function Cadenas() {
   const { cadenas, productosCompetencia: enlaces, loadingInitial: loading, refreshData: cargar } = useData();
   const { addToast } = useToast();
@@ -87,8 +103,7 @@ export default function Cadenas() {
       const r = resumen.get(c.id);
       if (filtroEstado === 'activas' && !c.activo) return false;
       if (filtroEstado === 'baja' && c.activo) return false;
-      if (filtroRobot === 'probado' && !lectorDe(c.modulo_scraper).probado) return false;
-      if (filtroRobot === 'sin_probar' && lectorDe(c.modulo_scraper).probado) return false;
+      if (filtroRobot !== 'todos' && estadoRobot(r?.ultima).clave !== filtroRobot) return false;
       if (filtroRevisar === 'otra_web' && !(r?.otraWeb.length > 0)) return false;
       if (filtroRevisar === 'fallos' && !conFallos(c)) return false;
       if (filtroRevisar === 'sin_enlaces' && !(c.activo && r?.activos.length === 0)) return false;
@@ -178,7 +193,7 @@ export default function Cadenas() {
             <span className="material-symbols-outlined text-primary text-3xl">storefront</span>
             <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Cadenas</h1>
           </div>
-          <p className="text-xs text-on-surface-variant">Las farmacias que vigila el robot: su color, su lector, sus enlaces y cómo le fue en la última lectura.</p>
+          <p className="text-xs text-on-surface-variant">Las farmacias que vigila el robot: su color, sus enlaces y cómo le fue al robot en la última lectura.</p>
         </div>
         <button data-edita onClick={() => setEditing('new')} className="m3-btn-primary self-start lg:self-auto">
           <span className="material-symbols-outlined text-base">add_business</span>
@@ -240,7 +255,7 @@ export default function Cadenas() {
                   <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroEstado} onChange={setFiltroEstado}
                     opciones={[['todos', 'Estado: todas'], ['activas', 'Activas'], ['baja', 'De baja']]} />
                   <FiltroChip etiqueta="Robot" icono="smart_toy" valor={filtroRobot} onChange={setFiltroRobot}
-                    opciones={[['todos', 'Robot: todos'], ['probado', 'Lector probado'], ['sin_probar', 'Sin probar']]} />
+                    opciones={[['todos', 'Robot: todos'], ['bien', 'Lee bien'], ['fallas', 'Con fallas'], ['sin_lecturas', 'Sin lecturas']]} />
                   <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
                     opciones={[['todos', 'Revisar: todas'], ['fallos', 'Fallos en la última lectura'], ['otra_web', 'Con enlaces de otra web'], ['sin_enlaces', 'Activas sin enlaces']]} />
                 </>
@@ -268,7 +283,7 @@ export default function Cadenas() {
                     <CadenaBadge cadena={c.id} tamano="md" title="" />
                     <button type="button" onClick={() => setFichaId(c.id)} className="flex-1 min-w-0 text-left">
                       <span className="m3-cell-primary">{c.nombre}</span>
-                      <div className="m3-cell-secondary">{r?.activos.length || 0} enlaces · {lectorDe(c.modulo_scraper).probado ? 'lector probado' : 'sin probar'}</div>
+                      <div className="m3-cell-secondary">{r?.activos.length || 0} enlaces · robot: {estadoRobot(r?.ultima).texto.toLowerCase()}</div>
                       <div className="mt-1"><span className={`m3-status ${c.activo ? 'is-on' : ''}`}>{c.activo ? 'Activa' : 'De baja'}</span></div>
                     </button>
                     <button data-edita type="button" onClick={() => setEditing(c.id)} className="m3-icon-btn" aria-label={`Editar ${c.nombre}`}>
@@ -302,7 +317,7 @@ export default function Cadenas() {
                 <tbody>
                   {filtradas.map(c => {
                     const r = resumen.get(c.id);
-                    const lector = lectorDe(c.modulo_scraper);
+                    const estado = estadoRobot(r?.ultima);
                     const leyendo = Boolean(robot.corrida?.etiqueta === c.nombre);
                     return (
                       <tr key={c.id}>
@@ -322,18 +337,18 @@ export default function Cadenas() {
                           </div>
                         </td>
                         <td>
-                          <div className={`m3-cell-primary ${lector.probado ? '' : 'm3-count-stale'}`}
-                            title={lector.probado ? 'El robot tiene reglas propias para esta tienda' : 'El robot la intenta con el lector genérico: puede fallar'}>
-                            {lector.probado ? 'Lector probado' : 'Sin probar'}
+                          <div className={`m3-cell-primary ${estado.alerta ? 'm3-count-stale' : ''}`}
+                            title="Cómo le fue al robot en la última lectura de esta cadena">
+                            {estado.texto}
                           </div>
-                          <div className="m3-cell-secondary">{lector.label}</div>
+                          <div className="m3-cell-secondary">{estado.detalle}</div>
                         </td>
                         <td>
                           <div className="m3-cell-primary">{r?.activos.length || 0} activos</div>
                           <div className="m3-cell-secondary">
                             {r?.otraWeb.length ? (
                               <button type="button" onClick={() => verOtraWeb(c)} className="m3-count-stale hover:underline"
-                                title="Ver en Competencia los enlaces de otra web">
+                                title="Ver en Relación los enlaces de otra web">
                                 {r.otraWeb.length} de otra web
                               </button>
                             ) : r?.deBaja ? `${r.deBaja} de baja` : '—'}
@@ -419,8 +434,8 @@ function FichaCadena({ cadena: c, resumen: r, robotOcupado, onClose, onEditar, o
     window.addEventListener('keydown', alPulsar);
     return () => window.removeEventListener('keydown', alPulsar);
   }, [onClose]);
-  const lector = lectorDe(c.modulo_scraper);
   const u = r?.ultima;
+  const estado = estadoRobot(u);
 
   return createPortal(
     <div className="m3-modal-scrim m3-sheet-scrim" onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
@@ -454,14 +469,14 @@ function FichaCadena({ cadena: c, resumen: r, robotOcupado, onClose, onEditar, o
                 <span className="m3-body-small text-on-surface-variant">{u ? haceCuanto(u.finished_at || u.started_at) : 'nunca'}</span>
               </div>
               <div className="m3-ficha-kpi">
-                <span className="m3-label-medium text-on-surface-variant">Lector</span>
-                <span className={`m3-title-medium ${lector.probado ? 'text-on-surface' : 'm3-count-stale'}`}>{lector.probado ? 'Probado' : 'Sin probar'}</span>
-                <span className="m3-body-small text-on-surface-variant truncate">{lector.label}</span>
+                <span className="m3-label-medium text-on-surface-variant">Robot</span>
+                <span className={`m3-title-medium ${estado.alerta ? 'm3-count-stale' : 'text-on-surface'}`}>{estado.texto}</span>
+                <span className="m3-body-small text-on-surface-variant truncate">{u ? `${u.fallidos || 0} sin precio` : '—'}</span>
               </div>
             </div>
-            {!lector.probado && (
+            {estado.clave === 'fallas' && (
               <p className="m3-body-small text-on-surface-variant mt-2">
-                El robot no tiene reglas propias para esta tienda: la lee con el lector genérico, que busca el precio en la página y puede fallar.
+                En la última lectura el robot no encontró el precio en varios enlaces. Revisa en Relación los que dicen «Revisar»: puede ser que el producto esté agotado o que la página cambió.
               </p>
             )}
           </section>
@@ -470,7 +485,7 @@ function FichaCadena({ cadena: c, resumen: r, robotOcupado, onClose, onEditar, o
             <section>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <h3 className="m3-title-small text-on-surface-variant">Enlaces de otra web ({r.otraWeb.length})</h3>
-                <button type="button" onClick={onVerOtraWeb} className="m3-btn-text">Ver en Competencia</button>
+                <button type="button" onClick={onVerOtraWeb} className="m3-btn-text">Ver en Relación</button>
               </div>
               <ul className="space-y-1">
                 {r.otraWeb.slice(0, 8).map(e => (
@@ -610,11 +625,9 @@ function CadenaModal({ cadena, cadenas, onSave, onClose }) {
         </FormSection>
 
         <FormSection titulo="Robot" icono="smart_toy">
-          <Field label="Lector" hint={lectorDe(form.modulo_scraper).probado
-            ? 'El robot tiene reglas propias para esta tienda.'
-            : 'Sin reglas propias: el robot la intenta con el lector genérico y puede fallar.'}>
+          <Field label="Lector" hint="Solo informativo: el robot reconoce la tienda por su web y lee todas las cadenas.">
             <Select value={form.modulo_scraper} onChange={e => cambiar('modulo_scraper', e.target.value)} className="m3-select w-full">
-              {LECTORES.map(l => <option key={l.value} value={l.value}>{`${l.label} · ${l.probado ? 'probado' : 'sin probar'}`}</option>)}
+              {LECTORES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </Select>
           </Field>
         </FormSection>

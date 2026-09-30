@@ -827,7 +827,7 @@ function UsuarioModal({ usuario, yo, onSave, onClose }) {
               </div>
             </Field>
 
-            <Field label="Qué productos ve" hint="Limita Dashboard, Mapa de Calor, Productos y Competencia a una línea. Los análisis de Experimental muestran todo: no se lo des si limitas.">
+            <Field label="Qué productos ve" hint="Limita Dashboard, Rango de precios, Productos y Relación a una línea. Los análisis de Experimental muestran todo: no se lo des si limitas.">
               <Segmentado etiqueta="Qué productos ve" valor={form.alcance ? 'algunos' : 'todos'}
                 onChange={v => cambiar('alcance', v === 'todos' ? null : { laboratorios: [], unidades_negocio: [], categorias: [] })}
                 opciones={[['todos', 'Todos'], ['algunos', 'Solo algunos']]} />

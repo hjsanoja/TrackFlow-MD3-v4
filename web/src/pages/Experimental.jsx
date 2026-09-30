@@ -13,18 +13,23 @@ const MapaPorCadena = lazy(() => import('../components/MapaPorCadena'));
 const ComparadorPeriodos = lazy(() => import('../components/analisis/ComparadorPeriodos'));
 const IndiceMolecula = lazy(() => import('../components/analisis/IndiceMolecula'));
 const VelocidadReaccion = lazy(() => import('../components/analisis/VelocidadReaccion'));
+const PosicionPorCadena = lazy(() => import('../components/analisis/PosicionPorCadena'));
+const TendenciaExperimental = lazy(() => import('../components/analisis/TendenciaExperimental'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
-// Analisis (indicadores, "¿Donde esta tu precio?" y "Mas caros que el minimo")
-// y Hallazgos (esas mismas alertas, la vista por molecula y los cambios).
+// Analisis (indicadores y "¿Donde esta tu precio?") y Hallazgos (esas mismas
+// alertas, la vista por molecula y los cambios). La tendencia de tu posicion
+// hizo el camino inverso: salio del Dashboard y volvio aqui.
 const TABS = [
   { id: 'revision', nombre: 'Revisión de capturas', icono: 'rule', desc: 'Capturas que el control de calidad marcó como dudosas: confírmalas, descártalas o corrige el enlace. Las ya revisadas se pueden volver a revisar.' },
-  { id: 'sugerencias', nombre: 'Sugerencias de enlaces', icono: 'travel_explore', desc: 'Beta: un robot busca tus productos de Competencia en las otras cadenas y propone el enlace; tú lo aceptas o lo descartas.' },
+  { id: 'sugerencias', nombre: 'Sugerencias de enlaces', icono: 'travel_explore', desc: 'Beta: un robot busca tus productos de Relación en las otras cadenas y propone el enlace; tú lo aceptas o lo descartas.' },
+  { id: 'por_cadena', nombre: 'Tu posición por cadena', icono: 'storefront', desc: 'Dentro de cada cadena: en cuántos productos eres el más barato o el más caro frente a la competencia de esa cadena, y si sube o baja día a día.' },
+  { id: 'tendencia', nombre: 'Tendencia de tu posición', icono: 'show_chart', desc: 'Tu precio frente al promedio del mercado, día a día, para el producto típico. Toca un día para ver cada producto.' },
   { id: 'devaluacion', nombre: 'Devaluación vs subida real', icono: 'currency_exchange', desc: 'Separa cuánto de una subida de precio fue la tasa BCV y cuánto una decisión de la cadena.' },
   { id: 'canibalizacion', nombre: 'Canibalización de marcas', icono: 'compare_arrows', desc: 'Tus genéricos y tus marcas de la misma molécula: brechas invertidas o demasiado cortas.' },
   { id: 'brecha_usd', nombre: 'Brechas USD diarias', icono: 'payments', desc: 'La brecha de cada producto día a día, con la tasa oficial de cada día.' },
-  { id: 'mapa_cadenas', nombre: 'Mapa por cadena', icono: 'grid_on', desc: 'Productos × cadenas: en qué cadenas eres más caro o más barato, celda por celda.' },
+  { id: 'mapa_cadenas', nombre: 'Mapa de calor', icono: 'grid_on', desc: 'Productos × cadenas: en qué cadenas eres más caro o más barato, celda por celda, en colores.' },
   { id: 'periodos', nombre: 'Comparador de períodos', icono: 'compare', desc: 'Tu precio frente al mercado en los últimos días y en los anteriores: qué productos se volvieron más o menos competitivos, y si fue por ti o por el mercado.' },
   { id: 'indice', nombre: 'Índice por molécula', icono: 'query_stats', desc: 'Cuánto subió o bajó en dólares el precio del mercado de cada molécula.' },
   { id: 'reaccion', nombre: 'Velocidad de reacción', icono: 'bolt', desc: 'Cuántos días tarda cada cadena en responder cuando otra cambia un precio.' },
@@ -74,6 +79,8 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'periodos' && <ComparadorPeriodos />}
         {activa === 'indice' && <IndiceMolecula />}
         {activa === 'reaccion' && <VelocidadReaccion />}
+        {activa === 'por_cadena' && <PosicionPorCadena />}
+        {activa === 'tendencia' && <TendenciaExperimental />}
       </Suspense>
     </div>
   );

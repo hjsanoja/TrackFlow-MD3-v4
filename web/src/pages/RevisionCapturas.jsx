@@ -181,7 +181,7 @@ export default function RevisionCapturas() {
   // Vuelve a leer ahora los enlaces de estas capturas.
   const releer = async (lista) => {
     const enlaces = [...new Map(lista.map(c => [c.publicacion_id, enlacePorPub.get(Number(c.publicacion_id))])).values()].filter(Boolean);
-    if (enlaces.length === 0) { addToast('No se encontró el enlace en Competencia.', 'warning'); return false; }
+    if (enlaces.length === 0) { addToast('No se encontró el enlace en Relación.', 'warning'); return false; }
     const ok = await robot.lanzar(enlaces, []);
     if (ok) addToast(`Robot lanzado para ${enlaces.length} ${enlaces.length === 1 ? 'enlace' : 'enlaces'}. Tarda unos minutos.`, 'info');
     return ok;
@@ -493,7 +493,7 @@ function FilaCaptura({ captura: c, ver, nombreCadena, seleccionada, onSelecciona
           title={leyendo ? 'El robot está leyendo este enlace' : robotOcupado ? 'Ya hay una lectura en curso' : 'Volver a leer ahora este enlace'} aria-label="Volver a leer">
           <span className={`material-symbols-outlined ${leyendo ? 'animate-spin' : ''}`} aria-hidden="true">sync</span>
         </button>
-        <Link data-edita to={`/competencia?editar=${c.publicacion_id}&volver=revision`} className="m3-btn-text" title="Abrir el formulario de este enlace en Competencia">
+        <Link data-edita to={`/competencia?editar=${c.publicacion_id}&volver=revision`} className="m3-btn-text" title="Abrir el formulario de este enlace en Relación">
           <span className="material-symbols-outlined" aria-hidden="true">edit</span>
           Corregir enlace
         </Link>

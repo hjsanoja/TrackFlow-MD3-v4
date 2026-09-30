@@ -2,10 +2,10 @@
 
 export const AVAILABLE_MENUS = [
   { id: '/', label: 'Dashboard', desc: 'Indicadores y KPIs de precios', icon: 'dashboard', isDefault: true },
-  { id: '/mapa-calor', label: 'Mapa de Calor', desc: 'Posición frente al mercado', icon: 'thermostat', isDefault: true },
+  { id: '/mapa-calor', label: 'Rango de precios', desc: 'Dónde cae tu precio en el rango del mercado', icon: 'linear_scale', isDefault: true },
   { id: '/experimental', label: 'Experimental', desc: 'Revisión de capturas, devaluación, canibalización y simulador', icon: 'science', isDefault: false },
   { id: '/productos', label: 'Productos', desc: 'Catálogo de productos propios', icon: 'medication', isDefault: false },
-  { id: '/competencia', label: 'Competencia', desc: 'Enlaces y precios de la competencia', icon: 'link', isDefault: false },
+  { id: '/competencia', label: 'Relación', desc: 'Tus enlaces y los de la competencia, con su precio', icon: 'link', isDefault: false },
   { id: '/cadenas', label: 'Cadenas', desc: 'Cadenas de farmacias vigiladas', icon: 'storefront', isDefault: false },
   { id: '/dimensiones', label: 'Dimensiones', desc: 'Laboratorios, categorías, moléculas…', icon: 'schema', isDefault: false },
 ];

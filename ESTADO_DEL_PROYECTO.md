@@ -561,6 +561,45 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Menús renombrados, tu posición por cadena y competidores sin unidad (PR #75, fase 45)
+
+- **Nombres** (las rutas no cambian, así `menus_permitidos` sigue valiendo):
+  - «Mapa de Calor» (`/mapa-calor`) → **Rango de precios**, icono
+    `linear_scale`: es la franja mínimo–promedio–máximo por producto.
+  - «Competencia» (`/competencia`) → **Relación**. El chip que se llamaba
+    «Relación» (mis productos / competidores) pasa a «De quién es el
+    enlace», y el chip Cadena va primero.
+  - El mapa productos × cadenas de Experimental («Mapa por cadena») →
+    **Mapa de calor**, que es lo que es.
+- **Dashboard**: sin el indicador «Más caros que el mínimo», su lista ni la
+  opción del filtro «Mostrar» (Hernando no se mide contra el mínimo); quedan
+  5 indicadores. La **Tendencia de tu posición** pasó a Experimental →
+  «Tendencia de tu posición» (`components/analisis/TendenciaExperimental.jsx`,
+  reusa `TendenciaPosicion`; tocar un día lista cada producto debajo).
+- **Cadenas**: la columna Robot ya no dice «Lector probado / Sin probar»
+  según una lista fija (`LECTORES.probado`, borrado): dice cómo le fue a la
+  cadena en su última lectura (`estadoRobot` en `pages/Cadenas.jsx`: «Lee
+  bien» 80 %+ con precio, «Lee con fallas», «No leyó precios», «Sin
+  lecturas»); filtro y ficha igual. El Lector del formulario es informativo.
+- **Dimensiones → Unidades de negocio**: solo La Sante contaba productos de
+  la competencia porque la fase 2 le puso `unidad_negocio_id` = La Sante a
+  todos los competidores migrados (los creados desde el panel nacen sin
+  unidad). La fase 45 se la quita a todo `COMP_`: la unidad de negocio es
+  solo tuya.
+- **Experimental → «Tu posición por cadena»**
+  (`components/analisis/PosicionPorCadena.jsx`): dentro de CADA cadena, tu
+  enlace frente a los competidores de esa misma cadena. Más barato = tu
+  precio ≤ el más barato + 0,5 %; más caro = tu precio > el más caro +
+  0,5 %; en medio = el resto. Hoy (tarjeta por cadena con barra y los tres
+  números, que abren la lista de productos) con `useAnalisisPrecios`, y día a
+  día con `fn_posicion_por_cadena(p_dias, p_con_descuento, p_por_unidad)`
+  (fase 45: mismo criterio de precios que `fn_posicion_productos`, sin
+  lecturas marcadas dudosas): una línea por cadena, «más caro» o «más
+  barato», en cantidad o %.
+- Probado en Postgres local: la fase 45 deja 0 competidores con unidad y no
+  toca la unidad de los productos propios; `fn_posicion_por_cadena(30)` ≈ 1 s
+  con 90 mil lecturas.
+
 ## Precios repetidos (PR #73, fase 44)
 
 - Síntoma: en Farmabien varios productos distintos quedaban con el MISMO
