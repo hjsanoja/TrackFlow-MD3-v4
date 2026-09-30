@@ -264,7 +264,7 @@ async def leer_vtex(page, url: str, bcv_rate: float) -> dict | None:
     if not isinstance(productos, list):
         return None
     if not productos:
-        return {"error": "Producto no disponible o enlace roto (404 / Agotado)."}
+        return {"error": "Enlace roto: la tienda ya no tiene este producto."}
 
     prod = productos[0]
     ofertas = []
@@ -274,7 +274,7 @@ async def leer_vtex(page, url: str, bcv_rate: float) -> dict | None:
             if (o.get("Price") or 0) > 0:
                 ofertas.append(o)
     if not ofertas:
-        return {"error": "Producto no disponible o enlace roto (404 / Agotado).", "nombre": prod.get("productName")}
+        return {"error": "Producto agotado en la tienda.", "nombre": prod.get("productName")}
     o = next((x for x in ofertas if x.get("IsAvailable") or (x.get("AvailableQuantity") or 0) > 0), ofertas[0])
     if not (o.get("IsAvailable") or (o.get("AvailableQuantity") or 0) > 0):
         return {"error": "Producto agotado en la tienda.", "nombre": prod.get("productName")}
@@ -437,10 +437,14 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                 return { error: "HTTP 429" };
             }
 
-            // 2. Detectar páginas agotadas / 404
-            if (title.includes('404') || bodyText.includes('Producto no disponible') || 
-                bodyText.includes('No pudimos encontrar') || bodyText.includes('no encontrado')) {
-                return { error: "Producto no disponible o enlace roto (404 / Agotado)." };
+            // 2. Pagina que no existe (enlace roto) o producto agotado. El
+            //    texto "agotado" / "Enlace roto" lo usa la fase 46 para
+            //    separar los agotados de las URL que fallan.
+            if (title.includes('404') || bodyText.includes('No pudimos encontrar') || bodyText.includes('no encontrado')) {
+                return { error: "Enlace roto: la página del producto no existe (404)." };
+            }
+            if (bodyText.includes('Producto no disponible')) {
+                return { error: "Producto agotado o no disponible en la tienda." };
             }
 
             const isVisible = (el) => {
@@ -990,7 +994,7 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
             if response and response.status >= 400:
                 result["error"] = f"HTTP {response.status}"
                 if response.status == 404:
-                    result["error"] = "Producto no disponible o enlace roto (404 / Agotado)."
+                    result["error"] = "Enlace roto: la página del producto no existe (HTTP 404)."
                     return result
                 if response.status in (429, 403, 500, 502, 503):
                     backoff = (6 * int_num) + random.uniform(2.5, 6.0)
@@ -1032,7 +1036,8 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
                 print(f"   [{task_id}] ⚠️ Detectado bloqueo HTTP 429 en DOM. Esperando {backoff:.1f}s", flush=True)
                 await asyncio.sleep(backoff)
                 continue
-            if "404" in data["error"] or "disponible" in data["error"]:
+            # Enlace roto o agotado: reintentar no cambia nada.
+            if "Enlace roto" in data["error"] or "agotado" in data["error"].lower():
                 return result
             await asyncio.sleep(1.5)
             continue

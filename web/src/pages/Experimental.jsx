@@ -15,6 +15,8 @@ const IndiceMolecula = lazy(() => import('../components/analisis/IndiceMolecula'
 const VelocidadReaccion = lazy(() => import('../components/analisis/VelocidadReaccion'));
 const PosicionPorCadena = lazy(() => import('../components/analisis/PosicionPorCadena'));
 const TendenciaExperimental = lazy(() => import('../components/analisis/TendenciaExperimental'));
+const Agotados = lazy(() => import('../components/analisis/Agotados'));
+const PrecioMinimo = lazy(() => import('../components/analisis/PrecioMinimo'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -24,6 +26,8 @@ const TendenciaExperimental = lazy(() => import('../components/analisis/Tendenci
 const TABS = [
   { id: 'revision', nombre: 'Revisión de capturas', icono: 'rule', desc: 'Capturas que el control de calidad marcó como dudosas: confírmalas, descártalas o corrige el enlace. Las ya revisadas se pueden volver a revisar.' },
   { id: 'sugerencias', nombre: 'Sugerencias de enlaces', icono: 'travel_explore', desc: 'Beta: un robot busca tus productos de Relación en las otras cadenas y propone el enlace; tú lo aceptas o lo descartas.' },
+  { id: 'agotados', nombre: 'Agotados', icono: 'remove_shopping_cart', desc: 'Tus productos y los de la competencia que la tienda da por agotados, desde cuándo, y los que volvieron a tener existencia.' },
+  { id: 'precio_minimo', nombre: 'Precio mínimo', icono: 'gpp_maybe', desc: 'Fija el precio mínimo al que aceptas que una cadena venda tu producto y mira qué cadenas lo están rompiendo.' },
   { id: 'por_cadena', nombre: 'Tu posición por cadena', icono: 'storefront', desc: 'Dentro de cada cadena: en cuántos productos eres el más barato o el más caro frente a la competencia de esa cadena, y si sube o baja día a día.' },
   { id: 'tendencia', nombre: 'Tendencia de tu posición', icono: 'show_chart', desc: 'Tu precio frente al promedio del mercado, día a día, para el producto típico. Toca un día para ver cada producto.' },
   { id: 'devaluacion', nombre: 'Devaluación vs subida real', icono: 'currency_exchange', desc: 'Separa cuánto de una subida de precio fue la tasa BCV y cuánto una decisión de la cadena.' },
@@ -81,6 +85,8 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'reaccion' && <VelocidadReaccion />}
         {activa === 'por_cadena' && <PosicionPorCadena />}
         {activa === 'tendencia' && <TendenciaExperimental />}
+        {activa === 'agotados' && <Agotados />}
+        {activa === 'precio_minimo' && <PrecioMinimo />}
       </Suspense>
     </div>
   );

@@ -96,6 +96,8 @@ export default function Layout({ user, userDoc, children }) {
     ...(isNavVisible({ to: '/experimental', adminOnly: false }) ? [
       { to: '/experimental?tab=revision', label: 'Revisión de capturas (Experimental)', icon: 'rule' },
       { to: '/experimental?tab=sugerencias', label: 'Sugerencias de enlaces (Experimental)', icon: 'travel_explore' },
+      { to: '/experimental?tab=agotados', label: 'Agotados (Experimental)', icon: 'remove_shopping_cart' },
+      { to: '/experimental?tab=precio_minimo', label: 'Precio mínimo (Experimental)', icon: 'gpp_maybe' },
       { to: '/experimental?tab=por_cadena', label: 'Tu posición por cadena (Experimental)', icon: 'storefront' },
       { to: '/experimental?tab=tendencia', label: 'Tendencia de tu posición (Experimental)', icon: 'show_chart' },
       { to: '/experimental?tab=devaluacion', label: 'Devaluación vs subida real (Experimental)', icon: 'currency_exchange' },

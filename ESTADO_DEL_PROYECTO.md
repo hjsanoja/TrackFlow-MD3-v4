@@ -561,6 +561,49 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Agotados, precio mínimo y revisión más clara (PR #75, fase 46)
+
+- **Robot** (`farmatodo.py`): el mensaje de error ya no mezcla «no
+  disponible o enlace roto (404 / Agotado)». Agotado = «Producto agotado en
+  la tienda» (VTEX sin oferta con precio, WooCommerce sin existencia) o
+  «Producto agotado o no disponible en la tienda» (la página lo dice);
+  enlace roto = «Enlace roto: …» (HTTP 404, título 404, «No pudimos
+  encontrar», VTEX sin el producto). Los dos cortan los reintentos.
+- **SQL** `sql/fase46_agotados_y_precio_minimo.sql`:
+  - `fn_es_agotado(texto)`: «agotad…» y no «enlace roto». El mensaje viejo
+    mezclado NO cuenta como agotado (es ambiguo): los agotados salen desde
+    la primera corrida con este robot.
+  - `v_enlaces_fallidos`: una lectura agotado cuenta como buena (la página
+    funciona), así un agotado no se marca «Revisar URL».
+  - `v_disponibilidad`: por enlace activo, `agotado` (su última lectura con
+    existencia conocida, desde cuándo) o `volvio` (hay de nuevo, desde hace
+    menos de 7 días). Las lecturas que fallaron por otra cosa se saltan.
+  - `precio_minimo` (producto_id PK, minimo_usd, actualizado, actualizado_por;
+    leer/crear/cambiar usuario activo, borrar admin; «quitar» = dejarlo
+    vacío) y `v_precio_minimo_alertas`: tus enlaces (tu producto en una
+    cadena) cuyo precio de venta (oferta si hay, si no lista, a la tasa del
+    día, sin lecturas dudosas) quedó < mínimo − 0,5 % en la última lectura,
+    y desde cuándo. Independiente del PVP.
+- **Experimental → Agotados** (`components/analisis/Agotados.jsx`): tus
+  productos agotados, oportunidades (competidor agotado en una cadena donde
+  tu producto tiene precio), competidores agotados y los que volvieron;
+  agrupado por tu producto.
+- **Experimental → Precio mínimo** (`components/analisis/PrecioMinimo.jsx`):
+  alertas arriba; abajo cada producto con «Hoy lo más bajo» y el campo del
+  mínimo (Enter guarda, vacío = no vigilar); Exportar / Cargar CSV
+  (`id_interno`, `precio_minimo_usd`; celda vacía = no cambiar). En modo solo
+  lectura se ve el valor (clase `solo-en-lectura`).
+- **Revisión de capturas**: cada captura muestra tres filas alineadas
+  (`Comparacion`): **Tu producto** (nombre · concentración · empaque ·
+  laboratorio · ID, de `productos`), **Competidor** (nombre · laboratorio ·
+  presentación registrada) o «Tu enlace», y **La tienda muestra** (nombre
+  leído · presentación leída · % de parecido; en rojo lo que no coincide).
+  Debajo, «Por qué está aquí» con los números y el umbral de
+  `config_calidad` (`porQue`).
+- Probado: fase 46 en Postgres local (agotado, volvió, timeout sigue en
+  fallidos, alertas de mínimo con «desde»); las pestañas nuevas y la
+  revisión con datos simulados, sin errores.
+
 ## Menús renombrados, tu posición por cadena y competidores sin unidad (PR #75, fase 45)
 
 - **Nombres** (las rutas no cambian, así `menus_permitidos` sigue valiendo):
