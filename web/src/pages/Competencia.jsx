@@ -186,7 +186,7 @@ export default function Competencia() {
     const volver = searchParams.get('volver');
     setSearchParams({}, { replace: true });
     if (!item) {
-      addToast('No se encontró ese enlace en Competencia.', 'warning');
+      addToast('No se encontró ese enlace en Relación.', 'warning');
       return;
     }
     volverRef.current = volver === 'revision' ? '/experimental?tab=revision' : null;
@@ -867,7 +867,7 @@ export default function Competencia() {
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-primary text-3xl">link</span>
             <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">
-              Enlaces de Competencia
+              Relación
             </h1>
           </div>
           <p className="text-xs text-on-surface-variant font-sans">
@@ -1027,14 +1027,14 @@ export default function Competencia() {
                 limpiar={{ visible: hayFiltros, onClick: limpiarFiltros }}
                 filtrar={(
                   <>
-                    <FiltroChip etiqueta="Producto" icono="medication" valor={filtroProducto}
-                      onChange={v => { setFiltroProducto(v); if (searchParams.get('producto')) setSearchParams({}); }}
-                      opciones={opcionesProducto} />
                     <FiltroChip etiqueta="Cadena" icono="storefront" valor={filtroCadena === 'todas' ? 'todos' : filtroCadena}
                       onChange={v => setFiltroCadena(v === 'todos' ? 'todas' : v)}
                       opciones={[['todos', 'Cadena: todas'], ...(cadenas || []).map(c => [c.id, c.nombre])]} />
-                    <FiltroChip etiqueta="Relación" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
-                      opciones={[['todos', 'Relación: todas'], ['propio', 'Mis productos'], ['competidor', 'Competidores']]} />
+                    <FiltroChip etiqueta="Producto" icono="medication" valor={filtroProducto}
+                      onChange={v => { setFiltroProducto(v); if (searchParams.get('producto')) setSearchParams({}); }}
+                      opciones={opcionesProducto} />
+                    <FiltroChip etiqueta="De quién es el enlace" icono="sell" valor={filtroTipo} onChange={setFiltroTipo}
+                      opciones={[['todos', 'Enlaces: todos'], ['propio', 'Mis productos'], ['competidor', 'Competidores']]} />
                     <FiltroChip etiqueta="Laboratorio" icono="science" valor={filtroLab} onChange={setFiltroLab}
                       opciones={[['todos', 'Laboratorio: todos'], ...laboratoriosCompetidores.map(l => [l, l])]} />
                     <FiltroChip etiqueta="Precio" icono="payments" valor={filtroPrecio} onChange={setFiltroPrecio}

@@ -486,7 +486,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
                   </tr>
                 ))}
                 {ofertasVisibles.length === 0 && (
-                  <tr><td colSpan={8} className="text-center text-on-surface-variant py-8">{ofertas.length ? 'Ninguna oferta con estos filtros.' : 'Este producto no tiene enlaces. Vincúlalos en Competencia.'}</td></tr>
+                  <tr><td colSpan={8} className="text-center text-on-surface-variant py-8">{ofertas.length ? 'Ninguna oferta con estos filtros.' : 'Este producto no tiene enlaces. Vincúlalos en Relación.'}</td></tr>
                 )}
               </tbody>
             </table>

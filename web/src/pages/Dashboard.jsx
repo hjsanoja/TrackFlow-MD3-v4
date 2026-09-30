@@ -25,7 +25,6 @@ import { dbClearAllHistoricoPrecios } from '../utils/dbClient';
 import { exportToCSV } from '../utils/exportUtils';
 import { fechaHora, haceCuanto } from '../utils/usuarios';
 import { normalizar } from '../components/formulario';
-import TendenciaPosicion, { diaLargo } from '../components/dashboard/TendenciaPosicion';
 import InfoGrafico from '../components/InfoGrafico';
 import { describirPresentacion } from '../utils/presentacion';
 import {
@@ -34,7 +33,6 @@ import {
 } from '../components/dashboard/comun';
 import { useCambiosDesdeVisita } from '../hooks/useCambiosDesdeVisita';
 import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
-import { supabase } from '../supabase';
 
 
 export default function Dashboard({ userDoc }) {
@@ -141,7 +139,6 @@ export default function Dashboard({ userDoc }) {
       // Mediana y no media: un solo producto muy desfasado no mueve el numero.
       frentePromedio: mediana(difs),
       masBaratos: comparables.filter(x => x.difMin <= UMBRAL_EMPATE),
-      masCaros: comparables.filter(x => x.difMin > UMBRAL_EMPATE).sort((a, b) => b.difMin - a.difMin),
       cambios,
       productosConCambios: new Set(cambios.map(c => c.item.producto.id_interno)).size,
       sinComparar: base.filter(x => !x.comparable),
@@ -218,7 +215,6 @@ export default function Dashboard({ userDoc }) {
     const term = normalizar(search);
     const lista = base.filter(x => {
       if (term && !normalizar(`${x.producto.id_interno} ${x.producto.nombre} ${x.producto.principio_activo || ''}`).includes(term)) return false;
-      if (mostrar === 'mas_caro') return x.comparable && x.difMin > UMBRAL_EMPATE;
       if (mostrar === 'mas_barato') return x.comparable && x.difMin <= UMBRAL_EMPATE;
       if (mostrar === 'cambios') return x.cambios.length > 0;
       if (mostrar === 'sin_comparar') return !x.comparable;
@@ -352,15 +348,6 @@ export default function Dashboard({ userDoc }) {
     tabla: 'mas_barato',
     vacio: 'En ningún producto eres el más barato con estos filtros.',
   });
-  const detalleMasCaros = () => abrirDetalle({
-    titulo: 'Más caros que el mínimo',
-    subtitulo: 'Productos donde otra cadena vende una alternativa más barata que tu precio. Primero los de mayor diferencia.',
-    icono: 'trending_up',
-    filas: kpi.masCaros,
-    columnas: [colProducto, colTuPrecio, colMinimo, colDifMin],
-    tabla: 'mas_caro',
-    vacio: 'Ningún producto está por encima del más barato del mercado.',
-  });
   const detalleCambios = () => abrirDetalle({
     titulo: 'Cambios de precio',
     subtitulo: `Precios que cambiaron en ${VENTANAS[ventana]}. Primero los mayores.`,
@@ -388,7 +375,7 @@ export default function Dashboard({ userDoc }) {
   });
   const detalleSinComparar = () => abrirDetalle({
     titulo: 'Sin comparar',
-    subtitulo: 'Productos a los que les falta tu precio o el de la competencia. Vincula tus enlaces y los de la competencia en Competencia. El PVP no cuenta: es un precio para otro cliente.',
+    subtitulo: 'Productos a los que les falta tu precio o el de la competencia. Vincula tus enlaces y los de la competencia en Relación. El PVP no cuenta: es un precio para otro cliente.',
     icono: 'help',
     filas: kpi.sinComparar,
     columnas: [colProducto, {
@@ -405,41 +392,6 @@ export default function Dashboard({ userDoc }) {
     filas: [...g.items].sort((a, b) => a.difProm - b.difProm),
     columnas: [colProducto, colTuPrecio, colPromedio, colDifProm, colAjuste],
   });
-
-  // Un dia de la tendencia: la posicion de cada producto ese dia (fase 28).
-  const productosFiltrados = hayFiltros ? base.map(x => x.producto.id_interno) : null;
-  const detalleDia = async (fecha) => {
-    const { data, error } = await supabase.rpc('fn_posicion_productos', {
-      p_desde: fecha, p_hasta: fecha,
-      p_con_descuento: modoPrecio === 'descuento',
-      p_por_unidad: modoAnalisis === 'unidosis',
-      p_cadena: cadenaComp === 'todos' ? null : cadenaComp,
-      p_productos: productosFiltrados,
-      // Solo si se filtra: asi funciona aunque falte la fase 30.
-      ...(tipoComp !== 'todos' ? { p_tipo_mercado: tipoComp } : {}),
-    });
-    if (error) { addToast(`No se pudo leer ese día: ${error.message}`, 'error'); return; }
-    const porId = new Map(base.map(x => [String(x.producto.id_interno), x]));
-    const filasDia = (data || [])
-      .filter(f => f.dif_promedio != null && porId.has(String(f.id_interno)))
-      .map(f => ({ ...f, item: porId.get(String(f.id_interno)) }))
-      .sort((a, b) => Number(a.dif_promedio) - Number(b.dif_promedio));
-    abrirDetalle({
-      titulo: `Tu posición el ${diaLargo(fecha)}`,
-      subtitulo: 'Tu precio y el promedio del mercado (la competencia y tú) ese día, con el último precio leído de cada enlace, en dólares a la tasa de ese día.',
-      icono: 'show_chart',
-      filas: filasDia,
-      clave: f => String(f.id_interno),
-      abrir: f => f.item,
-      vacio: 'Ese día no hay productos con tu precio y el de la competencia.',
-      columnas: [
-        { ...colProducto, celda: f => colProducto.celda(f.item) },
-        { titulo: 'Tu precio', alinear: 'right', celda: f => fmt(Number(f.tu_precio_usd)) },
-        { titulo: 'Promedio', alinear: 'right', celda: f => fmt(Number(f.promedio_usd)) },
-        { titulo: 'Tú frente al promedio', alinear: 'right', celda: f => <Diferencia valor={Number(f.dif_promedio)} /> },
-      ],
-    });
-  };
 
   // Cambios desde tu ultima visita (fase 28).
   const cambiosVisita = useCambiosDesdeVisita(userDoc?.email);
@@ -686,7 +638,7 @@ export default function Dashboard({ userDoc }) {
       />
 
       {/* Indicadores */}
-      <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-6 gap-3" aria-label="Indicadores">
+      <section className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-5 gap-3" aria-label="Indicadores">
         <StatCard
           compacto
           label="Tú frente al promedio"
@@ -706,16 +658,6 @@ export default function Dashboard({ userDoc }) {
           tono="primary"
           onClick={detalleMasBaratos}
           title="Ver los productos donde eres el más barato"
-        />
-        <StatCard
-          compacto
-          label="Más caros que el mínimo"
-          value={kpi.masCaros.length}
-          hint="Otra cadena es más barata"
-          icon="trending_up"
-          tono={kpi.masCaros.length ? 'negative' : 'neutral'}
-          onClick={detalleMasCaros}
-          title="Ver los productos donde la competencia es más barata"
         />
         <StatCard
           compacto
@@ -740,18 +682,8 @@ export default function Dashboard({ userDoc }) {
         <TarjetaBcv resumen={bcvResumen} bcv={bcv} color={tg.eje} onClick={() => setShowBcvModal(true)} />
       </section>
 
-      {/* Graficos: los tres en una fila */}
-      <section className={`grid grid-cols-1 lg:grid-cols-2 ${cadenaComp === 'todos' ? '2xl:grid-cols-3' : ''} gap-4`} aria-label="Gráficos">
-        <TendenciaPosicion
-          productos={productosFiltrados}
-          conDescuento={modoPrecio === 'descuento'}
-          porUnidad={modoAnalisis === 'unidosis'}
-          cadena={cadenaComp === 'todos' ? null : cadenaComp}
-          tipoMercado={tipoComp === 'todos' ? null : tipoComp}
-          meta={meta}
-          tg={tg}
-          onDia={detalleDia}
-        />
+      {/* Graficos (la tendencia de tu posicion paso a Experimental) */}
+      <section className={`grid grid-cols-1 ${cadenaComp === 'todos' ? 'lg:grid-cols-2' : ''} gap-4`} aria-label="Gráficos">
         <div className="m3-dash-card">
           <header className="m3-dash-card-header items-center">
             <div className="min-w-0 flex items-center gap-1">
@@ -861,7 +793,6 @@ export default function Dashboard({ userDoc }) {
                   opciones={[
                     ['todos', 'Mostrar: todos'],
                     ['con_precio', 'Ocultar sin precio'],
-                    ['mas_caro', 'Más caros que el mínimo'],
                     ['mas_barato', 'Eres el más barato'],
                     ['cambios', 'Con cambios de precio'],
                     ['sin_comparar', 'Sin comparar'],

@@ -146,7 +146,7 @@ export default function PreciosRepetidos({ selector, nombreCadena, releer, robot
                       <a href={f.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn" title="Abrir la página en la tienda" aria-label="Abrir en la tienda">
                         <span className="material-symbols-outlined" aria-hidden="true">open_in_new</span>
                       </a>
-                      <Link data-edita to={`/competencia?editar=${f.publicacion_id}&volver=revision`} className="m3-btn-text" title="Abrir el formulario de este enlace en Competencia">
+                      <Link data-edita to={`/competencia?editar=${f.publicacion_id}&volver=revision`} className="m3-btn-text" title="Abrir el formulario de este enlace en Relación">
                         <span className="material-symbols-outlined" aria-hidden="true">edit</span>
                         Corregir enlace
                       </Link>
