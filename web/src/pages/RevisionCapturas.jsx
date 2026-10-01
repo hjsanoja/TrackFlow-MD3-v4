@@ -17,6 +17,7 @@ import { normalizar } from '../components/formulario';
 import { useRobot } from '../hooks/useRobot';
 import { avisarCambioRevision } from '../hooks/usePendientesRevision';
 import { publicacionIdDe } from '../utils/dbClient';
+import { describirPresentacion } from '../utils/presentacion';
 
 /**
  * Bandeja de revisión de capturas sospechosas.
@@ -76,7 +77,7 @@ function diferenciaPresentacion(c) {
 function sugerencia(c) {
   const pres = diferenciaPresentacion(c);
   if (pres) {
-    return { tipo: 'erronea', texto: `La tienda muestra ${pres.leida} y el producto está registrado como ${pres.registrada}: corrige el enlace o márcala errónea.` };
+    return { tipo: 'erronea', texto: 'Si el enlace apunta a otra presentación, corrígelo; si no, márcala errónea.' };
   }
   const actual = Number(c.precio_bs);
   const ant = num(c.precio_anterior_bs);
@@ -111,7 +112,7 @@ async function guardarDecision(ids, estado) {
 }
 
 export default function RevisionCapturas() {
-  const { cadenas = [], productosCompetencia = [] } = useData() || {};
+  const { cadenas = [], productosCompetencia = [], productos = [] } = useData() || {};
   const { addToast } = useToast();
   const [ver, setVer] = useState('pendiente');
   const [capturas, setCapturas] = useState([]);
@@ -133,8 +134,19 @@ export default function RevisionCapturas() {
     return (id) => m.get(String(id).toLowerCase()) || id;
   }, [cadenas]);
 
-  // Enlace de Competencia de cada publicacion: lo necesita el robot.
+  // Enlace de Relacion de cada publicacion: lo necesita el robot.
   const enlacePorPub = useMemo(() => new Map(productosCompetencia.map(it => [publicacionIdDe(it), it])), [productosCompetencia]);
+  // Tu producto (el que se compara) por su ID, con laboratorio y presentacion.
+  const propioPorId = useMemo(() => new Map(productos.map(p => [String(p.id_interno).trim(), p])), [productos]);
+
+  // Umbrales con los que se marco (Sensibilidad): para explicar el porque.
+  const [umbrales, setUmbrales] = useState(null);
+  useEffect(() => {
+    if (!isSupabaseActive()) return;
+    supabase.from('config_calidad').select('clave, valor').then(({ data }) => {
+      if (data) setUmbrales(Object.fromEntries(data.map(r => [r.clave, Number(r.valor)])));
+    });
+  }, [verSensibilidad]);
 
   const cargarResumen = useCallback(async () => {
     const { data, error } = await supabase.from('v_calidad_datos').select('*').maybeSingle();
@@ -385,6 +397,7 @@ export default function RevisionCapturas() {
             <ul className="m3-revision-lista" aria-busy={cargando}>
               {visibles.slice(0, limite).map(c => (
                 <FilaCaptura key={c.captura_id} captura={c} ver={ver} nombreCadena={nombreCadena}
+                  propio={propioPorId.get(String(c.id_producto_propio).trim())} umbrales={umbrales}
                   seleccionada={seleccion.has(c.captura_id)} onSeleccionar={() => alternar(c.captura_id)}
                   onSeleccionarEnlace={() => seleccionarEnlace(c.publicacion_id)}
                   procesando={procesando} leyendo={robot.leyendo(enlacePorPub.get(Number(c.publicacion_id)))}
@@ -413,11 +426,11 @@ export default function RevisionCapturas() {
   );
 }
 
-function FilaCaptura({ captura: c, ver, nombreCadena, seleccionada, onSeleccionar, onSeleccionarEnlace, procesando, leyendo, robotOcupado, onReleer, onDecidir }) {
+function FilaCaptura({ captura: c, ver, nombreCadena, propio, umbrales, seleccionada, onSeleccionar, onSeleccionarEnlace, procesando, leyendo, robotOcupado, onReleer, onDecidir }) {
   const variacion = num(c.variacion_pct);
   const [motivoTexto, motivoIcono] = MOTIVOS[c.motivo_sospecha] || [c.motivo_sospecha || 'Dudosa', 'help'];
   const pista = sugerencia(c);
-  const nombreDistinto = c.nombre_capturado && normalizar(c.nombre_capturado) !== normalizar(c.producto_nombre);
+  const razones = porQue(c, umbrales);
 
   return (
     <li className={`m3-revision-item ${seleccionada ? 'is-seleccionada' : ''}`}>
@@ -437,17 +450,11 @@ function FilaCaptura({ captura: c, ver, nombreCadena, seleccionada, onSelecciona
             </button>
           )}
         </div>
-        <div className="m3-title-small text-on-surface mt-1 truncate" title={c.producto_nombre}>{c.producto_nombre}</div>
-        <div className="m3-body-small text-on-surface-variant truncate">
-          {[c.id_producto_propio, c.laboratorio, !c.es_propio && c.producto_propio_nombre ? `frente a ${c.producto_propio_nombre}` : null].filter(Boolean).join(' · ')}
-        </div>
-        {nombreDistinto && (
-          <div className="m3-body-small mt-1">
-            <span className="text-on-surface-variant">Se leyó: </span>
-            <span className={c.motivo_sospecha === 'nombre' || c.motivo_sospecha === 'ambos' || c.motivo_sospecha === 'presentacion' ? 'text-error' : 'text-on-surface'}>«{c.nombre_capturado}»</span>
-            {c.similitud_nombre != null && (
-              <span className="text-on-surface-variant"> · {Math.round(c.similitud_nombre * 100)} % de parecido</span>
-            )}
+        <Comparacion c={c} propio={propio} umbrales={umbrales} />
+        {razones.length > 0 && (
+          <div className="m3-revision-porque">
+            <span className="material-symbols-outlined" aria-hidden="true">info</span>
+            <span><strong className="font-medium">Por qué está aquí: </strong>{razones.join(' ')}</span>
           </div>
         )}
         {pista && (
@@ -560,4 +567,76 @@ function MiniHistorial({ lecturas }) {
       ))}
     </svg>
   );
+}
+
+// Presentacion de TU producto: "8 mg x 30".
+function presentacionPropio(p) {
+  if (!p) return '';
+  return [p.concentracion && p.concentracion !== '—' ? p.concentracion : null, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ');
+}
+
+// Tres filas alineadas: tu producto, el competidor que se vigila (su ficha) y
+// lo que la tienda muestra. Lo que no coincide con lo registrado va en rojo.
+function Comparacion({ c, propio, umbrales }) {
+  const dif = diferenciaPresentacion(c);
+  const registrada = presentacion(num(c.registrada_dosis_mg), num(c.registrada_tamano), c.registrada_unidad);
+  const leida = presentacion(num(c.leida_dosis_mg), num(c.leida_tamano), c.leida_unidad);
+  const minimoParecido = umbrales?.umbral_similitud_nombre ?? 0.4;
+  const nombreRaro = c.similitud_nombre != null && Number(c.similitud_nombre) < minimoParecido;
+  return (
+    <dl className="m3-revision-comparacion">
+      <dt>Tu producto</dt>
+      <dd>
+        <span className="text-on-surface font-medium">{propio?.nombre || c.producto_propio_nombre || c.producto_nombre}</span>
+        <span className="text-on-surface-variant">{[presentacionPropio(propio), propio?.laboratorio, c.id_producto_propio].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
+      </dd>
+      <dt>{c.es_propio ? 'Tu enlace' : 'Competidor'}</dt>
+      <dd>
+        {c.es_propio ? (
+          <span className="text-on-surface-variant">El mismo producto, vendido en esta cadena{registrada ? ` · registrado como ${registrada}` : ''}</span>
+        ) : (
+          <>
+            <span className="text-on-surface font-medium">{c.producto_nombre}</span>
+            <span className="text-on-surface-variant">{[c.laboratorio, registrada || null].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
+          </>
+        )}
+      </dd>
+      {c.nombre_capturado && (
+        <>
+          <dt>La tienda muestra</dt>
+          <dd>
+            <span className={nombreRaro ? 'text-error' : 'text-on-surface'}>«{c.nombre_capturado}»</span>
+            {leida && <span className={dif ? 'text-error' : 'text-on-surface-variant'}>{` · ${leida}`}</span>}
+            {c.similitud_nombre != null && (
+              <span className={nombreRaro ? 'text-error' : 'text-on-surface-variant'}>{` · ${Math.round(c.similitud_nombre * 100)} % de parecido`}</span>
+            )}
+          </dd>
+        </>
+      )}
+    </dl>
+  );
+}
+
+// Por que el control de calidad la marco, con sus numeros.
+function porQue(c, umbrales) {
+  const r = [];
+  const m = c.motivo_sospecha;
+  const variacion = num(c.variacion_pct);
+  const umbralPrecio = umbrales?.umbral_variacion_precio != null ? Math.round(umbrales.umbral_variacion_precio * 100) : null;
+  const umbralNombre = umbrales?.umbral_similitud_nombre != null ? Math.round(umbrales.umbral_similitud_nombre * 100) : null;
+  const pres = diferenciaPresentacion(c);
+  if (m === 'precio_repetido') {
+    r.push('Otros productos distintos de esta tienda salieron con este mismo precio exacto: suele ser el robot leyendo un monto que no es el del producto.');
+  }
+  if ((m === 'variacion_precio' || m === 'ambos') && variacion != null && c.precio_anterior_bs != null) {
+    r.push(`El precio ${variacion > 0 ? 'subió' : 'bajó'} ${Math.abs(variacion).toLocaleString('es-VE')} % frente a la lectura anterior (${bs(c.precio_anterior_bs)} → ${bs(c.precio_bs)})${umbralPrecio ? `; se marca desde ${umbralPrecio} %` : ''}.`);
+  }
+  if ((m === 'nombre' || m === 'ambos') && c.similitud_nombre != null && (umbrales == null || c.similitud_nombre < (umbrales.umbral_similitud_nombre ?? 0.4))) {
+    r.push(`El nombre de la tienda se parece ${Math.round(c.similitud_nombre * 100)} % al registrado${umbralNombre ? `; se marca por debajo de ${umbralNombre} %` : ''}: puede ser otro producto.`);
+  }
+  if ((m === 'presentacion' || m === 'ambos') && pres) {
+    r.push(`La tienda muestra ${pres.leida} y el enlace está registrado como ${pres.registrada}.`);
+  }
+  if (m === 'legacy') r.push('Dato traído del sistema anterior, sin revisar.');
+  return r;
 }

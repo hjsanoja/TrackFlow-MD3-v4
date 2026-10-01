@@ -2143,6 +2143,17 @@ td.m3-calor-celda {
   background-color: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant);
 }
 .m3-revision-pista .material-symbols-outlined { font-size: 18px; }
+.m3-revision-comparacion {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin-top: 8px;
+  font-size: 0.8125rem; line-height: 1.4;
+}
+.m3-revision-comparacion dt { color: var(--md-sys-color-on-surface-variant); font-weight: 500; white-space: nowrap; }
+.m3-revision-comparacion dd { min-width: 0; overflow-wrap: anywhere; }
+.m3-revision-porque {
+  display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; font-size: 0.8125rem; line-height: 1.35;
+  color: var(--md-sys-color-on-surface);
+}
+.m3-revision-porque .material-symbols-outlined { font-size: 18px; color: var(--md-sys-color-on-surface-variant); }
 .m3-revision-pista.is-valida { background-color: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent); color: var(--md-sys-color-on-surface); }
 .m3-revision-pista.is-valida .material-symbols-outlined { color: var(--md-sys-color-primary); }
 .m3-revision-pista.is-erronea { background-color: color-mix(in srgb, var(--md-sys-color-error) 10%, transparent); color: var(--md-sys-color-on-surface); }
@@ -2235,6 +2246,9 @@ button.m3-tienda-boton:hover { background-color: color-mix(in srgb, var(--md-sys
 body.sin-borrar [data-borra],
 body.solo-lectura [data-borra],
 body.solo-lectura [data-edita] { display: none !important; }
+/* Lo que solo se ve en modo solo lectura (el valor de un campo editable). */
+.solo-en-lectura { display: none; }
+body.solo-lectura .solo-en-lectura { display: inline; }
 
 /* Usuarios (fase 41). */
 .m3-etiqueta {
@@ -2242,6 +2256,7 @@ body.solo-lectura [data-edita] { display: none !important; }
   background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant);
 }
 .m3-etiqueta.is-error { background-color: color-mix(in srgb, var(--md-sys-color-error) 14%, transparent); color: var(--md-sys-color-error); }
+.m3-etiqueta.is-primary { background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
 .m3-permisos-lista { display: flex; flex-direction: column; gap: 6px; }
 .m3-permisos-lista > li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
 .m3-permisos-lista > li:last-child { border-bottom: none; }
