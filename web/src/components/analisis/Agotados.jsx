@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import StatCard from '../StatCard';
 import FiltroChip from '../FiltroChip';
 import BarraFiltros from '../BarraFiltros';
@@ -9,6 +9,7 @@ import { supabase, isSupabaseActive } from '../../supabase';
 import { normalizar } from '../formulario';
 import { haceCuanto, fechaHora } from '../../utils/usuarios';
 import { EstadoAnalisis } from './Estados';
+import { useConsulta } from '../../utils/cacheConsultas';
 
 // Agotados y de vuelta en existencia (v_disponibilidad, fase 46).
 //   - Tu producto agotado en una cadena: ventas que se pierden.
@@ -16,12 +17,18 @@ import { EstadoAnalisis } from './Estados';
 //   - Volvio: la ultima lectura tiene precio y antes estaba agotado (7 dias).
 // Solo cuentan las lecturas donde la tienda dijo "agotado"; una pagina que no
 // carga no dice nada de la existencia.
+const SIN_FILAS = [];
 const faltaVista = (e) => /42P01|PGRST205|does not exist|Could not find/i.test(`${e?.code} ${e?.message}`);
 
 export default function Agotados() {
   const { cadenas = [], productosCompetencia = [] } = useData() || {};
-  const [filas, setFilas] = useState([]);
-  const [estado, setEstado] = useState({ cargando: true, error: null, faltaSql: false });
+  // Queda en memoria: al volver a la pestana sale al instante (utils/cacheConsultas).
+  const consulta = useConsulta('disp:agotados', () => supabase.from('v_disponibilidad').select('*').limit(2000),
+    { activa: isSupabaseActive() });
+  const filas = consulta.datos || SIN_FILAS;
+  const estado = { cargando: consulta.cargando, error: consulta.error && !faltaVista(consulta.error) ? consulta.error : null,
+    faltaSql: Boolean(consulta.error && faltaVista(consulta.error)) };
+  const cargar = consulta.recargar;
   const [ver, setVer] = useState('todos');        // todos | tuyos | competencia | oportunidad | volvio
   const [cadena, setCadena] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
@@ -31,14 +38,6 @@ export default function Agotados() {
     return (id) => m.get(String(id).toLowerCase()) || id;
   }, [cadenas]);
 
-  const cargar = useCallback(async () => {
-    if (!isSupabaseActive()) { setEstado({ cargando: false, error: null, faltaSql: false }); return; }
-    setEstado(e => ({ ...e, cargando: true }));
-    const { data, error } = await supabase.from('v_disponibilidad').select('*').limit(2000);
-    setFilas(error ? [] : data || []);
-    setEstado({ cargando: false, error: error && !faltaVista(error) ? error : null, faltaSql: Boolean(error && faltaVista(error)) });
-  }, []);
-  useEffect(() => { cargar(); }, [cargar]);
 
   // Donde tu producto tiene hoy precio leido: (producto, cadena).
   const tuyoConPrecio = useMemo(() => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
+import { olvidarConsultas } from '../utils/cacheConsultas';
 
 // Cuantas capturas dudosas esperan revision: el contador del menu y de la
 // pestana. Se vuelve a contar cada 5 minutos y cuando la bandeja avisa de un
@@ -8,6 +9,7 @@ const EVENTO = 'trackflow:revision';
 const CADA_MS = 5 * 60 * 1000;
 
 export function avisarCambioRevision() {
+  olvidarConsultas('revision:'); // lo guardado de las bandejas ya no sirve
   window.dispatchEvent(new Event(EVENTO));
 }
 

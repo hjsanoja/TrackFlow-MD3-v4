@@ -8,6 +8,7 @@ import { useData } from '../context/DataContext';
 // al entrar, cada 5 minutos y al abrir la campana. Una vista que falta (fase
 // sin correr) simplemente no da aviso.
 const CADA_MS = 5 * 60 * 1000;
+const ESPERA_MS = 4000;
 
 async function contar(tabla, filtro) {
   let q = supabase.from(tabla).select('*', { count: 'exact', head: true });
@@ -31,6 +32,9 @@ export default function CentroAvisos({ verExperimental = true, verCadenas = true
   const [avisos, setAvisos] = useState([]);
   const [abierto, setAbierto] = useState(false);
   const ref = useRef(null);
+  // Los nombres de las cadenas se leen al armar el texto: si llegan despues no se vuelve a contar.
+  const cadenasRef = useRef(cadenas);
+  cadenasRef.current = cadenas;
 
   const cargar = useCallback(async () => {
     if (!isSupabaseActive()) return;
@@ -44,17 +48,18 @@ export default function CentroAvisos({ verExperimental = true, verCadenas = true
     setAvisos([
       { id: 'agotados', n: agotados, importante: true, icono: 'remove_shopping_cart', texto: `${agotados === 1 ? 'Un producto tuyo agotado' : `${agotados} enlaces tuyos agotados`} en alguna cadena`, ir: '/experimental?tab=agotados' },
       { id: 'minimo', n: bajoMinimo, importante: true, icono: 'gpp_maybe', texto: `${bajoMinimo === 1 ? 'Una cadena vende' : `${bajoMinimo} cadenas venden`} tu producto por debajo del mínimo`, ir: '/experimental?tab=precio_minimo' },
-      { id: 'fallas', n: fallas.length, importante: true, icono: 'smart_toy', texto: `El robot leyó con fallas: ${fallas.map(id => cadenas.find(c => String(c.id).toLowerCase() === String(id).toLowerCase())?.nombre || id).join(', ')}`, ir: '/cadenas' },
+      { id: 'fallas', n: fallas.length, importante: true, icono: 'smart_toy', texto: `El robot leyó con fallas: ${fallas.map(id => cadenasRef.current.find(c => String(c.id).toLowerCase() === String(id).toLowerCase())?.nombre || id).join(', ')}`, ir: '/cadenas' },
       { id: 'revision', n: pendientes, importante: false, icono: 'rule', texto: `${pendientes} ${pendientes === 1 ? 'captura dudosa espera' : 'capturas dudosas esperan'} revisión`, ir: '/experimental?tab=revision' },
       { id: 'sugerencias', n: sugerencias, importante: false, icono: 'travel_explore', texto: `${sugerencias} ${sugerencias === 1 ? 'sugerencia de enlace pendiente' : 'sugerencias de enlaces pendientes'}`, ir: '/experimental?tab=sugerencias' },
     ].filter(a => a.n > 0));
-  }, [verExperimental, verCadenas, cadenas]);
+  }, [verExperimental, verCadenas]);
 
   useEffect(() => {
-    cargar();
+    // El primer conteo espera unos segundos: primero carga la pantalla abierta.
+    const primero = setTimeout(cargar, ESPERA_MS);
     const t = setInterval(cargar, CADA_MS);
     window.addEventListener('trackflow:revision', cargar);
-    return () => { clearInterval(t); window.removeEventListener('trackflow:revision', cargar); };
+    return () => { clearTimeout(primero); clearInterval(t); window.removeEventListener('trackflow:revision', cargar); };
   }, [cargar]);
 
   useEffect(() => {
