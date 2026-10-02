@@ -2149,6 +2149,7 @@ td.m3-calor-celda {
 }
 .m3-revision-comparacion dt { color: var(--md-sys-color-on-surface-variant); font-weight: 500; white-space: nowrap; }
 .m3-revision-comparacion dd { min-width: 0; overflow-wrap: anywhere; }
+.m3-sugerencias-producto .m3-revision-comparacion { margin-top: 0; font-size: 0.875rem; }
 .m3-revision-porque {
   display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; font-size: 0.8125rem; line-height: 1.35;
   color: var(--md-sys-color-on-surface);
@@ -2264,3 +2265,23 @@ body.solo-lectura .solo-en-lectura { display: inline; }
   white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 0.9375rem; line-height: 1.5; padding: 14px 16px; border-radius: 12px;
   background-color: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface);
 }
+
+/* Centro de avisos (campana de la barra de arriba) */
+.m3-avisos-badge {
+  position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px;
+  font-size: 0.6875rem; font-weight: 700; line-height: 18px; text-align: center;
+  background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);
+}
+.m3-avisos-badge.is-importante { background-color: var(--md-sys-color-error); color: var(--md-sys-color-on-error); }
+.m3-avisos-panel {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: min(360px, calc(100vw - 32px));
+  border-radius: 16px; background-color: var(--md-sys-color-surface-container); box-shadow: var(--md-sys-elevation-2);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+.m3-aviso {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 16px; font-size: 0.875rem; line-height: 1.35;
+  color: var(--md-sys-color-on-surface);
+}
+.m3-aviso:hover { background-color: var(--md-sys-color-surface-container-high); }
+.m3-aviso > .material-symbols-outlined:first-child { color: var(--md-sys-color-on-surface-variant); }
+.m3-aviso.is-importante > .material-symbols-outlined:first-child { color: var(--md-sys-color-error); }
