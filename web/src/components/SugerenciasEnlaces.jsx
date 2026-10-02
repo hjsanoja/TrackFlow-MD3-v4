@@ -13,6 +13,7 @@ import GitHubConfigModal from './GitHubConfigModal';
 import ConfirmModal from './ConfirmModal';
 import ModalWrapper from './ModalWrapper';
 import { normalizar } from './formulario';
+import { describirPresentacion } from '../utils/presentacion';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
 /**
@@ -56,7 +57,8 @@ const leerLanzado = () => { try { return Number(localStorage.getItem(CLAVE_LANZA
 const guardarLanzado = (t) => { try { if (t) localStorage.setItem(CLAVE_LANZADO, String(t)); else localStorage.removeItem(CLAVE_LANZADO); } catch { /* sin almacenamiento */ } };
 
 export default function SugerenciasEnlaces() {
-  const { refreshCompetencia } = useData() || {};
+  const { refreshCompetencia, productos = [] } = useData() || {};
+  const propioPorId = useMemo(() => new Map(productos.map(x => [String(x.id_interno).trim(), x])), [productos]);
   const { addToast } = useToast();
   const [ver, setVer] = useState('pendiente');
   const [filas, setFilas] = useState([]);
@@ -377,7 +379,7 @@ export default function SugerenciasEnlaces() {
           <ul className="m3-sugerencias-lista">
             {grupos.slice(0, limite).map(g => (
               <li key={g.producto.producto_id} className="m3-sugerencias-grupo">
-                <CabeceraProducto p={g.producto} />
+                <CabeceraProducto p={g.producto} propio={propioPorId.get(String(g.producto.id_producto_propio).trim())} />
                 <ul>
                   {g.sugerencias.map(s => (
                     <FilaSugerencia key={s.id} s={s} ver={ver} nombreCadena={nombreCadena} procesando={procesando === s.id}
@@ -539,23 +541,48 @@ function EstadoCorrida({ corrida, arrancando, onDetener, deteniendo }) {
   );
 }
 
-function CabeceraProducto({ p }) {
+// Igual que Revision de capturas: tu producto y el que se busca, en filas
+// alineadas, cada uno con laboratorio y presentacion.
+function CabeceraProducto({ p, propio }) {
   const pres = presentacion(p.registrada_dosis_mg, p.registrada_tamano, p.registrada_unidad);
+  const presPropio = propio ? [propio.concentracion && propio.concentracion !== '—' ? propio.concentracion : null, describirPresentacion(propio)].filter(v => v && v !== '—').join(' · ') : '';
   return (
     <div className="m3-sugerencias-producto">
-      <div className="flex items-center gap-2 min-w-0">
-        {p.es_propio && <span className="m3-chip-propio">Tú</span>}
-        <span className="m3-title-small text-on-surface truncate" title={p.producto_nombre}>{p.producto_nombre}</span>
-      </div>
-      <div className="m3-body-small text-on-surface-variant truncate">
-        {[p.id_producto_propio, p.laboratorio, pres || 'sin dosis ni tamaño registrados', !p.es_propio && p.producto_propio_nombre ? `frente a ${p.producto_propio_nombre}` : null].filter(Boolean).join(' · ')}
-      </div>
+      <dl className="m3-revision-comparacion mt-0">
+        <dt>Tu producto</dt>
+        <dd>
+          <span className="text-on-surface font-medium">{propio?.nombre || p.producto_propio_nombre || p.producto_nombre}</span>
+          <span className="text-on-surface-variant">{[presPropio, propio?.laboratorio, p.id_producto_propio].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
+        </dd>
+        <dt>Se busca</dt>
+        <dd>
+          {p.es_propio ? (
+            <span className="text-on-surface">Tu mismo producto, en las cadenas donde aún no tienes enlace{pres ? <span className="text-on-surface-variant"> · {pres}</span> : null}</span>
+          ) : (
+            <>
+              <span className="text-on-surface font-medium">{p.producto_nombre}</span>
+              <span className="text-on-surface-variant">{[p.laboratorio, pres || 'sin dosis ni tamaño registrados'].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
+            </>
+          )}
+        </dd>
+      </dl>
     </div>
   );
 }
 
+// Dosis y tamano que se leen en el nombre de la tienda ("50 mg", "x 30", "120 ml").
+function leerPresentacion(nombre) {
+  const t = String(nombre || '').toLowerCase().replace(',', '.');
+  const dosis = t.match(/(\d+(?:\.\d+)?)\s*(mg|mcg|g)\b(?!\s*\/)/);
+  const tam = t.match(/\bx\s*(\d{1,4})\b/) || t.match(/\b(\d{1,4})\s*(tabletas?|tabs?|c[aá]psulas?|caps?|comprimidos?|grageas?|sobres?|unidades?)\b/)
+    || t.match(/(\d{2,4})\s*ml\b/);
+  const partes = [];
+  if (dosis) partes.push(`${dosis[1].replace('.', ',')} ${dosis[2]}`);
+  if (tam) partes.push(/ml\b/.test(tam[0]) && !/^x/.test(tam[0]) ? `${tam[1]} ml` : `x ${tam[1]}`);
+  return partes.join(' ');
+}
+
 const CRITERIOS = [['laboratorio', 'Laboratorio'], ['dosis', 'Dosis'], ['tamano', 'Tamaño']];
-const ICONO = { si: 'check', no: 'close', '?': 'help' };
 
 function FilaSugerencia({ s, ver, nombreCadena, procesando, onAceptar, onDescartar, onReabrir }) {
   const d = s.detalle || {};
@@ -566,21 +593,31 @@ function FilaSugerencia({ s, ver, nombreCadena, procesando, onAceptar, onDescart
           <span className="inline-flex items-center gap-1.5 m3-label-medium text-on-surface-variant">
             <CadenaBadge cadena={s.cadena_id} tamano="xs" title="" />{nombreCadena(s.cadena_id)}
           </span>
-          <span className={`m3-puntaje ${s.puntaje >= 100 ? 'is-alto' : s.puntaje >= 90 ? 'is-medio' : ''}`} title="Puntaje de coincidencia (0 a 100)">{s.puntaje}</span>
-          {CRITERIOS.map(([k, t]) => (
-            <span key={k} className={`m3-criterio is-${d[k] === 'si' ? 'si' : d[k] === 'no' ? 'no' : 'duda'}`}
-              title={d[k] === 'si' ? `${t}: coincide` : d[k] === 'no' ? `${t}: no coincide` : `${t}: no se pudo comprobar`}>
-              <span className="material-symbols-outlined" aria-hidden="true">{ICONO[d[k]] || 'help'}</span>{t}
-            </span>
-          ))}
+          <span className={`m3-puntaje ${s.puntaje >= 100 ? 'is-alto' : s.puntaje >= 90 ? 'is-medio' : ''}`} title="Puntaje de coincidencia (0 a 100)">{s.puntaje} de 100</span>
           {s.disponible === false && <span className="m3-chip-caido">Agotado</span>}
         </div>
-        <a href={s.url} target="_blank" rel="noopener noreferrer" className="m3-body-medium text-on-surface hover:underline mt-1 inline-flex items-center gap-1 max-w-full" title="Abrir en la tienda">
-          <span className="truncate">{s.nombre_tienda || s.url}</span>
-          <span className="material-symbols-outlined text-[16px] text-on-surface-variant shrink-0" aria-hidden="true">open_in_new</span>
-        </a>
-        <div className="m3-body-small text-on-surface-variant truncate">
-          {[s.marca_tienda, d.consulta ? `buscado como «${d.consulta}»` : null].filter(Boolean).join(' · ')}
+        <dl className="m3-revision-comparacion">
+          <dt>La tienda muestra</dt>
+          <dd>
+            <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-on-surface hover:underline" title="Abrir en la tienda">
+              «{s.nombre_tienda || s.url}»
+              <span className="material-symbols-outlined text-[14px] text-on-surface-variant align-[-2px] ml-0.5" aria-hidden="true">open_in_new</span>
+            </a>
+            <span className={d.dosis === 'no' || d.tamano === 'no' ? 'text-error' : 'text-on-surface-variant'}>
+              {[leerPresentacion(s.nombre_tienda), s.marca_tienda].filter(Boolean).map(t => ` · ${t}`).join('')}
+            </span>
+          </dd>
+        </dl>
+        <div className="m3-revision-porque">
+          <span className="material-symbols-outlined" aria-hidden="true">info</span>
+          <span>
+            {CRITERIOS.map(([k, t], i) => (
+              <span key={k} className={d[k] === 'no' ? 'text-error' : d[k] === 'si' ? 'text-on-surface' : 'text-on-surface-variant'}>
+                {i > 0 ? ' · ' : ''}{t}: {d[k] === 'si' ? 'coincide' : d[k] === 'no' ? 'no coincide' : 'no se pudo comprobar'}
+              </span>
+            ))}
+            {d.consulta && <span className="text-on-surface-variant"> · se buscó «{d.consulta}»</span>}
+          </span>
         </div>
       </div>
       <div className="text-right tabular-nums m3-body-medium text-on-surface whitespace-nowrap">{precio(s.precio, s.moneda)}</div>

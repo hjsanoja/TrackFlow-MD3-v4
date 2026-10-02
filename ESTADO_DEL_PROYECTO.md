@@ -561,6 +561,44 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Avisos, historial, resumen semanal y mapa de calor de tu precio (PR #77, fase 47)
+
+- **Centro de avisos** (`components/CentroAvisos.jsx`, campana en la barra
+  de arriba del `Layout`): tus enlaces agotados (`v_disponibilidad`), cadenas
+  bajo tu mínimo (`v_precio_minimo_alertas`), cadenas cuya última lectura del
+  robot tuvo menos de 80 % con precio (`scrape_runs`), capturas por revisar y
+  sugerencias pendientes. Cada aviso lleva a su pantalla; se cuenta al entrar,
+  cada 5 min y al abrir. Lo que falta (fase sin correr) no da aviso.
+- **Historial de decisiones** (`sql/fase47_historial_revision.sql`): tabla
+  `revision_historial` que llena el trigger `trg_anotar_revision` (AFTER
+  UPDATE de `revisado_manual`/`sospechoso` en `fact_precios`, SECURITY
+  DEFINER, usuario = `fn_mi_email()`). Anota cuando cambia `revisado_manual`
+  o el `sospechoso` de una captura ya revisada; la sensibilidad (marca sin
+  revisar) no se anota. Vista `v_revision_historial` con producto, cadena y
+  nombre del usuario. En el panel: opción «Historial» del selector de
+  Revisión de capturas (`components/revision/HistorialRevision.jsx`) y, en
+  Válidas/Erróneas, «por X · hace N» en cada captura.
+- **Revisión de capturas**: primero las capturas de tus enlaces; filtro
+  **Producto**; el chip «Relación» pasó a «De quién es el enlace».
+- **Experimental → Resumen de la semana** (`components/analisis/ResumenSemanal.jsx`,
+  pestaña por defecto de Experimental): cambios de precio en dólares (tuyos y
+  de la competencia, `fn_cambios_desde`), agotados nuevos y los que volvieron,
+  nuevos bajo el mínimo, «más caro» por cadena hoy frente a hace 7 días
+  (`fn_posicion_por_cadena`) y decisiones de revisión de la semana.
+- **Mapa de calor** (`components/MapaPorCadena.jsx`, rehecho): SOLO tu precio
+  en cada cadena (antes: el más bajo de la cadena, tuyo o de la competencia).
+  Color «Tus cadenas» = frente al promedio de tu precio en tus cadenas, o
+  «Competencia» = frente al competidor más barato de esa cadena. Indicadores:
+  dónde más barato y más caro te venden, diferencia típica entre tu cadena más
+  barata y la más cara; columna «Diferencia entre cadenas». Fila → ficha.
+- **Sugerencias de enlaces** con el formato de la revisión: cabecera «Tu
+  producto» / «Se busca» y, por sugerencia, «La tienda muestra» (nombre,
+  presentación leída del nombre con `leerPresentacion`, marca) y una línea
+  con laboratorio / dosis / tamaño: coincide, no coincide o no se pudo
+  comprobar.
+- Probado: fase 47 en Postgres local (válida, errónea, pendiente anotadas con
+  el usuario; la marca automática no); pantallas con datos simulados.
+
 ## Agotados, precio mínimo y revisión más clara (PR #75, fase 46)
 
 - **Robot** (`farmatodo.py`): el mensaje de error ya no mezcla «no

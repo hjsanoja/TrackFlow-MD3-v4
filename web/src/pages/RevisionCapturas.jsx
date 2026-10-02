@@ -13,6 +13,8 @@ import AvisoRobot from '../components/AvisoRobot';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import Sensibilidad from '../components/revision/Sensibilidad';
 import PreciosRepetidos from '../components/revision/PreciosRepetidos';
+import HistorialRevision from '../components/revision/HistorialRevision';
+import { haceCuanto, fechaHora } from '../utils/usuarios';
 import { normalizar } from '../components/formulario';
 import { useRobot } from '../hooks/useRobot';
 import { avisarCambioRevision } from '../hooks/usePendientesRevision';
@@ -116,6 +118,7 @@ export default function RevisionCapturas() {
   const { addToast } = useToast();
   const [ver, setVer] = useState('pendiente');
   const [capturas, setCapturas] = useState([]);
+  const [decisiones, setDecisiones] = useState(() => new Map()); // captura_id -> ultima decision (fase 47)
   const [resumen, setResumen] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [sinFase34, setSinFase34] = useState(false);
@@ -124,6 +127,7 @@ export default function RevisionCapturas() {
   const [motivo, setMotivo] = useState('todos');
   const [cadena, setCadena] = useState('todos');
   const [relacion, setRelacion] = useState('todos');
+  const [producto, setProducto] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
   const [limite, setLimite] = useState(POR_PAGINA);
   const [verSensibilidad, setVerSensibilidad] = useState(false);
@@ -154,7 +158,7 @@ export default function RevisionCapturas() {
   }, []);
 
   const cargar = useCallback(async () => {
-    if (!isSupabaseActive() || ver === 'repetidos') { setCargando(false); return; }
+    if (!isSupabaseActive() || ver === 'repetidos' || ver === 'historial') { setCargando(false); return; }
     setCargando(true);
     try {
       let { data, error } = await supabase.from('v_capturas_revision').select('*')
@@ -168,6 +172,14 @@ export default function RevisionCapturas() {
       if (error) throw error;
       setCapturas(data || []);
       cargarResumen();
+      // Quien decidio cada una (solo en Validas / Erroneas; sin la fase 47 no hay).
+      if (ver !== 'pendiente' && data?.length) {
+        const { data: h } = await supabase.from('v_revision_historial').select('captura_id, usuario, usuario_nombre, fecha')
+          .in('captura_id', data.map(c => c.captura_id)).order('fecha', { ascending: false });
+        const m = new Map();
+        for (const d of h || []) if (!m.has(d.captura_id)) m.set(d.captura_id, d);
+        setDecisiones(m);
+      }
     } catch (err) {
       console.error('Error cargando la bandeja de revisión:', err);
       addToast(`No se pudo cargar la bandeja: ${err.message}`, 'error');
@@ -177,7 +189,7 @@ export default function RevisionCapturas() {
   }, [ver, addToast, cargarResumen]);
 
   useEffect(() => { cargar(); }, [cargar]);
-  useEffect(() => { setLimite(POR_PAGINA); setSeleccion(new Set()); }, [ver, motivo, cadena, relacion, busqueda]);
+  useEffect(() => { setLimite(POR_PAGINA); setSeleccion(new Set()); }, [ver, motivo, cadena, relacion, producto, busqueda]);
 
   const robot = useRobot({
     onTerminado: ({ leidos }) => {
@@ -237,14 +249,29 @@ export default function RevisionCapturas() {
 
   const cadenasEnLista = useMemo(() => [...new Set(capturas.map(c => c.cadena_id))], [capturas]);
 
+  // Tus productos (los que tienen capturas en la lista), para el filtro.
+  const productosEnLista = useMemo(() => {
+    const m = new Map();
+    for (const c of capturas) {
+      const id = String(c.id_producto_propio).trim();
+      if (!m.has(id)) m.set(id, { id, nombre: propioPorId.get(id)?.nombre || c.producto_propio_nombre || c.producto_nombre, n: 0 });
+      m.get(id).n += 1;
+    }
+    return [...m.values()].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+  }, [capturas, propioPorId]);
+
+  // Primero las capturas de TUS enlaces (afectan tu precio); dentro de cada
+  // grupo, las mas recientes primero (el orden en que llegan).
   const visibles = useMemo(() => {
     const t = normalizar(busqueda);
     return capturas.filter(c =>
       (motivo === 'todos' || c.motivo_sospecha === motivo)
       && (cadena === 'todos' || c.cadena_id === cadena)
       && (relacion === 'todos' || (relacion === 'propio') === Boolean(c.es_propio))
-      && (!t || normalizar(`${c.id_producto_propio} ${c.producto_nombre} ${c.producto_propio_nombre || ''} ${c.laboratorio} ${c.nombre_capturado || ''}`).includes(t)));
-  }, [capturas, motivo, cadena, relacion, busqueda]);
+      && (producto === 'todos' || String(c.id_producto_propio).trim() === producto)
+      && (!t || normalizar(`${c.id_producto_propio} ${c.producto_nombre} ${c.producto_propio_nombre || ''} ${c.laboratorio} ${c.nombre_capturado || ''}`).includes(t)))
+      .map((c, i) => [c, i]).sort((a, b) => (b[0].es_propio ? 1 : 0) - (a[0].es_propio ? 1 : 0) || a[1] - b[1]).map(([c]) => c);
+  }, [capturas, motivo, cadena, relacion, producto, busqueda]);
 
   // Pendientes / Válidas / Erróneas y, aparte, los precios repetidos (fase 44).
   const selectorVista = sinFase34 ? null : (
@@ -252,11 +279,12 @@ export default function RevisionCapturas() {
       opciones={[
         ...Object.entries(VISTAS).map(([v, t]) => [v, t, v === 'pendiente' ? 'Aún sin revisar' : `Las que marcaste como ${t.toLowerCase().slice(0, -1)}`]),
         ['repetidos', 'Precios repetidos', 'Productos distintos de una cadena con el mismo precio exacto'],
+        ['historial', 'Historial', 'Quién marcó cada captura y cuándo'],
       ]} />
   );
 
-  const hayFiltros = motivo !== 'todos' || cadena !== 'todos' || relacion !== 'todos' || busqueda !== '';
-  const limpiar = () => { setMotivo('todos'); setCadena('todos'); setRelacion('todos'); setBusqueda(''); };
+  const hayFiltros = motivo !== 'todos' || cadena !== 'todos' || relacion !== 'todos' || producto !== 'todos' || busqueda !== '';
+  const limpiar = () => { setMotivo('todos'); setCadena('todos'); setRelacion('todos'); setProducto('todos'); setBusqueda(''); };
   const conteo = (clave) => capturas.filter(c => c.motivo_sospecha === clave).length;
 
   const seleccionadas = visibles.filter(c => seleccion.has(c.captura_id));
@@ -297,6 +325,8 @@ export default function RevisionCapturas() {
 
       {ver === 'repetidos' ? (
         <PreciosRepetidos selector={selectorVista} nombreCadena={nombreCadena} releer={releer} robotOcupado={Boolean(robot.corrida)} />
+      ) : ver === 'historial' ? (
+        <HistorialRevision selector={selectorVista} nombreCadena={nombreCadena} />
       ) : (
       <section className="m3-data-table" aria-label="Capturas">
         <div className="m3-data-table-toolbar flex flex-col gap-3">
@@ -343,8 +373,10 @@ export default function RevisionCapturas() {
                   opciones={[['todos', 'Motivo: todos'], ...Object.entries(MOTIVOS).filter(([k]) => conteo(k) > 0).map(([k, [t]]) => [k, `${t} (${conteo(k)})`])]} />
                 <FiltroChip etiqueta="Cadena" icono="storefront" valor={cadena} onChange={setCadena}
                   opciones={[['todos', 'Cadena: todas'], ...cadenasEnLista.map(id => [id, nombreCadena(id)])]} />
-                <FiltroChip etiqueta="Relación" icono="link" valor={relacion} onChange={setRelacion}
-                  opciones={[['todos', 'Relación: todas'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
+                <FiltroChip etiqueta="Producto" icono="medication" valor={producto} onChange={setProducto}
+                  opciones={[['todos', 'Producto: todos'], ...productosEnLista.map(x => [x.id, `${x.nombre} (${x.n})`])]} />
+                <FiltroChip etiqueta="De quién es el enlace" icono="link" valor={relacion} onChange={setRelacion}
+                  opciones={[['todos', 'Enlaces: todos'], ['propio', 'Solo tus enlaces'], ['competencia', 'Solo competencia']]} />
               </>} />
               <div className="flex flex-col md:flex-row md:items-center gap-3">
                 <label className="m3-search-field">
@@ -397,7 +429,7 @@ export default function RevisionCapturas() {
             <ul className="m3-revision-lista" aria-busy={cargando}>
               {visibles.slice(0, limite).map(c => (
                 <FilaCaptura key={c.captura_id} captura={c} ver={ver} nombreCadena={nombreCadena}
-                  propio={propioPorId.get(String(c.id_producto_propio).trim())} umbrales={umbrales}
+                  propio={propioPorId.get(String(c.id_producto_propio).trim())} umbrales={umbrales} decision={decisiones.get(c.captura_id)}
                   seleccionada={seleccion.has(c.captura_id)} onSeleccionar={() => alternar(c.captura_id)}
                   onSeleccionarEnlace={() => seleccionarEnlace(c.publicacion_id)}
                   procesando={procesando} leyendo={robot.leyendo(enlacePorPub.get(Number(c.publicacion_id)))}
@@ -426,7 +458,7 @@ export default function RevisionCapturas() {
   );
 }
 
-function FilaCaptura({ captura: c, ver, nombreCadena, propio, umbrales, seleccionada, onSeleccionar, onSeleccionarEnlace, procesando, leyendo, robotOcupado, onReleer, onDecidir }) {
+function FilaCaptura({ captura: c, ver, nombreCadena, propio, umbrales, decision, seleccionada, onSeleccionar, onSeleccionarEnlace, procesando, leyendo, robotOcupado, onReleer, onDecidir }) {
   const variacion = num(c.variacion_pct);
   const [motivoTexto, motivoIcono] = MOTIVOS[c.motivo_sospecha] || [c.motivo_sospecha || 'Dudosa', 'help'];
   const pista = sugerencia(c);
@@ -521,6 +553,11 @@ function FilaCaptura({ captura: c, ver, nombreCadena, propio, umbrales, seleccio
               <span className="material-symbols-outlined" aria-hidden="true">{ver === 'valida' ? 'check_circle' : 'block'}</span>
               {ver === 'valida' ? 'Válida' : 'Errónea'}
             </span>
+            {decision && (
+              <span className="m3-body-small text-on-surface-variant" title={fechaHora(decision.fecha)}>
+                por {decision.usuario_nombre || decision.usuario || 'alguien'} · {haceCuanto(decision.fecha).toLowerCase()}
+              </span>
+            )}
             <button data-edita type="button" onClick={() => onDecidir('pendiente')} disabled={procesando}
               className="m3-btn-outline h-10 px-4" title="Quitar la decisión: vuelve a pendientes">
               <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">undo</span>

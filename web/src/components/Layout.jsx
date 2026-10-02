@@ -6,6 +6,7 @@ import { registrarAcceso } from '../utils/accesos';
 import { limpiarCacheDatos } from '../utils/cacheDatos';
 import { useData } from '../context/DataContext';
 import { usePendientesRevision } from '../hooks/usePendientesRevision';
+import CentroAvisos from './CentroAvisos';
 import { permisosEn } from '../utils/permisos';
 
 export default function Layout({ user, userDoc, children }) {
@@ -94,6 +95,7 @@ export default function Layout({ user, userDoc, children }) {
   const allSearchNavItems = [
     ...navItems,
     ...(isNavVisible({ to: '/experimental', adminOnly: false }) ? [
+      { to: '/experimental?tab=resumen', label: 'Resumen de la semana (Experimental)', icon: 'summarize' },
       { to: '/experimental?tab=revision', label: 'Revisión de capturas (Experimental)', icon: 'rule' },
       { to: '/experimental?tab=sugerencias', label: 'Sugerencias de enlaces (Experimental)', icon: 'travel_explore' },
       { to: '/experimental?tab=agotados', label: 'Agotados (Experimental)', icon: 'remove_shopping_cart' },
@@ -313,6 +315,7 @@ export default function Layout({ user, userDoc, children }) {
           </div>
 
           <div className="flex items-center gap-3">
+            <CentroAvisos verExperimental={isNavVisible({ to: '/experimental', adminOnly: false })} verCadenas={isNavVisible({ to: '/cadenas', adminOnly: false })} />
             {isRefreshing ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-primary bg-primary-container/50 px-3 py-1 rounded-full border border-primary/20 animate-pulse">
                 <span className="material-symbols-outlined text-sm animate-spin">sync</span>
