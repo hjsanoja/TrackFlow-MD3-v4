@@ -561,6 +561,38 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Velocidad de carga (PR #78, fase 48)
+
+Medido en Postgres local con la copia de datos: lo lento era la base, no el
+navegador.
+
+- **JIT apagado** para `authenticated` (`ALTER ROLE ... SET jit = off` y
+  `NOTIFY pgrst, 'reload config'`). Postgres "compilaba" las consultas que
+  estimaba grandes: `fn_posicion_por_cadena` pasaba de ~20 ms a ~700 ms y
+  `v_sugerencias_enlaces` gastaba ~490 ms solo en JIT.
+- **`v_variacion`** reescrita (Precios, Dashboard): `v_precio_diario` se
+  lee una vez (CTE MATERIALIZED) y el precio de hace 1/7/15 días sale con
+  `DISTINCT ON`, en vez de subconsultas por publicación. Mismas columnas y
+  mismas filas (comparado con EXCEPT). ~530 → ~220 ms.
+- **`fn_capturas_revision(p_estado, p_limite)`**: Revisión de capturas.
+  La vista calculaba presentación, anterior/siguiente e historial de las
+  ~15 mil capturas dudosas o revisadas antes de cortar en 500 (la ventana
+  impedía empujar el filtro). La función elige primero las 500 y calcula
+  solo esas; devuelve `SETOF v_capturas_revision` (la vista queda igual).
+  Índice parcial `idx_fact_precios_revisadas`. ~1,1 s → ~50 ms. El panel
+  cae a la vista si falta la fase.
+- **`v_disponibilidad`** reescrita (Agotados, campana, resumen): sin
+  subconsultas correlacionadas. ~960 → ~50 ms.
+- **Memoria de consultas** (`utils/cacheConsultas.js`, `useConsulta`):
+  lo último leído se muestra al instante al volver a una pestaña y se pide
+  de nuevo por detrás si tiene más de 60 s. La usan `useRpc` (Comparador,
+  Índice, Velocidad, Posición por cadena), Tendencia de posición, Resumen de
+  la semana, Agotados, Historial de revisión y las bandejas de Revisión de
+  capturas (claves `revision:*`, que `avisarCambioRevision` olvida al
+  marcar capturas). Vive mientras la pestaña del navegador esté abierta.
+- **Campana**: el primer conteo espera 4 s para no competir con la pantalla
+  que se abre, y ya no vuelve a contar cuando llegan los nombres de cadenas.
+
 ## Avisos, historial, resumen semanal y mapa de calor de tu precio (PR #77, fase 47)
 
 - **Centro de avisos** (`components/CentroAvisos.jsx`, campana en la barra

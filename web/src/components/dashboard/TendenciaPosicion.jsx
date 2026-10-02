@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import Select from '../Select';
 import InfoGrafico from '../InfoGrafico';
 import { supabase, isSupabaseActive } from '../../supabase';
 import { leerColor, pct, textoMeta } from './comun';
+import { useConsulta } from '../../utils/cacheConsultas';
+
+const SIN_FILAS = [];
 
 const PERIODOS = [[7, 'Últimos 7 días'], [15, 'Últimos 15 días'], [30, 'Últimos 30 días'], [90, 'Últimos 90 días']];
 
@@ -17,29 +20,27 @@ export default function TendenciaPosicion({ productos, conDescuento, porUnidad, 
   const [dias, setDias] = useState(() => {
     try { return [7, 15, 30, 90].includes(Number(localStorage.getItem('dashboard.tendencia.dias'))) ? Number(localStorage.getItem('dashboard.tendencia.dias')) : 7; } catch { return 7; }
   });
-  const [estado, setEstado] = useState({ cargando: true, filas: [], error: null });
   // La lista de productos cambia de identidad en cada filtro: se compara por texto.
   const claveProductos = productos ? productos.join(',') : '';
-
-  useEffect(() => {
-    if (!isSupabaseActive()) { setEstado({ cargando: false, filas: [], error: null }); return undefined; }
-    let vigente = true;
-    setEstado(e => ({ ...e, cargando: true }));
-    supabase.rpc('fn_tendencia_posicion', {
-      p_dias: dias,
-      p_con_descuento: conDescuento,
-      p_por_unidad: porUnidad,
-      p_cadena: cadena || null,
-      p_productos: productos,
-      // Solo si se filtra: asi funciona aunque falte la fase 30.
-      ...(tipoMercado ? { p_tipo_mercado: tipoMercado } : {}),
-    }).then(({ data, error }) => {
-      if (!vigente) return;
-      setEstado({ cargando: false, filas: error ? [] : (data || []).map(f => ({ ...f, mediana: Number(f.mediana) })), error });
-    });
-    return () => { vigente = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dias, conDescuento, porUnidad, cadena, tipoMercado, claveProductos]);
+  const params = {
+    p_dias: dias,
+    p_con_descuento: conDescuento,
+    p_por_unidad: porUnidad,
+    p_cadena: cadena || null,
+    p_productos: productos,
+    // Solo si se filtra: asi funciona aunque falte la fase 30.
+    ...(tipoMercado ? { p_tipo_mercado: tipoMercado } : {}),
+  };
+  // Queda en memoria por filtro: volver a uno ya visto es instantaneo.
+  const consulta = useConsulta(
+    `rpc:fn_tendencia_posicion:${dias}|${conDescuento}|${porUnidad}|${cadena || ''}|${tipoMercado || ''}|${claveProductos}`,
+    async () => {
+      const { data, error } = await supabase.rpc('fn_tendencia_posicion', params);
+      return { data: error ? null : (data || []).map(f => ({ ...f, mediana: Number(f.mediana) })), error };
+    },
+    { activa: isSupabaseActive() },
+  );
+  const estado = { cargando: consulta.cargando, filas: consulta.datos || SIN_FILAS, error: consulta.error };
 
   const cambiarDias = (v) => {
     setDias(v);

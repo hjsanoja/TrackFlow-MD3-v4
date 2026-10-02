@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase, isSupabaseActive } from '../supabase';
 import { useToast } from '../context/ToastContext';
@@ -18,6 +18,7 @@ import { haceCuanto, fechaHora } from '../utils/usuarios';
 import { normalizar } from '../components/formulario';
 import { useRobot } from '../hooks/useRobot';
 import { avisarCambioRevision } from '../hooks/usePendientesRevision';
+import { leerConsulta, guardarConsulta } from '../utils/cacheConsultas';
 import { publicacionIdDe } from '../utils/dbClient';
 import { describirPresentacion } from '../utils/presentacion';
 
@@ -157,12 +158,29 @@ export default function RevisionCapturas() {
     if (!error) setResumen(data);
   }, []);
 
+  // Bandeja que se esta mirando: una respuesta de otra que llegue tarde no se pinta.
+  const verRef = useRef(ver);
+  verRef.current = ver;
+
   const cargar = useCallback(async () => {
     if (!isSupabaseActive() || ver === 'repetidos' || ver === 'historial') { setCargando(false); return; }
-    setCargando(true);
+    // Lo ultimo leido de esta bandeja sale al instante; se pide de nuevo por detras.
+    const clave = `revision:${ver}`;
+    const previo = leerConsulta(clave);
+    if (previo) {
+      setCapturas(previo.datos.capturas);
+      setDecisiones(previo.datos.decisiones);
+      setCargando(false);
+    } else {
+      setCargando(true);
+    }
     try {
-      let { data, error } = await supabase.from('v_capturas_revision').select('*')
-        .eq('estado_revision', ver).order('fecha_captura', { ascending: false }).limit(500);
+      // fn_capturas_revision (fase 48) elige primero las 500 y calcula solo esas.
+      let { data, error } = await supabase.rpc('fn_capturas_revision', { p_estado: ver, p_limite: 500 });
+      if (error && faltaVista(error)) {
+        ({ data, error } = await supabase.from('v_capturas_revision').select('*')
+          .eq('estado_revision', ver).order('fecha_captura', { ascending: false }).limit(500));
+      }
       if (error && faltaVista(error)) {
         setSinFase34(true);
         ({ data, error } = ver === 'pendiente'
@@ -170,16 +188,19 @@ export default function RevisionCapturas() {
           : { data: [], error: null });
       }
       if (error) throw error;
+      if (verRef.current !== ver) return;
       setCapturas(data || []);
+      setCargando(false);
       cargarResumen();
       // Quien decidio cada una (solo en Validas / Erroneas; sin la fase 47 no hay).
+      const m = new Map();
       if (ver !== 'pendiente' && data?.length) {
         const { data: h } = await supabase.from('v_revision_historial').select('captura_id, usuario, usuario_nombre, fecha')
           .in('captura_id', data.map(c => c.captura_id)).order('fecha', { ascending: false });
-        const m = new Map();
         for (const d of h || []) if (!m.has(d.captura_id)) m.set(d.captura_id, d);
-        setDecisiones(m);
+        if (verRef.current === ver) setDecisiones(m);
       }
+      guardarConsulta(clave, { capturas: data || [], decisiones: m });
     } catch (err) {
       console.error('Error cargando la bandeja de revisión:', err);
       addToast(`No se pudo cargar la bandeja: ${err.message}`, 'error');

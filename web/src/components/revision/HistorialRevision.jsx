@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { supabase, isSupabaseActive } from '../../supabase';
 import CadenaBadge from '../CadenaBadge';
 import FiltroChip from '../FiltroChip';
@@ -6,9 +6,11 @@ import BarraFiltros from '../BarraFiltros';
 import InfoGrafico from '../InfoGrafico';
 import { normalizar } from '../formulario';
 import { haceCuanto, fechaHora } from '../../utils/usuarios';
+import { useConsulta } from '../../utils/cacheConsultas';
 
 // Historial de decisiones (fase 47): quien marco cada captura como valida o
 // erronea, o la devolvio a pendientes, y cuando. Lo anota la base sola.
+const SIN_FILAS = [];
 const faltaVista = (e) => /42P01|PGRST205|does not exist|Could not find/i.test(`${e?.code} ${e?.message}`);
 const ACCIONES = {
   valida: ['Válida', 'check_circle', 'is-valida'],
@@ -18,20 +20,18 @@ const ACCIONES = {
 const bs = (v) => (v == null ? '—' : `Bs ${Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 export default function HistorialRevision({ selector, nombreCadena }) {
-  const [filas, setFilas] = useState([]);
-  const [estado, setEstado] = useState({ cargando: true, sinFase: false, error: null });
+  // 'revision:' se olvida al marcar capturas (avisarCambioRevision).
+  const consulta = useConsulta('revision:historial',
+    () => supabase.from('v_revision_historial').select('*').order('fecha', { ascending: false }).limit(500),
+    { activa: isSupabaseActive() });
+  const filas = consulta.datos || SIN_FILAS;
+  const estado = { cargando: consulta.cargando, sinFase: Boolean(consulta.error && faltaVista(consulta.error)),
+    error: consulta.error && !faltaVista(consulta.error) ? consulta.error : null };
+  const cargar = consulta.recargar;
   const [quien, setQuien] = useState('todos');
   const [accion, setAccion] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
 
-  const cargar = useCallback(async () => {
-    if (!isSupabaseActive()) { setEstado({ cargando: false, sinFase: false, error: null }); return; }
-    setEstado(e => ({ ...e, cargando: true }));
-    const { data, error } = await supabase.from('v_revision_historial').select('*').order('fecha', { ascending: false }).limit(500);
-    setFilas(error ? [] : data || []);
-    setEstado({ cargando: false, sinFase: Boolean(error && faltaVista(error)), error: error && !faltaVista(error) ? error : null });
-  }, []);
-  useEffect(() => { cargar(); }, [cargar]);
 
   const personas = useMemo(() => [...new Map(filas.map(f => [f.usuario || '', f.usuario_nombre || f.usuario || 'Sin usuario'])).entries()], [filas]);
   const visibles = useMemo(() => {

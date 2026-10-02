@@ -1,23 +1,12 @@
-import { useEffect, useState } from 'react';
 import { supabase, isSupabaseActive } from '../supabase';
+import { useConsulta } from '../utils/cacheConsultas';
 
 // Llama una funcion de Postgres (rpc) y devuelve sus filas. `faltaSql` dice
-// si la funcion no existe todavia (falta correr su fase).
+// si la funcion no existe todavia (falta correr su fase). El resultado queda
+// en memoria (utils/cacheConsultas): al volver a la pestana sale al instante.
 export function useRpc(nombre, params) {
-  const [estado, setEstado] = useState({ cargando: true, filas: [], error: null });
-  const clave = JSON.stringify(params);
-
-  useEffect(() => {
-    if (!isSupabaseActive()) { setEstado({ cargando: false, filas: [], error: null }); return undefined; }
-    let vigente = true;
-    setEstado(e => ({ ...e, cargando: true }));
-    supabase.rpc(nombre, params).then(({ data, error }) => {
-      if (vigente) setEstado({ cargando: false, filas: error ? [] : data || [], error });
-    });
-    return () => { vigente = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nombre, clave]);
-
-  const faltaSql = Boolean(estado.error && /PGRST202|function|404|does not exist/i.test(`${estado.error.code} ${estado.error.message}`));
-  return { ...estado, faltaSql };
+  const clave = `rpc:${nombre}:${JSON.stringify(params)}`;
+  const { datos, error, cargando } = useConsulta(clave, () => supabase.rpc(nombre, params), { activa: isSupabaseActive() });
+  const faltaSql = Boolean(error && /PGRST202|function|404|does not exist/i.test(`${error.code} ${error.message}`));
+  return { filas: datos || [], error, cargando, faltaSql };
 }

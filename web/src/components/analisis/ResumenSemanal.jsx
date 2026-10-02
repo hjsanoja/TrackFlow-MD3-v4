@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StatCard from '../StatCard';
 import CadenaBadge from '../CadenaBadge';
 import InfoGrafico from '../InfoGrafico';
 import { useData } from '../../context/DataContext';
 import { supabase, isSupabaseActive } from '../../supabase';
+import { useConsulta } from '../../utils/cacheConsultas';
 import { UMBRAL_CAMBIO, pct } from '../dashboard/comun';
 
 // Resumen de la semana: lo que paso en los ultimos 7 dias, en una pantalla.
@@ -23,26 +24,27 @@ async function leer(promesa) {
   try { const { data, error } = await promesa; return error ? null : data || []; } catch { return null; }
 }
 
+const SIN_DATOS = {};
+
+// Las cinco lecturas del resumen, juntas (cada una puede faltar: null).
+async function cargarResumen() {
+  const desde = hace(DIAS).toISOString();
+  const [cambios, disponibilidad, minimos, posicion, decisiones] = await Promise.all([
+    leer(supabase.rpc('fn_cambios_desde', { p_desde: desde })),
+    leer(supabase.from('v_disponibilidad').select('*')),
+    leer(supabase.from('v_precio_minimo_alertas').select('*')),
+    leer(supabase.rpc('fn_posicion_por_cadena', { p_dias: DIAS + 1, p_con_descuento: false, p_por_unidad: false })),
+    leer(supabase.from('revision_historial').select('accion, usuario, fecha').gte('fecha', desde)),
+  ]);
+  return { data: { cambios, disponibilidad, minimos, posicion, decisiones }, error: null };
+}
+
 export default function ResumenSemanal() {
   const { productosCompetencia = [], cadenas = [] } = useData() || {};
   const navigate = useNavigate();
-  const [datos, setDatos] = useState(null);
-
-  useEffect(() => {
-    if (!isSupabaseActive()) { setDatos({}); return; }
-    let vigente = true;
-    const desde = hace(DIAS).toISOString();
-    Promise.all([
-      leer(supabase.rpc('fn_cambios_desde', { p_desde: desde })),
-      leer(supabase.from('v_disponibilidad').select('*')),
-      leer(supabase.from('v_precio_minimo_alertas').select('*')),
-      leer(supabase.rpc('fn_posicion_por_cadena', { p_dias: DIAS + 1, p_con_descuento: false, p_por_unidad: false })),
-      leer(supabase.from('revision_historial').select('accion, usuario, fecha').gte('fecha', desde)),
-    ]).then(([cambios, disponibilidad, minimos, posicion, decisiones]) => {
-      if (vigente) setDatos({ cambios, disponibilidad, minimos, posicion, decisiones });
-    });
-    return () => { vigente = false; };
-  }, []);
+  // Queda en memoria: al volver a Experimental sale al instante.
+  const { datos: leidos } = useConsulta('resumen:semanal', cargarResumen, { activa: isSupabaseActive() });
+  const datos = isSupabaseActive() ? leidos : SIN_DATOS;
 
   const nombreCadena = useMemo(() => {
     const m = new Map((cadenas || []).map(c => [String(c.id).toLowerCase(), c.nombre]));
