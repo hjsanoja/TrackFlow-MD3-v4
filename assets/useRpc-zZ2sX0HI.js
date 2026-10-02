@@ -1,0 +1,1 @@
+import{n as i,i as r,s as u}from"./index-0jZv-xdb.js";function l(a,t){const o=`rpc:${a}:${JSON.stringify(t)}`,{datos:e,error:s,cargando:c}=i(o,()=>u.rpc(a,t),{activa:r()}),n=!!(s&&/PGRST202|function|404|does not exist/i.test(`${s.code} ${s.message}`));return{filas:e||[],error:s,cargando:c,faltaSql:n}}export{l as u};
