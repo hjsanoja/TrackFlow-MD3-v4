@@ -7,6 +7,10 @@ import FiltroChip from '../FiltroChip';
 import BarraFiltros from '../BarraFiltros';
 import InfoGrafico from '../InfoGrafico';
 import { avisarCambioRevision } from '../../hooks/usePendientesRevision';
+import { useData } from '../../context/DataContext';
+import { describirPresentacion } from '../../utils/presentacion';
+import { leerPresentacion } from '../../utils/leerPresentacion';
+import LecturaEnlace from './LecturaEnlace';
 
 // Precios repetidos (fase 44): productos distintos de una misma cadena con el
 // MISMO precio al centavo en su ultima lectura. Casi siempre es el robot
@@ -19,6 +23,13 @@ const fecha = (v) => (v ? new Date(v).toLocaleString('es-VE', { day: '2-digit', 
 
 export default function PreciosRepetidos({ selector, nombreCadena, releer, robotOcupado }) {
   const { addToast } = useToast();
+  const { productos = [] } = useData() || {};
+  const propioPorId = useMemo(() => new Map(productos.map(p => [String(p.id_interno).trim(), p])), [productos]);
+  const datosPropio = (f) => {
+    const p = propioPorId.get(String(f.id_producto_propio).trim());
+    const pres = p ? [p.concentracion && p.concentracion !== '—' ? p.concentracion : null, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ') : '';
+    return { nombre: p?.nombre || f.producto_propio_nombre || f.producto_nombre, id: f.id_producto_propio, laboratorio: p?.laboratorio, presentacion: pres };
+  };
   const [filas, setFilas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [sinFase, setSinFase] = useState(false);
@@ -131,15 +142,14 @@ export default function PreciosRepetidos({ selector, nombreCadena, releer, robot
                 {g.filas.map(f => (
                   <li key={f.captura_id} className="m3-sugerencia">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {f.es_propio && <span className="m3-chip-propio">Tú</span>}
-                        <span className="m3-body-medium text-on-surface truncate" title={f.producto_nombre}>{f.producto_nombre}</span>
+                      <div className="flex items-center gap-2 flex-wrap m3-label-medium text-on-surface-variant">
+                        <span className="tabular-nums">{fecha(f.fecha_captura)}</span>
                         {f.sospechoso && <span className="m3-etiqueta">Ya marcada dudosa</span>}
                       </div>
-                      <div className="m3-body-small text-on-surface-variant truncate">
-                        {[f.id_producto_propio, f.laboratorio, !f.es_propio && f.producto_propio_nombre ? `frente a ${f.producto_propio_nombre}` : null, fecha(f.fecha_captura)].filter(Boolean).join(' · ')}
-                      </div>
-                      {f.nombre_capturado && <div className="m3-body-small text-on-surface-variant truncate">Se leyó: «{f.nombre_capturado}»</div>}
+                      <LecturaEnlace esPropio={f.es_propio}
+                        enlace={{ nombre: f.producto_nombre, laboratorio: f.laboratorio, dosis_mg: f.registrada_dosis_mg, tamano: f.registrada_tamano, unidad: f.registrada_unidad }}
+                        propio={datosPropio(f)}
+                        leido={f.nombre_capturado ? { nombre: f.nombre_capturado, ...leerPresentacion(f.nombre_capturado) } : null} />
                     </div>
                     <div />
                     <div className="m3-sugerencia-acciones">

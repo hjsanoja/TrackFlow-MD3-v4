@@ -2143,13 +2143,6 @@ td.m3-calor-celda {
   background-color: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant);
 }
 .m3-revision-pista .material-symbols-outlined { font-size: 18px; }
-.m3-revision-comparacion {
-  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; margin-top: 8px;
-  font-size: 0.8125rem; line-height: 1.4;
-}
-.m3-revision-comparacion dt { color: var(--md-sys-color-on-surface-variant); font-weight: 500; white-space: nowrap; }
-.m3-revision-comparacion dd { min-width: 0; overflow-wrap: anywhere; }
-.m3-sugerencias-producto .m3-revision-comparacion { margin-top: 0; font-size: 0.875rem; }
 .m3-revision-porque {
   display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; font-size: 0.8125rem; line-height: 1.35;
   color: var(--md-sys-color-on-surface);
@@ -2285,3 +2278,47 @@ body.solo-lectura .solo-en-lectura { display: inline; }
 .m3-aviso:hover { background-color: var(--md-sys-color-surface-container-high); }
 .m3-aviso > .material-symbols-outlined:first-child { color: var(--md-sys-color-on-surface-variant); }
 .m3-aviso.is-importante > .material-symbols-outlined:first-child { color: var(--md-sys-color-error); }
+
+/* Ficha de un enlace (components/revision/LecturaEnlace): que producto es, de
+   cual tuyo es competidor, y registrado frente a leido en la tienda. */
+.m3-ficha { margin-top: 8px; }
+.m3-ficha-identidad { min-width: 0; }
+.m3-ficha-titulo {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  font-size: 0.9375rem; font-weight: 600; line-height: 1.35; color: var(--md-sys-color-on-surface);
+}
+.m3-ficha-lab { font-size: 0.8125rem; font-weight: 500; color: var(--md-sys-color-on-surface-variant); }
+.m3-ficha-relacion {
+  display: flex; align-items: flex-start; gap: 4px; margin-top: 2px;
+  font-size: 0.8125rem; line-height: 1.4; color: var(--md-sys-color-on-surface-variant);
+}
+.m3-ficha-relacion .material-symbols-outlined { font-size: 16px; margin-top: 1px; }
+.m3-ficha-tabla {
+  width: 100%; margin-top: 8px; table-layout: fixed; border-collapse: separate; border-spacing: 0;
+  border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;
+  font-size: 0.8125rem; line-height: 1.4;
+}
+.m3-ficha-tabla th, .m3-ficha-tabla td { padding: 6px 10px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.m3-ficha-tabla thead th {
+  background-color: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.75rem; font-weight: 500;
+}
+.m3-ficha-tabla thead th:first-child, .m3-ficha-tabla tbody th { width: 6.5rem; }
+.m3-ficha-tabla tbody th { color: var(--md-sys-color-on-surface-variant); font-weight: 500; }
+.m3-ficha-tabla tbody tr > * { border-top: 1px solid var(--md-sys-color-outline-variant); }
+.m3-ficha-tabla td { color: var(--md-sys-color-on-surface); }
+.m3-ficha-tabla td.is-no { color: var(--md-sys-color-error); background-color: color-mix(in srgb, var(--md-sys-color-error) 8%, transparent); font-weight: 500; }
+.m3-ficha-icono { font-size: 16px; vertical-align: -3px; margin-right: 4px; }
+.m3-ficha-icono.is-si { color: var(--md-sys-color-primary); }
+.m3-ficha-icono.is-no { color: var(--md-sys-color-error); }
+.m3-ficha-parecido {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; white-space: nowrap;
+  font-size: 0.6875rem; font-weight: 600; line-height: 18px;
+  background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant);
+}
+.m3-ficha-parecido.is-no { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+@media (max-width: 480px) {
+  .m3-ficha-tabla thead th:first-child, .m3-ficha-tabla tbody th { width: 5.75rem; }
+  .m3-ficha-tabla th, .m3-ficha-tabla td { padding: 6px 8px; }
+  .m3-ficha-tabla tbody th { font-size: 0.75rem; overflow-wrap: normal; }
+}

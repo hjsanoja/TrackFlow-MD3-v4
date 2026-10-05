@@ -38,16 +38,12 @@ export default function CentroAvisos({ verExperimental = true, verCadenas = true
 
   const cargar = useCallback(async () => {
     if (!isSupabaseActive()) return;
-    const [agotados, bajoMinimo, pendientes, sugerencias, fallas] = await Promise.all([
-      verExperimental ? contar('v_disponibilidad', q => q.eq('estado', 'agotado').eq('es_propio', true)) : 0,
-      verExperimental ? contar('v_precio_minimo_alertas') : 0,
+    const [pendientes, sugerencias, fallas] = await Promise.all([
       verExperimental ? contar('fact_precios', q => q.eq('sospechoso', true).eq('revisado_manual', false)) : 0,
       verExperimental ? contar('sugerencias_enlaces', q => q.eq('estado', 'pendiente')) : 0,
       verCadenas ? cadenasConFallas() : [],
     ]);
     setAvisos([
-      { id: 'agotados', n: agotados, importante: true, icono: 'remove_shopping_cart', texto: `${agotados === 1 ? 'Un producto tuyo agotado' : `${agotados} enlaces tuyos agotados`} en alguna cadena`, ir: '/experimental?tab=agotados' },
-      { id: 'minimo', n: bajoMinimo, importante: true, icono: 'gpp_maybe', texto: `${bajoMinimo === 1 ? 'Una cadena vende' : `${bajoMinimo} cadenas venden`} tu producto por debajo del mínimo`, ir: '/experimental?tab=precio_minimo' },
       { id: 'fallas', n: fallas.length, importante: true, icono: 'smart_toy', texto: `El robot leyó con fallas: ${fallas.map(id => cadenasRef.current.find(c => String(c.id).toLowerCase() === String(id).toLowerCase())?.nombre || id).join(', ')}`, ir: '/cadenas' },
       { id: 'revision', n: pendientes, importante: false, icono: 'rule', texto: `${pendientes} ${pendientes === 1 ? 'captura dudosa espera' : 'capturas dudosas esperan'} revisión`, ir: '/experimental?tab=revision' },
       { id: 'sugerencias', n: sugerencias, importante: false, icono: 'travel_explore', texto: `${sugerencias} ${sugerencias === 1 ? 'sugerencia de enlace pendiente' : 'sugerencias de enlaces pendientes'}`, ir: '/experimental?tab=sugerencias' },
