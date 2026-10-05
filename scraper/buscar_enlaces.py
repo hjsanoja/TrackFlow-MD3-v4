@@ -77,11 +77,12 @@ def _num(txt: str) -> float:
 
 def leer_presentacion(texto):
     """Dosis en mg y tamano (unidades, ml o g) de un nombre.
-    Misma regla que fn_leer_presentacion (fase 35/36)."""
+    Misma regla que fn_leer_presentacion (fase 49)."""
     s = re.sub(r"(\d),(\d)", r"\1.\2", normalizar(texto))
     m = re.search(r"(\d+(?:\.\d+)?)\s*(mg|mcg|g)(?![a-wyz])", s)
     xv = re.search(r"(?:^|[^a-z]|mg|mcg)x\s*(\d+(?:\.\d+)?)\s*(ml|g)\b", s)
-    xn = re.search(r"(?:^|[^a-z]|mg|mcg)x\s*(\d+)(?![\d.]*\s*(?:mg|mcg))", s)
+    # "10 sobres x 1.3 gr": el "x 1.3 gr" es el peso de cada sobre, no la cantidad.
+    xn = re.search(r"(?:^|[^a-z]|mg|mcg)x\s*(\d+)(?![\d.])(?!\s*(?:mg|mcg|g|gr|grs|ml)\b)", s)
     fn = re.search(r"(\d+)\s*(tabletas|tableta|tabs|tab|comprimidos|comprimido|capsulas|capsula|caps|"
                    r"grageas|sobres|ampollas|ampolla|ovulos|parches|unidades|und)\b", s)
     dosis = None

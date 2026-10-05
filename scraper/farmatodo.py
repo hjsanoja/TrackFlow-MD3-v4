@@ -275,9 +275,10 @@ async def leer_vtex(page, url: str, bcv_rate: float) -> dict | None:
                 ofertas.append(o)
     if not ofertas:
         return {"error": "Producto agotado en la tienda.", "nombre": prod.get("productName")}
+    # Sin existencia en linea pero con precio publicado (Locatel muestra
+    # "Consultar disponibilidad" para buscarlo por sede): no esta agotado y el
+    # precio vale. Se prefiere la oferta disponible si hay una.
     o = next((x for x in ofertas if x.get("IsAvailable") or (x.get("AvailableQuantity") or 0) > 0), ofertas[0])
-    if not (o.get("IsAvailable") or (o.get("AvailableQuantity") or 0) > 0):
-        return {"error": "Producto agotado en la tienda.", "nombre": prod.get("productName")}
 
     moneda = await moneda_vtex(request, base, url)
     if not moneda:

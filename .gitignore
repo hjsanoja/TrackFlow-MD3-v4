@@ -6,3 +6,5 @@ web/dist
 web/.vite
 *.log
 .DS_Store
+__pycache__/
+*.pyc

@@ -14,6 +14,8 @@ import ConfirmModal from './ConfirmModal';
 import ModalWrapper from './ModalWrapper';
 import { normalizar } from './formulario';
 import { describirPresentacion } from '../utils/presentacion';
+import { leerPresentacion } from '../utils/leerPresentacion';
+import { IdentidadEnlace, TablaLectura } from './revision/LecturaEnlace';
 import { getGitHubConfig, triggerGitHubScraper } from '../utils/githubClient';
 
 /**
@@ -30,13 +32,6 @@ const CADA_MS = 15000;
 const faltaSql = (e) => /42P01|PGRST205|PGRST202|does not exist|Could not find/i.test(`${e?.code} ${e?.message}`);
 
 const fecha = (v) => (v ? new Date(v).toLocaleString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
-const decimal = (v) => String(Number(v)).replace('.', ',');
-function presentacion(dosis, tamano, unidad) {
-  const partes = [];
-  if (dosis != null) partes.push(`${decimal(dosis)} mg`);
-  if (tamano != null) partes.push(`x ${decimal(tamano)}${unidad === 'ml' ? ' ml' : unidad === 'g' ? ' g' : ''}`);
-  return partes.join(' ');
-}
 function precio(v, moneda) {
   if (v == null) return '—';
   const n = Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -382,7 +377,7 @@ export default function SugerenciasEnlaces() {
                 <CabeceraProducto p={g.producto} propio={propioPorId.get(String(g.producto.id_producto_propio).trim())} />
                 <ul>
                   {g.sugerencias.map(s => (
-                    <FilaSugerencia key={s.id} s={s} ver={ver} nombreCadena={nombreCadena} procesando={procesando === s.id}
+                    <FilaSugerencia key={s.id} s={s} p={g.producto} ver={ver} nombreCadena={nombreCadena} procesando={procesando === s.id}
                       onAceptar={() => aceptar(s)} onDescartar={() => cambiarEstado(s, 'descartada')} onReabrir={() => cambiarEstado(s, 'pendiente')} />
                   ))}
                 </ul>
@@ -541,50 +536,26 @@ function EstadoCorrida({ corrida, arrancando, onDetener, deteniendo }) {
   );
 }
 
-// Igual que Revision de capturas: tu producto y el que se busca, en filas
-// alineadas, cada uno con laboratorio y presentacion.
+// Igual que Revision de capturas (components/revision/LecturaEnlace): que
+// producto se busca y de cual tuyo es competidor.
 function CabeceraProducto({ p, propio }) {
-  const pres = presentacion(p.registrada_dosis_mg, p.registrada_tamano, p.registrada_unidad);
   const presPropio = propio ? [propio.concentracion && propio.concentracion !== '—' ? propio.concentracion : null, describirPresentacion(propio)].filter(v => v && v !== '—').join(' · ') : '';
   return (
     <div className="m3-sugerencias-producto">
-      <dl className="m3-revision-comparacion mt-0">
-        <dt>Tu producto</dt>
-        <dd>
-          <span className="text-on-surface font-medium">{propio?.nombre || p.producto_propio_nombre || p.producto_nombre}</span>
-          <span className="text-on-surface-variant">{[presPropio, propio?.laboratorio, p.id_producto_propio].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
-        </dd>
-        <dt>Se busca</dt>
-        <dd>
-          {p.es_propio ? (
-            <span className="text-on-surface">Tu mismo producto, en las cadenas donde aún no tienes enlace{pres ? <span className="text-on-surface-variant"> · {pres}</span> : null}</span>
-          ) : (
-            <>
-              <span className="text-on-surface font-medium">{p.producto_nombre}</span>
-              <span className="text-on-surface-variant">{[p.laboratorio, pres || 'sin dosis ni tamaño registrados'].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
-            </>
-          )}
-        </dd>
-      </dl>
+      <IdentidadEnlace esPropio={p.es_propio}
+        enlace={{ nombre: p.producto_nombre, laboratorio: p.laboratorio }}
+        propio={{ nombre: propio?.nombre || p.producto_propio_nombre || p.producto_nombre, id: p.id_producto_propio, laboratorio: propio?.laboratorio, presentacion: presPropio }} />
+      <p className="m3-body-small text-on-surface-variant mt-1">
+        {p.es_propio ? 'Se busca tu mismo producto en las cadenas donde aún no tienes enlace.' : 'Se busca este competidor en las cadenas donde aún no tiene enlace.'}
+      </p>
     </div>
   );
 }
 
-// Dosis y tamano que se leen en el nombre de la tienda ("50 mg", "x 30", "120 ml").
-function leerPresentacion(nombre) {
-  const t = String(nombre || '').toLowerCase().replace(',', '.');
-  const dosis = t.match(/(\d+(?:\.\d+)?)\s*(mg|mcg|g)\b(?!\s*\/)/);
-  const tam = t.match(/\bx\s*(\d{1,4})\b/) || t.match(/\b(\d{1,4})\s*(tabletas?|tabs?|c[aá]psulas?|caps?|comprimidos?|grageas?|sobres?|unidades?)\b/)
-    || t.match(/(\d{2,4})\s*ml\b/);
-  const partes = [];
-  if (dosis) partes.push(`${dosis[1].replace('.', ',')} ${dosis[2]}`);
-  if (tam) partes.push(/ml\b/.test(tam[0]) && !/^x/.test(tam[0]) ? `${tam[1]} ml` : `x ${tam[1]}`);
-  return partes.join(' ');
-}
+// El buscador guarda 'si' / 'no' / otro (no se pudo comprobar).
+const estadoCriterio = (v) => (v === 'si' || v === 'no' ? v : null);
 
-const CRITERIOS = [['laboratorio', 'Laboratorio'], ['dosis', 'Dosis'], ['tamano', 'Tamaño']];
-
-function FilaSugerencia({ s, ver, nombreCadena, procesando, onAceptar, onDescartar, onReabrir }) {
+function FilaSugerencia({ s, p, ver, nombreCadena, procesando, onAceptar, onDescartar, onReabrir }) {
   const d = s.detalle || {};
   return (
     <li className="m3-sugerencia">
@@ -594,34 +565,19 @@ function FilaSugerencia({ s, ver, nombreCadena, procesando, onAceptar, onDescart
             <CadenaBadge cadena={s.cadena_id} tamano="xs" title="" />{nombreCadena(s.cadena_id)}
           </span>
           <span className={`m3-puntaje ${s.puntaje >= 100 ? 'is-alto' : s.puntaje >= 90 ? 'is-medio' : ''}`} title="Puntaje de coincidencia (0 a 100)">{s.puntaje} de 100</span>
-          {s.disponible === false && <span className="m3-chip-caido">Agotado</span>}
+          {s.disponible === false && <span className="m3-chip-caido" title="La tienda no lo vende en línea ahora (puede estar en alguna sede)">Sin existencia en línea</span>}
         </div>
-        <dl className="m3-revision-comparacion">
-          <dt>La tienda muestra</dt>
-          <dd>
-            <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-on-surface hover:underline" title="Abrir en la tienda">
-              «{s.nombre_tienda || s.url}»
-              <span className="material-symbols-outlined text-[14px] text-on-surface-variant align-[-2px] ml-0.5" aria-hidden="true">open_in_new</span>
-            </a>
-            <span className={d.dosis === 'no' || d.tamano === 'no' ? 'text-error' : 'text-on-surface-variant'}>
-              {[leerPresentacion(s.nombre_tienda), s.marca_tienda].filter(Boolean).map(t => ` · ${t}`).join('')}
-            </span>
-          </dd>
-        </dl>
-        <div className="m3-revision-porque">
-          <span className="material-symbols-outlined" aria-hidden="true">info</span>
-          <span>
-            {CRITERIOS.map(([k, t], i) => (
-              <span key={k} className={d[k] === 'no' ? 'text-error' : d[k] === 'si' ? 'text-on-surface' : 'text-on-surface-variant'}>
-                {i > 0 ? ' · ' : ''}{t}: {d[k] === 'si' ? 'coincide' : d[k] === 'no' ? 'no coincide' : 'no se pudo comprobar'}
-              </span>
-            ))}
-            {d.consulta && <span className="text-on-surface-variant"> · se buscó «{d.consulta}»</span>}
-          </span>
-        </div>
+        <TablaLectura
+          enlace={{ nombre: p.producto_nombre, laboratorio: p.laboratorio, dosis_mg: p.registrada_dosis_mg, tamano: p.registrada_tamano, unidad: p.registrada_unidad }}
+          leido={{ nombre: s.nombre_tienda || s.url, marca: s.marca_tienda, ...leerPresentacion(s.nombre_tienda) }}
+          estados={{ laboratorio: estadoCriterio(d.laboratorio), dosis: estadoCriterio(d.dosis), tamano: estadoCriterio(d.tamano) }} />
+        {d.consulta && <p className="m3-body-small text-on-surface-variant mt-1.5">El robot buscó «{d.consulta}» en la tienda.</p>}
       </div>
-      <div className="text-right tabular-nums m3-body-medium text-on-surface whitespace-nowrap">{precio(s.precio, s.moneda)}</div>
+      <div className="text-right tabular-nums m3-body-medium text-on-surface whitespace-nowrap min-w-[7rem]">{precio(s.precio, s.moneda)}</div>
       <div className="m3-sugerencia-acciones">
+        <a href={s.url} target="_blank" rel="noopener noreferrer" className="m3-icon-btn" title="Abrir la página en la tienda" aria-label="Abrir en la tienda">
+          <span className="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+        </a>
         {ver === 'pendiente' ? (
           s.ya_tiene_enlace ? (
             <>

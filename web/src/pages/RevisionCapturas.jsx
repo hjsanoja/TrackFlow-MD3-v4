@@ -21,6 +21,7 @@ import { avisarCambioRevision } from '../hooks/usePendientesRevision';
 import { leerConsulta, guardarConsulta } from '../utils/cacheConsultas';
 import { publicacionIdDe } from '../utils/dbClient';
 import { describirPresentacion } from '../utils/presentacion';
+import LecturaEnlace from '../components/revision/LecturaEnlace';
 
 /**
  * Bandeja de revisión de capturas sospechosas.
@@ -495,7 +496,6 @@ function FilaCaptura({ captura: c, ver, nombreCadena, propio, umbrales, decision
           <span className="inline-flex items-center gap-1.5 m3-label-medium text-on-surface-variant">
             <CadenaBadge cadena={c.cadena_id} tamano="xs" title="" />{nombreCadena(c.cadena_id)}
           </span>
-          {c.es_propio && <span className="m3-chip-propio">Tú</span>}
           <span className="m3-label-medium text-on-surface-variant tabular-nums">{fecha(c.fecha_captura)}</span>
           {c.pendientes_enlace > 1 && ver === 'pendiente' && (
             <button type="button" onClick={onSeleccionarEnlace} className="m3-revision-enlace" title="Seleccionar todas las capturas pendientes de este enlace">
@@ -633,45 +633,27 @@ function presentacionPropio(p) {
   return [p.concentracion && p.concentracion !== '—' ? p.concentracion : null, describirPresentacion(p)].filter(v => v && v !== '—').join(' · ');
 }
 
-// Tres filas alineadas: tu producto, el competidor que se vigila (su ficha) y
-// lo que la tienda muestra. Lo que no coincide con lo registrado va en rojo.
+// Que producto es, de cual tuyo es competidor y la tabla registrado / leido.
 function Comparacion({ c, propio, umbrales }) {
-  const dif = diferenciaPresentacion(c);
-  const registrada = presentacion(num(c.registrada_dosis_mg), num(c.registrada_tamano), c.registrada_unidad);
-  const leida = presentacion(num(c.leida_dosis_mg), num(c.leida_tamano), c.leida_unidad);
   const minimoParecido = umbrales?.umbral_similitud_nombre ?? 0.4;
-  const nombreRaro = c.similitud_nombre != null && Number(c.similitud_nombre) < minimoParecido;
   return (
-    <dl className="m3-revision-comparacion">
-      <dt>Tu producto</dt>
-      <dd>
-        <span className="text-on-surface font-medium">{propio?.nombre || c.producto_propio_nombre || c.producto_nombre}</span>
-        <span className="text-on-surface-variant">{[presentacionPropio(propio), propio?.laboratorio, c.id_producto_propio].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
-      </dd>
-      <dt>{c.es_propio ? 'Tu enlace' : 'Competidor'}</dt>
-      <dd>
-        {c.es_propio ? (
-          <span className="text-on-surface-variant">El mismo producto, vendido en esta cadena{registrada ? ` · registrado como ${registrada}` : ''}</span>
-        ) : (
-          <>
-            <span className="text-on-surface font-medium">{c.producto_nombre}</span>
-            <span className="text-on-surface-variant">{[c.laboratorio, registrada || null].filter(Boolean).map(t => ` · ${t}`).join('')}</span>
-          </>
-        )}
-      </dd>
-      {c.nombre_capturado && (
-        <>
-          <dt>La tienda muestra</dt>
-          <dd>
-            <span className={nombreRaro ? 'text-error' : 'text-on-surface'}>«{c.nombre_capturado}»</span>
-            {leida && <span className={dif ? 'text-error' : 'text-on-surface-variant'}>{` · ${leida}`}</span>}
-            {c.similitud_nombre != null && (
-              <span className={nombreRaro ? 'text-error' : 'text-on-surface-variant'}>{` · ${Math.round(c.similitud_nombre * 100)} % de parecido`}</span>
-            )}
-          </dd>
-        </>
-      )}
-    </dl>
+    <LecturaEnlace
+      esPropio={c.es_propio}
+      enlace={{
+        nombre: c.producto_nombre, laboratorio: c.laboratorio,
+        dosis_mg: c.registrada_dosis_mg, tamano: c.registrada_tamano, unidad: c.registrada_unidad,
+      }}
+      propio={{
+        nombre: propio?.nombre || c.producto_propio_nombre || c.producto_nombre,
+        id: c.id_producto_propio, laboratorio: propio?.laboratorio, presentacion: presentacionPropio(propio),
+      }}
+      leido={c.nombre_capturado ? {
+        nombre: c.nombre_capturado,
+        parecido: c.similitud_nombre,
+        parecidoBajo: c.similitud_nombre != null && Number(c.similitud_nombre) < minimoParecido,
+        dosis_mg: c.leida_dosis_mg, tamano: c.leida_tamano, unidad: c.leida_unidad,
+      } : null}
+    />
   );
 }
 

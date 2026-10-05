@@ -561,6 +561,31 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Experimental más limpio y revisión más clara (PR #79, fase 49)
+
+- **Fuera de Experimental**: Resumen de la semana (repetía Dashboard,
+  Posición por cadena e Historial), Agotados (Locatel muestra «Consultar
+  disponibilidad» y no estaba agotado) y Precio mínimo. También sus avisos
+  en la campana y su entrada en el buscador del menú. Experimental abre
+  ahora en Revisión de capturas.
+- **Robot (VTEX)**: una oferta con precio pero sin existencia en línea ya no
+  es «agotado»: se guarda su precio (caso Locatel).
+- **Lectura de presentación**: «10 Sobres x 1.3 gr» se leía «x 1». Ahora un
+  «x N» seguido de decimales o de mg/g/gr/ml no es cantidad. Misma regla en
+  `fn_leer_presentacion` (fase 49), `utils/leerPresentacion.js` y
+  `buscar_enlaces.py`.
+- **Ficha de lectura** (`components/revision/LecturaEnlace.jsx`), igual en
+  Revisión de capturas, Precios repetidos y Sugerencias de enlaces: qué
+  producto es el enlace, de cuál de tus productos es competidor (nombre, ID,
+  laboratorio, presentación) y una tabla «Registrado en el panel» frente a
+  «Leído en la tienda» (nombre con % de parecido, laboratorio, dosis,
+  tamaño), con ✓ o ✗ y en rojo lo que no coincide. `v_precios_repetidos`
+  suma la presentación registrada (fase 49).
+- **Limpieza (fase 49)**: se borran `precio_minimo`, `v_precio_minimo_alertas`,
+  `v_disponibilidad`, las vistas de la limpieza del catálogo de la fase 15 y
+  cuatro funciones que nada llamaba. Mapa de tablas y relaciones publicado
+  como página (artefacto «Mapa de tablas TrackFlow»).
+
 ## Velocidad de carga (PR #78, fase 48)
 
 Medido en Postgres local con la copia de datos: lo lento era la base, no el
