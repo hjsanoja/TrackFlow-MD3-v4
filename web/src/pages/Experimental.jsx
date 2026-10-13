@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { usePendientesRevision } from '../hooks/usePendientesRevision';
 
@@ -9,7 +9,6 @@ const SugerenciasEnlaces = lazy(() => import('../components/SugerenciasEnlaces')
 const Simulador = lazy(() => import('./Simulador'));
 const CanibalizacionInterna = lazy(() => import('../components/CanibalizacionInterna'));
 const BrechaHistoricaUsd = lazy(() => import('../components/BrechaHistoricaUsd'));
-const MapaPorCadena = lazy(() => import('../components/MapaPorCadena'));
 const ComparadorPeriodos = lazy(() => import('../components/analisis/ComparadorPeriodos'));
 const IndiceMolecula = lazy(() => import('../components/analisis/IndiceMolecula'));
 const VelocidadReaccion = lazy(() => import('../components/analisis/VelocidadReaccion'));
@@ -31,7 +30,6 @@ const TABS = [
   { id: 'devaluacion', nombre: 'Devaluación vs subida real', icono: 'currency_exchange', desc: 'Separa cuánto de una subida de precio fue la tasa BCV y cuánto una decisión de la cadena.' },
   { id: 'canibalizacion', nombre: 'Canibalización de marcas', icono: 'compare_arrows', desc: 'Tus genéricos y tus marcas de la misma molécula: brechas invertidas o demasiado cortas.' },
   { id: 'brecha_usd', nombre: 'Brechas USD diarias', icono: 'payments', desc: 'La brecha de cada producto día a día, con la tasa oficial de cada día.' },
-  { id: 'mapa_cadenas', nombre: 'Mapa de calor', icono: 'grid_on', desc: 'Tu precio en cada cadena, en colores: dónde te venden más barato y dónde más caro, frente a tus otras cadenas o a la competencia de esa cadena.' },
   { id: 'periodos', nombre: 'Comparador de períodos', icono: 'compare', desc: 'Tu precio frente al mercado en los últimos días y en los anteriores: qué productos se volvieron más o menos competitivos, y si fue por ti o por el mercado.' },
   { id: 'indice', nombre: 'Índice por molécula', icono: 'query_stats', desc: 'Cuánto subió o bajó en dólares el precio del mercado de cada molécula.' },
   { id: 'reaccion', nombre: 'Velocidad de reacción', icono: 'bolt', desc: 'Cuántos días tarda cada cadena en responder cuando otra cambia un precio.' },
@@ -44,6 +42,8 @@ export default function Experimental({ user, userDoc }) {
   const activa = TABS.some(t => t.id === pedida) ? pedida : 'revision';
   const tab = TABS.find(t => t.id === activa);
   const pendientes = usePendientesRevision();
+  // El mapa de calor paso al menu principal: los enlaces viejos siguen sirviendo.
+  if (pedida === 'mapa_cadenas') return <Navigate to="/mapa-cadenas" replace />;
 
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
@@ -76,7 +76,6 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'devaluacion' && <DevaluacionReal />}
         {activa === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activa === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
-        {activa === 'mapa_cadenas' && <MapaPorCadena />}
         {activa === 'simulador' && <Simulador user={user} userDoc={userDoc} />}
         {activa === 'periodos' && <ComparadorPeriodos />}
         {activa === 'indice' && <IndiceMolecula />}

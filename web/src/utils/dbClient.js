@@ -1033,6 +1033,33 @@ export async function dbCambiarActivoEnlaces(enlaces, activo) {
 // insertar en fact_precios, que es del scraper. Antes se escribia en
 // historico_precios, una vista de solo lectura desde la fase 5: el aviso
 // decia "actualizado" y no se guardaba nada.
+// Unidades por empaque de varios competidores a la vez (las lee el panel del
+// nombre que muestra la tienda). lista: [{ publicacion_id, unidades, unidad }].
+// Solo toca productos COMP_ (nunca los tuyos). Devuelve cuantos cambio.
+export async function dbCompletarUnidadesCompetidores(lista) {
+  const ids = [...new Set(lista.map(x => Number(x.publicacion_id)).filter(Boolean))];
+  if (!ids.length) return 0;
+  const { data: pubs, error } = await supabase.from('publicaciones').select('id, producto_id').in('id', ids);
+  if (error) throw new Error(`No se pudieron leer los enlaces: ${error.message}`);
+  const productoDe = new Map((pubs || []).map(p => [p.id, p.producto_id]));
+  const { data: prods, error: e2 } = await supabase.from('dim_productos').select('id, id_interno')
+    .in('id', [...new Set(productoDe.values())]);
+  if (e2) throw new Error(`No se pudieron leer los competidores: ${e2.message}`);
+  const esComp = new Set((prods || []).filter(p => String(p.id_interno || '').startsWith('COMP_')).map(p => p.id));
+  let hechos = 0;
+  const vistos = new Set();
+  for (const x of lista) {
+    const prodId = productoDe.get(Number(x.publicacion_id));
+    if (!prodId || !esComp.has(prodId) || vistos.has(prodId)) continue;
+    vistos.add(prodId);
+    const { error: e3 } = await supabase.from('dim_productos')
+      .update({ cantidad_contenido: x.unidades, unidad_contenido: x.unidad || 'unidad' }).eq('id', prodId);
+    if (e3) throw new Error(`No se pudo guardar: ${e3.message}`);
+    hechos += 1;
+  }
+  return hechos;
+}
+
 export async function dbRegistrarPrecioManual(enlace, precioBs, precioOfertaBs = null) {
   let pubId = publicacionIdDe(enlace);
   if (!pubId && enlace?.url) {

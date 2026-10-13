@@ -294,6 +294,7 @@ function unirPrecios(pcData, validPricesData) {
       tiene_descuento: Boolean(vm.tiene_promocion ?? p.tiene_descuento),
       tipo_promo: vm.promo_texto_raw || vm.tipo_promocion_codigo || p.tipo_promo,
       precio_efectivo_unidad_usd: vm.precio_efectivo_unidad_usd,
+      promo_codigo: vm.tipo_promocion_codigo || null,
       laboratorio: vm.laboratorio_nombre || p.laboratorio,
       es_propio: vm.es_propio,
       publicacion_id: vm.publicacion_id

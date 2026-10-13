@@ -8,6 +8,7 @@ import GitHubConfigModal from '../components/GitHubConfigModal';
 import FiltroChip from '../components/FiltroChip';
 import { FormSection, Field, ChoiceChips, normalizar } from '../components/formulario';
 import Segmentado from '../components/Segmentado';
+import PerfilesPermisos from '../components/usuarios/PerfilesPermisos';
 import { accesoVencido, hoyCaracas } from '../utils/permisos';
 import { getGitHubConfig } from '../utils/githubClient';
 import { useToast } from '../context/ToastContext';
@@ -776,6 +777,7 @@ function UsuarioModal({ usuario, yo, onSave, onClose }) {
         </FormSection>
 
         <FormSection titulo="Rol y menús" icono="admin_panel_settings">
+          {!yo && <PerfilesPermisos form={form} onAplicar={(v) => { setErrores({}); setErrorGeneral(null); setForm(f => ({ ...f, ...v })); }} />}
           <Field label="Rol" requerido hint={form.rol === 'administrador' ? 'Ve y cambia todo, incluidos los usuarios.' : 'Solo ve los menús que marques; no cambia usuarios.'}>
             {yo ? (
               <p className="m3-body-medium text-on-surface-variant">Administrador (no puedes quitarte este rol).</p>

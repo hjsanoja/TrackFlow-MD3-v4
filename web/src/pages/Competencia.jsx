@@ -26,6 +26,7 @@ import { exportToCSV } from '../utils/exportUtils';
 import { parseCSV, getRowValue, leerArchivoCsv } from '../utils/csvParser';
 import { DIAS_ENLACE_CAIDO, enlaceCaido, describirPresentacion } from '../utils/presentacion';
 import { esDeOtraWeb } from '../utils/cadenas';
+import { leerPresentacion } from '../utils/leerPresentacion';
 import {
   dbUpsertProductoCompetencia,
   dbDeleteProductoCompetencia,
@@ -33,6 +34,7 @@ import {
   dbUpsertCompetenciaBulk,
   dbCambiarActivoEnlaces,
   dbRegistrarPrecioManual,
+  dbCompletarUnidadesCompetidores,
   publicacionIdDe,
   normalizarUrl,
 } from '../utils/dbClient';
@@ -352,6 +354,15 @@ export default function Competencia() {
     estado: it => (it.activo ? 0 : 1),
   };
 
+  // Competidores sin unidades por empaque: ni guardadas (un 1 es "no se sabe")
+  // ni en su nombre. Sin ellas, "por unidad" usa las de tu producto.
+  const sinUnidades = useMemo(() => new Set(items.filter(it => !esPropio(it)
+    && !(Number(it.unidades_empaque) > 1) && !(parseUnidosisCount(it.tamano, it.marca, null) > 1)).map(it => it.id)), [items]);
+  // De esos, los que la tienda si dice en su nombre ("x 30 tabletas", "120 ml").
+  const completables = useMemo(() => items.filter(it => sinUnidades.has(it.id)).map(it => {
+    const l = leerPresentacion(it.ultimo_nombre);
+    return l.tamano > 1 ? { it, unidades: l.tamano, unidad: l.unidad } : null;
+  }).filter(Boolean), [items, sinUnidades]);
   const filtrados = useMemo(() => {
     const term = normalizar(search);
     const lista = items.filter(it => {
@@ -369,6 +380,7 @@ export default function Competencia() {
       if (filtroRevisar === 'duplicados' && !duplicados.has(it.id)) return false;
       if (filtroRevisar === 'mercado' && !mercadoDistinto.has(it.id)) return false;
       if (filtroRevisar === 'viejo' && !(it.activo && enlaceCaido(it))) return false;
+      if (filtroRevisar === 'sin_unidades' && !sinUnidades.has(it.id)) return false;
       if (filtroRevisar === 'otra_web' && !esDeOtraWeb(it.url, cadenaPorClave.get(String(it.cadena || '').toLowerCase())?.website)) return false;
       if (!term) return true;
       const p = productoPorId.get(String(it.id_producto_propio).trim());
@@ -392,7 +404,7 @@ export default function Competencia() {
       return porBloque(a, b);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, filtroLab, filtroRevisar, fallos, duplicados, mercadoDistinto, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
+  }, [items, search, filtroProducto, filtroCadena, filtroTipo, filtroPrecio, filtroActivo, filtroLab, filtroRevisar, fallos, duplicados, mercadoDistinto, sinUnidades, orden, ocultos, productoPorId, cadenaPorClave, tasaBcv]);
 
   const hayFiltros = filtroProducto !== 'todos' || filtroCadena !== 'todas' || filtroTipo !== 'todos' || filtroPrecio !== 'todos' ||
     filtroActivo !== 'todos' || filtroLab !== 'todos' || filtroRevisar !== 'todos';
@@ -403,6 +415,19 @@ export default function Competencia() {
   };
 
   const caidosActivos = useMemo(() => items.filter(it => it.activo && enlaceCaido(it)).length, [items]);
+  const [completando, setCompletando] = useState(false);
+  const completarUnidades = async () => {
+    setCompletando(true);
+    try {
+      const n = await dbCompletarUnidadesCompetidores(completables.map(c => ({ publicacion_id: publicacionIdDe(c.it), unidades: c.unidades, unidad: c.unidad })));
+      addToast(`${n} ${n === 1 ? 'competidor completado' : 'competidores completados'} con las unidades que muestra la tienda.`, 'success');
+      if (refreshCompetencia) refreshCompetencia();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setCompletando(false);
+    }
+  };
   const urlsQueFallan = useMemo(() => items.filter(revisarUrl).length,
   // eslint-disable-next-line react-hooks/exhaustive-deps
     [items, fallos]);
@@ -923,7 +948,22 @@ export default function Competencia() {
           </span>
           <button data-edita type="button" onClick={() => { setPreseleccion({ producto: filtroProducto, cadena: '' }); setEditing('new'); }} className="m3-btn-text">Vincular enlace</button>
         </div>
-      ) : (urlsQueFallan > 0 || duplicados.size > 0 || mercadoDistinto.size > 0 || caidosActivos > 0) && filtroRevisar === 'todos' && (
+      ) : filtroRevisar === 'sin_unidades' ? (
+        <div className="m3-banner" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+          <span className="m3-body-medium flex-1 min-w-0">
+            Sin las unidades del competidor, la comparación <strong>por unidad</strong> usa las de tu producto.
+            {completables.length > 0
+              ? ` En ${completables.length} la tienda las dice en el nombre del producto: se pueden completar de una vez. Las demás, edítalas una por una (campo «Unidades por empaque»).`
+              : ' Edítalos uno por uno (campo «Unidades por empaque»).'}
+          </span>
+          {completables.length > 0 && (
+            <button data-edita type="button" onClick={completarUnidades} disabled={completando} className="m3-btn-text">
+              {completando ? 'Completando…' : `Completar ${completables.length} desde el nombre`}
+            </button>
+          )}
+        </div>
+      ) : (urlsQueFallan > 0 || duplicados.size > 0 || mercadoDistinto.size > 0 || caidosActivos > 0 || sinUnidades.size > 0) && filtroRevisar === 'todos' && (
         <div className="m3-banner" role="status">
           <span className="material-symbols-outlined" aria-hidden="true">rule</span>
           <span className="m3-body-medium flex-1 min-w-0">
@@ -951,6 +991,12 @@ export default function Competencia() {
                 <button type="button" onClick={() => setFiltroRevisar('viejo')} className="text-primary font-medium hover:underline"
                   title={`Enlaces activos sin precio nuevo hace más de ${DIAS_ENLACE_CAIDO} días`}>
                   {caidosActivos} sin precio hace +{DIAS_ENLACE_CAIDO} días
+                </button>
+              )}
+              {sinUnidades.size > 0 && (
+                <button type="button" onClick={() => setFiltroRevisar('sin_unidades')} className="text-primary font-medium hover:underline"
+                  title="Competidores sin unidades por empaque: la comparación por unidad usa las de tu producto">
+                  {sinUnidades.size} {sinUnidades.size === 1 ? 'competidor sin unidades' : 'competidores sin unidades'}
                 </button>
               )}
             </span>
@@ -1042,7 +1088,7 @@ export default function Competencia() {
                     <FiltroChip etiqueta="Estado" icono="toggle_on" valor={filtroActivo} onChange={setFiltroActivo}
                       opciones={[['todos', 'Estado: todos'], ['activos', 'Activos'], ['inactivos', 'De baja']]} />
                     <FiltroChip etiqueta="Revisar" icono="rule" valor={filtroRevisar} onChange={setFiltroRevisar}
-                      opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['mercado', 'Dosis, tamaño o tipo distinto al tuyo'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web']]} />
+                      opciones={[['todos', 'Revisar: todos'], ['fallos', `La URL falla (${FALLOS_REVISAR}+ veces)`], ['duplicados', 'Posibles duplicados'], ['mercado', 'Dosis, tamaño o tipo distinto al tuyo'], ['viejo', `Sin precio hace +${DIAS_ENLACE_CAIDO} días`], ['otra_web', 'URL de otra web'], ['sin_unidades', 'Competidor sin unidades por empaque']]} />
                   </>
                 )}
               />
