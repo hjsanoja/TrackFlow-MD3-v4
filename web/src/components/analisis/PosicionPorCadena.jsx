@@ -15,6 +15,7 @@ import { describirPresentacion } from '../../utils/presentacion';
 import { normalizar } from '../formulario';
 import { UMBRAL_EMPATE, leerColor, pct } from '../dashboard/comun';
 import { EstadoAnalisis } from './Estados';
+import { AYUDA_OFERTA } from '../../utils/promociones';
 
 // Tu posicion por cadena: dentro de CADA cadena, tu enlace frente a los
 // competidores de esa misma cadena. Hoy (con el ultimo precio leido, como el
@@ -134,7 +135,7 @@ export default function PosicionPorCadena() {
         comparar={(
           <>
             <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
-              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', AYUDA_OFERTA]]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
           </>

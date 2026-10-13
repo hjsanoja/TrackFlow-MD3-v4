@@ -1,10 +1,15 @@
-import { useEffect, useState, useMemo } from 'react';
+import { memo, useCallback, useDeferredValue, useState, useMemo } from 'react';
 import StatCard from '../components/StatCard';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { useToast } from '../context/ToastContext';
 import { useData } from '../context/DataContext';
 import { exportToCSV } from '../utils/exportUtils';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
+import { factorPromo, AYUDA_OFERTA } from '../utils/promociones';
+import { tokensGrafico } from '../utils/chartTokens';
+import BarraFiltros from '../components/BarraFiltros';
+import Segmentado from '../components/Segmentado';
+import CadenaBadge from '../components/CadenaBadge';
 import ProductDetailModal from '../components/ProductDetailModal';
 import {
   ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip,
@@ -13,54 +18,60 @@ import {
 } from 'recharts';
 
 export default function Simulador({ user, userDoc }) {
-  const { productos, productosCompetencia, historicoPrecios, loadingInitial: loading, cargarHistorico } = useData();
-  // El historico no se baja al abrir el panel: se pide al entrar aqui.
-  useEffect(() => { cargarHistorico?.(); }, [cargarHistorico]);
+  const { productos, productosCompetencia, variaciones = [], cadenas = [], loadingInitial: loading } = useData();
+  // Antes bajaba 180 dias de historico solo para el cambio frente a ayer:
+  // ese dato ya esta en v_variacion (variaciones), que el panel tiene en memoria.
   const [dashboardPriceMode, setDashboardPriceMode] = useState('lista');
   const [analisisMode, setAnalisisMode] = useState('empaque'); // 'empaque' or 'unidosis'
   const [selectedProduct, setSelectedProduct] = useState(null);
 
   // Simulation State
   const [simulacionVariacion, setSimulacionVariacion] = useState(0);
-  const [reporteCargando, setReporteCargando] = useState(false);
-  const [reporteCargandoPaso, setReporteCargandoPaso] = useState('');
+  // El deslizador responde al instante; los indicadores se recalculan detras.
+  const variacionSim = useDeferredValue(simulacionVariacion);
   const [reporteGenerado, setReporteGenerado] = useState(null);
   const [activeReportTab, setActiveReportTab] = useState('ejecutivo');
 
   const bcv = useBcvRate();
   const { addToast } = useToast();
 
-  // Helper to normalize history grouping key
-  const getHistoryKey = (id_producto, cadena, marca) => {
-    return `${id_producto}_${cadena}_${marca}`.toLowerCase().replace(/[\s/\\]+/g, '_');
-  };
+  // Por enlace: precio actual y el de ayer (v_variacion).
+  const mapaVariacion = useMemo(() => {
+    const m = new Map();
+    for (const v of variaciones || []) if (v.publicacion_id != null) m.set(v.publicacion_id, v);
+    return m;
+  }, [variaciones]);
+  // Enlaces activos de cada producto tuyo (antes se filtraba la lista entera por producto).
+  const enlacesPorProducto = useMemo(() => {
+    const m = new Map();
+    for (const pc of productosCompetencia || []) {
+      if (!pc.activo || !pc.id_producto_propio) continue;
+      const id = String(pc.id_producto_propio).trim();
+      if (!m.has(id)) m.set(id, []);
+      m.get(id).push(pc);
+    }
+    return m;
+  }, [productosCompetencia]);
+  const nombreCadena = useMemo(() => {
+    const m = new Map();
+    for (const c of cadenas || []) { m.set(String(c.id).toLowerCase(), c.nombre); m.set(String(c.nombre).toLowerCase(), c.nombre); }
+    return (v) => m.get(String(v || '').toLowerCase()) || v || '—';
+  }, [cadenas]);
 
   // Main calculations for products and competitors
   const analizados = useMemo(() => {
-    const historyGrouped = {};
-    historicoPrecios.forEach(h => {
-      if (!h.id_producto_propio || !h.cadena || !h.marca) return;
-      const k = getHistoryKey(h.id_producto_propio, h.cadena, h.marca);
-      if (!historyGrouped[k]) {
-        historyGrouped[k] = [];
-      }
-      historyGrouped[k].push(h);
-    });
-
     return productos
       .filter(p => p.activo)
       .map(p => {
         const pId = String(p.id_interno || p.id || '').trim();
-        const compItems = pId 
-          ? productosCompetencia.filter(pc => pc.activo && pc.id_producto_propio && String(pc.id_producto_propio).trim() === pId)
-          : [];
+        const compItems = pId ? (enlacesPorProducto.get(pId) || []) : [];
         
         const pUnidosisCount = parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis || p.unidades_empaque);
         const pUnitFactor = analisisMode === 'unidosis' ? Math.max(pUnidosisCount, 1) : 1;
 
         const chainPrices = compItems.map(c => {
           const rawPriceBs = dashboardPriceMode === 'descuento'
-            ? (c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs)
+            ? (c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs) * factorPromo(c.promo_codigo)
             : c.ultimo_precio_full_bs;
           if (!rawPriceBs || !bcv.rate) return null;
 
@@ -69,22 +80,11 @@ export default function Simulador({ user, userDoc }) {
 
           const priceBs = rawPriceBs / cUnitFactor;
 
-          const k = getHistoryKey(p.id_interno, c.cadena, c.marca);
-          const hList = historyGrouped[k] || [];
-          const currentHist = hList[0];
-          // Mismo criterio que el Dashboard: se compara por fecha, no por
-          // corrida. Los precios migrados tienen scrape_run_id = NULL, así que
-          // comparar run_id nunca encontraba un precio anterior.
-          const corteSim = currentHist?.scraped_at
-            ? new Date(currentHist.scraped_at).getTime() - (24 * 60 * 60 * 1000)
-            : null;
-          const previousHist = corteSim
-            ? hList.find(x => x.scraped_at && new Date(x.scraped_at).getTime() <= corteSim)
-            : null;
-          
-          const currentVal = currentHist ? (dashboardPriceMode === 'descuento' ? (currentHist.precio_desc_bs || currentHist.precio_full_bs) : currentHist.precio_full_bs) : null;
-          const prevVal = previousHist ? (dashboardPriceMode === 'descuento' ? (previousHist.precio_desc_bs || previousHist.precio_full_bs) : previousHist.precio_full_bs) : null;
-          
+          const fila = c.publicacion_id != null ? mapaVariacion.get(c.publicacion_id) : null;
+          const desc = dashboardPriceMode === 'descuento';
+          const currentVal = fila ? Number(desc ? (fila.precio_actual_desc_bs ?? fila.precio_actual_full_bs) : fila.precio_actual_full_bs) || null : null;
+          const prevVal = fila ? Number(desc ? (fila.precio_1d_desc_bs ?? fila.precio_1d_full_bs) : fila.precio_1d_full_bs) || null : null;
+
           const valNow = currentVal !== null ? currentVal / cUnitFactor : priceBs;
           const valPrevAdjusted = prevVal !== null ? prevVal / cUnitFactor : null;
           let changePercent = 0;
@@ -167,7 +167,7 @@ export default function Simulador({ user, userDoc }) {
           pUnidosisCount,
         };
       });
-  }, [productos, productosCompetencia, bcv.rate, dashboardPriceMode, historicoPrecios, analisisMode]);
+  }, [productos, enlacesPorProducto, mapaVariacion, bcv.rate, dashboardPriceMode, analisisMode]);
 
   // Strategic Business Unit (UN) analysis
   const analisisUnidadNegocio = useMemo(() => {
@@ -435,7 +435,7 @@ export default function Simulador({ user, userDoc }) {
       const { propioPriceUsd, avgCompUsd, chainPrices } = item;
       
       const simOwnPriceUsd = propioPriceUsd !== null 
-        ? propioPriceUsd * (1 + simulacionVariacion / 100) 
+        ? propioPriceUsd * (1 + variacionSim / 100) 
         : null;
 
       let simRanking = item.ranking;
@@ -497,7 +497,7 @@ export default function Simulador({ user, userDoc }) {
       porcentajeLiderazgoSim,
       brechaPromedioVsMinSim,
     };
-  }, [analizados, simulacionVariacion, bcv.rate]);
+  }, [analizados, variacionSim, bcv.rate]);
 
   // Price gap bar chart data: deviation % vs competitors
   const priceGapData = useMemo(() => {
@@ -684,16 +684,16 @@ export default function Simulador({ user, userDoc }) {
       const elasticityScore = (avgDispersion * 0.6) + (avgVolatilidad * 0.4);
 
       let tipoElasticidad = 'Moderada';
-      let badgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+      let badgeClass = '';
       let recomendacion = 'Comportamiento en paridad estándar.';
 
       if (elasticityScore > 18 || avgDispersion > 25) {
         tipoElasticidad = 'Alta Elasticidad (Sensible)';
-        badgeClass = 'bg-red-100 text-red-800 border-red-200';
+        badgeClass = 'is-error';
         recomendacion = 'Sensibilidad alta al precio. Aumentos provocan rápida migración a genéricos u otra cadena.';
       } else if (elasticityScore < 10 && avgDispersion < 12) {
         tipoElasticidad = 'Inelástico (Oportunidad EBITDA)';
-        badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+        badgeClass = 'is-primary';
         recomendacion = 'Baja sensibilidad. Oportunidad para realizar ajustes al alza y capturar margen de beneficio.';
       }
 
@@ -714,89 +714,9 @@ export default function Simulador({ user, userDoc }) {
     return moleculasList.sort((a, b) => b.elasticityScore - a.elasticityScore);
   }, [analizados]);
 
-  // Custom scatter tooltip for positioning matrix
-  const CustomScatterTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      const rate = bcv.rate || 1;
-      const symbol = '$';
-
-      return (
-        <div className="bg-surface-container-lowest border border-outline-variant p-3.5 rounded-2xl shadow-xl text-xs space-y-1.5 max-w-xs font-sans">
-          <div className="font-bold text-primary font-display border-b border-outline-variant/40 pb-1">{data.name}</div>
-          <div className="text-label-sm text-on-surface-variant font-mono">{data.categoria} · {data.id}</div>
-          <div className="grid grid-cols-2 gap-3 pt-1 font-mono">
-            <div className="bg-surface-low p-2 rounded-xl border border-outline-variant/30">
-              <span className="text-label-sm text-on-surface-variant font-sans block">Mi Precio:</span>
-              <span className="font-bold text-primary text-sm">{symbol}{(data.y).toFixed(2)}</span>
-            </div>
-            <div className="bg-surface-low p-2 rounded-xl border border-outline-variant/30">
-              <span className="text-label-sm text-on-surface-variant font-sans block">Prom. Mercado:</span>
-              <span className="font-bold text-secondary text-sm">{symbol}{(data.x).toFixed(2)}</span>
-            </div>
-          </div>
-          <div className="text-label-md font-mono pt-1 flex justify-between items-center">
-            <span className={data.diffAvgPercent > 0 ? 'text-red-700 font-bold' : 'text-emerald-700 font-bold'}>
-              Brecha: {data.diffAvgPercent > 0 ? '+' : ''}{data.diffAvgPercent}%
-            </span>
-            <span className="text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-full text-label-sm">
-              Posición: #{data.ranking || '—'} / {data.totalOptions}
-            </span>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  // Custom tooltip for price gap bar chart
-  const PriceGapTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      const isCheaper = data.gap < 0;
-      const gapAbs = Math.abs(data.gap).toFixed(1);
-      
-      return (
-        <div className="bg-surface-container-lowest/95 p-3.5 border border-outline-variant rounded-2xl shadow-lg backdrop-blur-sm max-w-xs font-sans text-on-surface">
-          <p className="text-xs font-bold mb-1.5">{data.fullName}</p>
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between gap-6">
-              <span className="text-on-surface-variant">Nuestro Precio:</span>
-              <span className="font-semibold">{fmt(data.propioPrice)} ({fmtBs(data.propioPrice)})</span>
-            </div>
-            <div className="flex justify-between gap-6">
-              <span className="text-on-surface-variant">Promedio Competencia:</span>
-              <span className="font-semibold">{fmt(data.avgComp)} ({fmtBs(data.avgComp)})</span>
-            </div>
-            <div className="pt-1.5 border-t border-outline/10 flex justify-between gap-6 items-center">
-              <span>Desviación:</span>
-              <span className={`font-bold px-1.5 py-0.5 rounded-full text-label-md ${isCheaper ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                {isCheaper ? `-${gapAbs}%` : `+${gapAbs}%`}
-              </span>
-            </div>
-          </div>
-          <p className={`text-label-sm mt-2 font-semibold ${isCheaper ? 'text-emerald-600' : 'text-red-600'}`}>
-            {isCheaper 
-              ? `Estás un ${gapAbs}% más barato que el promedio.` 
-              : `Estás un ${gapAbs}% más caro que el promedio.`}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
-
   // Report Generation with deep insights for BOTH overly expensive and overly cheap items
-  const handleGenerarReporte = async () => {
-    setReporteCargando(true);
-    setReporteCargandoPaso('Examinando catálogo de medicamentos y paridades...');
-    await new Promise(r => setTimeout(r, 600));
-    setReporteCargandoPaso('Evaluando dispersión de precios y paridades BCV...');
-    await new Promise(r => setTimeout(r, 600));
-    setReporteCargandoPaso('Modelando elasticidad e impacto de simulación...');
-    await new Promise(r => setTimeout(r, 600));
-    setReporteCargandoPaso('Compilando informe ejecutivo final...');
-    await new Promise(r => setTimeout(r, 500));
+  const handleGenerarReporte = () => {
+    // Antes esperaba 2,3 s con pasos de carga de adorno: el calculo es inmediato.
 
     const numSubir = [];
     const numBajar = [];
@@ -867,8 +787,7 @@ export default function Simulador({ user, userDoc }) {
     };
 
     setReporteGenerado(reporte);
-    setReporteCargando(false);
-    addToast('¡Reporte de posicionamiento estratégico generado con éxito!', 'success');
+    setActiveReportTab('ejecutivo');
   };
 
   const handleCopiarReporte = () => {
@@ -894,8 +813,9 @@ export default function Simulador({ user, userDoc }) {
       });
     }
 
-    navigator.clipboard.writeText(txt);
-    addToast('El reporte ha sido copiado al portapapeles.', 'success');
+    navigator.clipboard.writeText(txt)
+      .then(() => addToast('Reporte copiado.', 'success'))
+      .catch(() => addToast('No se pudo copiar: usa «Descargar».', 'warning'));
   };
 
   const handleDescargarReporteTxt = () => {
@@ -969,787 +889,228 @@ export default function Simulador({ user, userDoc }) {
     addToast(`Simulación exportada a CSV con variacion de ${simulacionVariacion}%.`, 'success');
   };
 
+  const elegirProducto = useCallback((e) => setSelectedProduct({ producto: e.producto, competencia: e.competencia }), []);
+
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 space-y-4">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-mono font-bold text-primary animate-pulse">Cargando simulador de estrategia...</p>
+      <div className="space-y-6" aria-busy="true">
+        <div className="h-16 rounded-2xl m3-skeleton" />
+        <div className="h-72 rounded-2xl m3-skeleton" />
       </div>
     );
   }
 
+  const tonoDif = (v) => (v == null ? 'text-on-surface' : v > 5 ? 'text-error' : v < -5 ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-on-surface');
+  const pctTxt = (v, d = 1) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(d)} %`);
+  const ESCENARIOS = [[-10, '−10 %'], [-3, '−3 %'], [0, 'Actual'], [5, '+5 %']];
+
   return (
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
-      
-      {/* Header and top view controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-display font-extrabold text-on-background flex items-center gap-2">
-            <span className="material-symbols-outlined text-3xl text-primary">insights</span>
-            Análisis Estratégico & Simulador
-          </h1>
-          <p className="text-sm text-on-surface-variant font-sans mt-1">
-            Diagnóstico dinámico por unidad de negocio, recomendaciones de paridad de mercado y simulación predictiva de precios.
-          </p>
-        </div>
-
-        {/* Price mode toggle and export button */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Mode Switcher: Empaque vs Unidosis */}
-          <div className="flex m3-card-outlined p-1 text-xs font-mono font-bold">
-            <button onClick={() => setAnalisisMode('empaque')}
-              className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${analisisMode === 'empaque' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}>
-              <span className="material-symbols-outlined text-body-md">inventory_2</span>
-              Empaque
-            </button>
-            <button onClick={() => setAnalisisMode('unidosis')}
-              className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 ${analisisMode === 'unidosis' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'}`}
-              title="Analizar precios normalizados por 1 unidad/tableta/dosis">
-              <span className="material-symbols-outlined text-body-md">medication</span>
-              Por Unidosis
-            </button>
-          </div>
-
-          <button
-            onClick={handleExportarSimulacion}
-            className="px-4 py-2 bg-surface-container-lowest border border-outline-variant hover:bg-surface-low rounded-2xl text-xs font-bold text-primary transition-all flex items-center gap-1.5 shadow-sm"
-            title="Exportar productos y sus precios simulados a CSV"
-          >
-            <span className="material-symbols-outlined text-body-lg">download</span>
-            Exportar Simulación CSV
-          </button>
-
-          <div className="flex items-center gap-1.5 m3-card-outlined p-1.5">
-            <button
-              onClick={() => setDashboardPriceMode('descuento')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                dashboardPriceMode === 'descuento' 
-                  ? 'bg-primary text-on-primary shadow-sm' 
-                  : 'text-on-surface-variant hover:bg-surface/50'
-              }`}
-            >
-              <span className="material-symbols-outlined text-body-md">sell</span>
-              Con Descuento
-            </button>
-            <button
-              onClick={() => setDashboardPriceMode('lista')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                dashboardPriceMode === 'lista' 
-                  ? 'bg-primary text-on-primary shadow-sm' 
-                  : 'text-on-surface-variant hover:bg-surface/50'
-              }`}
-            >
-              <span className="material-symbols-outlined text-body-md">receipt_long</span>
-              Precio de Lista
-            </button>
-          </div>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <p className="m3-body-medium text-on-surface-variant">
+          Tu posición por unidad de negocio, qué pasaría si subes o bajas tus precios y dónde se aleja tu precio del mercado.
+        </p>
+        <button onClick={handleExportarSimulacion} className="m3-btn-outline self-start md:self-auto" title="Descargar en CSV tus precios actuales y simulados">
+          <span className="material-symbols-outlined text-base" aria-hidden="true">download</span>
+          <span>Exportar</span>
+        </button>
       </div>
 
-      {/* Strategic Business Unit Analytics & Recommendations */}
-      <div className="m3-card-outlined p-6 shadow-sm space-y-4">
-        <div>
-          <h2 className="text-sm font-bold text-primary uppercase font-mono tracking-wider flex items-center gap-1.5 mb-1">
-            <span className="material-symbols-outlined text-lg">corporate_fare</span>
-            Análisis Estratégico & Recomendaciones por Unidad de Negocio (UN)
-          </h2>
-          <p className="text-xs text-on-surface-variant font-sans max-w-3xl leading-relaxed">
-            Diagnóstico dinámico de posicionamiento y rentabilidad de nuestras tres líneas de negocio comparado con el promedio del mercado competitivo de marca y genéricos.
-          </p>
-        </div>
+      <BarraFiltros
+        etiqueta="Opciones del simulador"
+        comparar={(
+          <>
+            <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={dashboardPriceMode} onChange={setDashboardPriceMode}
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', AYUDA_OFERTA]]} />
+            <Segmentado etiqueta="Comparar por" rotulo="Por" valor={analisisMode} onChange={setAnalisisMode}
+              opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
+          </>
+        )}
+      />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {analisisUnidadNegocio.map(item => {
-            const hasAlerts = item.alertas.length > 0;
-            return (
-              <div key={item.un} className={`rounded-2xl border p-5 flex flex-col justify-between transition-all hover:shadow-sm ${
-                item.un === 'OTC' 
-                  ? 'bg-amber-500/[0.02] border-amber-500/10 hover:border-amber-500/25' 
-                  : item.un === 'Pharmetique' 
-                  ? 'bg-blue-500/[0.02] border-blue-500/10 hover:border-blue-500/25' 
-                  : 'bg-teal-500/[0.02] border-teal-500/10 hover:border-teal-500/25'
-              }`}>
-                <div>
-                  {/* Header */}
-                  <div className="flex items-center justify-between border-b pb-3 mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-3 h-3 rounded-full ${
-                        item.un === 'OTC' ? 'bg-amber-500' : item.un === 'Pharmetique' ? 'bg-blue-500' : 'bg-teal-500'
-                      }`}></span>
-                      <h3 className="font-display font-extrabold text-primary text-base">
-                        {item.un === 'La Sante' ? 'La Santé' : item.un}
-                      </h3>
-                    </div>
-                    <span className="text-label-sm font-mono font-bold text-on-surface-variant bg-surface-low px-2 py-0.5 rounded-md border border-outline-variant/50">
-                      {item.totalProductos} Productos
-                    </span>
-                  </div>
-
-                  {/* Pricing Diagnostics */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-on-surface-variant font-medium">Desviación vs Competencia:</span>
-                      <span className={`font-mono font-extrabold ${
-                        item.avgDiffAvg > 10 
-                          ? 'text-error' 
-                          : item.avgDiffAvg < -10 
-                          ? 'text-green-700' 
-                          : 'text-secondary'
-                      }`}>
-                        {item.avgDiffAvg ? `${item.avgDiffAvg >= 0 ? '+' : ''}${item.avgDiffAvg.toFixed(1)}%` : '—'}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-on-surface-variant font-medium">Brecha vs Competidor Mín:</span>
-                      <span className="font-mono font-extrabold text-on-surface">
-                        {item.avgDiffMin ? `+${item.avgDiffMin.toFixed(1)}%` : '—'}
-                      </span>
-                    </div>
-
-                    {item.brandPremiumAvg > 0 && (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-on-surface-variant font-medium">Prima Marca vs Genérico:</span>
-                        <span className={`font-mono font-bold ${item.brandPremiumAvg > 33 ? 'text-amber-700' : 'text-on-surface'}`}>
-                          +{item.brandPremiumAvg.toFixed(0)}%
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Recommendations */}
-                  <div className="mt-5 pt-4 border-t border-dashed border-outline-variant/50 space-y-3">
-                    <div className="text-label-sm uppercase font-mono font-bold tracking-wider text-on-surface-variant">
-                      Prescripción Estratégica:
-                    </div>
-                    {item.recomendaciones.map((rec, idx) => (
-                      <div key={idx} className="flex gap-2 text-xs leading-relaxed text-on-surface">
-                        <span className={`material-symbols-outlined text-sm shrink-0 mt-0.5 ${
-                          rec.tipo === 'subir_precios' 
-                            ? 'text-green-600' 
-                            : rec.tipo === 'bajar_precios' 
-                            ? 'text-error' 
-                            : rec.tipo === 'urgente' 
-                            ? 'text-error' 
-                            : 'text-secondary'
-                        }`}>
-                          {rec.tipo === 'subir_precios' ? 'add_circle' : rec.tipo === 'bajar_precios' ? 'remove_circle' : rec.tipo === 'urgente' ? 'gavel' : 'info'}
-                        </span>
-                        <div>
-                          <strong className="block font-bold">{rec.titulo}</strong>
-                          <span className="text-label-md text-on-surface-variant font-sans">{rec.detalle}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Bulletins/Alerts indicator */}
-                {hasAlerts && (
-                  <div className="mt-4 p-2 bg-error-container/30 border border-error/10 rounded-xl text-label-sm text-error flex gap-1.5 items-center">
-                    <span className="material-symbols-outlined text-xs">warning</span>
-                    <span className="font-semibold leading-tight">{item.alertas[0]}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Simulator Control and KPIs Row */}
-      <div className="m3-card-outlined p-6 shadow-sm space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-outline-variant pb-4 gap-4">
+      {/* 1. Simulacion */}
+      <section className="m3-card-outlined p-5 space-y-5" aria-labelledby="sim-titulo">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-display font-extrabold text-primary flex items-center gap-1.5">
-              <span className="material-symbols-outlined">tune</span>
-              Variables de Simulación
-            </h2>
-            <p className="text-xs text-on-surface-variant font-sans">
-              Modifica el deslizador para ver cómo respondería tu catálogo frente a la paridad con la competencia actual.
-            </p>
+            <h2 id="sim-titulo" className="m3-title-medium text-on-surface">Simula un cambio de tus precios</h2>
+            <p className="m3-body-small text-on-surface-variant mt-0.5">Mueve el control para subir o bajar todos tus precios a la vez y mira cómo cambia tu posición frente a la competencia de hoy.</p>
           </div>
-
-          <button
-            onClick={handleGenerarReporte}
-            disabled={reporteCargando}
-            className={`text-xs font-bold px-6 py-3 rounded-full shadow-sm transition-all flex items-center gap-2 border ${
-              reporteCargando
-                ? 'bg-surface-low text-on-surface-variant border-outline-variant cursor-not-allowed'
-                : 'bg-primary text-on-primary border-primary hover:bg-primary/95 hover:shadow'
-            }`}
-          >
-            <span className="material-symbols-outlined text-base">analytics</span>
-            {reporteCargando ? 'Analizando mercado...' : 'Generar Reporte de Estrategia'}
+          <button type="button" onClick={handleGenerarReporte} className="m3-btn-primary h-10 px-5 self-start">
+            <span className="material-symbols-outlined text-[18px] mr-1" aria-hidden="true">description</span>
+            Generar reporte
           </button>
         </div>
 
-        {/* Loading Steps Visual Effect */}
-        {reporteCargando && (
-          <div className="bg-surface-low rounded-2xl border border-outline-variant p-5 flex flex-col items-center justify-center space-y-3 py-8 animate-pulse">
-            <span className="material-symbols-outlined text-3xl text-primary animate-spin">sync</span>
-            <div className="text-sm font-semibold text-primary font-mono">{reporteCargandoPaso}</div>
-            <div className="w-48 bg-outline-variant h-1 rounded-full overflow-hidden">
-              <div className="bg-primary h-full rounded-full animate-pulse"></div>
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] gap-5">
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <label htmlFor="sim-variacion" className="m3-label-large text-on-surface-variant">Cambio de tus precios</label>
+              <span className={`m3-title-large tabular-nums ${simulacionVariacion > 0 ? 'text-error' : simulacionVariacion < 0 ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-on-surface'}`}>
+                {simulacionVariacion > 0 ? '+' : ''}{simulacionVariacion} %
+              </span>
             </div>
-          </div>
-        )}
-
-        {/* Report Output Panel */}
-        {reporteGenerado && !reporteCargando && (
-          <div className="bg-[#fcfbfc] rounded-2xl border border-outline-variant overflow-hidden shadow-inner flex flex-col">
-            <div className="bg-primary/[0.03] px-5 py-3 border-b border-outline-variant flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-sm">assignment</span>
-                <span className="text-xs font-bold text-primary uppercase font-mono tracking-wider">{reporteGenerado.titulo}</span>
-              </div>
-              <span className="text-label-sm text-on-surface-variant font-mono">{reporteGenerado.fecha}</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 border-b border-outline-variant text-center divide-x divide-outline-variant text-xs font-mono font-bold">
-              <button
-                onClick={() => setActiveReportTab('ejecutivo')}
-                className={`py-3 transition-all ${activeReportTab === 'ejecutivo' ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:bg-surface-low'}`}
-              >
-                Resumen Ejecutivo
-              </button>
-              <button
-                onClick={() => setActiveReportTab('oportunidades')}
-                className={`py-3 transition-all ${activeReportTab === 'oportunidades' ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:bg-surface-low'}`}
-              >
-                Acciones de Lista Sugeridas ({reporteGenerado.oportunidadesSubir.length + reporteGenerado.oportunidadesBajar.length})
-              </button>
-              <button
-                onClick={() => setActiveReportTab('margen')}
-                className={`py-3 transition-all ${activeReportTab === 'margen' ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:bg-surface-low'}`}
-              >
-                Estrategia & Elasticidad
-              </button>
-            </div>
-
-            <div className="p-5 text-xs text-on-surface-variant font-sans space-y-4 max-h-96 overflow-y-auto">
-              {activeReportTab === 'ejecutivo' && (
-                <div className="space-y-3 leading-relaxed">
-                  <h4 className="font-bold text-primary text-sm font-display">Situación de Posicionamiento Global</h4>
-                  <p dangerouslySetInnerHTML={{ __html: reporteGenerado.resumenEjecutivo.replaceAll('**', '<strong>').replaceAll('</strong></strong>', '</strong>') }}></p>
-                  <p className="bg-primary/5 p-3 rounded-xl border border-primary/10 text-label-md">
-                    <strong>Indicación estratégica:</strong> Mantener un IPR cercano al 100% asegura que tu catálogo preserve el balance óptimo de rentabilidad y recordación de marca de bajo precio ante tus pacientes/clientes de farmacia.
-                  </p>
-                </div>
-              )}
-
-              {activeReportTab === 'oportunidades' && (
-                <div className="space-y-6">
-                  {/* CHEAP PRODUCTS RECOMMENDATIONS (STOP MARGIN LOSS) */}
-                  {reporteGenerado.oportunidadesSubir.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="font-bold text-emerald-700 text-sm font-display flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-base">savings</span>
-                        Oportunidades de Captura de Margen (Evitar Pérdidas por Subprecio)
-                      </h4>
-                      <p className="text-label-md text-on-surface-variant">
-                        Los siguientes productos se venden <strong>excesivamente baratos</strong> frente al promedio de los competidores. Puedes aumentar sus precios para capturar márgenes sin perder competitividad:
-                      </p>
-                      <div className="space-y-3">
-                        {reporteGenerado.oportunidadesSubir.map(o => (
-                          <div key={o.id} className="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/10 flex justify-between items-start gap-4 flex-wrap">
-                            <div className="flex-1 min-w-[260px]">
-                              <strong className="text-emerald-800 font-sans block text-sm">{o.nombre}</strong>
-                              <span className="text-label-sm font-mono text-on-surface-variant mt-0.5 block">ID: {o.id}</span>
-                              <p className="text-label-md text-on-surface mt-2 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20 leading-relaxed">
-                                {o.recomendacion}
-                              </p>
-                            </div>
-                            <div className="text-right font-mono shrink-0 m3-card-outlined p-3 min-w-[150px]">
-                              <div className="text-on-surface-variant text-label-sm">Precio actual:</div>
-                              <div className="text-on-surface font-bold font-sans text-xs">{fmt(o.precioPropio)}</div>
-                              
-                              <div className="text-emerald-700 text-label-sm mt-2 font-semibold">Sugerido (+{o.incrementoPct}%):</div>
-                              <div className="text-emerald-700 font-extrabold font-sans text-sm">{fmt(o.precioSugeridoUsd)}</div>
-                              <div className="text-label-sm text-emerald-600">{fmtBs(o.precioSugeridoUsd)}</div>
-                              
-                              <div className="text-on-surface-variant text-label-sm mt-2 pt-1.5 border-t border-outline/10">Promedio Comp: {fmt(o.precioPromedio)}</div>
-                              <div className="text-emerald-600 font-extrabold text-label-sm">Brecha: {o.gap.toFixed(1)}%</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* EXPENSIVE PRODUCTS RECOMMENDATIONS (AVOID SALES FLIGHT) */}
-                  {reporteGenerado.oportunidadesBajar.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="font-bold text-error text-sm font-display flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-base">error</span>
-                        Riesgos Críticos de Fuga de Ventas (Alineación por Sobreprecio)
-                      </h4>
-                      <p className="text-label-md text-on-surface-variant">
-                        Estás perdiendo el posicionamiento de bajo costo en estos ítems. Se recomienda un ajuste correctivo a la baja para evitar que tus clientes migren a la competencia:
-                      </p>
-                      <div className="space-y-3">
-                        {reporteGenerado.oportunidadesBajar.map(o => (
-                          <div key={o.id} className="bg-error-container/10 p-4 rounded-xl border border-error/10 flex justify-between items-start gap-4 flex-wrap">
-                            <div className="flex-1 min-w-[260px]">
-                              <strong className="text-error font-sans block text-sm">{o.nombre}</strong>
-                              <span className="text-label-sm font-mono text-on-surface-variant mt-0.5 block">ID: {o.id}</span>
-                              <p className="text-label-md text-on-surface mt-2 bg-error-container/20 p-2.5 rounded-lg border border-error/20 leading-relaxed">
-                                {o.recomendacion}
-                              </p>
-                            </div>
-                            <div className="text-right font-mono shrink-0 m3-card-outlined p-3 min-w-[150px]">
-                              <div className="text-on-surface-variant text-label-sm">Precio actual:</div>
-                              <div className="text-on-surface font-bold font-sans text-xs">{fmt(o.precioPropio)}</div>
-                              
-                              <div className="text-error text-label-sm mt-2 font-semibold">Sugerido (-{o.descuentoPct}%):</div>
-                              <div className="text-error font-extrabold font-sans text-sm">{fmt(o.precioSugeridoUsd)}</div>
-                              <div className="text-label-sm text-error/80">{fmtBs(o.precioSugeridoUsd)}</div>
-                              
-                              <div className="text-on-surface-variant text-label-sm mt-2 pt-1.5 border-t border-outline/10">Promedio Comp: {fmt(o.precioPromedio)}</div>
-                              <div className="text-error font-extrabold text-label-sm">Brecha: +{o.gap.toFixed(1)}%</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {reporteGenerado.oportunidadesSubir.length === 0 && reporteGenerado.oportunidadesBajar.length === 0 && (
-                    <div className="text-center italic text-on-surface-variant py-4">No se detectaron brechas de precio que requieran correcciones inmediatas de lista. Tu portafolio está óptimamente alineado.</div>
-                  )}
-                </div>
-              )}
-
-              {activeReportTab === 'margen' && (
-                <div className="space-y-3 leading-relaxed">
-                  <h4 className="font-bold text-primary text-sm font-display">Estudio de Elasticidad del Ajuste Simulado</h4>
-                  <p>{reporteGenerado.estrategiaElasticidad}</p>
-                  <p className="bg-amber-500/5 p-3 rounded-xl border border-amber-500/15 text-label-md">
-                    <strong>Nota Metodológica:</strong> El cálculo de volumen estimado asume una elasticidad precio promedio de la demanda farmacéutica del sector de medicamentos básicos de -1.15. Las variaciones son sugerencias algorítmicas de paridad de góndola.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-surface-low px-5 py-3 border-t border-outline-variant flex items-center justify-end gap-2.5">
-              <button
-                onClick={handleCopiarReporte}
-                className="text-label-md font-bold text-primary hover:underline uppercase inline-flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-xs">content_copy</span>
-                Copiar Markdown
-              </button>
-              <span className="text-outline-variant">|</span>
-              <button
-                onClick={handleDescargarReporteTxt}
-                className="text-label-md font-bold text-primary hover:underline uppercase inline-flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-xs">download_file</span>
-                Descargar Reporte (.TXT)
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Dynamic Simulation Slider Area */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {/* Slider Controls Card */}
-          <div className="md:col-span-1 bg-surface-low border border-outline-variant p-5 rounded-2xl flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-label-sm font-mono font-bold uppercase text-on-surface-variant tracking-wider">Ajuste de Mi Marca</span>
-                <span className={`text-base font-mono font-extrabold ${simulacionVariacion > 0 ? 'text-primary' : simulacionVariacion < 0 ? 'text-emerald-700' : 'text-on-surface-variant'}`}>
-                  {simulacionVariacion > 0 ? `+${simulacionVariacion}` : simulacionVariacion}%
-                </span>
-              </div>
-
-              <input
-                type="range"
-                min="-30"
-                max="30"
-                step="1"
-                value={simulacionVariacion}
-                onChange={e => setSimulacionVariacion(parseInt(e.target.value))}
-                className="w-full accent-primary h-1.5 bg-outline-variant rounded-lg appearance-none cursor-pointer"
-              />
-
-              {/* Slider Quick Preset Buttons */}
-              <div className="space-y-1 pt-1">
-                <span className="text-label-sm uppercase font-mono text-on-surface-variant block font-bold">Escenarios Preconfigurados:</span>
-                <div className="grid grid-cols-2 gap-1.5 text-label-sm font-mono font-bold text-center">
-                  <button onClick={() => setSimulacionVariacion(-10)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === -10 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
-                    -10% Agresivo
-                  </button>
-                  <button onClick={() => setSimulacionVariacion(-3)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === -3 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
-                    -3% Descuento
-                  </button>
-                  <button onClick={() => setSimulacionVariacion(0)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === 0 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
-                    0% Base Actual
-                  </button>
-                  <button onClick={() => setSimulacionVariacion(5)} className={`p-1.5 rounded-lg border transition-all ${simulacionVariacion === 5 ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest border-outline-variant hover:bg-surface text-on-surface'}`}>
-                    +5% Inflación
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-outline-variant/50 text-label-sm text-on-surface-variant font-sans leading-relaxed mt-4">
-              Desliza para aplicar un porcentaje de cambio sobre tu precio base y simular los nuevos indicadores.
+            <input id="sim-variacion" type="range" min="-30" max="30" step="1" value={simulacionVariacion}
+              onChange={e => setSimulacionVariacion(parseInt(e.target.value, 10))} className="w-full accent-primary cursor-pointer" />
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Escenarios">
+              {ESCENARIOS.map(([v, t]) => (
+                <button key={v} type="button" onClick={() => setSimulacionVariacion(v)} aria-pressed={simulacionVariacion === v}
+                  className={`m3-choice-chip ${simulacionVariacion === v ? 'is-selected' : ''}`}>{t}</button>
+              ))}
             </div>
           </div>
 
-          {/* Side-by-side KPI Output Cards */}
-          <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Simulated IPR Card */}
-            {/* Los tres usan el StatCard único. El delta va dentro de `value`
-                porque forma parte de la cifra, no es un dato aparte. */}
-            <StatCard
-              label="Paridad Global Simulada"
-              value={
-                <span className="inline-flex items-baseline gap-2">
-                  {simulatedStats.simGlobalIpr ? `${simulatedStats.simGlobalIpr.toFixed(1)}%` : '—'}
-                  {simulacionVariacion !== 0 && simulatedStats.simGlobalIpr && (
-                    <span className={`text-label-md font-mono font-bold inline-flex items-center ${simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-error'}`}>
-                      <span className="material-symbols-outlined text-body-sm leading-none mr-0.5">
-                        {simulatedStats.simGlobalIpr < (kpiStats.globalIpr || 100) ? 'arrow_downward' : 'arrow_upward'}
-                      </span>
-                      {Math.abs(simulatedStats.simGlobalIpr - (kpiStats.globalIpr || 100)).toFixed(1)}%
-                    </span>
-                  )}
-                </span>
-              }
-              hint={`Base: ${kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)}%` : '—'}`}
-              icon="speed"
-              tono="primary"
-            />
-
-            <StatCard
-              label="Liderazgo Góndola"
-              value={
-                <span className="inline-flex items-baseline gap-2">
-                  {simulatedStats.porcentajeLiderazgoSim}%
-                  {simulacionVariacion !== 0 && (
-                    <span className={`text-label-md font-mono font-bold inline-flex items-center ${simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-error'}`}>
-                      <span className="material-symbols-outlined text-body-sm leading-none mr-0.5">
-                        {simulatedStats.porcentajeLiderazgoSim > kpiStats.porcentajeLiderazgoPropio ? 'arrow_upward' : 'arrow_downward'}
-                      </span>
-                      {Math.abs(simulatedStats.porcentajeLiderazgoSim - kpiStats.porcentajeLiderazgoPropio)}%
-                    </span>
-                  )}
-                </span>
-              }
-              hint={`Base: ${kpiStats.porcentajeLiderazgoPropio}%`}
-              icon="leaderboard"
-            />
-
-            <StatCard
-              label="Impacto en Góndola"
-              value={
-                <span className="inline-flex items-center gap-1.5 text-xl">
-                  <span className="material-symbols-outlined text-[22px] leading-none">
-                    {simulacionVariacion > 0 ? 'trending_up' : simulacionVariacion < 0 ? 'trending_down' : 'remove'}
-                  </span>
-                  {simulacionVariacion > 12 ? 'Riesgo Crítico'
-                    : simulacionVariacion > 0 ? 'Margen Elevado'
-                    : simulacionVariacion < 0 ? 'Volumen Activo'
-                    : 'Estable'}
-                </span>
-              }
-              hint={`Brecha mínima: ${simulatedStats.brechaPromedioVsMinSim.toFixed(1)}%`}
-              icon="insights"
-              tono={
-                simulacionVariacion > 12 ? 'negative'
-                : simulacionVariacion > 0 ? 'warning'
-                : simulacionVariacion < 0 ? 'positive'
-                : 'neutral'
-              }
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <StatCard compacto label="Tu precio frente al mercado" icon="speed" tono="primary"
+              value={simulatedStats.simGlobalIpr ? `${simulatedStats.simGlobalIpr.toFixed(1)} %` : '—'}
+              hint={`Hoy: ${kpiStats.globalIpr ? `${kpiStats.globalIpr.toFixed(1)} %` : '—'} · 100 % = igual al promedio`} />
+            <StatCard compacto label="Productos donde eres el más barato" icon="leaderboard"
+              value={`${simulatedStats.porcentajeLiderazgoSim} %`}
+              hint={`Hoy: ${kpiStats.porcentajeLiderazgoPropio} %`} />
+            <StatCard compacto label="Distancia al más barato" icon="unfold_more"
+              tono={simulacionVariacion > 12 ? 'negative' : simulacionVariacion < 0 ? 'positive' : 'neutral'}
+              value={`${simulatedStats.brechaPromedioVsMinSim.toFixed(1)} %`}
+              hint={simulacionVariacion > 12 ? 'Riesgo alto de perder ventas' : simulacionVariacion > 0 ? 'Más margen, menos volumen' : simulacionVariacion < 0 ? 'Más volumen, menos margen' : 'Sin cambios'} />
           </div>
         </div>
-      </div>
 
-      {/* Pricing Positioning (Price Gap vs Competitors) */}
-      <div className="m3-card-outlined p-6 shadow-sm flex flex-col justify-between">
+        {reporteGenerado && (
+          <Reporte reporte={reporteGenerado} tab={activeReportTab} onTab={setActiveReportTab} fmt={fmt} fmtBs={fmtBs}
+            onCopiar={handleCopiarReporte} onDescargar={handleDescargarReporteTxt} onCerrar={() => setReporteGenerado(null)} />
+        )}
+      </section>
+
+      {/* 2. Unidades de negocio */}
+      <section className="space-y-3" aria-labelledby="un-titulo">
         <div>
-          <h2 className="text-xs font-bold text-primary uppercase font-mono tracking-wider mb-1 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-base">bar_chart</span>
-            Desviación de Precios vs. Promedio de Competidores
-          </h2>
-          <p className="text-xs text-on-surface-variant font-sans mb-6 leading-relaxed">
-            Muestra el porcentaje en el que nuestros precios se desvían de la media del mercado. Las barras hacia abajo (verde) indican que somos más baratos (liderazgo de bajo costo) y las barras hacia arriba (rojo) representan sobreprecios (pérdida de competitividad).
-          </p>
+          <h2 id="un-titulo" className="m3-title-medium text-on-surface">Por unidad de negocio</h2>
+          <p className="m3-body-small text-on-surface-variant mt-0.5">Cuánto se aleja tu precio del promedio y del más barato, en promedio, en cada línea.</p>
         </div>
-        <div className="h-80 mt-2">
-          {priceGapData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-xs text-on-surface-variant italic">No hay suficientes datos comparativos.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
-                key={`sim-bar-${selectedProduct?.producto?.id || 'all'}-${priceGapData.length}`}
-                data={priceGapData} 
-                margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                <XAxis 
-                  dataKey="name" 
-                  tick={{ fontSize: 9, fill: '#464650' }} 
-                  interval={0}
-                />
-                <YAxis 
-                  tick={{ fontSize: 10, fill: '#464650' }} 
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <Tooltip content={<PriceGapTooltip />} />
-                <ReferenceLine y={0} stroke="var(--md-sys-color-on-surface-variant)" strokeWidth={1} />
-                <Bar 
-                  dataKey="gap"
-                  isAnimationActive={true}
-                  animationDuration={750}
-                  animationBegin={0}
-                  animationEasing="ease-out"
-                >
-                  {priceGapData.map((entry, index) => {
-                    const isCheaper = entry.gap < 0;
-                    return (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={isCheaper ? '#10b981' : '#f43f5e'} 
-                      />
-                    );
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {analisisUnidadNegocio.map(item => (
+            <article key={item.un} className="m3-card-outlined p-4 flex flex-col gap-3 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="m3-title-small text-on-surface">{item.un === 'La Sante' ? 'La Santé' : item.un}</h3>
+                <span className="m3-etiqueta">{item.totalProductos} productos</span>
+              </div>
+              <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 m3-body-small">
+                <dt className="text-on-surface-variant">Frente al promedio</dt>
+                <dd className={`tabular-nums font-medium text-right ${tonoDif(item.avgDiffAvg || null)}`}>{item.avgDiffAvg ? pctTxt(item.avgDiffAvg) : '—'}</dd>
+                <dt className="text-on-surface-variant">Frente al más barato</dt>
+                <dd className="tabular-nums font-medium text-right text-on-surface">{item.avgDiffMin ? pctTxt(item.avgDiffMin) : '—'}</dd>
+                {item.brandPremiumAvg > 0 && (
+                  <>
+                    <dt className="text-on-surface-variant">Marca sobre genérico</dt>
+                    <dd className="tabular-nums font-medium text-right text-on-surface">+{item.brandPremiumAvg.toFixed(0)} %</dd>
+                  </>
+                )}
+              </dl>
+              {item.recomendaciones.length > 0 && (
+                <ul className="space-y-2 pt-3 border-t border-outline-variant">
+                  {item.recomendaciones.map((rec, idx) => (
+                    <li key={idx} className="flex gap-2 m3-body-small">
+                      <span className={`material-symbols-outlined text-[18px] shrink-0 ${rec.tipo === 'bajar_precios' || rec.tipo === 'urgente' ? 'text-error' : rec.tipo === 'subir_precios' ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-on-surface-variant'}`} aria-hidden="true">
+                        {rec.tipo === 'subir_precios' ? 'arrow_upward' : rec.tipo === 'bajar_precios' ? 'arrow_downward' : rec.tipo === 'urgente' ? 'priority_high' : 'info'}
+                      </span>
+                      <span className="min-w-0"><strong className="font-medium text-on-surface">{rec.titulo}</strong><span className="block text-on-surface-variant">{rec.detalle}</span></span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {item.alertas.length > 0 && (
+                <p className="m3-etiqueta is-error self-start whitespace-normal">{item.alertas[0]}</p>
+              )}
+            </article>
+          ))}
         </div>
-      </div>
+      </section>
 
-      {/* Positioning Matrix (Scatter Chart: Mi Precio vs. Promedio Mercado) */}
-      {scatterPlotData.length > 0 && (
-        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
-            <div>
-              <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
-                <span className="material-symbols-outlined text-xl text-primary">scatter_plot</span>
-                Matriz de Posicionamiento de Precios (Mi Precio vs. Promedio de Mercado)
-              </h2>
-              <p className="text-xs text-on-surface-variant font-sans mt-0.5">
-                Visualización bidimensional: Los puntos por debajo de la diagonal muestran productos donde tu precio es más bajo que el mercado (Verde = Líder en precio), y por encima muestran productos con mayor precio (Rojo = Riesgo de volumen).
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-xs font-mono font-bold">
-              <span className="flex items-center gap-1 text-emerald-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-                Bajo Promedio Mercado
-              </span>
-              <span className="flex items-center gap-1 text-red-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
-                Sobre Promedio Mercado
-              </span>
-            </div>
+      {/* 3. Graficos (no se redibujan al mover el deslizador) */}
+      <GraficoBrechas datos={priceGapData} tasa={bcv.rate} />
+      <MatrizPosicion datos={scatterPlotData} onElegir={elegirProducto} />
+
+      {/* 4. Por cadena */}
+      {cadenaComparacionCostos && cadenaComparacionCostos.ranking.length > 0 && (
+        <section className="space-y-3" aria-labelledby="cad-titulo">
+          <div>
+            <h2 id="cad-titulo" className="m3-title-medium text-on-surface">Dónde son más caros tus productos</h2>
+            <p className="m3-body-small text-on-surface-variant mt-0.5">Por cadena: cuánto se aleja tu precio, en promedio, de lo que cuesta allí lo comparable.</p>
           </div>
-
-          <div className="h-80 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart 
-                key={`sim-scatter-${scatterPlotData.length}`}
-                margin={{ top: 20, right: 30, bottom: 20, left: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f3f6" />
-                <XAxis 
-                  type="number" 
-                  dataKey="x" 
-                  name="Promedio Mercado" 
-                  unit=" $" 
-                  tick={{ fontSize: 10, fill: '#464650' }}
-                  label={{ value: 'Promedio Mercado (USD $)', position: 'bottom', offset: 0, fontSize: 11, fill: '#016874', fontWeight: 'bold' }}
-                />
-                <YAxis 
-                  type="number" 
-                  dataKey="y" 
-                  name="Mi Precio" 
-                  unit=" $" 
-                  tick={{ fontSize: 10, fill: '#464650' }}
-                  label={{ value: 'Mi Precio (USD $)', angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill: '#016874', fontWeight: 'bold' }}
-                />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomScatterTooltip />} />
-                <Scatter 
-                  name="Productos Monitoreados" 
-                  data={scatterPlotData} 
-                  onClick={(entry) => setSelectedProduct({ producto: entry.producto, competencia: entry.competencia })}
-                  isAnimationActive={true}
-                  animationDuration={750}
-                  animationBegin={0}
-                >
-                  {scatterPlotData.map((entry, index) => {
-                    const isCheaper = entry.y < entry.x;
-                    const isEqual = Math.abs(entry.y - entry.x) < 0.05;
-                    const color = isCheaper ? '#10b981' : isEqual ? '#016874' : '#f43f5e';
-                    return <Cell key={`scatter-cell-${index}`} fill={color} className="cursor-pointer hover:opacity-80 transition-opacity" />;
-                  })}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Indicador: Cadena en que los productos son más costosos en promedio */}
-      {cadenaComparacionCostos && (
-        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
-            <div>
-              <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
-                <span className="material-symbols-outlined text-xl text-primary">storefront</span>
-                Nivel de Precios Promedio por Cadena Farmacéutica
-              </h2>
-              <p className="text-xs text-on-surface-variant font-sans mt-0.5">
-                Indica en qué cadena nuestros productos resultan más costosos o más económicos en promedio comparado contra ofertas homologables.
-              </p>
-            </div>
-            {cadenaComparacionCostos.cadenaMasCostosa && (
-              <span className="px-3.5 py-1.5 rounded-full text-xs font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 self-start">
-                <span className="material-symbols-outlined text-sm">trending_up</span>
-                Más costosos en: <strong>{cadenaComparacionCostos.cadenaMasCostosa.cadena}</strong> (+{cadenaComparacionCostos.cadenaMasCostosa.avgDiff.toFixed(1)}%)
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {cadenaComparacionCostos.ranking.map(item => {
-              const isCostly = item.avgDiff > 0;
+              const caro = item.avgDiff > 0;
               return (
-                <div key={item.cadena} className={`p-4 rounded-2xl border ${isCostly ? 'bg-amber-50/50 border-amber-200' : 'bg-emerald-50/50 border-emerald-200'} space-y-2`}>
-                  <div className="flex justify-between items-center">
-                    <span className="font-display font-bold text-sm text-primary">{item.cadena}</span>
-                    <span className={`text-xs font-mono font-extrabold px-2 py-0.5 rounded-full ${isCostly ? 'bg-amber-200/60 text-amber-900' : 'bg-emerald-200/60 text-emerald-900'}`}>
-                      {isCostly ? `+${item.avgDiff.toFixed(1)}%` : `${item.avgDiff.toFixed(1)}%`}
-                    </span>
+                <article key={item.cadena} className="m3-card-outlined p-4 space-y-2 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 m3-title-small text-on-surface min-w-0"><CadenaBadge cadena={item.cadena} tamano="xs" title="" /><span className="truncate">{nombreCadena(item.cadena)}</span></span>
+                    <span className={`m3-title-small tabular-nums ${caro ? 'text-error' : 'text-[color:var(--md-sys-color-data-positive)]'}`}>{pctTxt(item.avgDiff)}</span>
                   </div>
-                  <p className="text-xs text-on-surface-variant font-sans">
-                    Nuestros productos son <strong>{isCostly ? 'más costosos' : 'más económicos'}</strong> que en {item.cadena} en promedio.
+                  <p className="m3-body-small text-on-surface-variant">
+                    {item.count} productos comparados · {caro ? `${item.masCostososCount} por encima` : `${item.masBaratosCount} por debajo`}
                   </p>
-                  <div className="pt-2 border-t border-outline-variant/30 text-label-md text-on-surface-variant flex justify-between font-mono">
-                    <span>{item.count} SKUs comparados</span>
-                    <span className={isCostly ? 'text-amber-800 font-bold' : 'text-emerald-800 font-bold'}>
-                      {isCostly ? `${item.masCostososCount} arriba` : `${item.masBaratosCount} abajo`}
-                    </span>
-                  </div>
-                </div>
+                </article>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Indicador: Share of Voice (SoV) de Precios por Cadena */}
       {shareOfVoiceData.length > 0 && (
-        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
+        <section className="space-y-3" aria-labelledby="sov-titulo">
           <div>
-            <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
-              <span className="material-symbols-outlined text-xl text-primary">pie_chart</span>
-              Share of Voice (SoV) de Precios y Cobertura por Cadena
-            </h2>
-            <p className="text-xs text-on-surface-variant font-sans mt-0.5">
-              Participación de mercado en cobertura de catálogo y porcentaje de liderazgo en precio más bajo.
-            </p>
+            <h2 id="sov-titulo" className="m3-title-medium text-on-surface">Qué cadena tiene el precio más bajo</h2>
+            <p className="m3-body-small text-on-surface-variant mt-0.5">De tus productos vigilados en cada cadena, en cuántos esa cadena tiene el precio más bajo o el más alto del mercado.</p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {shareOfVoiceData.map(ch => (
-              <div key={ch.cadena} className="p-4 rounded-2xl border border-outline-variant bg-surface-low/30 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-display font-extrabold text-sm text-primary">{ch.cadena}</span>
-                  <span className="text-label-sm font-mono font-bold bg-primary-container text-on-primary-container px-2.5 py-0.5 rounded-full">
-                    {ch.skusMonitoreados} SKUs ({ch.coveragePct.toFixed(0)}%)
-                  </span>
+              <article key={ch.cadena} className="m3-card-outlined p-4 space-y-2.5 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 m3-title-small text-on-surface min-w-0"><CadenaBadge cadena={ch.cadena} tamano="xs" title="" /><span className="truncate">{nombreCadena(ch.cadena)}</span></span>
+                  <span className="m3-etiqueta">{ch.skusMonitoreados} productos</span>
                 </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-sans">
-                    <span className="text-on-surface-variant">SoV Precio Más Bajo:</span>
-                    <span className="font-bold text-secondary font-mono">{ch.cheapestSoVPct.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-surface-low rounded-full h-2 overflow-hidden border border-outline-variant/30">
-                    <div className="bg-secondary h-2 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, ch.cheapestSoVPct)}%` }}></div>
-                  </div>
+                <div className="flex justify-between m3-body-small"><span className="text-on-surface-variant">Precio más bajo</span><span className="tabular-nums font-medium">{ch.cheapestSoVPct.toFixed(0)} %</span></div>
+                <div className="m3-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ch.cheapestSoVPct)}>
+                  <div style={{ width: `${Math.min(100, ch.cheapestSoVPct)}%` }} />
                 </div>
-
-                <div className="pt-2 border-t border-outline-variant/40 grid grid-cols-2 gap-2 text-label-md font-mono">
-                  <div className="bg-surface-container-lowest p-2 rounded-xl text-center border border-outline-variant/30">
-                    <span className="text-label-sm text-on-surface-variant font-sans block">Líder Mínimo</span>
-                    <span className="font-bold text-emerald-700">{ch.lowestCount} prods</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-2 rounded-xl text-center border border-outline-variant/30">
-                    <span className="text-label-sm text-on-surface-variant font-sans block">Máximo Precio</span>
-                    <span className="font-bold text-red-700">{ch.highestCount} prods</span>
-                  </div>
-                </div>
-              </div>
+                <p className="m3-body-small text-on-surface-variant tabular-nums">{ch.lowestCount} más baratos · {ch.highestCount} más caros</p>
+              </article>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Indicador: Elasticidad Histórica por Molécula */}
       {elasticidadPorMolecula.length > 0 && (
-        <div className="m3-card-outlined p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-3 gap-2">
-            <div>
-              <h2 className="font-display font-extrabold text-lg text-primary flex items-center gap-2">
-                <span className="material-symbols-outlined text-xl text-primary">query_stats</span>
-                Elasticidad Histórica por Molécula (Principio Activo)
-              </h2>
-              <p className="text-xs text-on-surface-variant font-sans mt-0.5">
-                Evaluación de sensibilidad al precio e identificación de oportunidades de alza o protección de volumen por molécula.
-              </p>
-            </div>
-            <span className="text-xs font-mono font-bold text-on-surface-variant bg-surface-low px-3 py-1.5 rounded-full border border-outline-variant self-start">
-              {elasticidadPorMolecula.length} Moléculas Analizadas
-            </span>
+        <section className="m3-data-table" aria-labelledby="ela-titulo">
+          <div className="m3-data-table-toolbar">
+            <h2 id="ela-titulo" className="m3-title-medium text-on-surface">Sensibilidad al precio por molécula</h2>
+            <p className="m3-body-small text-on-surface-variant mt-0.5">Mercados con precios muy dispersos o que cambian mucho reaccionan más a una subida. Es una estimación a partir de los precios de hoy y de ayer.</p>
           </div>
-
           <div className="overflow-x-auto">
             <table className="m3-table">
               <thead className="m3-sticky-header">
                 <tr>
-                  <th>Principio Activo</th>
-                  <th className="text-center">SKUs en Catálogo</th>
-                  <th className="text-center">Dispersión Mercado (%)</th>
-                  <th className="text-center">Volatilidad Histórica</th>
-                  <th className="text-center">Clasificación Elasticidad</th>
-                  <th>Diagnóstico Strategic EBITDA</th>
+                  <th>Molécula</th>
+                  <th className="text-right">Productos</th>
+                  <th className="text-right">Dispersión</th>
+                  <th className="text-right">Cambio de ayer</th>
+                  <th>Sensibilidad</th>
+                  <th>Qué significa</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-variant font-sans">
+              <tbody>
                 {elasticidadPorMolecula.map(m => (
-                  <tr key={m.nombre} className="hover:bg-surface-low transition-colors">
-                    <td className="font-bold text-on-surface font-display text-sm">
-                      {m.nombre}
-                    </td>
-                    <td className="text-center font-mono">
-                      <span className="font-bold">{m.totalSkus}</span> <span className="text-xs text-on-surface-variant">({m.marcasCount} Marca / {m.genericosCount} Gen)</span>
-                    </td>
-                    <td className="text-center font-mono font-bold text-on-surface">
-                      {m.avgDispersion.toFixed(1)}%
-                    </td>
-                    <td className="text-center font-mono">
-                      {m.avgVolatilidad > 0 ? `${m.avgVolatilidad.toFixed(1)}%` : 'Estable'}
-                    </td>
-                    <td className="text-center">
-                      <span className={`px-2.5 py-1 text-label-sm font-mono font-bold rounded-full border ${m.badgeClass}`}>
-                        {m.tipoElasticidad}
-                      </span>
-                    </td>
-                    <td className="text-on-surface-variant text-xs font-sans">
-                      {m.recomendacion}
-                    </td>
+                  <tr key={m.nombre}>
+                    <td className="m3-cell-primary">{m.nombre}</td>
+                    <td className="text-right tabular-nums">{m.totalSkus} <span className="m3-cell-secondary">({m.marcasCount} marca · {m.genericosCount} gen.)</span></td>
+                    <td className="text-right tabular-nums">{m.avgDispersion.toFixed(1)} %</td>
+                    <td className="text-right tabular-nums">{m.avgVolatilidad > 0 ? `${m.avgVolatilidad.toFixed(1)} %` : 'Sin cambio'}</td>
+                    <td><span className={`m3-etiqueta ${m.badgeClass}`}>{m.badgeClass === 'is-error' ? 'Alta' : m.badgeClass === 'is-primary' ? 'Baja' : 'Media'}</span></td>
+                    <td className="m3-body-small text-on-surface-variant">{m.recomendacion}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       )}
 
       {selectedProduct && (
@@ -1761,7 +1122,165 @@ export default function Simulador({ user, userDoc }) {
           onClose={() => setSelectedProduct(null)}
         />
       )}
-
     </div>
   );
 }
+
+// Texto con **negritas** sin HTML inyectado.
+function ConNegritas({ texto }) {
+  return String(texto || '').split('**').map((t, i) => (i % 2 ? <strong key={i} className="font-medium text-on-surface">{t}</strong> : <span key={i}>{t}</span>));
+}
+
+function Reporte({ reporte: r, tab, onTab, fmt, fmtBs, onCopiar, onDescargar, onCerrar }) {
+  const n = r.oportunidadesSubir.length + r.oportunidadesBajar.length;
+  const Fila = ({ o, subir }) => (
+    <li className="py-3 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4">
+      <div className="min-w-0">
+        <div className="m3-body-medium font-medium text-on-surface">{o.nombre} <span className="m3-cell-secondary">· {o.id}</span></div>
+        <p className="m3-body-small text-on-surface-variant mt-0.5"><ConNegritas texto={o.recomendacion} /></p>
+      </div>
+      <div className="sm:text-right m3-body-small tabular-nums whitespace-nowrap">
+        <div className="text-on-surface-variant">Hoy {fmt(o.precioPropio)} · promedio {fmt(o.precioPromedio)}</div>
+        <div className={`font-medium ${subir ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-error'}`}>
+          Sugerido {fmt(o.precioSugeridoUsd)} ({subir ? `+${o.incrementoPct}` : `−${o.descuentoPct}`} %) · {fmtBs(o.precioSugeridoUsd)}
+        </div>
+      </div>
+    </li>
+  );
+  return (
+    <div className="rounded-2xl border border-outline-variant bg-surface-container-low overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3">
+        <span className="m3-title-small text-on-surface">Reporte de precios · <span className="text-on-surface-variant font-normal">{r.fecha}</span></span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={onCopiar} className="m3-btn-text"><span className="material-symbols-outlined" aria-hidden="true">content_copy</span>Copiar</button>
+          <button type="button" onClick={onDescargar} className="m3-btn-text"><span className="material-symbols-outlined" aria-hidden="true">download</span>Descargar</button>
+          <button type="button" onClick={onCerrar} className="m3-icon-btn" aria-label="Cerrar el reporte"><span className="material-symbols-outlined">close</span></button>
+        </div>
+      </div>
+      <nav className="m3-tabs px-2" aria-label="Partes del reporte">
+        {[['ejecutivo', 'Resumen'], ['oportunidades', `Ajustes sugeridos (${n})`], ['margen', 'Efecto de la simulación']].map(([id, t]) => (
+          <button key={id} type="button" onClick={() => onTab(id)} aria-current={tab === id ? 'page' : undefined} className={`m3-tab ${tab === id ? 'is-active' : ''}`}>{t}</button>
+        ))}
+      </nav>
+      <div className="px-4 py-3 m3-body-medium text-on-surface-variant max-h-96 overflow-y-auto">
+        {tab === 'ejecutivo' && <p><ConNegritas texto={r.resumenEjecutivo} /></p>}
+        {tab === 'oportunidades' && (
+          n === 0 ? <p>No hay productos lejos del promedio del mercado (más de 12 % por encima o por debajo).</p> : (
+            <div className="space-y-4">
+              {r.oportunidadesSubir.length > 0 && (
+                <div>
+                  <h3 className="m3-title-small text-on-surface">Más baratos que el mercado: podrías subir</h3>
+                  <ul className="divide-y divide-outline-variant">{r.oportunidadesSubir.map(o => <Fila key={o.id} o={o} subir />)}</ul>
+                </div>
+              )}
+              {r.oportunidadesBajar.length > 0 && (
+                <div>
+                  <h3 className="m3-title-small text-on-surface">Más caros que el mercado: riesgo de perder ventas</h3>
+                  <ul className="divide-y divide-outline-variant">{r.oportunidadesBajar.map(o => <Fila key={o.id} o={o} />)}</ul>
+                </div>
+              )}
+            </div>
+          )
+        )}
+        {tab === 'margen' && (
+          <div className="space-y-2">
+            <p><ConNegritas texto={r.estrategiaElasticidad} /></p>
+            <p className="m3-body-small">Los efectos sobre el volumen son estimaciones generales, no datos de tus ventas.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const fmtUsd = (v) => (v == null ? '—' : `$${Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
+// Cuanto se aleja tu precio del promedio, producto por producto. Memo: no
+// depende del deslizador, asi que no se redibuja al moverlo.
+const GraficoBrechas = memo(function GraficoBrechas({ datos, tasa }) {
+  const tg = tokensGrafico();
+  const muchos = datos.length > 30;
+  return (
+    <section className="m3-card-outlined p-5 space-y-3" aria-labelledby="bre-titulo">
+      <div>
+        <h2 id="bre-titulo" className="m3-title-medium text-on-surface">Cuánto se aleja tu precio del promedio</h2>
+        <p className="m3-body-small text-on-surface-variant mt-0.5">Cada barra es un producto, del más barato al más caro frente al promedio del mercado. Pasa el cursor para ver cuál es.</p>
+      </div>
+      <div className="h-72">
+        {datos.length === 0 ? (
+          <p className="h-full flex items-center justify-center m3-body-medium text-on-surface-variant">Aún no hay productos con tu precio y competencia.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={datos} margin={{ top: 8, right: 8, left: -12, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={tg.rejilla} vertical={false} />
+              <XAxis dataKey="name" tick={muchos ? false : { fontSize: 10, fill: tg.eje }} interval={0} height={muchos ? 8 : 40} />
+              <YAxis tick={{ fontSize: 11, fill: tg.eje }} tickFormatter={(v) => `${v}%`} />
+              <Tooltip cursor={{ fill: tg.rejilla, opacity: 0.4 }} content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="m3-card-outlined p-3 m3-body-small space-y-0.5 max-w-xs" style={{ background: tg.superficie }}>
+                    <div className="font-medium text-on-surface">{d.fullName}</div>
+                    <div className="text-on-surface-variant tabular-nums">Tu precio {fmtUsd(d.propioPrice)} · Bs {(d.propioPrice * (tasa || 0)).toLocaleString('es-VE', { maximumFractionDigits: 2 })}</div>
+                    <div className="text-on-surface-variant tabular-nums">Promedio {fmtUsd(d.avgComp)}</div>
+                    <div className={`font-medium tabular-nums ${d.gap < 0 ? 'text-[color:var(--md-sys-color-data-positive)]' : 'text-error'}`}>{d.gap > 0 ? '+' : ''}{d.gap} %</div>
+                  </div>
+                );
+              }} />
+              <ReferenceLine y={0} stroke={tg.eje} />
+              <Bar dataKey="gap" isAnimationActive={false} radius={[3, 3, 0, 0]}>
+                {datos.map((d, i) => <Cell key={i} fill={d.gap < 0 ? tg.positivo : tg.negativo} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </section>
+  );
+});
+
+// Tu precio (vertical) frente al promedio del mercado (horizontal). Debajo de
+// la diagonal eres mas barato. Toca un punto para abrir la ficha.
+const MatrizPosicion = memo(function MatrizPosicion({ datos, onElegir }) {
+  const tg = tokensGrafico();
+  if (!datos.length) return null;
+  return (
+    <section className="m3-card-outlined p-5 space-y-3" aria-labelledby="mat-titulo">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+        <div>
+          <h2 id="mat-titulo" className="m3-title-medium text-on-surface">Tu precio frente al promedio del mercado</h2>
+          <p className="m3-body-small text-on-surface-variant mt-0.5">Cada punto es un producto. Toca uno para abrir su ficha.</p>
+        </div>
+        <div className="flex flex-wrap gap-3 m3-body-small text-on-surface-variant">
+          <span className="inline-flex items-center gap-1.5"><i className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: tg.positivo }} />Más barato que el promedio</span>
+          <span className="inline-flex items-center gap-1.5"><i className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: tg.negativo }} />Más caro</span>
+        </div>
+      </div>
+      <div className="h-80">
+        <ResponsiveContainer width="100%" height="100%">
+          <ScatterChart margin={{ top: 12, right: 16, bottom: 24, left: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={tg.rejilla} />
+            <XAxis type="number" dataKey="x" name="Promedio del mercado" unit=" $" tick={{ fontSize: 11, fill: tg.eje }}
+              label={{ value: 'Promedio del mercado ($)', position: 'bottom', offset: 6, fontSize: 12, fill: tg.eje }} />
+            <YAxis type="number" dataKey="y" name="Tu precio" unit=" $" tick={{ fontSize: 11, fill: tg.eje }}
+              label={{ value: 'Tu precio ($)', angle: -90, position: 'insideLeft', offset: 12, fontSize: 12, fill: tg.eje }} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const d = payload[0].payload;
+              return (
+                <div className="m3-card-outlined p-3 m3-body-small space-y-0.5 max-w-xs" style={{ background: tg.superficie }}>
+                  <div className="font-medium text-on-surface">{d.name}</div>
+                  <div className="text-on-surface-variant tabular-nums">Tu precio {fmtUsd(d.y)} · promedio {fmtUsd(d.x)}</div>
+                  <div className={`font-medium tabular-nums ${d.diffAvgPercent > 0 ? 'text-error' : 'text-[color:var(--md-sys-color-data-positive)]'}`}>{d.diffAvgPercent > 0 ? '+' : ''}{d.diffAvgPercent} % · lugar {d.ranking || '—'} de {d.totalOptions}</div>
+                </div>
+              );
+            }} />
+            <Scatter data={datos} onClick={onElegir} isAnimationActive={false}>
+              {datos.map((d, i) => <Cell key={i} fill={d.y < d.x ? tg.positivo : tg.negativo} className="cursor-pointer" />)}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
+  );
+});

@@ -14,6 +14,7 @@ import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
 import { exportToCSV } from '../utils/exportUtils';
 import { describirPresentacion } from '../utils/presentacion';
 import { crearFormato, pct, mediana, usePreferencia, GRUPOS, grupoDe } from './dashboard/comun';
+import { AYUDA_OFERTA } from '../utils/promociones';
 
 // Experimental: mapa de calor de TU precio en cada cadena (solo tus enlaces).
 // Cada fila es un producto tuyo y cada celda su precio en esa cadena. El color
@@ -200,7 +201,7 @@ export default function MapaPorCadena() {
             <Segmentado etiqueta="El color compara tu precio contra" rotulo="Color" valor={frente} onChange={setFrente}
               opciones={[['mas_bajo', 'Tu más bajo', 'Cada celda frente a tu precio más bajo de esa fila (ese producto)'], ['competencia', 'Competencia', 'Tu precio en esa cadena frente al competidor más barato de esa cadena']]} />
             <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
-              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', AYUDA_OFERTA]]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
             <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={setMoneda}

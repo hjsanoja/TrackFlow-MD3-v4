@@ -290,7 +290,11 @@ async def leer_vtex(page, url: str, bcv_rate: float) -> dict | None:
         return None
     venta = float(o["Price"]) * factor
     lista = float(o.get("ListPrice") or o.get("PriceWithoutDiscount") or 0) * factor
+    # Promocion de varias unidades anunciada por la tienda (2x1, 3x2, 2da unidad).
+    nombres = [t.get("<Name>k__BackingField") or t.get("Name") for t in (o.get("Teasers") or []) + (o.get("PromotionTeasers") or []) if isinstance(t, dict)]
+    promo = next((n for n in nombres if n and re.search(r"2\s*x\s*1|3\s*x\s*2|2\s*da|segunda", n, re.I)), None)
     return {
+        "tipo_promo": promo,
         "nombre": prod.get("productName"),
         "precio_lista": round(max(venta, lista), 2),
         "precio_oferta": round(venta, 2) if lista > venta + 0.01 else None,
@@ -563,6 +567,13 @@ async def extract_product_data_from_page(page, url: str, target_product_id: str 
                             const txt = (badge.innerText || badge.textContent || '').replace(/\s+/g, ' ').trim();
                             if (!txt || txt.length > 90) continue;
 
+                            // Promociones de varias unidades ("2x1", "3x2", "2da unidad"): no
+                            // cambian el precio de la caja; se guarda el texto y el panel
+                            // calcula lo que cuesta cada caja llevando la promocion.
+                            if (/\b(2\s*x\s*1|3\s*x\s*2|2\s*da|segunda)\b/i.test(txt)) {
+                                promo_struct = { tipo: "multiunidad", valor: null, texto_literal: txt };
+                                break;
+                            }
                             const matchPct = txt.match(/\b(\d{1,2})\s*%\s*(?:dcto|descuento|off)?/i) || txt.match(/(\d{1,2})%/);
                             const matchMonto = txt.match(/(?:ahorra|dcto|descuento|menos)\s*(?:bs\.?s?|ves)?\s*([\d.,]+)/i);
 
@@ -907,6 +918,8 @@ async def scrape_url_async(page, url: str, marca: str, bcv_rate: float, task_id:
                 result["nombre"] = limpiar_nombre(rapido.get("nombre"))
                 if DIAGNOSTICO:
                     print(f"\n   🔎 [{task_id}] API VTEX {url}: lista={rapido['precio_lista']} oferta={rapido.get('precio_oferta')} (tienda en {rapido.get('moneda_tienda')})", flush=True)
+                if rapido.get("tipo_promo"):
+                    result["tipo_promo"] = rapido["tipo_promo"]
                 return llenar_resultado(result, rapido["precio_lista"], rapido.get("precio_oferta"), "vtex_api", bcv_rate)
 
         # Via rapida para tiendas WooCommerce (Farmadon...).

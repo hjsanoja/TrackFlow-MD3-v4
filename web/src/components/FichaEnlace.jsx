@@ -5,6 +5,7 @@ import { supabase, isSupabaseActive } from '../supabase';
 import { publicacionIdDe } from '../utils/dbClient';
 import { enlaceCaido, describirPresentacion } from '../utils/presentacion';
 import { limpiarNombreCapturado } from '../context/DataContext';
+import { factorPromo, textoPromo } from '../utils/promociones';
 
 /**
  * Ficha de un enlace de competencia (side sheet), hermana de FichaProducto:
@@ -140,6 +141,12 @@ export default function FichaEnlace({
               <p className="m3-body-small text-on-surface-variant mt-2">
                 <span className="m3-chip-oferta mr-1">Oferta</span>
                 Precio normal {bs(e.ultimo_precio_full_bs)}{e.tipo_promo ? ` · ${e.tipo_promo}` : ''}
+              </p>
+            )}
+            {factorPromo(e.promo_codigo) < 1 && (
+              <p className="m3-body-small text-on-surface-variant mt-2">
+                <span className="m3-chip-oferta mr-1">{textoPromo(e.promo_codigo)}</span>
+                Llevando la promoción, cada caja sale en {bs((e.ultimo_precio_desc_bs || e.ultimo_precio_full_bs) * factorPromo(e.promo_codigo))}. Es el precio que usa «Oferta» en el Dashboard y los mapas.
               </p>
             )}
           </section>

@@ -33,6 +33,7 @@ import {
 } from '../components/dashboard/comun';
 import { useCambiosDesdeVisita } from '../hooks/useCambiosDesdeVisita';
 import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
+import { AYUDA_OFERTA } from '../utils/promociones';
 
 
 export default function Dashboard({ userDoc }) {
@@ -624,7 +625,7 @@ export default function Dashboard({ userDoc }) {
         comparar={(
           <>
             <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
-              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', AYUDA_OFERTA]]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
             <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={setMoneda}

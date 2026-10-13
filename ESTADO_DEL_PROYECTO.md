@@ -561,6 +561,31 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Lanzamiento: Mapa de calor al menú, promociones, perfiles y Simulador (PR #81, fase 50)
+
+- **Mapa de calor** en el menú principal (`/mapa-cadenas`, `pages/MapaCadenas.jsx`);
+  `/experimental?tab=mapa_cadenas` redirige. Menú por defecto de consulta; la
+  fase 50 lo suma a quien veía Rango de precios o Experimental.
+- **Relación**: «Revisar → Competidor sin unidades por empaque» y aviso; botón
+  «Completar N desde el nombre» (lee el nombre de la tienda con
+  `leerPresentacion`, `dbCompletarUnidadesCompetidores`, solo productos `COMP_`).
+- **Recarga del catálogo cerrada**: la reemplaza el aviso «ficha incompleta» de
+  Productos. Carpeta `recarga/` borrada (queda en el historial de git).
+- **Precio con promoción** (`utils/promociones.js`): en «Oferta», 2x1 = ½,
+  3x2 = ⅔, 2.ª unidad = ¾ del precio por caja (`promo_codigo` de
+  `v_ultimo_precio_valido`). Dashboard, Rango, Mapa, Posición por cadena y
+  Simulador; la ficha del enlace lo muestra. Robot: lee letreros «2x1/3x2/2da»
+  en la página y los Teasers de VTEX.
+- **Perfiles de permisos** (`perfiles_usuario`, fase 50, solo admin):
+  `components/usuarios/PerfilesPermisos.jsx` en el formulario de usuario
+  (aplicar, guardar como perfil, borrar). Aplicar copia valores.
+- **Simulador**: sin descargar 180 días de histórico (usa `v_variacion`),
+  enlaces indexados por producto, sin la espera falsa de 2,3 s del reporte,
+  deslizador con `useDeferredValue`, gráficos `memo` sin animación; diseño
+  nuevo (BarraFiltros, tarjetas M3, tokens de gráficos, sin HTML inyectado).
+- **Sugerencias en bloque**: casillas, «Elegir las N perfectas», Aceptar /
+  Descartar varias (una por producto y cadena, la de mayor puntaje).
+
 ## Mapa de calor por filas (PR #80)
 
 - `MapaPorCadena.jsx`: el color por defecto («Tu más bajo») compara cada
@@ -1608,7 +1633,6 @@ Cadenas y Dimensiones.
 **Diseño**: quedan colores fijos en `Simulador.jsx` y
 `ProductDetailModal.jsx` (gradientes y Recharts).
 
-**Limpieza del repo**: borrar `recarga/` cuando termine la recarga.
 
 ---
 

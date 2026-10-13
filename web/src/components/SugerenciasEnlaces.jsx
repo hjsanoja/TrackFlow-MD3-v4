@@ -63,6 +63,9 @@ export default function SugerenciasEnlaces() {
   const [cargando, setCargando] = useState(true);
   const [sinFase36, setSinFase36] = useState(false);
   const [procesando, setProcesando] = useState(null);
+  // Varias a la vez (solo en Por revisar): ids elegidos y avance del lote.
+  const [seleccion, setSeleccion] = useState(() => new Set());
+  const [lote, setLote] = useState(null); // { hechos, total }
   const [cadena, setCadena] = useState('todos');
   const [nivel, setNivel] = useState('todos');
   const [busqueda, setBusqueda] = useState('');
@@ -108,7 +111,7 @@ export default function SugerenciasEnlaces() {
   useEffect(() => { cargar(); }, [cargar]);
   // Al abrir: si la ultima corrida figura "corriendo" pero ya no corre, se cierra.
   useEffect(() => { if (corrida?.estado === 'corriendo') revisarViva(corrida); }, [corrida?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setLimite(POR_PAGINA); }, [ver, cadena, nivel, busqueda]);
+  useEffect(() => { setLimite(POR_PAGINA); setSeleccion(new Set()); }, [ver, cadena, nivel, busqueda]);
 
   // Marca como terminada una corrida que ya no corre (cancelada en GitHub o
   // cortada). Si la base no lo permite (falta la fase 38), solo en pantalla.
@@ -237,6 +240,55 @@ export default function SugerenciasEnlaces() {
     }
   };
 
+  // Acepta varias: una sola por producto y cadena (la de mayor puntaje); las
+  // demas de ese producto en esa cadena salen solas, como al aceptar una.
+  const aceptarVarias = async () => {
+    const elegidas = filas.filter(f => seleccion.has(f.id) && !f.ya_tiene_enlace);
+    const mejor = new Map();
+    for (const f of elegidas) {
+      const k = `${f.producto_id}|${f.cadena_id}`;
+      if (!mejor.has(k) || f.puntaje > mejor.get(k).puntaje) mejor.set(k, f);
+    }
+    const lista = [...mejor.values()];
+    if (!lista.length) return;
+    setLote({ hechos: 0, total: lista.length });
+    let ok = 0;
+    const fallas = [];
+    const salen = [];
+    for (const f of lista) {
+      const { error } = await supabase.rpc('fn_aceptar_sugerencia', { p_id: f.id });
+      if (error) fallas.push(`${f.producto_nombre} (${nombreCadena(f.cadena_id)}): ${error.message}`);
+      else {
+        ok += 1;
+        salen.push(...filas.filter(x => x.producto_id === f.producto_id && x.cadena_id === f.cadena_id).map(x => x.id));
+      }
+      setLote({ hechos: ok + fallas.length, total: lista.length });
+    }
+    quitar(salen);
+    setSeleccion(new Set());
+    setLote(null);
+    if (ok) refreshCompetencia?.();
+    const repetidas = elegidas.length - lista.length;
+    addToast(`${ok} ${ok === 1 ? 'enlace creado' : 'enlaces creados'}${repetidas > 0 ? ` (${repetidas} ${repetidas === 1 ? 'era otra opción' : 'eran otras opciones'} del mismo producto y cadena)` : ''}. El robot de precios los leerá en su próxima corrida.${fallas.length ? ` No se pudieron aceptar ${fallas.length}: ${fallas.slice(0, 2).join('; ')}` : ''}`,
+      fallas.length ? 'warning' : 'success');
+  };
+
+  const descartarVarias = async () => {
+    const ids = [...seleccion];
+    if (!ids.length) return;
+    setLote({ hechos: 0, total: ids.length });
+    const { data, error } = await supabase.from('sugerencias_enlaces')
+      .update({ estado: 'descartada', revisado: new Date().toISOString(), actualizado: new Date().toISOString() })
+      .in('id', ids).select('id');
+    setLote(null);
+    if (error) { addToast(`No se pudo guardar: ${error.message}`, 'error'); return; }
+    quitar((data || []).map(d => d.id));
+    setSeleccion(new Set());
+    addToast(`${data?.length || 0} sugerencias descartadas: no se vuelven a proponer.`, 'success');
+  };
+
+  const alternar = (id) => setSeleccion(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
   const cambiarEstado = async (s, estado) => {
     setProcesando(s.id);
     try {
@@ -282,6 +334,9 @@ export default function SugerenciasEnlaces() {
   const limpiar = () => { setCadena('todos'); setNivel('todos'); setBusqueda(''); };
   const cadenasEnLista = [...new Set(filas.map(f => f.cadena_id))];
   const perfectas = filas.filter(f => f.puntaje >= 100).length;
+  // Lo que se ve con los filtros y se puede aceptar.
+  const seleccionables = grupos.flatMap(g => g.sugerencias).filter(f => !f.ya_tiene_enlace);
+  const perfectasVisibles = seleccionables.filter(f => f.puntaje >= 100);
   const conBuscador = cadenas.filter(c => PLATAFORMAS[c.plataforma]).length;
 
   if (sinFase36) {
@@ -360,6 +415,31 @@ export default function SugerenciasEnlaces() {
           </div>
         </div>
 
+        {ver === 'pendiente' && (seleccion.size > 0 || seleccionables.length > 0) && (
+          seleccion.size > 0 ? (
+            <div className="m3-selection-bar" role="toolbar" aria-label="Acciones sobre las sugerencias elegidas">
+              <button type="button" onClick={() => setSeleccion(new Set())} disabled={!!lote} className="m3-icon-btn" title="Quitar selección" aria-label="Quitar selección">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+              <span className="m3-title-medium mr-auto">
+                {lote ? `Procesando ${lote.hechos} de ${lote.total}…` : `${seleccion.size} ${seleccion.size === 1 ? 'elegida' : 'elegidas'}`}
+              </span>
+              <button data-edita type="button" onClick={descartarVarias} disabled={!!lote} className="m3-btn-text">Descartar</button>
+              <button data-edita type="button" onClick={aceptarVarias} disabled={!!lote} className="m3-btn-primary h-10 px-4">Aceptar {seleccion.size}</button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-outline-variant">
+              <span className="m3-body-small text-on-surface-variant mr-auto">Marca las casillas para aceptar o descartar varias a la vez.</span>
+              {perfectasVisibles.length > 0 && (
+                <button data-edita type="button" onClick={() => setSeleccion(new Set(perfectasVisibles.map(f => f.id)))} className="m3-btn-text">
+                  <span className="material-symbols-outlined" aria-hidden="true">done_all</span>
+                  Elegir las {perfectasVisibles.length} perfectas
+                </button>
+              )}
+            </div>
+          )
+        )}
+
         {cargando && filas.length === 0 ? (
           <div className="h-48 m3-skeleton m-4 rounded-2xl" aria-busy="true" />
         ) : grupos.length === 0 ? (
@@ -377,7 +457,8 @@ export default function SugerenciasEnlaces() {
                 <CabeceraProducto p={g.producto} propio={propioPorId.get(String(g.producto.id_producto_propio).trim())} />
                 <ul>
                   {g.sugerencias.map(s => (
-                    <FilaSugerencia key={s.id} s={s} p={g.producto} ver={ver} nombreCadena={nombreCadena} procesando={procesando === s.id}
+                    <FilaSugerencia key={s.id} s={s} p={g.producto} ver={ver} nombreCadena={nombreCadena} procesando={procesando === s.id || !!lote}
+                      elegida={seleccion.has(s.id)} onElegir={ver === 'pendiente' && !s.ya_tiene_enlace ? () => alternar(s.id) : null}
                       onAceptar={() => aceptar(s)} onDescartar={() => cambiarEstado(s, 'descartada')} onReabrir={() => cambiarEstado(s, 'pendiente')} />
                   ))}
                 </ul>
@@ -555,12 +636,16 @@ function CabeceraProducto({ p, propio }) {
 // El buscador guarda 'si' / 'no' / otro (no se pudo comprobar).
 const estadoCriterio = (v) => (v === 'si' || v === 'no' ? v : null);
 
-function FilaSugerencia({ s, p, ver, nombreCadena, procesando, onAceptar, onDescartar, onReabrir }) {
+function FilaSugerencia({ s, p, ver, nombreCadena, procesando, elegida, onElegir, onAceptar, onDescartar, onReabrir }) {
   const d = s.detalle || {};
   return (
     <li className="m3-sugerencia">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
+          {onElegir && (
+            <input type="checkbox" className="m3-checkbox" checked={elegida} onChange={onElegir} disabled={procesando}
+              aria-label={`Elegir la sugerencia de ${nombreCadena(s.cadena_id)}`} />
+          )}
           <span className="inline-flex items-center gap-1.5 m3-label-medium text-on-surface-variant">
             <CadenaBadge cadena={s.cadena_id} tamano="xs" title="" />{nombreCadena(s.cadena_id)}
           </span>

@@ -18,9 +18,9 @@ export default function Layout({ user, userDoc, children }) {
   // El rol se toma EXCLUSIVAMENTE de la tabla usuarios
   const isAdmin = userDoc?.rol === 'administrador';
 
-  const defaultConsultaMenus = ['/', '/mapa-calor'];
+  const defaultConsultaMenus = ['/', '/mapa-calor', '/mapa-cadenas'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
+    ? ['/', '/mapa-calor', '/mapa-cadenas', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -68,6 +68,7 @@ export default function Layout({ user, userDoc, children }) {
   const navItems = [
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
     { to: '/mapa-calor', label: 'Rango de precios', icon: 'linear_scale', adminOnly: false },
+    { to: '/mapa-cadenas', label: 'Mapa de calor', icon: 'grid_on', adminOnly: false },
     { to: '/experimental', label: 'Experimental', icon: 'science', adminOnly: false, badge: 'Labs' },
     { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: false },
     { to: '/competencia', label: 'Relación', icon: 'link', adminOnly: false },
@@ -102,7 +103,6 @@ export default function Layout({ user, userDoc, children }) {
       { to: '/experimental?tab=devaluacion', label: 'Devaluación vs subida real (Experimental)', icon: 'currency_exchange' },
       { to: '/experimental?tab=canibalizacion', label: 'Canibalización de marcas (Experimental)', icon: 'compare_arrows' },
       { to: '/experimental?tab=brecha_usd', label: 'Brechas USD diarias (Experimental)', icon: 'payments' },
-      { to: '/experimental?tab=mapa_cadenas', label: 'Mapa de calor (Experimental)', icon: 'grid_on' },
       { to: '/experimental?tab=periodos', label: 'Comparador de períodos (Experimental)', icon: 'compare' },
       { to: '/experimental?tab=indice', label: 'Índice por molécula (Experimental)', icon: 'query_stats' },
       { to: '/experimental?tab=reaccion', label: 'Velocidad de reacción (Experimental)', icon: 'bolt' },

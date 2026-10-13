@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { parseUnidosisCount } from '../utils/unidosisUtils';
 import { UMBRAL_CAMBIO } from '../components/dashboard/comun';
 import { esMarca } from '../utils/tipoMercado';
+import { factorPromo } from '../utils/promociones';
 
 // Precios de cada producto propio frente a la competencia, con el mismo
 // criterio en el Dashboard y en el Mapa de Calor:
@@ -12,6 +13,8 @@ import { esMarca } from '../utils/tipoMercado';
 //     minimoComp y promedioComp son los de la competencia sola.
 //   - Cambios: en dolares, cada precio a la tasa de su dia (v_variacion).
 //   - Por unidad: el precio entre las unidades del empaque.
+//   - Oferta: con una promocion de varias unidades (2x1, 3x2, 2.a unidad)
+//     el precio de cada caja llevando la promocion (utils/promociones).
 //   - tipoComp: comparar contra toda la competencia, solo genericos o solo
 //     marcas (tipo_mercado de cada competidor, fase 29).
 //   - cruce: tu generico cuesta mas que una marca de la competencia, o tu
@@ -55,7 +58,9 @@ export function useAnalisisPrecios({
       const unidadesPropio = Math.max(parseUnidosisCount(p.tamano || p.presentacion, p.nombre, p.unidosis || p.unidades_empaque), 1);
 
       const todos = competencia.map(c => {
-        const bs = conDescuento ? (c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs) : c.ultimo_precio_full_bs;
+        const bs = conDescuento
+          ? (c.ultimo_precio_desc_bs || c.ultimo_precio_full_bs) * factorPromo(c.promo_codigo)
+          : c.ultimo_precio_full_bs;
         if (!bs || !tasa) return null;
         const tipo = String(c.tipo || '').toLowerCase();
         const cadena = idCadena(c.cadena);
@@ -94,6 +99,7 @@ export function useAnalisisPrecios({
           tipoMercado: esMarca(c) ? 'MARCA' : 'GENERICO',
           cadena,
           marca: c.marca,
+          promo: conDescuento && factorPromo(c.promo_codigo) < 1 ? c.promo_codigo : null,
           unidades,
           priceUsd: bs / factor / tasa,
           unitUsd: bs / unidades / tasa,

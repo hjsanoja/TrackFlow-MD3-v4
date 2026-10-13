@@ -15,6 +15,7 @@ import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
 import { exportToCSV } from '../utils/exportUtils';
 import { describirPresentacion } from '../utils/presentacion';
 import { crearFormato, Diferencia, pct, usePreferencia, grupoDe } from '../components/dashboard/comun';
+import { AYUDA_OFERTA } from '../utils/promociones';
 
 // Mapa de calor: por cada producto, el espectro de precios de la competencia
 // (del mas barato al mas caro) y donde cae tu precio. La franja se colorea
@@ -221,7 +222,7 @@ export default function MapaCalor() {
         comparar={(
           <>
             <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
-              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
+              opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', AYUDA_OFERTA]]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
             <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={setMoneda}
