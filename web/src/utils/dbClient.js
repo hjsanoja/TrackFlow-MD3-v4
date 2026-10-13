@@ -1432,8 +1432,9 @@ export async function dbEliminarUsuarioCompleto(email) {
 // Accesos de todos (solo lo ve un administrador por RLS).
 export async function dbAccesos(limite = 1000) {
   if (!isSupabaseActive()) return [];
+  // Sin las visitas a menus (fase 51): esas se resumen en v_actividad_menus.
   const { data, error } = await supabase.from('accesos').select('email, evento, fecha, agente')
-    .order('fecha', { ascending: false }).limit(limite);
+    .neq('evento', 'menu').order('fecha', { ascending: false }).limit(limite);
   if (error) return [];
   return data || [];
 }

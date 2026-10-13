@@ -9,6 +9,8 @@ import FiltroChip from '../components/FiltroChip';
 import { FormSection, Field, ChoiceChips, normalizar } from '../components/formulario';
 import Segmentado from '../components/Segmentado';
 import PerfilesPermisos from '../components/usuarios/PerfilesPermisos';
+import ActividadUsuario from '../components/usuarios/ActividadUsuario';
+import AplicarPerfilVarios from '../components/usuarios/AplicarPerfilVarios';
 import { accesoVencido, hoyCaracas } from '../utils/permisos';
 import { getGitHubConfig } from '../utils/githubClient';
 import { useToast } from '../context/ToastContext';
@@ -58,6 +60,9 @@ export default function Usuarios({ userDoc }) {
   const [showGithubModal, setShowGithubModal] = useState(false);
   const [githubInfo, setGithubInfo] = useState(null);
   const [accesos, setAccesos] = useState([]);
+  // Usuarios elegidos para aplicarles un perfil (nunca tu propia cuenta).
+  const [elegidos, setElegidos] = useState(() => new Set());
+  const alternarElegido = (id) => setElegidos(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const [search, setSearch] = useState('');
   const [filtroRol, setFiltroRol] = useState('todos');
@@ -303,6 +308,12 @@ export default function Usuarios({ userDoc }) {
           </div>
         </div>
 
+        {elegidos.size > 0 && (
+          <AplicarPerfilVarios usuarios={(usuarios || []).filter(u => elegidos.has(u.id))} addToast={addToast}
+            onLimpiar={() => setElegidos(new Set())}
+            onListo={() => { setElegidos(new Set()); cargar?.(); }} />
+        )}
+
         {loading ? (
           <div className="p-4 space-y-3" aria-busy="true">
             {[1, 2, 3].map(n => <div key={n} className="h-14 rounded-xl m3-skeleton" />)}
@@ -317,6 +328,10 @@ export default function Usuarios({ userDoc }) {
             <ul className="md:hidden divide-y divide-outline-variant" aria-label="Usuarios">
               {filtrados.map(u => (
                 <li key={u.id} className="m3-product-card">
+                  {u.email !== userDoc?.email && (
+                    <input type="checkbox" className="m3-checkbox self-start mt-1" checked={elegidos.has(u.id)} onChange={() => alternarElegido(u.id)}
+                      aria-label={`Elegir a ${u.nombre || u.email}`} />
+                  )}
                   <button type="button" onClick={() => setFichaId(u.id)} className="flex-1 min-w-0 text-left">
                     <span className="m3-cell-primary">{u.nombre || u.email}</span>
                     <div className="m3-cell-secondary">{u.email}</div>
@@ -336,6 +351,7 @@ export default function Usuarios({ userDoc }) {
             <div className="hidden md:block overflow-x-auto">
               <table className="m3-table m3-table-productos m3-table-usuarios">
                 <colgroup>
+                  <col className="w-[44px]" />
                   <col />
                   <col className="w-[22%]" />
                   <col className="w-[104px]" />
@@ -345,6 +361,7 @@ export default function Usuarios({ userDoc }) {
                 </colgroup>
                 <thead className="m3-sticky-header">
                   <tr>
+                    <th><span className="sr-only">Elegir</span></th>
                     <th>Usuario</th>
                     <th>Rol</th>
                     <th className="text-center">Correos</th>
@@ -359,6 +376,12 @@ export default function Usuarios({ userDoc }) {
                     const menus = menusDe(u);
                     return (
                       <tr key={u.id}>
+                        <td>
+                          {!yo && (
+                            <input type="checkbox" className="m3-checkbox" checked={elegidos.has(u.id)} onChange={() => alternarElegido(u.id)}
+                              aria-label={`Elegir a ${u.nombre || u.email}`} />
+                          )}
+                        </td>
                         <td>
                           <div className="flex items-center gap-1.5 min-w-0">
                             <button type="button" onClick={() => setFichaId(u.id)} className="m3-cell-link min-w-0" title="Abrir la ficha del usuario">
@@ -614,6 +637,8 @@ function FichaUsuario({ usuario: u, yo, accesos, onClose, onEditar, onClave, onA
               </li>
             </ul>
           </section>
+
+          <ActividadUsuario email={u.email} />
 
           <section>
             <h3 className="m3-title-small text-on-surface-variant mb-2">Últimos accesos</h3>

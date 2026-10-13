@@ -2322,3 +2322,31 @@ body.solo-lectura .solo-en-lectura { display: inline; }
   .m3-ficha-tabla th, .m3-ficha-tabla td { padding: 6px 8px; }
   .m3-ficha-tabla tbody th { font-size: 0.75rem; overflow-wrap: normal; }
 }
+
+/* Ayuda por pantalla y recorrido de bienvenida (v1.0). */
+.m3-ayuda-pasos { list-style: decimal; padding-left: 1.25rem; display: grid; gap: 6px; color: var(--md-sys-color-on-surface); font-size: 0.875rem; line-height: 1.45; }
+.m3-ayuda-ejemplo {
+  display: flex; gap: 8px; align-items: flex-start; padding: 12px 14px; border-radius: 16px;
+  background-color: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface-container-lowest));
+  font-size: 0.875rem; color: var(--md-sys-color-on-surface);
+}
+.m3-ayuda-ejemplo .material-symbols-outlined { color: var(--md-sys-color-primary); font-size: 20px; }
+.m3-ayuda-ejemplo p { margin: 0; }
+.m3-bienvenida {
+  width: min(440px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  padding: 28px 24px 20px; border-radius: 28px; background-color: var(--md-sys-color-surface-container-high);
+  box-shadow: var(--md-sys-elevation-3, 0 8px 24px rgb(0 0 0 / 0.2));
+}
+.m3-bienvenida-icono {
+  width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center;
+  background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);
+}
+.m3-bienvenida-icono .material-symbols-outlined { font-size: 30px; }
+.m3-bienvenida-puntos { display: flex; gap: 6px; }
+.m3-bienvenida-puntos i { width: 8px; height: 8px; border-radius: 9999px; background-color: var(--md-sys-color-outline-variant); }
+.m3-bienvenida-puntos i.is-activo { width: 20px; background-color: var(--md-sys-color-primary); }
+.m3-info-grafico-ejemplo { padding: 8px 10px; border-radius: 10px; background-color: var(--md-sys-color-surface-container-lowest); }
+.m3-version {
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
+  font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant);
+}

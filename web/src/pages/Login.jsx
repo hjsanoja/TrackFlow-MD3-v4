@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
 import { registrarAcceso, urlDelPanel, mensajeAuth } from '../utils/accesos';
+import { VERSION, ETIQUETA_VERSION, DESARROLLADOR } from '../utils/version';
 
 // Inicio de sesion con correo y contraseña, y "¿Olvidaste tu contraseña?":
 // Supabase manda un enlace; al abrirlo, App muestra "Crea tu contraseña nueva".
@@ -140,6 +141,7 @@ export default function Login() {
 
         <p className="pt-5 border-t border-outline-variant text-center m3-body-small text-on-surface-variant">
           Acceso restringido a personal autorizado.
+          <span className="block mt-1">TrackFlow v{VERSION} · {ETIQUETA_VERSION} · Dev: {DESARROLLADOR}</span>
         </p>
       </div>
     </div>
