@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
-// Boton (i) junto al titulo de un grafico: la explicacion, la formula y como
-// leerlo quedan a un toque, sin ocupar espacio fijo sobre el grafico.
-export default function InfoGrafico({ titulo, que, formula, lectura, alinear = 'izquierda' }) {
+// Boton (i) junto al titulo de un grafico: la explicacion, la formula, como
+// leerlo y un ejemplo quedan a un toque, sin ocupar espacio fijo. La ayuda de
+// toda la pantalla esta en el boton "Ayuda" de la barra de arriba.
+export default function InfoGrafico({ titulo, que, formula, lectura, ejemplo, alinear = 'izquierda' }) {
   const [abierto, setAbierto] = useState(false);
   const raiz = useRef(null);
   const id = useId();
@@ -27,7 +28,12 @@ export default function InfoGrafico({ titulo, que, formula, lectura, alinear = '
       </button>
       {abierto && (
         <div id={id} role="dialog" aria-label={titulo} className={`m3-info-grafico-panel ${alinear === 'derecha' ? 'is-derecha' : ''}`}>
-          <div className="m3-title-small text-on-surface">{titulo}</div>
+          <div className="flex items-start gap-2">
+            <div className="m3-title-small text-on-surface flex-1">{titulo}</div>
+            <button type="button" onClick={() => setAbierto(false)} className="m3-icon-btn m3-icon-btn-sm -mt-1 -mr-2" aria-label="Cerrar">
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
           {que && <p>{que}</p>}
           {formulas.length > 0 && (
             <div className="m3-info-grafico-formula">
@@ -41,6 +47,13 @@ export default function InfoGrafico({ titulo, que, formula, lectura, alinear = '
               <p>{lectura}</p>
             </div>
           )}
+          {ejemplo && (
+            <div className="m3-info-grafico-ejemplo">
+              <div className="m3-label-small text-on-surface-variant">Ejemplo</div>
+              <p>{ejemplo}</p>
+            </div>
+          )}
+          <p className="m3-body-small">¿Más dudas? Toca «Ayuda» arriba.</p>
         </div>
       )}
     </span>

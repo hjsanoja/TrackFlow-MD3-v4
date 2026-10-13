@@ -561,6 +561,31 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Versión 1.0.0 · Primera versión pública (PR #82, fase 51)
+
+- **Versión** (`utils/version.js`, `web/package.json` = 1.0.0): «TrackFlow
+  v1.0.0 · Primera versión pública · Dev: Hernando Sanoja» en el menú
+  lateral, Mi cuenta y la pantalla de entrada.
+- **Ayuda por pantalla** (`components/AyudaPantalla.jsx`, botón «Ayuda» de la
+  barra de arriba; texto en `utils/ayudaMenus.js`): para qué sirve, qué
+  mirar, pregunta típica y glosario. Mismo contenido que el «Manual de
+  TrackFlow» (documento compartible en Claude).
+- **Botón i** (`InfoGrafico`): botón de cerrar y campo `ejemplo` (Dashboard,
+  Rango de precios, Mapa de calor).
+- **Recorrido de bienvenida** (`components/Bienvenida.jsx`): la primera vez
+  por correo y versión (localStorage); se repite desde Ayuda o Mi cuenta.
+- **Usuarios** (fase 51):
+  - actividad por menú: `registrarMenu` anota `accesos.evento = 'menu'`
+    (una vez por menú y sesión), `v_actividad_menus` (30 días) en la ficha;
+    `fn_registrar_acceso(evento, agente, detalle)` reemplaza la de 2
+    argumentos;
+  - aplicar un perfil a varios usuarios (casillas + `AplicarPerfilVarios`);
+  - perfiles con `vence_dias` (perfil «Invitado 30 días»): al aplicarlo,
+    «Acceso hasta» = hoy + N;
+  - historial de permisos: `usuarios_bitacora` + trigger
+    `trg_anotar_permisos` (rol, menús, solo ver, alcance, vence_el, activo,
+    alta y baja), en la ficha.
+
 ## Lanzamiento: Mapa de calor al menú, promociones, perfiles y Simulador (PR #81, fase 50)
 
 - **Mapa de calor** en el menú principal (`/mapa-cadenas`, `pages/MapaCadenas.jsx`);

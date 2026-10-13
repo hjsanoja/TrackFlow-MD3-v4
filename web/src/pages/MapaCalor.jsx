@@ -283,6 +283,7 @@ export default function MapaCalor() {
                     'Globo = tu precio y tu precio ÷ promedio − 1',
                     'Tu posición = lugar de tu precio entre todas las ofertas (1 = el más barato)',
                   ]}
+                  ejemplo="Si el mercado va de $1,00 a $2,00 con promedio $1,50 y tu precio es $1,35, tu punto queda en la zona azul con el globo «−10 %»."
                   lectura="Azul: más de 5 % por debajo del promedio. Gris: a ±5 %. Rojo: más de 5 % por encima. Si tu punto está en la esquina izquierda eres el más barato; en la derecha, el más caro (el rótulo dice «Tú»). Ojo: en el Dashboard el promedio es solo de la competencia, por eso el % puede ser distinto. Solo cuentan las cadenas y el tipo (marca / genérico) de los filtros."
                 />
               </span>

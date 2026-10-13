@@ -2,11 +2,18 @@ import { useEffect, useState } from 'react';
 import { supabase, isSupabaseActive } from '../../supabase';
 import Select from '../Select';
 import { Field } from '../formulario';
+import { venceConDias } from './AplicarPerfilVarios';
+import { hoyCaracas } from '../../utils/permisos';
 
 // Perfiles de permisos (fase 50): plantillas con rol, menus, "solo ver" y
 // que productos ve, para no marcar todo a mano en cada usuario nuevo.
 // "Aplicar" copia el perfil al formulario (luego se puede ajustar); el
 // usuario no queda atado al perfil. Sin la fase 50 el bloque no sale.
+const diasHasta = (fecha) => {
+  if (!fecha) return null;
+  const d = Math.round((new Date(`${fecha}T12:00:00`) - new Date(`${hoyCaracas()}T12:00:00`)) / 864e5);
+  return d > 0 ? d : null;
+};
 const faltaTabla = (e) => /42P01|PGRST205|does not exist|Could not find/i.test(`${e?.code} ${e?.message}`);
 
 export default function PerfilesPermisos({ form, onAplicar }) {
@@ -34,8 +41,10 @@ export default function PerfilesPermisos({ form, onAplicar }) {
       menus_permitidos: p.menus_permitidos || [],
       menus_solo_lectura: p.menus_solo_lectura || [],
       alcance: p.alcance && ['laboratorios', 'unidades_negocio', 'categorias'].some(k => p.alcance[k]?.length) ? p.alcance : null,
+      // Perfil con dias (fase 51, ej. "Invitado 30 dias"): acceso hasta hoy + N.
+      ...(p.vence_dias ? { vence_el: venceConDias(p.vence_dias) } : {}),
     });
-    setMensaje(`Se aplicó «${p.nombre}». Puedes ajustar lo que haga falta antes de guardar.`);
+    setMensaje(`Se aplicó «${p.nombre}»${p.vence_dias ? `: acceso por ${p.vence_dias} días` : ''}. Puedes ajustar lo que haga falta antes de guardar.`);
   };
 
   const guardarComo = async () => {
@@ -48,6 +57,8 @@ export default function PerfilesPermisos({ form, onAplicar }) {
       menus_permitidos: form.menus_permitidos,
       menus_solo_lectura: form.menus_solo_lectura,
       alcance: form.alcance,
+      // Con "Acceso hasta", el perfil guarda los dias que faltan (fase 51).
+      ...(diasHasta(form.vence_el) ? { vence_dias: diasHasta(form.vence_el) } : {}),
       actualizado: new Date().toISOString(),
     }, { onConflict: 'nombre' });
     setGuardando(false);
@@ -72,7 +83,7 @@ export default function PerfilesPermisos({ form, onAplicar }) {
       <div className="flex flex-wrap items-center gap-2">
         <Select value={elegido} onChange={e => aplicar(e.target.value)} className="m3-select min-w-[14rem]" aria-label="Aplicar un perfil">
           <option value="">{perfiles.length ? 'Elegir un perfil…' : 'Aún no hay perfiles'}</option>
-          {perfiles.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          {perfiles.map(p => <option key={p.id} value={p.id}>{p.nombre}{p.vence_dias ? ` (${p.vence_dias} días)` : ''}</option>)}
         </Select>
         {elegido && (
           <button type="button" onClick={borrar} className="m3-btn-text-danger" data-borra title="Borrar este perfil (no cambia a ningún usuario)">Borrar perfil</button>

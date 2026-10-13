@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
-import { registrarAcceso } from '../utils/accesos';
+import { registrarAcceso, registrarMenu } from '../utils/accesos';
+import AyudaPantalla from './AyudaPantalla';
+import Bienvenida from './Bienvenida';
+import { VERSION, ETIQUETA_VERSION, DESARROLLADOR } from '../utils/version';
 import { limpiarCacheDatos } from '../utils/cacheDatos';
 import { useData } from '../context/DataContext';
 import { usePendientesRevision } from '../hooks/usePendientesRevision';
@@ -53,6 +56,8 @@ export default function Layout({ user, userDoc, children }) {
   // borrar (data-borra) y, en solo lectura, los de crear o editar
   // (data-edita). En <body> para que alcancen tambien a las ventanas.
   const ubicacion = useLocation();
+  // Actividad por menu (fase 51): una vez por menu y sesion.
+  useEffect(() => { registrarMenu(ubicacion.pathname); }, [ubicacion.pathname]);
   const permisos = permisosEn(userDoc, ubicacion.pathname);
   useEffect(() => {
     document.body.classList.toggle('sin-borrar', !permisos.puedeBorrar);
@@ -276,14 +281,13 @@ export default function Layout({ user, userDoc, children }) {
             {!menuColapsado && <span>Cerrar Sesión</span>}
           </button>
 
-          {/* Version Footer */}
-          <div className={`pt-3 text-center border-t border-outline-variant/40 flex-col items-center gap-1 ${menuColapsado ? 'hidden' : 'flex'}`}>
-            <span className="text-label-sm text-on-surface-variant font-mono tracking-wide">
-              Sistema de Inteligencia Competitiva
+          {/* Version */}
+          <div className={`pt-3 text-center border-t border-outline-variant/40 flex-col items-center gap-1.5 ${menuColapsado ? 'hidden' : 'flex'}`}>
+            <span className="m3-version">
+              <span className="font-medium text-on-surface">TrackFlow v{VERSION}</span>
+              <span className="m3-etiqueta is-primary">{ETIQUETA_VERSION}</span>
             </span>
-            <span className="text-label-sm text-on-surface-variant/70 font-mono">
-              TrackFlow v7.4 · Supabase RLS Ready
-            </span>
+            <span className="m3-version">Dev: {DESARROLLADOR}</span>
           </div>
         </div>
       </aside>
@@ -312,6 +316,7 @@ export default function Layout({ user, userDoc, children }) {
           </div>
 
           <div className="flex items-center gap-3">
+            <AyudaPantalla />
             <CentroAvisos verExperimental={isNavVisible({ to: '/experimental', adminOnly: false })} verCadenas={isNavVisible({ to: '/cadenas', adminOnly: false })} />
             {isRefreshing ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-primary bg-primary-container/50 px-3 py-1 rounded-full border border-primary/20 animate-pulse">
@@ -331,6 +336,7 @@ export default function Layout({ user, userDoc, children }) {
           </div>
         </header>
 
+        <Bienvenida email={user?.email} menus={isAdmin ? null : allowedMenuIds} />
         <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto pb-20 md:pb-8">
           {permisos.soloLectura && (
             <div className="m3-banner mb-4" role="status">

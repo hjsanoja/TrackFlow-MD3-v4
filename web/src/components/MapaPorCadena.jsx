@@ -241,6 +241,7 @@ export default function MapaPorCadena() {
                 {filas.length === base.length ? `${base.length} productos` : `${filas.length} de ${base.length} productos`}
               </span>
               <InfoGrafico alinear="derecha" titulo="Mapa de calor: tu precio en cada cadena"
+                ejemplo="Acetaminofén: $1,20 en Farmatodo (azul, «más bajo»), $1,30 en Locatel (+8 %, rojo claro) y $1,47 en SAAS (+22 %, rojo)."
                 que="Solo tus enlaces: cuánto cuesta tu producto en cada cadena. Toca una fila para abrir la ficha."
                 formula={[
                   'Tu más bajo: tu precio en la cadena ÷ tu precio más bajo de ese mismo producto (la fila) − 1',

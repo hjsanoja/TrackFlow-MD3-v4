@@ -698,6 +698,7 @@ export default function Dashboard({ userDoc }) {
                   'Rangos: −15 % o menos · −15 a −5 % · parejo (±5 %) · +5 a +15 % · +15 % o más',
                 ]}
                 lectura="Azul a la izquierda: más barato que el mercado. Gris al centro: parejo. Rojo a la derecha: más caro. Mientras más productos en rojo, más caro estás frente a la competencia."
+                ejemplo="Si tu Losartán cuesta $2,20 y el promedio del mercado es $2,00, estás 10 % más caro: cae en la barra «+5 a +15 %»."
               />
             </div>
           </header>
@@ -737,6 +738,7 @@ export default function Dashboard({ userDoc }) {
                 que="En cuántos productos cada cadena tiene el precio más bajo de la competencia. Toca una barra para ver la lista."
                 formula="Por producto: la cadena con el precio mínimo de la competencia suma 1"
                 lectura="La barra más larga es la cadena más agresiva en precio. Tus propios enlaces no cuentan aquí."
+                ejemplo="Si Locatel tiene el competidor más barato en 12 de tus 40 productos, su barra marca 12."
                 alinear="derecha"
               />
             </div>

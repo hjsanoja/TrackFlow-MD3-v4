@@ -4,6 +4,8 @@ import { useToast } from '../context/ToastContext';
 import { FormSection, Field } from '../components/formulario';
 import { registrarAcceso, mensajeAuth } from '../utils/accesos';
 import { AVAILABLE_MENUS, etiquetaEvento, fechaHora } from '../utils/usuarios';
+import { abrirBienvenida } from '../components/Bienvenida';
+import { VERSION, ETIQUETA_VERSION, DESARROLLADOR } from '../utils/version';
 
 // Mi cuenta: cada usuario ve sus datos, cambia su nombre, elige que correos
 // recibe, cambia su contraseña y ve sus ultimos accesos. El rol, los menus y
@@ -181,6 +183,18 @@ export default function MiCuenta({ user, userDoc, onActualizado }) {
             ))}
           </ul>
         )}
+      </FormSection>
+
+      <FormSection titulo="Ayuda" icono="help">
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={abrirBienvenida} className="m3-btn-outline">
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">tour</span>
+            Ver el recorrido de bienvenida
+          </button>
+          <span className="m3-body-small text-on-surface-variant">
+            TrackFlow v{VERSION} · {ETIQUETA_VERSION} · Dev: {DESARROLLADOR}
+          </span>
+        </div>
       </FormSection>
     </div>
   );
