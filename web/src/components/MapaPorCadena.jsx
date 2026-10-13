@@ -16,13 +16,22 @@ import { describirPresentacion } from '../utils/presentacion';
 import { crearFormato, pct, mediana, usePreferencia, GRUPOS, grupoDe } from './dashboard/comun';
 
 // Experimental: mapa de calor de TU precio en cada cadena (solo tus enlaces).
-// Cada celda es tu precio en esa cadena. El color responde a una pregunta,
-// a elegir:
-//   - "Tus cadenas": tu precio ahi frente al promedio de tu precio en todas
-//     tus cadenas (azul = es donde te venden mas barato, rojo = mas caro).
+// Cada fila es un producto tuyo y cada celda su precio en esa cadena. El color
+// responde a una pregunta, a elegir:
+//   - "Tu más bajo" (por filas): cada celda frente a tu precio MAS BAJO de esa
+//     misma fila. Azul = la cadena donde ese producto esta mas barato; gris =
+//     hasta 5 % por encima; rojo claro = 5 a 15 %; rojo = 15 % o mas.
 //   - "Competencia": tu precio ahi frente al mas barato de la competencia en
-//     ESA misma cadena.
-// Mismos colores y tramos (±5 %, ±15 %) que "¿Donde esta tu precio?".
+//     ESA misma cadena (tramos ±5 %, ±15 % de "¿Donde esta tu precio?").
+
+// Tramos frente a tu precio mas bajo de la fila (la diferencia nunca es negativa).
+const TRAMOS_MINIMO = [
+  { id: 'muy_barato', corto: 'Tu precio más bajo', hasta: 0.5 },
+  { id: 'parejo', corto: 'Hasta 5 % más caro', hasta: 5 },
+  { id: 'caro', corto: '5 a 15 % más caro', hasta: 15 },
+  { id: 'muy_caro', corto: '15 % o más caro', hasta: Infinity },
+];
+const tramoMinimo = (dif) => TRAMOS_MINIMO.find(t => dif <= t.hasta);
 
 export default function MapaPorCadena() {
   const { productos = [], productosCompetencia = [], cadenas = [], variaciones = [], loadingInitial: loading } = useData();
@@ -31,7 +40,7 @@ export default function MapaPorCadena() {
   const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs'], { sesion: true });
   const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis'], { sesion: true });
   const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento'], { sesion: true });
-  const [frente, setFrente] = usePreferencia('mapa.frente', 'mias', ['mias', 'competencia']);
+  const [frente, setFrente] = usePreferencia('mapa.frente', 'mas_bajo', ['mas_bajo', 'competencia']);
   const [filtroUnidad, setFiltroUnidad] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
@@ -70,20 +79,23 @@ export default function MapaPorCadena() {
         if (!m.has(o.cadena) || o.priceUsd < m.get(o.cadena)) m.set(o.cadena, o.priceUsd);
       }
       const valores = [...tuyo.values()];
-      const promedio = valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
       const min = valores.length ? Math.min(...valores) : null;
       const max = valores.length ? Math.max(...valores) : null;
-      return { ...x, tuyo, comp, promedioTuyo: promedio, rango: valores.length > 1 ? (max / min - 1) * 100 : null };
+      return { ...x, tuyo, comp, minTuyo: min, rango: valores.length > 1 ? (max / min - 1) * 100 : null };
     })
     .filter(x => x.tuyo.size > 0), [analizados, filtroUnidad, filtroTipo, filtroCategoria]);
 
   const difDe = (x, cadena) => {
     const p = x.tuyo.get(cadena);
     if (p == null) return null;
-    if (frente === 'mias') return x.tuyo.size > 1 && x.promedioTuyo > 0 ? (p / x.promedioTuyo - 1) * 100 : null;
+    if (frente === 'mas_bajo') return x.tuyo.size > 1 && x.minTuyo > 0 ? (p / x.minTuyo - 1) * 100 : null;
     const c = x.comp.get(cadena);
     return c > 0 ? (p / c - 1) * 100 : null;
   };
+
+  const claseColor = (dif) => (dif == null ? '' : `m3-calor-${frente === 'mas_bajo' ? tramoMinimo(dif).id : grupoDe(dif).id}`);
+  const textoDif = (dif) => (frente === 'mas_bajo' ? (dif <= 0.5 ? 'más bajo' : `+${Math.round(dif)} %`) : pct(dif, 0));
+  const leyenda = frente === 'mas_bajo' ? TRAMOS_MINIMO : GRUPOS;
 
   const cadenasTabla = useMemo(() => {
     const ids = new Map();
@@ -157,8 +169,8 @@ export default function MapaPorCadena() {
     );
   }
 
-  const explicacion = frente === 'mias'
-    ? 'Cada celda es tu precio en esa cadena. Azul: ahí te venden más barato que en tus otras cadenas; rojo: más caro. Gris: parejo (±5 %) o solo estás en una cadena.'
+  const explicacion = frente === 'mas_bajo'
+    ? 'Cada fila es un producto tuyo y cada celda su precio en esa cadena. El color se mide en la fila: azul es la cadena donde ese producto está más barato; el resto dice cuánto más caro está frente a ese precio más bajo.'
     : 'Cada celda es tu precio en esa cadena. Azul: ahí eres más barato que el competidor más barato de esa cadena; rojo: más caro. Sin color: no hay competencia en esa cadena.';
 
   return (
@@ -186,7 +198,7 @@ export default function MapaPorCadena() {
         comparar={(
           <>
             <Segmentado etiqueta="El color compara tu precio contra" rotulo="Color" valor={frente} onChange={setFrente}
-              opciones={[['mias', 'Tus cadenas', 'Tu precio en esa cadena frente a tu precio en tus otras cadenas'], ['competencia', 'Competencia', 'Tu precio en esa cadena frente al competidor más barato de esa cadena']]} />
+              opciones={[['mas_bajo', 'Tu más bajo', 'Cada celda frente a tu precio más bajo de esa fila (ese producto)'], ['competencia', 'Competencia', 'Tu precio en esa cadena frente al competidor más barato de esa cadena']]} />
             <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={setModoPrecio}
               opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', 'Precio con oferta']]} />
             <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={setModoAnalisis}
@@ -221,7 +233,7 @@ export default function MapaPorCadena() {
               )}
             </label>
             <div className="m3-calor-leyenda" aria-label="Leyenda de colores">
-              {GRUPOS.map(g => <span key={g.id}><i className={`m3-calor-${g.id}`} />{g.corto}</span>)}
+              {leyenda.map(g => <span key={g.id}><i className={`m3-calor-${g.id}`} />{g.corto}</span>)}
             </div>
             <div className="flex items-center gap-1 md:ml-auto">
               <span className="m3-label-large text-on-surface-variant whitespace-nowrap" aria-live="polite">
@@ -230,11 +242,11 @@ export default function MapaPorCadena() {
               <InfoGrafico alinear="derecha" titulo="Mapa de calor: tu precio en cada cadena"
                 que="Solo tus enlaces: cuánto cuesta tu producto en cada cadena. Toca una fila para abrir la ficha."
                 formula={[
-                  'Tus cadenas: tu precio en la cadena ÷ el promedio de tu precio en tus cadenas − 1',
-                  'Competencia: tu precio en la cadena ÷ el competidor más barato de esa cadena − 1',
-                  'Colores: −15 % o menos · −15 a −5 % · parejo ±5 % · +5 a +15 % · +15 % o más',
+                  'Tu más bajo: tu precio en la cadena ÷ tu precio más bajo de ese mismo producto (la fila) − 1',
+                  'Colores de «Tu más bajo»: el más bajo · hasta +5 % · +5 a +15 % · +15 % o más',
+                  'Competencia: tu precio en la cadena ÷ el competidor más barato de esa cadena − 1, con tramos ±5 % y ±15 %',
                 ]}
-                lectura="Con «Tus cadenas», una columna muy azul es la cadena que mejor precio da a tus productos; muy roja, la que más los encarece." />
+                lectura="Con «Tu más bajo», lee cada fila por separado: el azul te dice en qué cadena ese producto está más barato y los rojos cuánto lo encarecen las demás. Una columna con muchos azules es la cadena que mejor vende tus productos." />
             </div>
           </div>
         </div>
@@ -255,7 +267,7 @@ export default function MapaPorCadena() {
                       {cadenasTabla.filter(c => x.tuyo.has(c.id)).map(c => {
                         const dif = difDe(x, c.id);
                         return (
-                          <span key={c.id} className={`m3-calor-chip ${dif != null ? `m3-calor-${grupoDe(dif).id}` : ''}`}>
+                          <span key={c.id} className={`m3-calor-chip ${claseColor(dif)}`}>
                             <CadenaBadge cadena={c.id} tamano="xs" title="" />{fmtModo(x.tuyo.get(c.id))}
                           </span>
                         );
@@ -294,10 +306,10 @@ export default function MapaPorCadena() {
                         const dif = difDe(x, c.id);
                         const comp = x.comp.get(c.id);
                         return (
-                          <td key={c.id} className={`m3-calor-celda ${dif != null ? `m3-calor-${grupoDe(dif).id}` : ''}`}
-                            title={`Tu precio en ${nombreCadena(c.id)}: ${fmtModo(p)}${frente === 'mias' && x.promedioTuyo ? ` · tu promedio en tus cadenas ${fmtModo(x.promedioTuyo)}` : ''}${comp ? ` · competidor más barato ahí ${fmtModo(comp)}` : ''}`}>
+                          <td key={c.id} className={`m3-calor-celda ${claseColor(dif)}`}
+                            title={`Tu precio en ${nombreCadena(c.id)}: ${fmtModo(p)}${frente === 'mas_bajo' && x.tuyo.size > 1 ? ` · tu precio más bajo de este producto ${fmtModo(x.minTuyo)}` : ''}${comp ? ` · competidor más barato ahí ${fmtModo(comp)}` : ''}`}>
                             <div className="font-medium tabular-nums">{fmtModo(p)}</div>
-                            <div className="m3-calor-precio tabular-nums">{dif != null ? pct(dif, 0) : frente === 'mias' ? 'única' : 'sin comp.'}</div>
+                            <div className="m3-calor-precio tabular-nums">{dif != null ? textoDif(dif) : frente === 'mas_bajo' ? 'única' : 'sin comp.'}</div>
                           </td>
                         );
                       })}

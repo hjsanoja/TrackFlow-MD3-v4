@@ -561,6 +561,15 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Mapa de calor por filas (PR #80)
+
+- `MapaPorCadena.jsx`: el color por defecto («Tu más bajo») compara cada
+  celda con tu precio MÁS BAJO de esa fila (antes: con el promedio de tus
+  cadenas). Tramos: el más bajo (azul), hasta +5 % (gris), +5 a +15 % y
+  +15 % o más (rojos); la celda dice «más bajo» o «+8 %». «Competencia»
+  sigue igual. Preferencia `mapa.frente` = `mas_bajo` | `competencia`.
+- Cadenas y Dimensiones: revisadas, ya tenían el diseño nuevo.
+
 ## Experimental más limpio y revisión más clara (PR #79, fase 49)
 
 - **Fuera de Experimental**: Resumen de la semana (repetía Dashboard,
@@ -1453,6 +1462,14 @@ SELECT count(*) FROM v_productos_sin_ficha WHERE es_propio;
 
 Al empezar la sesión daba 248. Debería bajar a casi cero al terminar.
 
+La vista se borró en la fase 49. Misma cuenta sin ella:
+
+```sql
+SELECT count(*) FROM dim_productos p
+JOIN dim_laboratorios l ON l.id = p.laboratorio_id AND l.es_propio
+WHERE NOT EXISTS (SELECT 1 FROM producto_principios pp WHERE pp.producto_id = p.id);
+```
+
 Sobre `fn_evaluar_calidad_historica`: **no aplicar el criterio de nombre**.
 Marcaría 649 capturas buenas. Solo el de precio:
 `SELECT jsonb_pretty(fn_evaluar_calidad_historica(TRUE, 0.40, 0));`
@@ -1559,44 +1576,39 @@ No volver a tropezar con estas:
 
 ## Qué falta
 
-**Recarga del catálogo**: ver su sección. Aparcada.
+Lista revisada el 2026-10-13 (PR #80). Lo decide Hernando.
 
-**Funciones del bloque 5** (menú Experimental). Hechas: bandeja de revisión de
-capturas y devaluación vs subida real. Faltan:
+**Pendientes aparcados**
+- **Recarga del catálogo** (ver su sección): que molécula, dosis, forma y
+  empaque de tus productos vivan en sus campos y no solo en el nombre.
+  Parte 1 (78) subida; 22 marcas esperan su molécula
+  (`recarga/pendientes_marcas.csv`); ~145 sin procesar; 5 por confirmar con
+  la caja. La vista para medir lo que falta (`v_productos_sin_ficha`) se
+  borró en la fase 49: usar la consulta de la sección de la recarga.
+- **Correo con Brevo**: sin SMTP propio no llegan los correos de recuperar
+  contraseña a otras personas, ni alertas ni reporte semanal.
+- **Precio efectivo de promoción**: el robot detecta promociones tipo 2x1
+  (`tipo_promocion_id`), pero las comparaciones usan precio de lista u oferta.
+- **Etapa 2 del buscador**: que proponga competidores nuevos, no solo
+  enlaces de productos ya cargados en Relación.
+- **Perfiles de permisos**: plantillas (menús, solo lectura, alcance) para
+  aplicar de una vez a usuarios nuevos.
+- **Velocidad del Simulador**.
+- **Alertas por WhatsApp** (la API de WhatsApp Business cobra por
+  conversación; Telegram sería gratis).
 
-- Mapa de cobertura (en parte: "Cobertura por cadena" en Competencia)
-- Precio efectivo de promoción
-- Alertas por correo (espera Brevo)
-- Reporte semanal (espera Brevo)
+**Ideas sin elegir**: minigráfico de 7 días junto a cada precio, revisión
+automática de capturas, aceptar sugerencias en bloque, Exportar en todas las
+pestañas de Experimental, calendario de ofertas por cadena.
 
-Hechas en el #55: índice por molécula, comparador de períodos y velocidad
-de reacción.
+**Hechos que seguían en esta lista**: unidades por empaque de los
+competidores (campo en Relación y en la plantilla CSV); diseño nuevo en
+Cadenas y Dimensiones.
 
-**Competencia**: historial y "Nombre en la tienda" de la ficha del enlace, hechos en el #54.
+**Diseño**: quedan colores fijos en `Simulador.jsx` y
+`ProductDetailModal.jsx` (gradientes y Recharts).
 
-**Unidades por empaque de los competidores** (para comparar por unidad):
-tras la fase 28 salen de la ficha del producto competidor
-(`cantidad_contenido`). Al crear un competidor desde un enlace se guarda 1
-si no se sabe, y el panel toma ese 1 como "no se sabe": lee las unidades del
-nombre ("x 20 tabletas") o asume las de tu producto. Falta una forma de
-cargar el contenido real de cada competidor (idea para Competencia).
-
-**Limpieza del repo**: hecha en el #53 (SQL en `sql/`, sin `debug/`). Falta
-borrar `recarga/` cuando termine la recarga.
-
-**Diseño (Material Design 3 Expressive)**: Productos y Competencia ya están al día. En el
-resto quedaban 71 colores hex sueltos (sobre todo gradientes y Recharts en
-`ProductDetailModal.jsx`), 33 tamaños de texto arbitrarios y 2 `bg-white`
-(cifras de antes de esta sesión, sin recontar). Las clases nuevas de
-`index.css` (`m3-data-table`, `m3-filter-chip`, `m3-icon-btn`,
-`m3-side-sheet`, `m3-banner`…) y las piezas compartidas sirven para llevar el
-mismo diseño a Cadenas y Dimensiones.
-
-**Ideas que quedaron sobre la mesa**
-- Productos: historial del PVP en la
-  ficha, gestionar enlaces desde la ficha, filtros en la dirección web.
-- Siglas de unidad de negocio (`PH`): la tabla no tiene columna `codigo`;
-  haría falta SQL.
+**Limpieza del repo**: borrar `recarga/` cuando termine la recarga.
 
 ---
 
