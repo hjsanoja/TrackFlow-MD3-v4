@@ -8,6 +8,7 @@
 //     formato: 'moneda' | 'pct' | 'factor' | 'texto'; v en % para 'pct' (42 = 42 %)
 //     color: id de tramo (muy_barato, barato, parejo, caro, muy_caro)
 //   leyenda: [{ color, texto }]
+//   congelar: columnas fijas a la izquierda (codigo y producto)
 //   decimales: de los precios (3 para precios por unidad en dolares)
 
 // Mismos colores que las celdas del mapa (tokens data-div mezclados con blanco).
@@ -29,7 +30,7 @@ const GRIS = 'FFF1F3F8';
 const TEXTO_SUAVE = 'FF5B6170';
 const BORDE = { style: 'thin', color: { argb: 'FFD9DDE6' } };
 
-export async function exportarExcel({ archivo, hoja = 'Datos', titulo, detalle = [], grupos, filas, pie, leyenda = [], moneda = 'bs', decimales = 2 }) {
+export async function exportarExcel({ archivo, hoja = 'Datos', titulo, detalle = [], grupos, filas, pie, leyenda = [], moneda = 'bs', decimales = 2, congelar = 1 }) {
   const { default: ExcelJS } = await import('exceljs');
   const libro = new ExcelJS.Workbook();
   libro.creator = 'TrackFlow';
@@ -70,7 +71,7 @@ export async function exportarExcel({ archivo, hoja = 'Datos', titulo, detalle =
       const arriba = ws.getCell(filaGrupo, col + k);
       arriba.fill = relleno(fondo);
       arriba.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      arriba.alignment = { horizontal: k === 0 && i === 0 ? 'left' : 'center', vertical: 'middle', wrapText: true };
+      arriba.alignment = { horizontal: i < congelar && n === 1 ? 'left' : 'center', vertical: 'middle', wrapText: true };
       if (sola) continue;
       const abajo = ws.getCell(filaSub, col + k);
       abajo.value = g.columnas[k].titulo;
@@ -134,7 +135,7 @@ export async function exportarExcel({ archivo, hoja = 'Datos', titulo, detalle =
   }
 
   ws.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } };
-  ws.views = [{ state: 'frozen', xSplit: 1, ySplit: filaSub, showGridLines: false }];
+  ws.views = [{ state: 'frozen', xSplit: congelar, ySplit: filaSub, showGridLines: false }];
 
   const datos = await libro.xlsx.writeBuffer();
   const blob = new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
