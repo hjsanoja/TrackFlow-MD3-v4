@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
 import Login from './pages/Login';
@@ -16,20 +16,46 @@ const motivoInactivo = (u) => (u && accesoVencido(u)
   ? `Tu acceso venció el ${fechaCorta(u.vence_el)}. Pídele a un administrador que lo extienda.`
   : null);
 
+// Reintenta la descarga de un módulo lazy si el servidor de desarrollo o la red
+// parpadean momentáneamente ("Failed to fetch dynamically imported module").
+function lazyConReintento(importador) {
+  return lazy(async () => {
+    let ultimoError;
+    for (let intento = 0; intento < 3; intento++) {
+      try {
+        return await importador();
+      } catch (err) {
+        ultimoError = err;
+        await new Promise((r) => setTimeout(r, 400 * (intento + 1)));
+      }
+    }
+    if (typeof window !== 'undefined') {
+      const clave = 'tf_lazy_reload_ts';
+      const ultimoReload = Number(sessionStorage.getItem(clave) || 0);
+      if (Date.now() - ultimoReload > 15000) {
+        sessionStorage.setItem(clave, String(Date.now()));
+        window.location.reload();
+        return new Promise(() => {});
+      }
+    }
+    throw ultimoError;
+  });
+}
+
 // Carga bajo demanda: cada pantalla viaja en su propio archivo y solo se
 // descarga al entrar en ella. Antes todo el panel iba en un unico bundle de
 // 1,79 MB que habia que bajar entero para ver el Dashboard.
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Experimental = lazy(() => import('./pages/Experimental'));
-const MapaCalor = lazy(() => import('./pages/MapaCalor'));
-const MapaCadenas = lazy(() => import('./pages/MapaCadenas'));
-const MargenCadena = lazy(() => import('./pages/MargenCadena'));
-const Productos = lazy(() => import('./pages/Productos'));
-const Competencia = lazy(() => import('./pages/Competencia'));
-const Cadenas = lazy(() => import('./pages/Cadenas'));
-const Usuarios = lazy(() => import('./pages/Usuarios'));
-const Dimensiones = lazy(() => import('./pages/Dimensiones'));
-const MiCuenta = lazy(() => import('./pages/MiCuenta'));
+const Dashboard = lazyConReintento(() => import('./pages/Dashboard'));
+const Experimental = lazyConReintento(() => import('./pages/Experimental'));
+const MapaCalor = lazyConReintento(() => import('./pages/MapaCalor'));
+const MapaCadenas = lazyConReintento(() => import('./pages/MapaCadenas'));
+const MargenCadena = lazyConReintento(() => import('./pages/MargenCadena'));
+const Productos = lazyConReintento(() => import('./pages/Productos'));
+const Competencia = lazyConReintento(() => import('./pages/Competencia'));
+const Cadenas = lazyConReintento(() => import('./pages/Cadenas'));
+const Usuarios = lazyConReintento(() => import('./pages/Usuarios'));
+const Dimensiones = lazyConReintento(() => import('./pages/Dimensiones'));
+const MiCuenta = lazyConReintento(() => import('./pages/MiCuenta'));
 
 import Layout from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -37,9 +63,16 @@ import { ToastProvider, useToast } from './context/ToastContext';
 import { DataProvider } from './context/DataContext';
 import { limpiarCacheDatos } from './utils/cacheDatos';
 
+const esErrorDeRed = (err) => {
+  const msg = `${err?.message || ''} ${err?.details || ''}`.toLowerCase();
+  return msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed');
+};
+
 function AppContent() {
   const [user, setUser] = useState(null);
   const [userDoc, setUserDoc] = useState(null);
+  const userDocRef = useRef(null);
+  userDocRef.current = userDoc;
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [recuperando, setRecuperando] = useState(LLEGO_POR_RECUPERACION);
@@ -64,12 +97,20 @@ function AppContent() {
     }
 
     try {
-      // Filtrar estrictamente por columna email con .eq()
-      const { data: uData, error: dbError } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('email', email)
-        .maybeSingle();
+      // Filtrar estrictamente por columna email con .eq(), con reintento ante parpadeo de red
+      let uData = null;
+      let dbError = null;
+      for (let intento = 0; intento < 2; intento++) {
+        const res = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('email', email)
+          .maybeSingle();
+        uData = res.data;
+        dbError = res.error;
+        if (!dbError || !esErrorDeRed(dbError)) break;
+        if (intento === 0) await new Promise((r) => setTimeout(r, 700));
+      }
 
       if (dbError) {
         throw dbError;
@@ -96,7 +137,13 @@ function AppContent() {
       setAuthError(null);
       setLoading(false);
     } catch (err) {
-      console.error('Error al validar autorización del usuario:', err);
+      // Si el usuario ya tenía su sesión validada en memoria y solo hubo un corte momentáneo de red,
+      // conservamos la sesión activa sin bloquear la pantalla.
+      if (esErrorDeRed(err) && userDocRef.current?.email?.toLowerCase() === email) {
+        setLoading(false);
+        return;
+      }
+      console.warn('No se pudo validar autorización del usuario:', err?.message || err);
       setAuthError('Error de conexión al verificar permisos de usuario.');
       setLoading(false);
     }
@@ -110,7 +157,7 @@ function AppContent() {
       if (error) throw error;
       await syncUserSession(session);
     } catch (err) {
-      console.error('Error al obtener sesión inicial:', err);
+      console.warn('No se pudo obtener sesión inicial:', err?.message || err);
       setAuthError('No se pudo verificar la sesión. Por favor reintenta.');
       setLoading(false);
     }

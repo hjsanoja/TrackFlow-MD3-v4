@@ -115,9 +115,23 @@ export default function Dimensiones() {
     }
   }, []);
 
+  const cambiarTab = useCallback((nuevaTab) => {
+    if (nuevaTab === activeTab) return;
+    setLoading(true);
+    setRows([]);
+    setUso(new Map());
+    setSearch('');
+    setFiltroUso('todos');
+    setFiltroTipo('todos');
+    setPagina(1);
+    setOrden({
+      campo: TABLAS[nuevaTab].orden ? TABLAS[nuevaTab].orden.col : 'nombre',
+      dir: TABLAS[nuevaTab].orden?.asc === false ? 'desc' : 'asc',
+    });
+    setActiveTab(nuevaTab);
+  }, [activeTab]);
+
   useEffect(() => {
-    setSearch(''); setFiltroUso('todos'); setFiltroTipo('todos'); setPagina(1);
-    setOrden({ campo: TABLAS[activeTab].orden ? TABLAS[activeTab].orden.col : 'nombre', dir: TABLAS[activeTab].orden?.asc === false ? 'desc' : 'asc' });
     cargar(activeTab);
   }, [activeTab, cargar]);
 
@@ -288,7 +302,7 @@ export default function Dimensiones() {
 
       <nav className="m3-tabs" aria-label="Catálogos">
         {Object.entries(TABLAS).map(([key, tab]) => (
-          <button key={key} type="button" onClick={() => setActiveTab(key)} aria-current={activeTab === key ? 'page' : undefined}
+          <button key={key} type="button" onClick={() => cambiarTab(key)} aria-current={activeTab === key ? 'page' : undefined}
             className={`m3-tab ${activeTab === key ? 'is-active' : ''}`}>
             <span className="material-symbols-outlined" aria-hidden="true">{tab.icono}</span>
             {tab.nombre}
@@ -373,8 +387,8 @@ export default function Dimensiones() {
                 </tr>
               </thead>
               <tbody>
-                {visibles.map((r) => (
-                  <tr key={r[pk]}>
+                {visibles.map((r, idx) => (
+                  <tr key={r[pk] ?? r.id ?? r.fecha ?? idx}>
                     {activeTab === 'dim_tasa_bcv' ? (
                       <>
                         <td className="tabular-nums">{r.fecha}</td>
