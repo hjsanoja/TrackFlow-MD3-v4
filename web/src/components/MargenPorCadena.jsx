@@ -233,14 +233,26 @@ export default function MargenPorCadena() {
     const tasa = bcv.rate || 0;
     const precio = (usd) => (usd == null ? null : moneda === 'usd' ? usd : usd * tasa);
     const celdaPrecio = (o, color, nota) => ({ v: precio(o?.priceUsd), formato: 'moneda', color, nota });
-    const producto = (x) => ({ v: `${x.producto.nombre}\n${x.producto.id_interno}`, formato: 'texto' });
+    // Nombre con su presentacion completa (dosis y tamano), sin repetir lo
+    // que el nombre ya dice: hay varios productos con la misma molecula.
+    const nombreCompleto = (p) => {
+      const nombre = String(p.nombre || '').trim();
+      const sinEspacios = (t) => normalizar(t).replace(/\s+/g, '');
+      const extras = [p.concentracion, describirPresentacion(p)]
+        .filter(t => t && t !== '—' && !sinEspacios(nombre).includes(sinEspacios(t))
+          // "x 30" en el nombre ya dice "30 tabletas"
+          && !(/^[\d.,]+/.test(t) && new RegExp(`x\\s*${t.match(/^[\d.,]+/)[0].replace('.', '\\.')}\\b`, 'i').test(nombre)));
+      return [nombre, ...extras].join(' · ');
+    };
     const base = [
-      { titulo: 'Producto', columnas: [{ ancho: 34 }] },
+      { titulo: 'Código', columnas: [{ ancho: 11 }] },
+      { titulo: 'Producto', columnas: [{ ancho: 44 }] },
       { titulo: 'PVP', columnas: [{ ancho: 13 }] },
       { titulo: 'Teórico', columnas: [{ titulo: 'Precio', ancho: 13 }, { titulo: 'Margen', ancho: 9 }] },
     ];
     const inicio = (x) => [
-      producto(x),
+      { v: x.producto.id_interno, formato: 'texto' },
+      { v: nombreCompleto(x.producto), formato: 'texto' },
       { v: precio(x.pvp), formato: 'moneda' },
       { v: precio(x.teorico), formato: 'moneda', nota: x.factorPropio ? `Factor propio ${textoFactor(x.factor)}` : null },
       { v: (x.factor - 1) * 100, formato: 'pct' },
@@ -257,7 +269,7 @@ export default function MargenPorCadena() {
         const color = conColor(v, v.vsTeorico != null ? grupoDe(v.vsTeorico).id : null);
         return [celdaPrecio(v.real, color, v.motivo), { v: v.margen, formato: 'pct', color }];
       })]);
-      pie = [{ v: `Promedio (${filas.length} productos)`, formato: 'texto' }, null, null, { v: promedios.teorico, formato: 'pct' },
+      pie = [null, { v: `Promedio (${filas.length} productos)`, formato: 'texto' }, null, null, { v: promedios.teorico, formato: 'pct' },
         ...cadenasConPrecio.flatMap(c => [null, { v: promedios.cadenas.get(c.id), formato: 'pct' }])];
       leyenda = GRUPOS.map(g => ({ color: g.id, texto: `Margen real ${TEXTO_VS_TEORICO[g.id]}` }));
     } else {
@@ -274,7 +286,7 @@ export default function MargenPorCadena() {
             return [celdaPrecio(v?.comp, color, v?.motivo), { v: v?.gap, formato: 'pct', color }];
           })];
       });
-      pie = [{ v: `Promedio (${filas.length} productos)`, formato: 'texto' }, null, null, { v: promedios.teorico, formato: 'pct' },
+      pie = [null, { v: `Promedio (${filas.length} productos)`, formato: 'texto' }, null, null, { v: promedios.teorico, formato: 'pct' },
         null, { v: promedios.margen, formato: 'pct' }, ...labsElegidos.flatMap(l => [null, { v: promedios.labs.get(l.clave), formato: 'pct' }])];
       leyenda = TRAMOS_GAP.map(g => ({ color: g.id, texto: `GAP: ${g.corto}` }));
     }
@@ -288,7 +300,7 @@ export default function MargenPorCadena() {
         archivo: `margen_por_cadena_${vista === 'cadenas' ? 'todas' : nombreSel}`.replace(/\s+/g, '_').toLowerCase(),
         hoja: vista === 'cadenas' ? 'Cadenas' : nombreSel,
         titulo: `Margen por cadena · ${vista === 'cadenas' ? 'Todas las cadenas' : nombreSel}`,
-        detalle, grupos, filas: filasExcel, pie, leyenda, moneda, decimales: 2,
+        detalle, grupos, filas: filasExcel, pie, leyenda, moneda, decimales: 2, congelar: 2,
       });
     } finally {
       setExportando(false);
