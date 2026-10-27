@@ -2350,3 +2350,26 @@ body.solo-lectura .solo-en-lectura { display: inline; }
   display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
   font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant);
 }
+
+/* Margen por cadena */
+.m3-margen-factor { display: inline-flex; align-items: center; gap: 6px; font-size: 0.875rem; }
+.m3-margen-factor-input {
+  width: 4.25rem; height: 32px; padding: 0 8px; border-radius: 8px; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.m3-margen-quitar { font-size: 0.75rem; padding: 2px 8px; height: auto; }
+.m3-margen-factor-propio { color: var(--md-sys-color-tertiary); font-weight: 600; }
+.m3-margen-editar { opacity: 0; transition: opacity 150ms; }
+.m3-table-margen tr:hover .m3-margen-editar,
+.m3-margen-editar:focus-visible { opacity: 1; }
+@media (hover: none) { .m3-margen-editar { opacity: 1; } }
+.m3-margen-reloj { font-size: 14px; vertical-align: -2px; margin-left: 4px; color: var(--md-sys-color-on-surface-variant); }
+.m3-margen-col-cadena { border-left: 2px solid var(--md-sys-color-outline-variant) !important; }
+.m3-margen-promedio td {
+  font-weight: 500; font-size: 0.8125rem; color: var(--md-sys-color-on-surface-variant);
+  border-top: 2px solid var(--md-sys-color-outline-variant);
+  background-color: var(--md-sys-color-surface-container-low);
+}
+.m3-margen-labs { left: 0; right: auto; width: min(320px, calc(100vw - 32px)); }
+.m3-margen-labs-lista { max-height: 300px; overflow-y: auto; }
+.m3-margen-labs-lista .m3-menu-item { height: 40px; cursor: pointer; }

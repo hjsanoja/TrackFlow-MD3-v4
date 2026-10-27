@@ -99,6 +99,8 @@ export function useAnalisisPrecios({
           tipoMercado: esMarca(c) ? 'MARCA' : 'GENERICO',
           cadena,
           marca: c.marca,
+          laboratorio: c.laboratorio || c.marca,
+          fecha: c.ultimo_scrape || null,
           promo: conDescuento && factorPromo(c.promo_codigo) < 1 ? c.promo_codigo : null,
           unidades,
           priceUsd: bs / factor / tasa,

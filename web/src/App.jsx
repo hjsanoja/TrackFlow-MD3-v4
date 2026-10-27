@@ -23,6 +23,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Experimental = lazy(() => import('./pages/Experimental'));
 const MapaCalor = lazy(() => import('./pages/MapaCalor'));
 const MapaCadenas = lazy(() => import('./pages/MapaCadenas'));
+const MargenCadena = lazy(() => import('./pages/MargenCadena'));
 const Productos = lazy(() => import('./pages/Productos'));
 const Competencia = lazy(() => import('./pages/Competencia'));
 const Cadenas = lazy(() => import('./pages/Cadenas'));
@@ -262,9 +263,9 @@ function AppContent() {
   // El rol se toma EXCLUSIVAMENTE de la tabla usuarios
   const isAdmin = userDoc?.rol === 'administrador';
 
-  const defaultConsultaMenus = ['/', '/mapa-calor', '/mapa-cadenas'];
+  const defaultConsultaMenus = ['/', '/mapa-calor', '/mapa-cadenas', '/margen-cadena'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/mapa-cadenas', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
+    ? ['/', '/mapa-calor', '/mapa-cadenas', '/margen-cadena', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -295,6 +296,7 @@ function AppContent() {
           <Route path="/" element={isAllowed('/') ? <Dashboard user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/mapa-calor" element={isAllowed('/mapa-calor') ? <MapaCalor user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/mapa-cadenas" element={isAllowed('/mapa-cadenas') ? <MapaCadenas /> : <Navigate to={fallbackPath} replace />} />
+          <Route path="/margen-cadena" element={isAllowed('/margen-cadena') ? <MargenCadena /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/reporteria" element={<Navigate to="/" replace />} />
           <Route path="/experimental" element={isAllowed('/experimental') ? <Experimental user={user} userDoc={userDoc} /> : <Navigate to={fallbackPath} replace />} />
           <Route path="/analisis" element={<Navigate to="/" replace />} />

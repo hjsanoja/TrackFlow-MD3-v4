@@ -21,9 +21,9 @@ export default function Layout({ user, userDoc, children }) {
   // El rol se toma EXCLUSIVAMENTE de la tabla usuarios
   const isAdmin = userDoc?.rol === 'administrador';
 
-  const defaultConsultaMenus = ['/', '/mapa-calor', '/mapa-cadenas'];
+  const defaultConsultaMenus = ['/', '/mapa-calor', '/mapa-cadenas', '/margen-cadena'];
   const allowedMenuIds = isAdmin
-    ? ['/', '/mapa-calor', '/mapa-cadenas', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
+    ? ['/', '/mapa-calor', '/mapa-cadenas', '/margen-cadena', '/experimental', '/reporteria', '/analisis', '/simulador', '/hallazgos', '/productos', '/competencia', '/cadenas', '/dimensiones', '/usuarios']
     : (Array.isArray(userDoc?.menus_permitidos) && userDoc.menus_permitidos.length > 0)
       ? userDoc.menus_permitidos
       : defaultConsultaMenus;
@@ -74,6 +74,7 @@ export default function Layout({ user, userDoc, children }) {
     { to: '/', label: 'Dashboard', icon: 'dashboard', adminOnly: false },
     { to: '/mapa-calor', label: 'Rango de precios', icon: 'linear_scale', adminOnly: false },
     { to: '/mapa-cadenas', label: 'Mapa de calor', icon: 'grid_on', adminOnly: false },
+    { to: '/margen-cadena', label: 'Margen por cadena', icon: 'price_change', adminOnly: false },
     { to: '/experimental', label: 'Experimental', icon: 'science', adminOnly: false, badge: 'Labs' },
     { to: '/productos', label: 'Productos', icon: 'medication', adminOnly: false },
     { to: '/competencia', label: 'Relación', icon: 'link', adminOnly: false },

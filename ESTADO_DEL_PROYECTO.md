@@ -561,6 +561,29 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Margen por cadena (fase 52)
+
+- **Menú nuevo** `/margen-cadena` (`pages/MargenCadena.jsx`,
+  `components/MargenPorCadena.jsx`). La fase 52 lo suma una vez a todos los
+  usuarios y perfiles que ya existen; a los nuevos se les elige como a
+  cualquier menú (viene marcado por defecto).
+- **Columnas:** producto · PVP (= PSL; en $ y pasado a Bs con la tasa de hoy)
+  · teórico = PVP × factor · tu precio en la cadena elegida con su margen
+  real (precio ÷ PVP − 1) · de 1 a 9 laboratorios con precio del robot en esa
+  cadena, cada uno con su GAP (competidor ÷ tu precio en la cadena − 1).
+  Aquí el PVP sí entra en el cálculo (es la base del margen).
+- **Extras:** «—» con el motivo al pasar el mouse; colores del GAP (rojo =
+  competidor más barato) y del margen real frente al teórico; indicadores y
+  fila de promedios; factor general y por producto (lápiz); fecha de los
+  precios y reloj si tienen más de 3 días; filtros «Algún competidor más
+  barato», «La cadena me encarece» y «Sin mi precio»; orden por columna;
+  exportar CSV; vista «Cadenas» (tu precio y margen en todas a la vez);
+  Lista u Oferta (Lista por defecto), Empaque o Unidad, Bs o $.
+- **Preferencias por usuario:** `preferencias_usuario` (email, clave, valor
+  jsonb; RLS: cada quien lee y cambia solo lo suyo, sin borrar) y
+  `hooks/usePreferenciaGuardada.js` (copia en el navegador y en la base).
+- `useAnalisisPrecios` ahora da `laboratorio` y `fecha` de cada precio.
+
 ## Versión 1.0.0 · Primera versión pública (PR #82, fase 51)
 
 - **Versión** (`utils/version.js`, `web/package.json` = 1.0.0): «TrackFlow

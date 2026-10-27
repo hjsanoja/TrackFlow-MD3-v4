@@ -33,6 +33,17 @@ export const AYUDA_MENUS = {
     ],
     pregunta: '¿Qué cadena encarece mis productos? → busca la columna con más rojos.',
   },
+  '/margen-cadena': {
+    titulo: 'Margen por cadena',
+    para: 'Tu PVP frente al precio al que lo vende la cadena, y ese precio frente a los laboratorios que elijas.',
+    pasos: [
+      'Elige la cadena y de 1 a 9 laboratorios; las columnas salen en el orden en que los eliges.',
+      'Teórico = PVP × factor (1,5 = 50 %). El lápiz cambia el factor solo de un producto.',
+      'Margen real = precio en la cadena ÷ PVP − 1. GAP = competidor ÷ tu precio en la cadena − 1: rojo es un competidor más barato.',
+      'En «Ver: Cadenas» comparas tu margen en todas las cadenas a la vez. Lo que eliges queda guardado para ti.',
+    ],
+    pregunta: '¿Quién me gana en Farmatodo? → elige Farmatodo y filtra «Algún competidor más barato».',
+  },
   '/productos': {
     titulo: 'Productos',
     para: 'Tu catálogo: molécula, dosis, forma, tamaño, laboratorio y PVP de cada producto.',
