@@ -12,7 +12,7 @@ import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
 import { usePreferenciaGuardada } from '../hooks/usePreferenciaGuardada';
-import { exportToCSV } from '../utils/exportUtils';
+import { exportarExcel } from '../utils/exportarExcel';
 import { describirPresentacion } from '../utils/presentacion';
 import { crearFormato, pct, mediana, GRUPOS, grupoDe } from './dashboard/comun';
 import { AYUDA_OFERTA, textoPromo } from '../utils/promociones';
@@ -32,7 +32,7 @@ import { AYUDA_OFERTA, textoPromo } from '../utils/promociones';
 const MAX_LABS = 9;
 const DIAS_VIEJO = 3;
 const INICIAL = {
-  cadena: null, factor: 1.5, factores: {}, labs: null, moneda: 'bs', precio: 'lista', modo: 'empaque', vista: 'labs',
+  cadena: null, factor: 1.5, factores: {}, labs: null, moneda: 'bs', precio: 'lista', vista: 'labs',
 };
 
 // Colores del GAP, leidos desde tu lado: rojo = el competidor esta mas barato.
@@ -60,12 +60,12 @@ export default function MargenPorCadena() {
   const { productos = [], productosCompetencia = [], cadenas = [], variaciones = [], loadingInitial: loading } = useData();
   const bcv = useBcvRate();
   const [pref, cambiarPref] = usePreferenciaGuardada('margen_cadena', INICIAL);
-  const { moneda, precio: modoPrecio, modo: modoAnalisis, vista } = pref;
+  const { moneda, precio: modoPrecio, vista } = pref;
+  // Siempre por empaque (precio de la caja), como en la hoja de calculo.
+  const modoAnalisis = 'empaque';
   const factorGeneral = Number(pref.factor) > 0 ? Number(pref.factor) : 1.5;
 
   const [filtroUnidad, setFiltroUnidad] = useState('todos');
-  const [filtroTipo, setFiltroTipo] = useState('todos');
-  const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [mostrar, setMostrar] = useState('todos'); // todos | pierdo | encarece | sin_precio
   const [search, setSearch] = useState('');
   const [orden, setOrden] = useState({ campo: 'nombre', dir: 'asc' });
@@ -86,7 +86,6 @@ export default function MargenPorCadena() {
     productos.forEach(p => m.set(claveUnidad(p), p.unidad_negocio || 'La Sante'));
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [productos]);
-  const categorias = useMemo(() => [...new Set(productos.map(p => p.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [productos]);
 
   // Cadenas donde tienes al menos un precio leido; la elegida por defecto es
   // la que tiene mas.
@@ -128,9 +127,7 @@ export default function MargenPorCadena() {
   // Una fila por producto: PVP, teorico, tu precio en la cadena y cada laboratorio.
   const base = useMemo(() => analizados
     .filter(({ producto: p }) =>
-      (filtroUnidad === 'todos' || claveUnidad(p) === filtroUnidad) &&
-      (filtroTipo === 'todos' || (p.market_type || 'GENERICO').toLowerCase() === filtroTipo) &&
-      (filtroCategoria === 'todos' || p.categoria === filtroCategoria))
+      filtroUnidad === 'todos' || claveUnidad(p) === filtroUnidad)
     .map(x => {
       const p = x.producto;
       const pvp = Number(p.pvp_propio_usd) > 0 ? Number(p.pvp_propio_usd) / (modoAnalisis === 'unidosis' ? x.unidadesPropio : 1) : null;
@@ -161,7 +158,7 @@ export default function MargenPorCadena() {
         ...x, pvp, factor: f, factorPropio: f !== factorGeneral, teorico, ...propio, porCadena, labs,
         peorGap: gaps.length ? Math.min(...gaps) : null,
       };
-    }), [analizados, filtroUnidad, filtroTipo, filtroCategoria, modoAnalisis, pref.factores, factorGeneral, cadena, vista, cadenasConPrecio, labsElegidos, idCadena]);
+    }), [analizados, filtroUnidad, modoAnalisis, pref.factores, factorGeneral, cadena, vista, cadenasConPrecio, labsElegidos, idCadena]);
 
   const conPvp = useMemo(() => base.filter(x => x.pvp != null), [base]);
   const resumen = useMemo(() => {
@@ -216,7 +213,7 @@ export default function MargenPorCadena() {
     };
   }, [filas, labsElegidos, cadenasConPrecio]);
 
-  useEffect(() => { setPaginaActual(1); }, [search, mostrar, filtroUnidad, filtroTipo, filtroCategoria, orden, itemsPorPagina, cadena]);
+  useEffect(() => { setPaginaActual(1); }, [search, mostrar, filtroUnidad, orden, itemsPorPagina, cadena]);
   const totalPaginas = Math.max(1, Math.ceil(filas.length / itemsPorPagina));
   const filasPagina = filas.slice((paginaActual - 1) * itemsPorPagina, paginaActual * itemsPorPagina);
   const ordenarPor = (campo) => setOrden(o => ({ campo, dir: o.campo === campo && o.dir === 'asc' ? 'desc' : 'asc' }));
@@ -230,47 +227,72 @@ export default function MargenPorCadena() {
   };
   const factoresPropios = Object.keys(pref.factores || {}).length;
 
-  const exportar = () => {
-    const suf = moneda === 'usd' ? 'USD' : 'Bs';
-    const valor = (usd) => (usd == null ? '' : moneda === 'usd' ? usd.toFixed(modoAnalisis === 'unidosis' ? 4 : 2) : (usd * (bcv.rate || 0)).toFixed(2));
-    const num = (v) => (v == null ? '' : v.toFixed(1));
-    const cols = [
-      { key: 'id', label: 'ID' }, { key: 'producto', label: 'Producto' },
-      { key: 'pvp', label: `PVP (${suf})` }, { key: 'factor', label: 'Factor' },
-      { key: 'teorico', label: `Precio teórico (${suf})` }, { key: 'margen_teo', label: 'Margen teórico (%)' },
+  const [exportando, setExportando] = useState(false);
+  const exportar = async () => {
+    if (!filas.length || exportando) return;
+    const tasa = bcv.rate || 0;
+    const precio = (usd) => (usd == null ? null : moneda === 'usd' ? usd : usd * tasa);
+    const celdaPrecio = (o, color, nota) => ({ v: precio(o?.priceUsd), formato: 'moneda', color, nota });
+    const producto = (x) => ({ v: `${x.producto.nombre}\n${x.producto.id_interno}`, formato: 'texto' });
+    const base = [
+      { titulo: 'Producto', columnas: [{ ancho: 34 }] },
+      { titulo: 'PVP', columnas: [{ ancho: 13 }] },
+      { titulo: 'Teórico', columnas: [{ titulo: 'Precio', ancho: 13 }, { titulo: 'Margen', ancho: 9 }] },
     ];
+    const inicio = (x) => [
+      producto(x),
+      { v: precio(x.pvp), formato: 'moneda' },
+      { v: precio(x.teorico), formato: 'moneda', nota: x.factorPropio ? `Factor propio ${textoFactor(x.factor)}` : null },
+      { v: (x.factor - 1) * 100, formato: 'pct' },
+    ];
+    const conColor = (v, grupo) => (v.real ? grupo : null);
+    let grupos;
+    let filasExcel;
+    let pie;
+    let leyenda;
     if (vista === 'cadenas') {
-      cadenasConPrecio.forEach(c => cols.push(
-        { key: `p_${c.id}`, label: `${nombreCadena(c.id)} (${suf})` },
-        { key: `m_${c.id}`, label: `Margen real ${nombreCadena(c.id)} (%)` }));
-    } else {
-      cols.push(
-        { key: 'real', label: `Precio en ${nombreCadena(cadena)} (${suf})` },
-        { key: 'margen', label: 'Margen real (%)' },
-        { key: 'fecha', label: 'Fecha del precio' });
-      labsElegidos.forEach(l => cols.push(
-        { key: `p_${l.clave}`, label: `${l.nombre} (${suf})` },
-        { key: `g_${l.clave}`, label: `GAP ${l.nombre} (%)` }));
-    }
-    const datos = filas.map(x => {
-      const fila = {
-        id: x.producto.id_interno, producto: x.producto.nombre, pvp: valor(x.pvp), factor: x.factor,
-        teorico: valor(x.teorico), margen_teo: num((x.factor - 1) * 100),
-        real: valor(x.real?.priceUsd), margen: num(x.margen), fecha: x.real?.fecha ? String(x.real.fecha).slice(0, 10) : '',
-      };
-      labsElegidos.forEach(l => {
-        const v = x.labs.get(l.clave);
-        fila[`p_${l.clave}`] = valor(v?.comp?.priceUsd);
-        fila[`g_${l.clave}`] = num(v?.gap);
-      });
-      if (vista === 'cadenas') cadenasConPrecio.forEach(c => {
+      grupos = [...base, ...cadenasConPrecio.map(c => ({ titulo: nombreCadena(c.id), columnas: [{ titulo: 'Precio', ancho: 13 }, { titulo: 'Margen', ancho: 9 }] }))];
+      filasExcel = filas.map(x => [...inicio(x), ...cadenasConPrecio.flatMap(c => {
         const v = x.porCadena.get(c.id);
-        fila[`p_${c.id}`] = valor(v?.real?.priceUsd);
-        fila[`m_${c.id}`] = num(v?.margen);
+        const color = conColor(v, v.vsTeorico != null ? grupoDe(v.vsTeorico).id : null);
+        return [celdaPrecio(v.real, color, v.motivo), { v: v.margen, formato: 'pct', color }];
+      })]);
+      pie = [{ v: `Promedio (${filas.length} productos)`, formato: 'texto' }, null, null, { v: promedios.teorico, formato: 'pct' },
+        ...cadenasConPrecio.flatMap(c => [null, { v: promedios.cadenas.get(c.id), formato: 'pct' }])];
+      leyenda = GRUPOS.map(g => ({ color: g.id, texto: `Margen real ${TEXTO_VS_TEORICO[g.id]}` }));
+    } else {
+      grupos = [...base,
+        { titulo: nombreSel, columnas: [{ titulo: 'Precio', ancho: 13 }, { titulo: 'Margen', ancho: 9 }] },
+        ...labsElegidos.map(l => ({ titulo: l.nombre, columnas: [{ titulo: 'Precio', ancho: 13 }, { titulo: 'GAP', ancho: 9 }] }))];
+      filasExcel = filas.map(x => {
+        const colorPropio = conColor(x, x.vsTeorico != null ? grupoDe(x.vsTeorico).id : null);
+        return [...inicio(x),
+          celdaPrecio(x.real, colorPropio, x.motivo), { v: x.margen, formato: 'pct', color: colorPropio },
+          ...labsElegidos.flatMap(l => {
+            const v = x.labs.get(l.clave);
+            const color = v?.gap != null ? tramoGap(v.gap).id : null;
+            return [celdaPrecio(v?.comp, color, v?.motivo), { v: v?.gap, formato: 'pct', color }];
+          })];
       });
-      return fila;
-    });
-    if (datos.length) exportToCSV(`margen_por_cadena${vista === 'cadenas' ? '_todas' : `_${nombreCadena(cadena)}`}`.replace(/\s+/g, '_').toLowerCase(), cols, datos);
+      pie = [{ v: `Promedio (${filas.length} productos)`, formato: 'texto' }, null, null, { v: promedios.teorico, formato: 'pct' },
+        null, { v: promedios.margen, formato: 'pct' }, ...labsElegidos.flatMap(l => [null, { v: promedios.labs.get(l.clave), formato: 'pct' }])];
+      leyenda = TRAMOS_GAP.map(g => ({ color: g.id, texto: `GAP: ${g.corto}` }));
+    }
+    const detalle = [
+      `${vista === 'cadenas' ? 'Todas las cadenas' : `Cadena: ${nombreSel}`} · Factor ${textoFactor(factorGeneral)} (${textoMargen((factorGeneral - 1) * 100)}) · Precio de ${modoPrecio === 'lista' ? 'lista' : 'oferta'} · Precio por caja · ${moneda === 'usd' ? 'Dólares' : `Bolívares a tasa BCV ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}`,
+      `Margen real = precio en la cadena ÷ PVP − 1${vista === 'cadenas' ? ' · El color compara el precio de la cadena con tu precio teórico' : ' · GAP = precio del competidor ÷ tu precio en la cadena − 1 (negativo: el competidor está más barato)'}${resumen.ultimaFecha ? ` · Precios al ${fechaCorta(resumen.ultimaFecha)}` : ''}`,
+    ];
+    setExportando(true);
+    try {
+      await exportarExcel({
+        archivo: `margen_por_cadena_${vista === 'cadenas' ? 'todas' : nombreSel}`.replace(/\s+/g, '_').toLowerCase(),
+        hoja: vista === 'cadenas' ? 'Cadenas' : nombreSel,
+        titulo: `Margen por cadena · ${vista === 'cadenas' ? 'Todas las cadenas' : nombreSel}`,
+        detalle, grupos, filas: filasExcel, pie, leyenda, moneda, decimales: 2,
+      });
+    } finally {
+      setExportando(false);
+    }
   };
 
   if (loading && productos.length === 0) {
@@ -283,7 +305,7 @@ export default function MargenPorCadena() {
   }
 
   const sinPvp = base.length - conPvp.length;
-  const hayFiltros = filtroUnidad !== 'todos' || filtroTipo !== 'todos' || filtroCategoria !== 'todos' || mostrar !== 'todos';
+  const hayFiltros = filtroUnidad !== 'todos' || mostrar !== 'todos';
   const nombreSel = cadena ? nombreCadena(cadena) : '—';
 
   return (
@@ -294,14 +316,14 @@ export default function MargenPorCadena() {
             ? 'Cada columna es una cadena: tu precio ahí y el margen que le suma a tu PVP. El color compara ese precio con tu precio teórico.'
             : `Tu PVP, el precio que debería tener ${nombreSel} con tu factor, el precio real ahí y cuánto más barato o caro está cada laboratorio que elijas.`}
         </p>
-        <button onClick={exportar} className="m3-btn-outline self-start md:self-auto" title="Descargar en CSV (se abre en Excel) con los filtros actuales">
-          <span className="material-symbols-outlined text-base">download</span>
-          <span>Exportar</span>
+        <button onClick={exportar} disabled={exportando || !filas.length} className="m3-btn-outline self-start md:self-auto" title="Descargar en Excel, con los colores y los filtros de la pantalla">
+          <span className="material-symbols-outlined text-base">{exportando ? 'hourglass_top' : 'download'}</span>
+          <span>{exportando ? 'Preparando…' : 'Exportar a Excel'}</span>
         </button>
       </div>
 
       <BarraFiltros
-        limpiar={{ visible: hayFiltros, onClick: () => { setFiltroUnidad('todos'); setFiltroTipo('todos'); setFiltroCategoria('todos'); setMostrar('todos'); } }}
+        limpiar={{ visible: hayFiltros, onClick: () => { setFiltroUnidad('todos'); setMostrar('todos'); } }}
         etiqueta="Filtros de margen por cadena"
         filtrar={(
           <>
@@ -316,20 +338,16 @@ export default function MargenPorCadena() {
             <FiltroChip etiqueta="Qué productos mostrar" icono="filter_list" valor={mostrar} onChange={setMostrar}
               opciones={[['todos', 'Mostrar: todos'], ['pierdo', 'Algún competidor más barato'], ['encarece', 'La cadena me encarece (+5 %)'], ['sin_precio', 'Sin mi precio en la cadena']]} />
             <FiltroChip etiqueta="Unidad de negocio" icono="corporate_fare" valor={filtroUnidad} onChange={setFiltroUnidad} opciones={[['todos', 'Unidad: todas'], ...unidadesNegocio]} />
-            <FiltroChip etiqueta="Tipo de tus productos" icono="category" valor={filtroTipo} onChange={setFiltroTipo} opciones={[['todos', 'Tus productos: todos'], ['generico', 'Tus genéricos'], ['marca', 'Tus marcas']]} />
-            <FiltroChip etiqueta="Categoría" icono="sell" valor={filtroCategoria} onChange={setFiltroCategoria} opciones={[['todos', 'Categoría: todas'], ...categorias.map(c => [c, c])]} />
           </>
         )}
         comparar={(
           <>
-            <Segmentado etiqueta="Qué ver" rotulo="Ver" valor={vista} onChange={v => cambiarPref({ vista: v })}
-              opciones={[['labs', 'Competidores', 'Una cadena frente a los laboratorios que elijas'], ['cadenas', 'Cadenas', 'Tu precio y tu margen en todas las cadenas a la vez']]} />
             <FactorGeneral valor={factorGeneral} onChange={v => cambiarPref({ factor: v })} propios={factoresPropios}
               onQuitarPropios={() => cambiarPref({ factores: {} })} />
+            <Segmentado etiqueta="Qué ver" rotulo="Ver" valor={vista} onChange={v => cambiarPref({ vista: v })}
+              opciones={[['labs', 'Competidores', 'Una cadena frente a los laboratorios que elijas'], ['cadenas', 'Cadenas', 'Tu precio y tu margen en todas las cadenas a la vez']]} />
             <Segmentado etiqueta="Precio que se compara" rotulo="Precio" valor={modoPrecio} onChange={v => cambiarPref({ precio: v })}
               opciones={[['lista', 'Lista', 'Precio de lista'], ['descuento', 'Oferta', AYUDA_OFERTA]]} />
-            <Segmentado etiqueta="Comparar por" rotulo="Por" valor={modoAnalisis} onChange={v => cambiarPref({ modo: v })}
-              opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g (sirve si las cajas son de distinto tamaño)']]} />
             <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={v => cambiarPref({ moneda: v })}
               opciones={[['bs', 'Bs', 'Bolívares a la tasa BCV de hoy'], ['usd', '$', 'Dólares']]} />
           </>
