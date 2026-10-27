@@ -563,7 +563,7 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
 
 ## Margen por cadena más simple y exportar a Excel
 
-- Siempre por unidad (tableta, ml o g): sin el selector Empaque/Unidad.
+- Siempre por empaque (precio de la caja): sin el selector Empaque/Unidad.
   Fuera los filtros Categoría y Tus productos. El Factor va primero en
   «Comparar».
 - **Exportar a Excel** (`utils/exportarExcel.js`, exceljs cargado solo al

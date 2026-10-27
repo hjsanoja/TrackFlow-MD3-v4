@@ -61,8 +61,8 @@ export default function MargenPorCadena() {
   const bcv = useBcvRate();
   const [pref, cambiarPref] = usePreferenciaGuardada('margen_cadena', INICIAL);
   const { moneda, precio: modoPrecio, vista } = pref;
-  // Siempre por unidad (tableta, ml o g): cajas de distinto tamano se comparan bien.
-  const modoAnalisis = 'unidosis';
+  // Siempre por empaque (precio de la caja), como en la hoja de calculo.
+  const modoAnalisis = 'empaque';
   const factorGeneral = Number(pref.factor) > 0 ? Number(pref.factor) : 1.5;
 
   const [filtroUnidad, setFiltroUnidad] = useState('todos');
@@ -279,7 +279,7 @@ export default function MargenPorCadena() {
       leyenda = TRAMOS_GAP.map(g => ({ color: g.id, texto: `GAP: ${g.corto}` }));
     }
     const detalle = [
-      `${vista === 'cadenas' ? 'Todas las cadenas' : `Cadena: ${nombreSel}`} · Factor ${textoFactor(factorGeneral)} (${textoMargen((factorGeneral - 1) * 100)}) · Precio de ${modoPrecio === 'lista' ? 'lista' : 'oferta'} · Por unidad (tableta, ml o g) · ${moneda === 'usd' ? 'Dólares' : `Bolívares a tasa BCV ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}`,
+      `${vista === 'cadenas' ? 'Todas las cadenas' : `Cadena: ${nombreSel}`} · Factor ${textoFactor(factorGeneral)} (${textoMargen((factorGeneral - 1) * 100)}) · Precio de ${modoPrecio === 'lista' ? 'lista' : 'oferta'} · Precio por caja · ${moneda === 'usd' ? 'Dólares' : `Bolívares a tasa BCV ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}`,
       `Margen real = precio en la cadena ÷ PVP − 1${vista === 'cadenas' ? ' · El color compara el precio de la cadena con tu precio teórico' : ' · GAP = precio del competidor ÷ tu precio en la cadena − 1 (negativo: el competidor está más barato)'}${resumen.ultimaFecha ? ` · Precios al ${fechaCorta(resumen.ultimaFecha)}` : ''}`,
     ];
     setExportando(true);
@@ -288,7 +288,7 @@ export default function MargenPorCadena() {
         archivo: `margen_por_cadena_${vista === 'cadenas' ? 'todas' : nombreSel}`.replace(/\s+/g, '_').toLowerCase(),
         hoja: vista === 'cadenas' ? 'Cadenas' : nombreSel,
         titulo: `Margen por cadena · ${vista === 'cadenas' ? 'Todas las cadenas' : nombreSel}`,
-        detalle, grupos, filas: filasExcel, pie, leyenda, moneda, decimales: moneda === 'usd' ? 3 : 2,
+        detalle, grupos, filas: filasExcel, pie, leyenda, moneda, decimales: 2,
       });
     } finally {
       setExportando(false);
