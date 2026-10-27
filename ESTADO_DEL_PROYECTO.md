@@ -561,6 +561,16 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Margen por cadena más simple y exportar a Excel
+
+- Siempre por unidad (tableta, ml o g): sin el selector Empaque/Unidad.
+  Fuera los filtros Categoría y Tus productos. El Factor va primero en
+  «Comparar».
+- **Exportar a Excel** (`utils/exportarExcel.js`, exceljs cargado solo al
+  exportar): título, lo elegido (cadena, factor, precio, tasa), encabezados
+  agrupados como en pantalla, celdas con los mismos colores, «—» con nota del
+  motivo, fila de promedios, leyenda y página horizontal.
+
 ## Margen por cadena (fase 52)
 
 - **Menú nuevo** `/margen-cadena` (`pages/MargenCadena.jsx`,
