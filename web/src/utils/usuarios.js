@@ -4,7 +4,7 @@ export const AVAILABLE_MENUS = [
   { id: '/', label: 'Dashboard', desc: 'Indicadores y KPIs de precios', icon: 'dashboard', isDefault: true },
   { id: '/mapa-calor', label: 'Rango de precios', desc: 'Dónde cae tu precio en el rango del mercado', icon: 'linear_scale', isDefault: true },
   { id: '/mapa-cadenas', label: 'Mapa de calor', desc: 'Tu precio de cada producto en cada cadena', icon: 'grid_on', isDefault: true },
-  { id: '/margen-cadena', label: 'Margen por cadena', desc: 'Tu PVP frente al precio de la cadena y a los laboratorios que elijas', icon: 'price_change', isDefault: true },
+  { id: '/margen-cadena', label: 'Margen por cadena', desc: 'Tu PSL frente al precio de la cadena y a los laboratorios que elijas', icon: 'price_change', isDefault: true },
   { id: '/experimental', label: 'Experimental', desc: 'Revisión de capturas, devaluación, canibalización y simulador', icon: 'science', isDefault: false },
   { id: '/productos', label: 'Productos', desc: 'Catálogo de productos propios', icon: 'medication', isDefault: false },
   { id: '/competencia', label: 'Relación', desc: 'Tus enlaces y los de la competencia, con su precio', icon: 'link', isDefault: false },

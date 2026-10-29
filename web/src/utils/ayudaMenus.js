@@ -35,22 +35,22 @@ export const AYUDA_MENUS = {
   },
   '/margen-cadena': {
     titulo: 'Margen por cadena',
-    para: 'Tu PVP frente al precio al que lo vende la cadena, y ese precio frente a los laboratorios que elijas.',
+    para: 'Tu PSL frente al precio al que lo vende la cadena, y ese precio frente a los laboratorios que elijas.',
     pasos: [
       'Elige la cadena y de 1 a 9 laboratorios; las columnas salen en el orden en que los eliges.',
-      'Teórico = PVP × factor (1,5 = 50 %). El lápiz cambia el factor solo de un producto.',
-      'Margen real = precio en la cadena ÷ PVP − 1. GAP = competidor ÷ tu precio en la cadena − 1: rojo es un competidor más barato.',
+      'Teórico = PSL × factor (1,5 = 50 %). El lápiz cambia el factor solo de un producto.',
+      'Margen real = precio en la cadena ÷ PSL − 1. GAP = competidor ÷ tu precio en la cadena − 1: rojo es un competidor más barato.',
       'En «Ver: Cadenas» comparas tu margen en todas las cadenas a la vez. Lo que eliges queda guardado para ti.',
     ],
     pregunta: '¿Quién me gana en Farmatodo? → elige Farmatodo y filtra «Algún competidor más barato».',
   },
   '/productos': {
     titulo: 'Productos',
-    para: 'Tu catálogo: molécula, dosis, forma, tamaño, laboratorio y PVP de cada producto.',
+    para: 'Tu catálogo: molécula, dosis, forma, tamaño, laboratorio y PSL de cada producto.',
     pasos: [
       'Si sale el aviso de ficha incompleta, toca «Ver cuáles» y completa lo que falta.',
       '«Cargar CSV» agrega varios a la vez (descarga antes la plantilla).',
-      'El PVP es solo referencia: no entra en ningún cálculo.',
+      'El PSL (precio de salida del laboratorio) solo entra en Margen por cadena.',
     ],
     pregunta: '¿Qué productos tienen datos incompletos? → filtro «Ficha: Incompletas».',
   },
@@ -111,5 +111,9 @@ export const GLOSARIO = [
   ['Parejo', 'A menos de 5 % del valor con que se compara.'],
   ['Botón i', 'Explica cada gráfico: qué es, cómo se calcula, cómo leerlo y un ejemplo.'],
 ];
+
+// Guia visual (pagina con dibujos de las pantallas principales). Para que
+// otros la abran, debe estar compartida desde claude.ai.
+export const GUIA_VISUAL_URL = 'https://claude.ai/artifact/GRTMK9pfrzu2zdrxJeVJcP';
 
 export const ayudaDe = (ruta) => AYUDA_MENUS[`/${String(ruta || '/').split(/[?#]/)[0].split('/')[1] || ''}`] || AYUDA_MENUS['/'];

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { ayudaDe, GLOSARIO } from '../utils/ayudaMenus';
 import { abrirBienvenida } from './Bienvenida';
+import { GUIA_VISUAL_URL } from '../utils/ayudaMenus';
 
 // Boton "Ayuda" de la barra de arriba: explica la pantalla abierta (para que
 // sirve, que mirar, una pregunta tipica) y las palabras que se repiten.
@@ -63,6 +64,10 @@ export default function AyudaPantalla() {
                   <span className="material-symbols-outlined text-[18px]" aria-hidden="true">tour</span>
                   Ver el recorrido de bienvenida
                 </button>
+                <a href={GUIA_VISUAL_URL} target="_blank" rel="noreferrer" className="m3-btn-outline">
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">menu_book</span>
+                  Abrir la guía visual
+                </a>
               </div>
             </div>
           </aside>

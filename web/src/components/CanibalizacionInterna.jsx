@@ -117,7 +117,7 @@ export default function CanibalizacionInterna({ user, userDoc }) {
           const unidosisGen = Number(prodGenerico.unidosis || 10);
           const unidosisMar = Number(prodMarca.unidosis || 10);
 
-          // Solo precios leidos en las cadenas: el PVP no entra en los
+          // Solo precios leidos en las cadenas: el PSL no entra en los
           // calculos (es un precio para otro cliente).
 
           // Evaluar en anaquel por cadena si está disponible

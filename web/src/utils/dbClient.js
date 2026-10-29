@@ -475,7 +475,7 @@ async function guardarConcentracionCompetidor(productoId, item, cache = null) {
   await guardarPrincipiosActivos(productoId, molecula, concentracion, cache);
 }
 
-// Registra un PVP nuevo cerrando el anterior, en vez de insertar a ciegas.
+// Registra un PSL nuevo cerrando el anterior, en vez de insertar a ciegas.
 //
 // pvp_propio tiene una restriccion de exclusion (excl_pvp_sin_solape) que
 // prohibe dos rangos de vigencia solapados para el mismo producto. La fila
@@ -660,7 +660,7 @@ export async function dbUpsertProducto(data, cache = null) {
 
       // Con soloLoQueViene es un UPDATE: un upsert (INSERT ... ON CONFLICT)
       // exige las columnas NOT NULL aunque la fila ya exista. Si no hay nada
-      // que cambiar en dim_productos (p. ej. solo PVP) se lee el id.
+      // que cambiar en dim_productos (p. ej. solo PSL) se lee el id.
       const upsertDim = payload => {
         const tabla = supabase.from('dim_productos');
         if (!soloLoQueViene) {
@@ -694,7 +694,7 @@ export async function dbUpsertProducto(data, cache = null) {
         try {
           await guardarPvpPropio(dimProd.id, cleanData.pvp_propio_usd);
         } catch (ePvp) {
-          console.warn('[Supabase] No se pudo guardar el PVP propio:', ePvp?.message || String(ePvp));
+          console.warn('[Supabase] No se pudo guardar el PSL propio:', ePvp?.message || String(ePvp));
         }
       }
 
@@ -776,7 +776,7 @@ export async function dbNombresDimensionesCerradas() {
 }
 
 // Alta o baja de varios productos en una sola peticion. Solo toca `activo`:
-// no reescribe la ficha ni el PVP como haria pasar por dbUpsertProducto.
+// no reescribe la ficha ni el PSL como haria pasar por dbUpsertProducto.
 // `.select()` para saber cuantos cambiaron de verdad (un UPDATE bloqueado por
 // RLS responde sin error y sin filas).
 export async function dbCambiarActivoProductos(idsInternos, activo) {

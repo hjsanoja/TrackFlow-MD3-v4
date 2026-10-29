@@ -21,7 +21,7 @@ export const ESQUEMAS = {
       { campo: 'id_interno', etiqueta: 'ID Interno', obligatorio: true,
         alias: ['id', 'codigo', 'código', 'sku', 'clave', 'identificador'] },
       // Solo obligatorio en productos nuevos: para actualizar uno que ya
-      // existe basta el id y las columnas que cambian (p. ej. solo el PVP).
+      // existe basta el id y las columnas que cambian (p. ej. solo el PSL).
       { campo: 'nombre', etiqueta: 'Nombre del Producto', obligatorio: true, soloNuevos: true,
         alias: ['producto', 'descripcion', 'descripción'] },
       { campo: 'laboratorio', etiqueta: 'Laboratorio', obligatorio: false,
@@ -30,7 +30,7 @@ export const ESQUEMAS = {
       { campo: 'unidad_negocio', etiqueta: 'Unidad de Negocio', obligatorio: false, alias: ['un'] },
       { campo: 'tipo_mercado', etiqueta: 'Tipo de mercado', obligatorio: false,
         alias: ['market_type'], tipo: 'lista', valores: ['marca', 'generico', 'genérico'] },
-      { campo: 'pvp_propio_usd', etiqueta: 'PVP Propio (USD)', obligatorio: false,
+      { campo: 'pvp_propio_usd', etiqueta: 'PSL Propio (USD)', obligatorio: false,
         alias: ['pvp', 'pvp_usd', 'precio_usd'], tipo: 'numero' },
       // exacto: getRowValue acepta subcadenas y 'activo' encajaria con
       // 'principio_activo'.

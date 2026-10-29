@@ -561,6 +561,32 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Datos más limpios, relaciones por molécula y PSL (fase 53)
+
+- **Cadenas de baja** (`dim_cadenas.activo = false`): el robot no las lee
+  (`cadenas_de_baja()` en `scraper/farmatodo.py`) y sus precios no se ven en
+  el panel: política RESTRICTIVA de lectura en `fact_precios`
+  (`fn_publicaciones_de_baja`). No se borra nada; al reactivarla vuelve todo.
+  Los enlaces siguen en Relación y Cadenas.
+- **Precios viejos**: `v_ultimo_precio_valido` y `v_variacion` solo toman
+  precios de los últimos 15 días. `v_precios_viejos` lista los enlaces
+  pasados de 15 días: aviso en la campana y pestaña «Precios sin
+  actualizar» (Experimental).
+- **Molécula del competidor**: `dim_productos.molecula_competidor` y
+  `v_relaciones_molecula`; pestaña «Relaciones a revisar» (Experimental,
+  `components/revision/RelacionesMolecula.jsx`, `utils/moleculas.js`):
+  cruce errado, sin molécula, parcial o coincide. Sin molécula cargada se lee
+  del nombre (genéricos).
+- **Dashboard**: fuera «Desde tu última visita» (tomaba el último inicio de
+  sesión, no la última visita) y el selector 24h/7d/15d (siempre 24 h). El
+  gráfico de cadenas ahora es «¿En qué cadena está más barato tu producto?»
+  (solo tus precios, productos en 2 o más cadenas).
+- Las listas de las tarjetas (`DetalleLista`) son más anchas y fijan la
+  columna del producto.
+- **PVP → PSL** (precio de salida del laboratorio) en todos los textos. En la
+  base sigue siendo `pvp_propio`. La carga CSV acepta la columna «PSL».
+- Ayuda: botón «Abrir la guía visual».
+
 ## Margen por cadena más simple y exportar a Excel
 
 - Siempre por empaque (precio de la caja): sin el selector Empaque/Unidad.

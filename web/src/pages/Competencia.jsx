@@ -41,7 +41,7 @@ import {
 
 // CSV de enlaces. La PLANTILLA de carga solo lleva lo que relaciona tu
 // producto con su enlace o su competidor (lo mismo que el formulario "Vincular
-// enlace"). El REPORTE agrega PVP, precios y fecha de captura, que son
+// enlace"). El REPORTE agrega PSL, precios y fecha de captura, que son
 // informativos. Donde el dato es el mismo que en el CSV de productos, la
 // columna se llama igual (id_interno, nombre, laboratorio, tipo_mercado,
 // activo). En las filas "propio", laboratorio, unidades, medida y tipo_mercado
@@ -878,7 +878,7 @@ export default function Competencia() {
     const d = diferencia(it);
     if (d === null) return <span className="m3-cell-secondary">—</span>;
     return (
-      <span className={`m3-count ${d > 0 ? 'text-error' : ''}`} title={d > 0 ? 'Tu PVP es más caro que este precio' : 'Tu PVP es más barato que este precio'}>
+      <span className={`m3-count ${d > 0 ? 'text-error' : ''}`} title={d > 0 ? 'Tu PSL es más caro que este precio' : 'Tu PSL es más barato que este precio'}>
         {d > 0 ? '+' : ''}{d.toFixed(0)}%
       </span>
     );

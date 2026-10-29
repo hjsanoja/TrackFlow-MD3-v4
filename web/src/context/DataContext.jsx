@@ -214,7 +214,7 @@ async function fetchDimProductos() {
         String(d.id_interno || '').toUpperCase().startsWith('COMP_');
 
       return data.filter(d => !esProductoCompetidor(d)).map(d => {
-        // Encontrar PVP vigente actual
+        // Encontrar PSL vigente actual
         let pvpUsd = 0;
         if (Array.isArray(d.pvp_propio) && d.pvp_propio.length > 0) {
           const sortedPvp = [...d.pvp_propio].sort((a, b) => new Date(b.vigente_desde) - new Date(a.vigente_desde));

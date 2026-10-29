@@ -38,13 +38,15 @@ export default function CentroAvisos({ verExperimental = true, verCadenas = true
 
   const cargar = useCallback(async () => {
     if (!isSupabaseActive()) return;
-    const [pendientes, sugerencias, fallas] = await Promise.all([
+    const [pendientes, sugerencias, fallas, viejos] = await Promise.all([
       verExperimental ? contar('fact_precios', q => q.eq('sospechoso', true).eq('revisado_manual', false)) : 0,
       verExperimental ? contar('sugerencias_enlaces', q => q.eq('estado', 'pendiente')) : 0,
       verCadenas ? cadenasConFallas() : [],
+      verExperimental ? contar('v_precios_viejos') : 0,
     ]);
     setAvisos([
       { id: 'fallas', n: fallas.length, importante: true, icono: 'smart_toy', texto: `El robot leyó con fallas: ${fallas.map(id => cadenasRef.current.find(c => String(c.id).toLowerCase() === String(id).toLowerCase())?.nombre || id).join(', ')}`, ir: '/cadenas' },
+      { id: 'viejos', n: viejos, importante: true, icono: 'history_toggle_off', texto: `${viejos} ${viejos === 1 ? 'precio lleva' : 'precios llevan'} más de 15 días sin actualizar (ya no cuentan en los análisis)`, ir: '/experimental?tab=precios_viejos' },
       { id: 'revision', n: pendientes, importante: false, icono: 'rule', texto: `${pendientes} ${pendientes === 1 ? 'captura dudosa espera' : 'capturas dudosas esperan'} revisión`, ir: '/experimental?tab=revision' },
       { id: 'sugerencias', n: sugerencias, importante: false, icono: 'travel_explore', texto: `${sugerencias} ${sugerencias === 1 ? 'sugerencia de enlace pendiente' : 'sugerencias de enlaces pendientes'}`, ir: '/experimental?tab=sugerencias' },
     ].filter(a => a.n > 0));

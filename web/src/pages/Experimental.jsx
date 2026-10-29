@@ -14,6 +14,8 @@ const IndiceMolecula = lazy(() => import('../components/analisis/IndiceMolecula'
 const VelocidadReaccion = lazy(() => import('../components/analisis/VelocidadReaccion'));
 const PosicionPorCadena = lazy(() => import('../components/analisis/PosicionPorCadena'));
 const TendenciaExperimental = lazy(() => import('../components/analisis/TendenciaExperimental'));
+const RelacionesMolecula = lazy(() => import('../components/revision/RelacionesMolecula'));
+const PreciosViejos = lazy(() => import('../components/revision/PreciosViejos'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -24,6 +26,8 @@ const TendenciaExperimental = lazy(() => import('../components/analisis/Tendenci
 // o el "agotado" no era real (Locatel pide consultar la sede).
 const TABS = [
   { id: 'revision', nombre: 'Revisión de capturas', icono: 'rule', desc: 'Capturas que el control de calidad marcó como dudosas: confírmalas, descártalas o corrige el enlace. Las ya revisadas se pueden volver a revisar.' },
+  { id: 'relaciones', nombre: 'Relaciones a revisar', icono: 'join_inner', desc: 'Tu producto y cada competidor vinculado con la molécula de los dos: encuentra cruces errados, sobre todo entre marcas.' },
+  { id: 'precios_viejos', nombre: 'Precios sin actualizar', icono: 'history_toggle_off', desc: 'Enlaces cuyo último precio tiene más de 15 días: ya no cuentan en gráficos ni promedios. Revísalos.' },
   { id: 'sugerencias', nombre: 'Sugerencias de enlaces', icono: 'travel_explore', desc: 'Beta: un robot busca tus productos de Relación en las otras cadenas y propone el enlace; tú lo aceptas o lo descartas.' },
   { id: 'por_cadena', nombre: 'Tu posición por cadena', icono: 'storefront', desc: 'Dentro de cada cadena: en cuántos productos eres el más barato o el más caro frente a la competencia de esa cadena, y si sube o baja día a día.' },
   { id: 'tendencia', nombre: 'Tendencia de tu posición', icono: 'show_chart', desc: 'Tu precio frente al promedio del mercado, día a día, para el producto típico. Toca un día para ver cada producto.' },
@@ -73,6 +77,8 @@ export default function Experimental({ user, userDoc }) {
       <Suspense fallback={<div className="h-64 rounded-3xl m3-skeleton" aria-busy="true" />}>
         {activa === 'revision' && <RevisionCapturas />}
         {activa === 'sugerencias' && <SugerenciasEnlaces />}
+        {activa === 'relaciones' && <RelacionesMolecula />}
+        {activa === 'precios_viejos' && <PreciosViejos />}
         {activa === 'devaluacion' && <DevaluacionReal />}
         {activa === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activa === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}
