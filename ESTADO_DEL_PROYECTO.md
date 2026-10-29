@@ -561,6 +561,26 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Correos con Brevo, alertas a la medida y salud de los datos (fase 54)
+
+- `scraper/correos.py` (`alertas` | `resumen`), por la API de Brevo:
+  - **Alertas**: reglas de cada usuario (`alertas_usuario`: baja, sube o
+    queda más barato que tú, con %, laboratorio, cadena y producto
+    opcionales). Salen al final de cada corrida del robot
+    (`scraper-diario.yml`), una vez por regla, enlace y día
+    (`alertas_enviadas`). Se crean y pausan en Mi cuenta (`MisAlertas`).
+  - **Resumen semanal** (lunes 7:20 a. m., `correos.yml`): dónde más
+    perdiste y ganaste frente al competidor más barato en 7 días, cuántos
+    precios cambiaron y cuántos llevan +15 días sin actualizar.
+  - Solo usuarios activos y vigentes, con el interruptor encendido en Mi
+    cuenta; respetan el alcance de cada uno y no cuentan cadenas de baja.
+  - Bitácora: `correos_enviados`. Sin `BREVO_API_KEY` solo imprime.
+  - Secretos de GitHub: `BREVO_API_KEY`, `BREVO_REMITENTE`, `BREVO_NOMBRE`
+    (opcional) y `PANEL_URL` (opcional, botón «Abrir TrackFlow»).
+- **Salud de los datos** (Cadenas, `components/SaludDatos.jsx`): por cadena
+  activa, % de enlaces con precio de los últimos 15 días y leídos hoy;
+  verde ≥ 90 %, ámbar 70–90 %, rojo < 70 %.
+
 ## Datos más limpios, relaciones por molécula y PSL (fase 53)
 
 - **Cadenas de baja** (`dim_cadenas.activo = false`): el robot no las lee
