@@ -561,6 +561,34 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Logo, correo por SMTP, Excel con colores, revisión automática, calendario de ofertas, competidores nuevos y videos (fases 55–57)
+
+- **Logo** «pulso de precio» (`components/Logo.jsx`, `public/favicon.svg`):
+  menú, entrada y pestaña del navegador.
+- **Correos por SMTP** (`scraper/correos.py`): Brevo no acepta registros
+  desde Venezuela; ahora envía por Gmail u Outlook con `SMTP_USUARIO`,
+  `SMTP_CLAVE` (en Gmail, contraseña de aplicación), `SMTP_HOST`,
+  `SMTP_PUERTO` y `CORREO_NOMBRE`. Brevo queda como opción.
+- **Exportar a Excel con colores** en Dashboard, Rango de precios y Mapa de
+  calor (`exportarTablaExcel`); el CSV de siempre sigue (botón «CSV»).
+- **Revisión automática** (fase 55, `fn_revision_automatica`): confirma las
+  dudosas por precio evidentes: solo cambió la tasa (mismo USD ±2 %) o el
+  mismo precio nuevo en 2+ días. `fact_precios.revision_automatica` dice
+  cuál. La corre `push_to_supabase.py` al final y el botón «Revisar
+  automáticamente» de la bandeja.
+- **Calendario de ofertas** (fase 56, Experimental): % de enlaces en oferta
+  por día y cadena, detalle del día y patrón por día de la semana
+  (`fn_calendario_ofertas`, `fn_ofertas_del_dia`).
+- **Competidores nuevos** (fase 57, etapa 2 del buscador):
+  `buscar_enlaces.py` con `MODO=competidores` busca molécula + dosis de
+  cada producto tuyo y propone productos de otros laboratorios no
+  registrados (`competidores_nuevos`); se aceptan en Experimental
+  (`fn_aceptar_competidor` crea laboratorio, producto COMP_N, molécula,
+  relación y enlace) o se descartan.
+- **Videos de ayuda** (Experimental): se graban solos con datos de ejemplo
+  (`web/demo/`: `npm run demo` y luego `npm run videos`) en
+  `public/videos/*.webm`.
+
 ## Correos con Brevo, alertas a la medida y salud de los datos (fase 54)
 
 - `scraper/correos.py` (`alertas` | `resumen`), por la API de Brevo:

@@ -343,6 +343,16 @@ def main():
     print("Run ID: " + str(run_id))
     print("=" * 60)
 
+    # Revision automatica (fase 55): confirma las capturas dudosas evidentes
+    # (solo cambio la tasa, o el mismo precio nuevo 2 dias seguidos).
+    if not fallo_guardado:
+        try:
+            from supabase_client import _request
+            res = _request("rpc/fn_revision_automatica", method="POST", data={"p_aplicar": True})
+            print(f"Revision automatica: {res}")
+        except Exception as e:
+            print(f"Revision automatica no disponible ({e}). Corre fase55 en Supabase.")
+
     # Si no se guardo en Supabase, la corrida debe salir en rojo en Actions
     # (antes decia "OK" aunque no se hubiera guardado nada).
     if fallo_guardado:

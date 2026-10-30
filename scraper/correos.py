@@ -1,5 +1,6 @@
 """
-Correos de TrackFlow por Brevo (fase 54).
+Correos de TrackFlow (fase 54): por SMTP (Gmail, Outlook o cualquier
+servidor de correo) o por la API de Brevo.
 
   python scraper/correos.py alertas   -> despues de cada corrida del robot
   python scraper/correos.py resumen   -> lunes en la manana (resumen semanal)
@@ -21,10 +22,15 @@ categorias) y no cuentan las cadenas de baja.
 
 Variables de entorno:
   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   (las mismas del robot)
-  BREVO_API_KEY      clave de la API de Brevo (sin ella solo se imprime)
-  BREVO_REMITENTE    correo remitente verificado en Brevo
-  BREVO_NOMBRE       nombre del remitente (por defecto «TrackFlow»)
+  Por SMTP (se usa si esta SMTP_USUARIO):
+    SMTP_USUARIO     la cuenta que envia (p. ej. tucuenta@gmail.com)
+    SMTP_CLAVE       en Gmail, una «contrasena de aplicacion» (no la normal)
+    SMTP_HOST        por defecto smtp.gmail.com (Outlook: smtp.office365.com)
+    SMTP_PUERTO      por defecto 587 (STARTTLS); 465 = SSL
+  Por Brevo: BREVO_API_KEY y BREVO_REMITENTE
+  CORREO_NOMBRE      nombre del remitente (por defecto «TrackFlow»)
   PANEL_URL          enlace al panel que va en cada correo
+Sin ninguno de los dos, solo se imprime lo que se enviaria.
 """
 
 import html
@@ -217,14 +223,51 @@ def correo_resumen(nombre, perdiste, ganaste, cambios, mas_barato, total, viejos
 # ---------------------------------------------------------------------------
 # Envio
 # ---------------------------------------------------------------------------
+def nombre_remitente():
+    return os.environ.get("CORREO_NOMBRE", "").strip() or os.environ.get("BREVO_NOMBRE", "").strip() or "TrackFlow"
+
+
+def enviar_smtp(para, nombre, asunto, contenido):
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.utils import formataddr
+    usuario = os.environ.get("SMTP_USUARIO", "").strip()
+    clave = os.environ.get("SMTP_CLAVE", "").replace(" ", "").strip()
+    host = os.environ.get("SMTP_HOST", "").strip() or "smtp.gmail.com"
+    puerto = int(os.environ.get("SMTP_PUERTO", "").strip() or 587)
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = asunto
+    msg["From"] = formataddr((nombre_remitente(), usuario))
+    msg["To"] = formataddr((nombre or "", para))
+    msg.attach(MIMEText("Abre este correo en un lector que muestre HTML.", "plain", "utf-8"))
+    msg.attach(MIMEText(contenido, "html", "utf-8"))
+    try:
+        if puerto == 465:
+            with smtplib.SMTP_SSL(host, puerto, timeout=30) as s:
+                s.login(usuario, clave)
+                s.sendmail(usuario, [para], msg.as_string())
+        else:
+            with smtplib.SMTP(host, puerto, timeout=30) as s:
+                s.starttls()
+                s.login(usuario, clave)
+                s.sendmail(usuario, [para], msg.as_string())
+        return True, f"smtp {host}"
+    except Exception as e:  # noqa: BLE001
+        print(f"Error enviando a {para} por SMTP: {e}", flush=True)
+        return False, str(e)[:300]
+
+
 def enviar(para, nombre, asunto, contenido):
+    if os.environ.get("SMTP_USUARIO", "").strip():
+        return enviar_smtp(para, nombre, asunto, contenido)
     clave = os.environ.get("BREVO_API_KEY", "").strip()
     remitente = os.environ.get("BREVO_REMITENTE", "").strip()
     if not clave or not remitente:
-        print(f"[sin Brevo] {para}: {asunto}", flush=True)
-        return False, "sin BREVO_API_KEY o BREVO_REMITENTE"
+        print(f"[sin servicio de correo] {para}: {asunto}", flush=True)
+        return False, "sin SMTP_USUARIO ni BREVO_API_KEY"
     datos = {
-        "sender": {"name": os.environ.get("BREVO_NOMBRE", "TrackFlow"), "email": remitente},
+        "sender": {"name": nombre_remitente(), "email": remitente},
         "to": [{"email": para, "name": nombre or para}],
         "subject": asunto,
         "htmlContent": contenido,

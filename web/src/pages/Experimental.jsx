@@ -16,6 +16,9 @@ const PosicionPorCadena = lazy(() => import('../components/analisis/PosicionPorC
 const TendenciaExperimental = lazy(() => import('../components/analisis/TendenciaExperimental'));
 const RelacionesMolecula = lazy(() => import('../components/revision/RelacionesMolecula'));
 const PreciosViejos = lazy(() => import('../components/revision/PreciosViejos'));
+const CalendarioOfertas = lazy(() => import('../components/analisis/CalendarioOfertas'));
+const CompetidoresNuevos = lazy(() => import('../components/revision/CompetidoresNuevos'));
+const VideosAyuda = lazy(() => import('../components/VideosAyuda'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -26,6 +29,7 @@ const PreciosViejos = lazy(() => import('../components/revision/PreciosViejos'))
 // o el "agotado" no era real (Locatel pide consultar la sede).
 const TABS = [
   { id: 'revision', nombre: 'Revisión de capturas', icono: 'rule', desc: 'Capturas que el control de calidad marcó como dudosas: confírmalas, descártalas o corrige el enlace. Las ya revisadas se pueden volver a revisar.' },
+  { id: 'competidores', nombre: 'Competidores nuevos', icono: 'person_search', desc: 'Beta: el robot busca la molécula y la dosis de tus productos en cada cadena y propone competidores que aún no tienes registrados.' },
   { id: 'relaciones', nombre: 'Relaciones a revisar', icono: 'join_inner', desc: 'Tu producto y cada competidor vinculado con la molécula de los dos: encuentra cruces errados, sobre todo entre marcas.' },
   { id: 'precios_viejos', nombre: 'Precios sin actualizar', icono: 'history_toggle_off', desc: 'Enlaces cuyo último precio tiene más de 15 días: ya no cuentan en gráficos ni promedios. Revísalos.' },
   { id: 'sugerencias', nombre: 'Sugerencias de enlaces', icono: 'travel_explore', desc: 'Beta: un robot busca tus productos de Relación en las otras cadenas y propone el enlace; tú lo aceptas o lo descartas.' },
@@ -37,6 +41,8 @@ const TABS = [
   { id: 'periodos', nombre: 'Comparador de períodos', icono: 'compare', desc: 'Tu precio frente al mercado en los últimos días y en los anteriores: qué productos se volvieron más o menos competitivos, y si fue por ti o por el mercado.' },
   { id: 'indice', nombre: 'Índice por molécula', icono: 'query_stats', desc: 'Cuánto subió o bajó en dólares el precio del mercado de cada molécula.' },
   { id: 'reaccion', nombre: 'Velocidad de reacción', icono: 'bolt', desc: 'Cuántos días tarda cada cadena en responder cuando otra cambia un precio.' },
+  { id: 'ofertas', nombre: 'Calendario de ofertas', icono: 'calendar_month', desc: 'Qué días y en qué cadenas hubo descuentos o promociones (2x1, 3x2…), y qué día de la semana suele descontar cada cadena.' },
+  { id: 'videos', nombre: 'Videos de ayuda', icono: 'smart_display', desc: 'Videos cortos de cada menú principal, grabados solos con datos de ejemplo.' },
   { id: 'simulador', nombre: 'Simulador de precios', icono: 'calculate', desc: 'Qué pasaría con tu posición si subes o bajas tus precios.' },
 ];
 
@@ -78,7 +84,10 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'revision' && <RevisionCapturas />}
         {activa === 'sugerencias' && <SugerenciasEnlaces />}
         {activa === 'relaciones' && <RelacionesMolecula />}
+        {activa === 'competidores' && <CompetidoresNuevos />}
         {activa === 'precios_viejos' && <PreciosViejos />}
+        {activa === 'ofertas' && <CalendarioOfertas />}
+        {activa === 'videos' && <VideosAyuda />}
         {activa === 'devaluacion' && <DevaluacionReal />}
         {activa === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activa === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}

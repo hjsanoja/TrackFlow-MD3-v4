@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "demo": "vite --config demo/vite.demo.config.mjs",
+    "videos": "node demo/grabar.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

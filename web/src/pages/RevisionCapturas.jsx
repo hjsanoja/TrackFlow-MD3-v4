@@ -102,11 +102,16 @@ function sugerencia(c) {
 // Guarda la decision de varias capturas. estado: 'valida' | 'erronea' | 'pendiente'.
 async function guardarDecision(ids, estado) {
   const cambios = estado === 'pendiente'
-    ? { revisado_manual: false, sospechoso: true }
+    ? { revisado_manual: false, sospechoso: true, revision_automatica: null }
     : { revisado_manual: true, sospechoso: estado === 'erronea' };
   let hechas = 0;
   for (let i = 0; i < ids.length; i += 150) {
-    const { data, error } = await supabase.from('fact_precios').update(cambios).in('id', ids.slice(i, i + 150)).select('id');
+    let { data, error } = await supabase.from('fact_precios').update(cambios).in('id', ids.slice(i, i + 150)).select('id');
+    // Sin la fase 55 no existe revision_automatica: se guarda sin ella.
+    if (error && /revision_automatica/.test(error.message || '')) {
+      const { revision_automatica: _sinFase55, ...resto } = cambios;
+      ({ data, error } = await supabase.from('fact_precios').update(resto).in('id', ids.slice(i, i + 150)).select('id'));
+    }
     if (error) throw error;
     hechas += data?.length || 0;
   }
@@ -231,6 +236,24 @@ export default function RevisionCapturas() {
     const ok = await robot.lanzar(enlaces, []);
     if (ok) addToast(`Robot lanzado para ${enlaces.length} ${enlaces.length === 1 ? 'enlace' : 'enlaces'}. Tarda unos minutos.`, 'info');
     return ok;
+  };
+
+  // Revision automatica (fase 55): confirma las dudosas evidentes por precio
+  // (solo cambio la tasa, o el mismo precio nuevo 2 dias seguidos). El robot
+  // la corre al terminar; este boton la corre ahora.
+  const revisarSolo = async () => {
+    setProcesando(true);
+    const { data, error } = await supabase.rpc('fn_revision_automatica', { p_aplicar: true });
+    setProcesando(false);
+    if (error) {
+      addToast(/PGRST202|function|does not exist/i.test(`${error.code} ${error.message}`)
+        ? 'Falta correr fase55_revision_automatica.sql en Supabase.' : `No se pudo revisar: ${error.message}`, 'error');
+      return;
+    }
+    const n = (data?.solo_tasa || 0) + (data?.precio_sostenido || 0);
+    addToast(n === 0 ? 'Ninguna captura pendiente es evidente: quedan para revisar a mano.'
+      : `${n} ${n === 1 ? 'captura confirmada' : 'capturas confirmadas'} solas: ${data.solo_tasa} por la tasa y ${data.precio_sostenido} por precio sostenido.`, n ? 'success' : 'info');
+    if (n) { cargar(); cargarResumen(); avisarCambioRevision(); }
   };
 
   const decidir = async (lista, estado) => {
@@ -408,6 +431,11 @@ export default function RevisionCapturas() {
                 </label>
                 <div className="flex items-center gap-1 md:ml-auto">
                   <span className="m3-label-large text-on-surface-variant mr-2">{visibles.length} de {capturas.length}</span>
+                  <button data-edita type="button" onClick={revisarSolo} disabled={procesando} className="m3-btn-text"
+                    title="Confirma solas las dudosas evidentes por precio: en dólares no cambió (solo la tasa) o la tienda mostró el mismo precio nuevo 2 días seguidos">
+                    <span className="material-symbols-outlined" aria-hidden="true">auto_fix_high</span>
+                    Revisar automáticamente
+                  </button>
                   <button data-edita type="button" onClick={() => setVerSensibilidad(true)} className="m3-btn-text" title="Cuándo se marca una captura como dudosa">
                     <span className="material-symbols-outlined" aria-hidden="true">tune</span>
                     Sensibilidad

@@ -23,6 +23,7 @@ import { tokensGrafico } from '../utils/chartTokens';
 import { getChainColor } from '../utils/brandColors';
 import { dbClearAllHistoricoPrecios } from '../utils/dbClient';
 import { exportToCSV } from '../utils/exportUtils';
+import { exportarTablaExcel } from '../utils/exportarExcel';
 import { fechaHora, haceCuanto } from '../utils/usuarios';
 import { normalizar } from '../components/formulario';
 import InfoGrafico from '../components/InfoGrafico';
@@ -456,6 +457,42 @@ export default function Dashboard({ userDoc }) {
     exportToCSV(`dashboard_precios_por_cadena${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`, cols, datos);
   };
 
+  // El mismo contenido que el CSV, en Excel y con los colores de la tabla.
+  const exportarExcelTabla = () => {
+    if (filas.length === 0) { addToast('No hay productos para exportar con estos filtros.', 'info'); return; }
+    const precio = (usd) => (usd == null ? null : moneda === 'usd' ? usd : usd * (bcv.rate || 0));
+    const colorDif = (v) => (v == null ? null : grupoDe(v).id);
+    exportarTablaExcel({
+      archivo: `dashboard_precios_por_cadena${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`,
+      hoja: 'Precios por cadena',
+      titulo: 'Precios por cadena',
+      detalle: [
+        `Precio de ${modoPrecio === 'lista' ? 'lista' : 'oferta'} · ${modoAnalisis === 'unidosis' ? 'por unidad' : 'por caja'} · ${moneda === 'usd' ? 'Dólares' : `Bolívares a tasa BCV ${(bcv.rate || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`} · Meta: ${textoMeta(meta)}`,
+        'Diferencias: azul = más barato que el mercado, rojo = más caro. En las cadenas, resaltada la del precio más bajo.',
+      ],
+      moneda, decimales: moneda === 'usd' && modoAnalisis === 'unidosis' ? 3 : 2, congelar: 2,
+      columnas: [
+        { titulo: 'Código', ancho: 11, valor: x => x.producto.id_interno },
+        { titulo: 'Producto', ancho: 38, valor: x => x.producto.nombre },
+        { titulo: 'Tipo', ancho: 10, valor: x => ((x.producto.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico') },
+        { titulo: 'Tu precio', formato: 'moneda', valor: x => precio(x.tuPrecio) },
+        { titulo: 'Mínimo', formato: 'moneda', valor: x => precio(x.minimo) },
+        { titulo: 'Cadena del mínimo', ancho: 18, valor: x => x.cadenasMin.map(nombreCadena).join(' / ') },
+        { titulo: 'Promedio', formato: 'moneda', valor: x => precio(x.promedio) },
+        { titulo: 'Tú vs mínimo', ancho: 11, formato: 'pct', valor: x => x.difMin, color: x => colorDif(x.difMin) },
+        { titulo: 'Posición', ancho: 10, valor: x => (x.posicion ? `${x.posicion.lugar} de ${x.posicion.de}` : null) },
+        { titulo: 'Tú vs promedio', ancho: 12, formato: 'pct', valor: x => x.difProm, color: x => colorDif(x.difProm) },
+        { titulo: 'Para la meta', ancho: 11, formato: 'pct', valor: x => ajusteDe(x)?.porcentaje ?? null },
+        ...cadenasTabla.map(c => ({
+          titulo: nombreCadena(c), formato: 'moneda', valor: x => precio(x.porCadena.get(c)?.priceUsd),
+          color: x => (x.porCadena.get(c) && x.cadenasMin.includes(c) ? 'muy_barato' : null),
+        })),
+      ],
+      filas,
+      leyenda: GRUPOS.map(g => ({ color: g.id, texto: g.corto })),
+    });
+  };
+
   const borrarHistorial = async () => {
     setBorrando(true);
     try {
@@ -502,9 +539,13 @@ export default function Dashboard({ userDoc }) {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start lg:self-auto">
-          <button onClick={exportar} className="m3-btn-outline" title="Descargar en CSV la tabla de precios por cadena, con los filtros actuales">
+          <button onClick={exportarExcelTabla} className="m3-btn-outline" title="Descargar en Excel la tabla de precios por cadena, con colores y los filtros actuales">
+            <span className="material-symbols-outlined text-base">table_view</span>
+            <span>Excel</span>
+          </button>
+          <button onClick={exportar} className="m3-btn-text" title="Descargar en CSV la tabla de precios por cadena, con los filtros actuales">
             <span className="material-symbols-outlined text-base">download</span>
-            <span>Exportar</span>
+            <span>CSV</span>
           </button>
           {isAdmin && (
             <details ref={menuMasRef} className="m3-menu">

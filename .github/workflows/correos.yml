@@ -31,5 +31,10 @@ jobs:
           BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
           BREVO_REMITENTE: ${{ secrets.BREVO_REMITENTE }}
           BREVO_NOMBRE: ${{ secrets.BREVO_NOMBRE }}
+          SMTP_USUARIO: ${{ secrets.SMTP_USUARIO }}
+          SMTP_CLAVE: ${{ secrets.SMTP_CLAVE }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PUERTO: ${{ secrets.SMTP_PUERTO }}
+          CORREO_NOMBRE: ${{ secrets.CORREO_NOMBRE }}
           PANEL_URL: ${{ secrets.PANEL_URL }}
         run: python scraper/correos.py ${{ github.event.inputs.modo || 'resumen' }}

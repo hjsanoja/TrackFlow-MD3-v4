@@ -12,6 +12,7 @@ import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
 import { exportToCSV } from '../utils/exportUtils';
+import { exportarTablaExcel } from '../utils/exportarExcel';
 import { describirPresentacion } from '../utils/presentacion';
 import { crearFormato, pct, mediana, usePreferencia, GRUPOS, grupoDe } from './dashboard/comun';
 import { AYUDA_OFERTA } from '../utils/promociones';
@@ -161,6 +162,31 @@ export default function MapaPorCadena() {
     if (datos.length) exportToCSV(`mapa_de_calor_tu_precio${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`, cols, datos);
   };
 
+  const exportarExcelTabla = () => {
+    if (!filas.length) return;
+    const precio = (usd) => (usd == null ? null : moneda === 'usd' ? usd : usd * (bcv.rate || 0));
+    exportarTablaExcel({
+      archivo: `mapa_de_calor_tu_precio${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`,
+      hoja: 'Mapa de calor',
+      titulo: 'Mapa de calor: tu precio en cada cadena',
+      detalle: [`Precio de ${modoPrecio === 'lista' ? 'lista' : 'oferta'} · ${modoAnalisis === 'unidosis' ? 'por unidad' : 'por caja'} · ${moneda === 'usd' ? 'Dólares' : `Bolívares a tasa BCV ${(bcv.rate || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}`,
+        frente === 'mas_bajo' ? 'Color por fila: azul = la cadena donde ese producto está más barato; rojo = cuánto más caro está en las demás.'
+          : 'Color: tu precio en esa cadena frente al competidor más barato de esa cadena.'],
+      moneda, decimales: moneda === 'usd' && modoAnalisis === 'unidosis' ? 3 : 2, congelar: 2,
+      columnas: [
+        { titulo: 'Código', ancho: 11, valor: x => x.producto.id_interno },
+        { titulo: 'Producto', ancho: 38, valor: x => x.producto.nombre },
+        ...cadenasTabla.map(c => ({
+          titulo: nombreCadena(c.id), formato: 'moneda', valor: x => precio(x.tuyo.get(c.id)),
+          color: x => { const d = difDe(x, c.id); return d == null ? null : frente === 'mas_bajo' ? tramoMinimo(d).id : grupoDe(d).id; },
+        })),
+        { titulo: 'Diferencia entre cadenas', ancho: 14, formato: 'pct', valor: x => x.rango },
+      ],
+      filas,
+      leyenda: leyenda.map(g => ({ color: g.id, texto: g.corto })),
+    });
+  };
+
   if (loading && productos.length === 0) {
     return (
       <div className="space-y-6" aria-busy="true">
@@ -178,10 +204,16 @@ export default function MapaPorCadena() {
     <div className="space-y-6 text-on-background pb-12 animate-fade-in-slide font-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <p className="m3-body-medium text-on-surface-variant">{explicacion}</p>
-        <button onClick={exportar} className="m3-btn-outline self-start md:self-auto" title="Descargar en CSV tu precio en cada cadena, con los filtros actuales">
-          <span className="material-symbols-outlined text-base">download</span>
-          <span>Exportar</span>
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <button onClick={exportarExcelTabla} className="m3-btn-outline" title="Descargar en Excel tu precio en cada cadena, con colores y los filtros actuales">
+            <span className="material-symbols-outlined text-base">table_view</span>
+            <span>Excel</span>
+          </button>
+          <button onClick={exportar} className="m3-btn-text" title="Descargar en CSV tu precio en cada cadena, con los filtros actuales">
+            <span className="material-symbols-outlined text-base">download</span>
+            <span>CSV</span>
+          </button>
+        </div>
       </div>
 
       <BarraFiltros

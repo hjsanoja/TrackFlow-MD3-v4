@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Logo from './Logo';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -168,9 +169,7 @@ export default function Layout({ user, userDoc, children }) {
           {/* Logo & Brand */}
           <div className={`mb-8 flex items-center ${menuColapsado ? 'flex-col gap-3 px-0' : 'justify-between px-4'}`}>
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center text-on-primary shadow-elevation-1 shrink-0">
-                <span className="material-symbols-outlined select-none text-2xl font-bold">monitoring</span>
-              </div>
+              <Logo tamano={40} className="shrink-0 shadow-elevation-1 rounded-2xl" />
               {!menuColapsado && (
                 <div className="min-w-0">
                   <h1 className="text-xl font-display font-bold tracking-tight text-on-surface flex items-center gap-0.5">

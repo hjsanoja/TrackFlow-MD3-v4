@@ -2411,3 +2411,27 @@ body.solo-lectura .solo-en-lectura { display: inline; }
 .m3-salud-chip.is-verde i { background-color: #1e9e5a; }
 .m3-salud-chip.is-ambar i { background-color: #f5a524; }
 .m3-salud-chip.is-rojo i { background-color: var(--md-sys-color-error); }
+
+/* Calendario de ofertas: una gama (primario) de claro a oscuro. */
+.m3-calendario { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.m3-calendario-cab { text-align: center; font-size: 0.75rem; font-weight: 500; color: var(--md-sys-color-on-surface-variant); padding: 4px 0; }
+.m3-calendario-dia {
+  position: relative; min-height: 64px; border-radius: 10px; padding: 6px 8px; text-align: left;
+  display: flex; flex-direction: column; justify-content: space-between;
+  color: var(--md-sys-color-on-surface); border: 1px solid var(--md-sys-color-outline-variant);
+}
+.m3-calendario-dia.is-vacio { background: transparent; color: var(--md-sys-color-on-surface-variant); opacity: 0.6; }
+.m3-calendario-dia.is-elegido { outline: 2px solid var(--md-sys-color-primary); outline-offset: 1px; }
+.m3-calendario-dia:not(:disabled):hover { filter: brightness(0.96); }
+.m3-calendario-num { font-size: 0.75rem; font-weight: 600; }
+.m3-calendario-pct { font-size: 0.875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.m3-calendario-n { position: absolute; top: 6px; right: 8px; font-size: 0.6875rem; color: inherit; opacity: 0.8; }
+.m3-oferta-n0 { background-color: var(--md-sys-color-surface-container-low); }
+.m3-oferta-n1 { background-color: color-mix(in srgb, var(--md-sys-color-primary) 12%, var(--md-sys-color-surface-container-lowest)); }
+.m3-oferta-n2 { background-color: color-mix(in srgb, var(--md-sys-color-primary) 28%, var(--md-sys-color-surface-container-lowest)); }
+.m3-oferta-n3 { background-color: color-mix(in srgb, var(--md-sys-color-primary) 50%, var(--md-sys-color-surface-container-lowest)); color: var(--md-sys-color-on-primary); }
+.m3-oferta-n4 { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.m3-calor-leyenda i.m3-oferta-n3, .m3-calor-leyenda i.m3-oferta-n4 { border-color: transparent; }
+@media (max-width: 640px) { .m3-calendario-dia { min-height: 48px; padding: 4px; } .m3-calendario-n { display: none; } }
+.m3-calendario-dia.m3-oferta-n3, .m3-calendario-dia.m3-oferta-n4,
+.m3-table td.m3-oferta-n3, .m3-table td.m3-oferta-n4 { color: var(--md-sys-color-on-primary); }
