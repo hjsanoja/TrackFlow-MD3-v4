@@ -17,6 +17,7 @@ const TendenciaExperimental = lazy(() => import('../components/analisis/Tendenci
 const RelacionesMolecula = lazy(() => import('../components/revision/RelacionesMolecula'));
 const PreciosViejos = lazy(() => import('../components/revision/PreciosViejos'));
 const CalendarioOfertas = lazy(() => import('../components/analisis/CalendarioOfertas'));
+const CompetidoresNuevos = lazy(() => import('../components/revision/CompetidoresNuevos'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -27,6 +28,7 @@ const CalendarioOfertas = lazy(() => import('../components/analisis/CalendarioOf
 // o el "agotado" no era real (Locatel pide consultar la sede).
 const TABS = [
   { id: 'revision', nombre: 'Revisión de capturas', icono: 'rule', desc: 'Capturas que el control de calidad marcó como dudosas: confírmalas, descártalas o corrige el enlace. Las ya revisadas se pueden volver a revisar.' },
+  { id: 'competidores', nombre: 'Competidores nuevos', icono: 'person_search', desc: 'Beta: el robot busca la molécula y la dosis de tus productos en cada cadena y propone competidores que aún no tienes registrados.' },
   { id: 'relaciones', nombre: 'Relaciones a revisar', icono: 'join_inner', desc: 'Tu producto y cada competidor vinculado con la molécula de los dos: encuentra cruces errados, sobre todo entre marcas.' },
   { id: 'precios_viejos', nombre: 'Precios sin actualizar', icono: 'history_toggle_off', desc: 'Enlaces cuyo último precio tiene más de 15 días: ya no cuentan en gráficos ni promedios. Revísalos.' },
   { id: 'sugerencias', nombre: 'Sugerencias de enlaces', icono: 'travel_explore', desc: 'Beta: un robot busca tus productos de Relación en las otras cadenas y propone el enlace; tú lo aceptas o lo descartas.' },
@@ -80,6 +82,7 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'revision' && <RevisionCapturas />}
         {activa === 'sugerencias' && <SugerenciasEnlaces />}
         {activa === 'relaciones' && <RelacionesMolecula />}
+        {activa === 'competidores' && <CompetidoresNuevos />}
         {activa === 'precios_viejos' && <PreciosViejos />}
         {activa === 'ofertas' && <CalendarioOfertas />}
         {activa === 'devaluacion' && <DevaluacionReal />}

@@ -11,6 +11,10 @@ on:
         description: "Buscar todo otra vez y volver a detectar las tiendas (1 = si)"
         required: false
         default: ""
+      modo:
+        description: "Vacio = tus enlaces faltantes · competidores = competidores nuevos (etapa 2)"
+        required: false
+        default: ""
   repository_dispatch:      # boton "Buscar enlaces" del panel
     types: [buscar-enlaces]
 
@@ -46,4 +50,5 @@ jobs:
           SOLO_PRODUCTOS: ${{ github.event.client_payload.productos }}
           SOLO_CADENAS: ${{ github.event.client_payload.cadenas }}
           MAX_PRODUCTOS: ${{ github.event.client_payload.max_productos }}
+          MODO: ${{ github.event.inputs.modo || github.event.client_payload.modo }}
         run: python scraper/buscar_enlaces.py

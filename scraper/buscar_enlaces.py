@@ -31,6 +31,10 @@ Variables de entorno (ademas de las de Supabase):
                   detectar la plataforma
   MAX_PRODUCTOS   tope de productos por corrida (0 = todos)
   DIAGNOSTICO     '1' = imprime los candidatos de cada busqueda
+  MODO            'competidores' = etapa 2 (fase 57): busca la MOLECULA y la
+                  dosis de cada producto tuyo y propone productos de OTROS
+                  laboratorios que aun no estan registrados
+                  (competidores_nuevos). Vacio = buscar tus enlaces faltantes.
 """
 
 import html
@@ -205,6 +209,148 @@ def puntuar(prod: dict, cand: dict):
         detalle["tamano"] = "?"
         puntaje += 10
     return puntaje, detalle
+
+
+# ---------------------------------------------------------------------------
+# Etapa 2: competidores nuevos (fase 57)
+# ---------------------------------------------------------------------------
+MIN_PUNTAJE_COMP = 60
+MAX_COMPETIDORES = 6        # por producto y cadena
+
+
+def consultas_competidor(prod: dict) -> list:
+    principio = normalizar(prod.get("principio") or "")
+    if not principio:
+        return []
+    dosis = fmt_dosis(prod.get("dosis_mg"))
+    consultas = [" ".join(x for x in (principio, dosis) if x)]
+    primera = principio.split(" ")[0]
+    if dosis and primera != principio:
+        consultas.append(f"{primera} {dosis}")
+    return consultas
+
+
+def puntuar_competidor(prod: dict, cand: dict, labs_propios: list):
+    """(puntaje, detalle) si es la misma molecula y dosis de OTRO laboratorio."""
+    texto = normalizar(f"{cand.get('nombre', '')} {cand.get('marca') or ''}")
+    principio = normalizar(prod.get("principio") or "")
+    claves = [p for p in principio.split() if len(p) >= 4][:1]
+    if not claves or not re.search(r"\b" + re.escape(claves[0][:-1] if len(claves[0]) > 5 else claves[0]), texto):
+        return None
+    if any(re.search(r"\b" + re.escape(l) + r"\b", texto) for l in labs_propios):
+        return None                       # es tuyo
+    detalle = {"molecula": "si"}
+    puntaje = 30
+    ld, lt, lu = leer_presentacion(cand.get("nombre", ""))
+    rd = prod.get("dosis_mg")
+    if ld is not None and rd is not None:
+        if abs(float(ld) - float(rd)) > 0.001:
+            return None                   # otra dosis
+        detalle["dosis"] = "si"
+        puntaje += 40
+    else:
+        detalle["dosis"] = "?"
+        puntaje += 15
+    rt, ru = prod.get("tamano"), prod.get("unidad") or "unidad"
+    if lt is not None and rt is not None and (lu or "unidad") == ru:
+        igual = abs(float(lt) - float(rt)) < 0.001
+        detalle["tamano"] = "si" if igual else "distinto"
+        puntaje += 30 if igual else 10
+    else:
+        detalle["tamano"] = "?"
+        puntaje += 15
+    if lt is not None:
+        detalle["tamano_leido"] = lt
+        detalle["unidad_leida"] = lu or "unidad"
+    return puntaje, detalle
+
+
+def buscar_competidores(prod: dict, cadena: dict, conocidas: set, labs_propios: list) -> dict:
+    buscar = BUSCADORES[cadena["plataforma"]]
+    base = base_de(cadena["website"])
+    ctx = cadena.get("plataforma_detalle") or {}
+    consultas = consultas_competidor(prod)
+    if cadena["plataforma"] == "navegador":
+        consultas = consultas[:1]
+    vistos = {}
+    candidatos = 0
+    for q in consultas:
+        time.sleep(PAUSA)
+        for cand in buscar(base, q, ctx):
+            url = cand.get("url")
+            if not url or url in vistos or re.sub(r"\?.*$", "", url).strip().lower() in conocidas:
+                continue
+            candidatos += 1
+            res = puntuar_competidor(prod, cand, labs_propios)
+            if DIAGNOSTICO:
+                print(f"    [{cadena['id']}] '{q}' -> {cand['nombre']} | {cand.get('marca')} | {res}")
+            if res:
+                cand["puntaje"], cand["detalle"] = res
+                cand["detalle"]["consulta"] = q
+                vistos[url] = cand
+    mejores = sorted(vistos.values(), key=lambda c: (-c["puntaje"], c.get("disponible") is False, len(c["nombre"])))
+    return {"consultas": consultas, "candidatos": candidatos,
+            "propuestas": [c for c in mejores if c["puntaje"] >= MIN_PUNTAJE_COMP][:MAX_COMPETIDORES]}
+
+
+def correr_competidores(db, cadenas_activas, productos, forzar, corrida_id):
+    """Etapa 2: por cada producto tuyo y cadena, propone competidores nuevos."""
+    labs_propios = sorted({normalizar(p.get("laboratorio")) for p in productos if p.get("es_propio") and p.get("laboratorio")}
+                          | {normalizar(s) for p in productos if p.get("es_propio") for s in (p.get("laboratorio_sinonimos") or [])})
+    labs_propios = [l for l in labs_propios if len(l) >= 3]
+    propios = [p for p in productos if p.get("es_propio") and p.get("principio")]
+    conocidas = {str(x.get("url_normalizada") or "").lower() for x in db.select("publicaciones", "select=url_normalizada")}
+    revisadas = {(c["producto_propio_id"], c["cadena_id"], c["url"]): c["estado"]
+                 for c in db.select("competidores_nuevos", "select=producto_propio_id,cadena_id,url,estado")}
+    pendientes = {(k[0], k[1]) for k, v in revisadas.items() if v == "pendiente"}
+    tareas = {c["id"]: [p for p in propios if forzar or (p["producto_id"], c["id"]) not in pendientes] for c in cadenas_activas}
+    total = sum(len(t) for t in tareas.values())
+    db.update("corridas_buscador", "id", corrida_id, {"total": total})
+    print(f"Competidores nuevos: {len(propios)} productos tuyos, {total} busquedas en {len(cadenas_activas)} cadenas")
+    lock = threading.Lock()
+    estado = {"procesados": 0, "propuestas": 0, "errores": 0}
+
+    def trabajar(cadena):
+        try:
+            for p in tareas[cadena["id"]]:
+                try:
+                    res = buscar_competidores(p, cadena, conocidas, labs_propios)
+                    filas = []
+                    for c in res["propuestas"]:
+                        if revisadas.get((p["producto_id"], cadena["id"], c["url"])) in ("aceptada", "descartada"):
+                            continue
+                        precio, moneda = en_bolivares(c.get("precio"), c.get("moneda"))
+                        filas.append({
+                            "producto_propio_id": p["producto_id"], "cadena_id": cadena["id"], "url": c["url"],
+                            "nombre_tienda": c["nombre"][:500], "marca_tienda": (c.get("marca") or "")[:200] or None,
+                            "laboratorio_leido": (c.get("marca") or "")[:200] or None,
+                            "precio": precio, "moneda": moneda, "disponible": c.get("disponible"),
+                            "puntaje": c["puntaje"], "detalle": c["detalle"], "actualizado": ahora_iso(),
+                        })
+                    if filas:
+                        db.upsert("competidores_nuevos", filas, on_conflict="producto_propio_id,cadena_id,url")
+                    with lock:
+                        estado["propuestas"] += len(filas)
+                except Exception as e:
+                    with lock:
+                        estado["errores"] += 1
+                    print(f"  [{cadena['id']}] {p['nombre']}: {e}")
+                with lock:
+                    estado["procesados"] += 1
+                    n = estado["procesados"]
+                if n % 20 == 0:
+                    db.update("corridas_buscador", "id", corrida_id, {"procesados": n})
+                    print(f"  {n}/{total}")
+        finally:
+            cerrar_navegador()
+
+    with ThreadPoolExecutor(max_workers=max(1, len(cadenas_activas))) as ex:
+        list(ex.map(trabajar, cadenas_activas))
+    db.update("corridas_buscador", "id", corrida_id, {
+        "estado": "terminada", "fin": ahora_iso(), "procesados": estado["procesados"],
+        "resumen": {"modo": "competidores", "productos": len(propios), "propuestas": estado["propuestas"], "errores": estado["errores"]},
+    })
+    print(f"Listo: {estado['procesados']} busquedas, {estado['propuestas']} competidores propuestos.")
 
 
 # ---------------------------------------------------------------------------
@@ -790,6 +936,13 @@ def main():
 
         # 2. Que buscar
         productos = db.select("v_buscar_enlaces", "select=*")
+        if os.environ.get("MODO", "").strip().lower() == "competidores":
+            if solo_productos:
+                productos = [p for p in productos if str(p["producto_id"]) in solo_productos]
+            if max_productos:
+                productos = productos[:max_productos]
+            correr_competidores(db, activas, productos, forzar, corrida_id)
+            return
         if solo_productos:
             productos = [p for p in productos if str(p["producto_id"]) in solo_productos]
         if max_productos:
