@@ -18,6 +18,7 @@ const RelacionesMolecula = lazy(() => import('../components/revision/RelacionesM
 const PreciosViejos = lazy(() => import('../components/revision/PreciosViejos'));
 const CalendarioOfertas = lazy(() => import('../components/analisis/CalendarioOfertas'));
 const CompetidoresNuevos = lazy(() => import('../components/revision/CompetidoresNuevos'));
+const VideosAyuda = lazy(() => import('../components/VideosAyuda'));
 
 // Herramientas en prueba. Lo que ya existe en otros menus salio de aqui:
 // Reporteria (la tabla "Precios por cadena" del Dashboard con Exportar),
@@ -41,6 +42,7 @@ const TABS = [
   { id: 'indice', nombre: 'Índice por molécula', icono: 'query_stats', desc: 'Cuánto subió o bajó en dólares el precio del mercado de cada molécula.' },
   { id: 'reaccion', nombre: 'Velocidad de reacción', icono: 'bolt', desc: 'Cuántos días tarda cada cadena en responder cuando otra cambia un precio.' },
   { id: 'ofertas', nombre: 'Calendario de ofertas', icono: 'calendar_month', desc: 'Qué días y en qué cadenas hubo descuentos o promociones (2x1, 3x2…), y qué día de la semana suele descontar cada cadena.' },
+  { id: 'videos', nombre: 'Videos de ayuda', icono: 'smart_display', desc: 'Videos cortos de cada menú principal, grabados solos con datos de ejemplo.' },
   { id: 'simulador', nombre: 'Simulador de precios', icono: 'calculate', desc: 'Qué pasaría con tu posición si subes o bajas tus precios.' },
 ];
 
@@ -85,6 +87,7 @@ export default function Experimental({ user, userDoc }) {
         {activa === 'competidores' && <CompetidoresNuevos />}
         {activa === 'precios_viejos' && <PreciosViejos />}
         {activa === 'ofertas' && <CalendarioOfertas />}
+        {activa === 'videos' && <VideosAyuda />}
         {activa === 'devaluacion' && <DevaluacionReal />}
         {activa === 'canibalizacion' && <CanibalizacionInterna user={user} userDoc={userDoc} />}
         {activa === 'brecha_usd' && <BrechaHistoricaUsd user={user} userDoc={userDoc} />}

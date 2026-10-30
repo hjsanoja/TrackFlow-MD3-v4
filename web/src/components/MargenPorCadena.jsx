@@ -383,7 +383,7 @@ export default function MargenPorCadena() {
       <section className="m3-data-table" aria-label="Margen por cadena">
         <div className="m3-data-table-toolbar">
           <div className="flex flex-col md:flex-row md:items-center gap-3">
-            <label className="m3-search-field">
+            <label className="m3-search-field" style={{ minWidth: 'min(16rem, 100%)' }}>
               <span className="material-symbols-outlined" aria-hidden="true">search</span>
               <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por ID, nombre o molécula" aria-label="Buscar producto" />
               {search && (
