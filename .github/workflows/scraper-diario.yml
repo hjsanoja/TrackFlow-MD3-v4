@@ -59,3 +59,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python scraper/push_to_supabase.py
+
+      - name: Send price alerts by email
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_REMITENTE: ${{ secrets.BREVO_REMITENTE }}
+          BREVO_NOMBRE: ${{ secrets.BREVO_NOMBRE }}
+          PANEL_URL: ${{ secrets.PANEL_URL }}
+        run: python scraper/correos.py alertas
+        continue-on-error: true   # un correo que falla no marca la corrida como fallida

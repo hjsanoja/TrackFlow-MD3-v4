@@ -8,6 +8,7 @@ import FiltroChip from '../components/FiltroChip';
 import Select from '../components/Select';
 import CadenaBadge from '../components/CadenaBadge';
 import AvisoRobot from '../components/AvisoRobot';
+import SaludDatos, { calcularSalud } from '../components/SaludDatos';
 import GitHubConfigModal from '../components/GitHubConfigModal';
 import { FormSection, Field, normalizar } from '../components/formulario';
 import { useToast } from '../context/ToastContext';
@@ -112,6 +113,11 @@ export default function Cadenas() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cadenas, resumen, search, filtroEstado, filtroRobot, filtroRevisar]);
   const hayFiltros = filtroEstado !== 'todos' || filtroRobot !== 'todos' || filtroRevisar !== 'todos';
+
+  const salud = useMemo(() => (cadenas || []).filter(c => c.activo)
+    .map(c => ({ cadena: c, salud: calcularSalud(resumen.get(c.id)?.activos || []) }))
+    .filter(x => x.salud.total > 0)
+    .sort((a, b) => (a.salud.pct ?? 101) - (b.salud.pct ?? 101)), [cadenas, resumen]);
 
   const totalOtraWeb = useMemo(() => [...resumen.values()].reduce((n, r) => n + r.otraWeb.length, 0), [resumen]);
   const cadenasConFallos = (cadenas || []).filter(c => c.activo && conFallos(c)).length;
@@ -229,6 +235,8 @@ export default function Cadenas() {
           </span>
         </div>
       )}
+
+      <SaludDatos filas={salud} />
 
       <section className="m3-data-table" aria-label="Cadenas">
         <div className="m3-data-table-toolbar">

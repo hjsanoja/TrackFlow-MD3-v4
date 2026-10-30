@@ -22,7 +22,7 @@ export const ETIQUETAS = {
   presentacion: 'Presentación',
   unidosis: 'Unidades por Empaque',
   codigo_barra: 'Código de Barras',
-  pvp_propio: 'PVP Propio (USD)',
+  pvp_propio: 'PSL Propio (USD)',
   tipo_mercado: 'Tipo de Mercado',
 
   // --- Cadena ---

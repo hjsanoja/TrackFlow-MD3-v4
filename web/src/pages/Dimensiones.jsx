@@ -57,8 +57,8 @@ const TABLAS = {
     ],
   },
   pvp_propio: {
-    nombre: 'Historial de PVP', singular: 'PVP', icono: 'price_check', soloLectura: true, orden: { col: 'vigente_desde', asc: false },
-    descripcion: 'Cada cambio de PVP de tus productos. El PVP se cambia en Productos; aquí solo se consulta o se borra una fila errada.',
+    nombre: 'Historial de PSL', singular: 'PSL', icono: 'price_check', soloLectura: true, orden: { col: 'vigente_desde', asc: false },
+    descripcion: 'Cada cambio de PSL de tus productos. El PSL se cambia en Productos; aquí solo se consulta o se borra una fila errada.',
     campos: [],
   },
 };
@@ -276,7 +276,7 @@ export default function Dimensiones() {
             <span className="material-symbols-outlined text-primary text-3xl">schema</span>
             <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Dimensiones</h1>
           </div>
-          <p className="text-xs text-on-surface-variant">Los catálogos que usan los productos: laboratorios, categorías, unidades, formas, moléculas, tasas y PVP.</p>
+          <p className="text-xs text-on-surface-variant">Los catálogos que usan los productos: laboratorios, categorías, unidades, formas, moléculas, tasas y PSL.</p>
         </div>
         <div className="flex gap-2 items-center shrink-0">
           {!config.soloLectura && (
@@ -374,7 +374,7 @@ export default function Dimensiones() {
                   {activeTab === 'dim_tasa_bcv' ? (
                     <>{encabezado('fecha', 'Fecha')}{encabezado('tasa', 'Tasa (Bs/$)', 'text-right')}<th>Fuente</th></>
                   ) : activeTab === 'pvp_propio' ? (
-                    <><th>Producto</th>{encabezado('pvp_usd', 'PVP', 'text-right')}{encabezado('vigente_desde', 'Desde')}<th>Hasta</th></>
+                    <><th>Producto</th>{encabezado('pvp_usd', 'PSL', 'text-right')}{encabezado('vigente_desde', 'Desde')}<th>Hasta</th></>
                   ) : (
                     <>
                       {encabezado('nombre', 'Nombre')}
@@ -734,7 +734,7 @@ function LimpiezaModal({ onClose, onTerminado }) {
         <p className="m3-body-medium text-on-surface-variant">
           {tipo === 'scrapes'
             ? 'Borra todas las capturas de precio y las corridas del robot. Tus productos y enlaces quedan.'
-            : 'Borra TODO el catálogo: productos, enlaces, PVP, equivalencias, capturas y corridas. Solo para empezar de cero.'}
+            : 'Borra TODO el catálogo: productos, enlaces, PSL, equivalencias, capturas y corridas. Solo para empezar de cero.'}
         </p>
         <Field label='Escribe BORRAR para confirmar' requerido>
           <input type="text" value={confirmacion} onChange={e => setConfirmacion(e.target.value)} className="m3-input" autoComplete="off" />

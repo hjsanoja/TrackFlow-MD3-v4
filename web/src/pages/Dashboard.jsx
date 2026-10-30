@@ -31,7 +31,6 @@ import {
   UMBRAL_CAMBIO, UMBRAL_EMPATE, VENTANAS, METAS, textoMeta, usePreferencia, leerColor, mediana, pct,
   crearFormato, Diferencia, calcularAjuste, AjusteMeta, GRUPOS, grupoDe,
 } from '../components/dashboard/comun';
-import { useCambiosDesdeVisita } from '../hooks/useCambiosDesdeVisita';
 import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
 import { AYUDA_OFERTA } from '../utils/promociones';
 
@@ -56,7 +55,8 @@ export default function Dashboard({ userDoc }) {
   const [moneda, setMoneda] = usePreferencia('trackflow_pref_currency', 'usd', ['usd', 'bs'], { sesion: true });
   const [modoAnalisis, setModoAnalisis] = usePreferencia('trackflow_pref_analisis_mode', 'empaque', ['empaque', 'unidosis'], { sesion: true });
   const [modoPrecio, setModoPrecio] = usePreferencia('dashboard.precio', 'lista', ['lista', 'descuento'], { sesion: true });
-  const [ventana, setVentana] = usePreferencia('trackflow_pref_ventana_variacion', 1, [1, 7, 15], { sesion: true });
+  // Cambios de precio: siempre las ultimas 24 horas.
+  const ventana = 1;
   // Meta: promedio del mercado ± X %. Dice cuanto subir o bajar.
   const [meta, setMeta] = usePreferencia('dashboard.meta', 0, METAS.map(([v]) => v));
 
@@ -155,13 +155,21 @@ export default function Dashboard({ userDoc }) {
   // El color se lee en cada pintado para seguir el tema claro u oscuro.
   const grupos = gruposSinColor.map(g => ({ ...g, color: leerColor(g.token, g.respaldo) }));
 
+  // En que cadena esta mas barato TU producto: por cada producto tuyo con
+  // precio en 2 o mas cadenas, suma 1 la cadena donde tu precio es el mas
+  // bajo. La competencia no cuenta.
   const lideres = useMemo(() => {
     const m = new Map();
-    // Solo competencia: que cadena de la competencia tiene el precio mas bajo.
     for (const x of base) {
-      if (x.minimoComp == null) continue;
-      const cadenas = new Set(x.precios.filter(o => o.tipo !== 'propio' && Math.abs(o.priceUsd - x.minimoComp) < 0.0005).map(o => o.cadena));
-      for (const c of cadenas) {
+      const tuyos = new Map();
+      for (const o of x.precios) {
+        if (o.tipo !== 'propio') continue;
+        if (!tuyos.has(o.cadena) || o.priceUsd < tuyos.get(o.cadena)) tuyos.set(o.cadena, o.priceUsd);
+      }
+      if (tuyos.size < 2) continue;
+      const min = Math.min(...tuyos.values());
+      for (const [c, v] of tuyos) {
+        if (v > min * 1.005) continue;
         if (!m.has(c)) m.set(c, []);
         m.get(c).push(x);
       }
@@ -376,7 +384,7 @@ export default function Dashboard({ userDoc }) {
   });
   const detalleSinComparar = () => abrirDetalle({
     titulo: 'Sin comparar',
-    subtitulo: 'Productos a los que les falta tu precio o el de la competencia. Vincula tus enlaces y los de la competencia en Relación. El PVP no cuenta: es un precio para otro cliente.',
+    subtitulo: 'Productos a los que les falta tu precio o el de la competencia. Vincula tus enlaces y los de la competencia en Relación. El PSL no cuenta aquí: es tu precio de salida a la cadena, no el precio al público.',
     icono: 'help',
     filas: kpi.sinComparar,
     columnas: [colProducto, {
@@ -394,64 +402,12 @@ export default function Dashboard({ userDoc }) {
     columnas: [colProducto, colTuPrecio, colPromedio, colDifProm, colAjuste],
   });
 
-  // Cambios desde tu ultima visita (fase 28).
-  const cambiosVisita = useCambiosDesdeVisita(userDoc?.email);
-  const cambiosDesdeVisita = useMemo(() => {
-    const porPub = new Map();
-    for (const e of productosCompetencia) {
-      if (e.publicacion_id == null || !e.activo) continue;
-      if (!porPub.has(e.publicacion_id)) porPub.set(e.publicacion_id, []);
-      porPub.get(e.publicacion_id).push(e);
-    }
-    const porId = new Map(base.map(x => [String(x.producto.id_interno).trim(), x]));
-    const conDescuento = modoPrecio === 'descuento';
-    const lista = [];
-    for (const f of cambiosVisita.filas) {
-      const antesBs = conDescuento ? (f.antes_desc_bs ?? f.antes_full_bs) : f.antes_full_bs;
-      const ahoraBs = conDescuento ? (f.ahora_desc_bs ?? f.ahora_full_bs) : f.ahora_full_bs;
-      if (!(antesBs > 0) || !(ahoraBs > 0) || !(f.antes_tasa > 0) || !(f.ahora_tasa > 0)) continue;
-      const antesUsd = antesBs / f.antes_tasa;
-      const ahoraUsd = ahoraBs / f.ahora_tasa;
-      const cambio = (ahoraUsd / antesUsd - 1) * 100;
-      if (Math.abs(cambio) <= UMBRAL_CAMBIO) continue;
-      for (const e of porPub.get(f.publicacion_id) || []) {
-        const item = porId.get(String(e.id_producto_propio).trim());
-        if (!item) continue;
-        lista.push({ clave: `${f.publicacion_id}_${e.id}`, item, enlace: e, cadena: idCadena(e.cadena), antesUsd, ahoraUsd, cambio });
-      }
-    }
-    return lista.sort((a, b) => Math.abs(b.cambio) - Math.abs(a.cambio));
-  }, [cambiosVisita.filas, productosCompetencia, base, modoPrecio, idCadena]);
-
-  const detalleVisita = () => abrirDetalle({
-    titulo: 'Desde tu última visita',
-    subtitulo: `Precios que cambiaron desde ${fechaHora(cambiosVisita.desde)}, en dólares (a la tasa de cada día). Primero los mayores.`,
-    icono: 'history',
-    filas: cambiosDesdeVisita,
-    clave: f => f.clave,
-    abrir: f => f.item,
-    columnas: [
-      { ...colProducto, celda: f => colProducto.celda(f.item) },
-      {
-        titulo: 'Cadena · marca',
-        celda: f => (
-          <div className="flex items-center gap-2 min-w-0">
-            <CadenaBadge cadena={f.cadena} tamano="xs" title={nombreCadena(f.cadena)} />
-            <span className="m3-cell-clamp max-w-[12rem]" title={f.enlace.marca}>{String(f.enlace.tipo).toLowerCase() === 'propio' ? 'Tu producto' : f.enlace.marca}</span>
-          </div>
-        ),
-      },
-      { titulo: 'Antes', alinear: 'right', celda: f => fmt(f.antesUsd) },
-      { titulo: 'Ahora', alinear: 'right', celda: f => fmt(f.ahoraUsd) },
-      { titulo: 'Cambio', alinear: 'right', celda: f => <Diferencia valor={f.cambio} /> },
-    ],
-  });
   const detalleCadena = (l) => abrirDetalle({
-    titulo: `Más barato en ${l.nombre}`,
-    subtitulo: `Productos donde ${l.nombre} tiene el precio más bajo de la competencia.`,
+    titulo: `Tu producto más barato en ${l.nombre}`,
+    subtitulo: `Productos tuyos que ${l.nombre} vende más barato que las otras cadenas donde están.`,
     icono: 'storefront',
     filas: [...l.items].sort((a, b) => (a.producto.nombre || '').localeCompare(b.producto.nombre || '')),
-    columnas: [colProducto, colMinimo, colTuPrecio, colDifMin],
+    columnas: [colProducto, colTuPrecio, colMinimo, colDifMin],
   });
 
   // ------------------------------------------------------------------------
@@ -574,22 +530,6 @@ export default function Dashboard({ userDoc }) {
 
       <AvisoRobot robot={robot} />
 
-      {cambiosVisita.listo && cambiosVisita.desde && (
-        <div className="m3-banner m3-banner-info" role="status">
-          <span className="material-symbols-outlined" aria-hidden="true">history</span>
-          <span className="m3-body-medium flex-1 min-w-0">
-            <strong>Desde tu última visita</strong> ({haceCuanto(cambiosVisita.desde).toLowerCase()}):{' '}
-            {cambiosDesdeVisita.length === 0 ? 'ningún precio cambió.' : (
-              <>
-                {cambiosDesdeVisita.length} {cambiosDesdeVisita.length === 1 ? 'precio cambió' : 'precios cambiaron'}
-                {' · '}{cambiosDesdeVisita.filter(c => c.cambio > 0).length} subieron, {cambiosDesdeVisita.filter(c => c.cambio < 0).length} bajaron.
-              </>
-            )}
-          </span>
-          {cambiosDesdeVisita.length > 0 && <button type="button" onClick={detalleVisita} className="m3-btn-text">Ver cambios</button>}
-        </div>
-      )}
-
       {cruces.length > 0 && (
         <div className="m3-banner m3-banner-warning" role="status">
           <span className="material-symbols-outlined" aria-hidden="true">swap_vert</span>
@@ -630,8 +570,6 @@ export default function Dashboard({ userDoc }) {
               opciones={[['empaque', 'Empaque', 'Precio de la caja'], ['unidosis', 'Unidad', 'Precio por tableta, ml o g']]} />
             <Segmentado etiqueta="Moneda" rotulo="Moneda" valor={moneda} onChange={setMoneda}
               opciones={[['usd', '$', 'Dólares'], ['bs', 'Bs', 'Bolívares a la tasa BCV']]} />
-            <Segmentado etiqueta="Periodo de los cambios" rotulo="Cambios" valor={String(ventana)} onChange={v => setVentana(Number(v))}
-              opciones={[['1', '24 h', 'Cambios de las últimas 24 horas'], ['7', '7 d', 'Cambios de los últimos 7 días'], ['15', '15 d', 'Cambios de los últimos 15 días']]} />
             <AjusteChip etiqueta="Tu meta de precio" icono="flag" valor={String(meta)} onChange={v => setMeta(Number(v))}
               opciones={METAS.map(([v, t]) => [String(v), t])} />
           </>
@@ -732,21 +670,21 @@ export default function Dashboard({ userDoc }) {
         {cadenaComp === 'todos' && <div className="m3-dash-card">
           <header className="m3-dash-card-header items-center">
             <div className="min-w-0 flex items-center gap-1">
-              <h2 className="m3-title-medium text-on-surface">¿Qué cadena tiene el precio más bajo?</h2>
+              <h2 className="m3-title-medium text-on-surface">¿En qué cadena está más barato tu producto?</h2>
               <InfoGrafico
-                titulo="¿Qué cadena tiene el precio más bajo?"
-                que="En cuántos productos cada cadena tiene el precio más bajo de la competencia. Toca una barra para ver la lista."
-                formula="Por producto: la cadena con el precio mínimo de la competencia suma 1"
-                lectura="La barra más larga es la cadena más agresiva en precio. Tus propios enlaces no cuentan aquí."
-                ejemplo="Si Locatel tiene el competidor más barato en 12 de tus 40 productos, su barra marca 12."
+                titulo="¿En qué cadena está más barato tu producto?"
+                que="Solo tus productos: en cuántos de ellos cada cadena tiene TU precio más bajo. Toca una barra para ver la lista."
+                formula="Por cada producto tuyo con precio en 2 o más cadenas: la cadena con tu precio más bajo suma 1"
+                lectura="La barra más larga es la cadena que mejor vende tus productos. La competencia no cuenta aquí; los productos que están en una sola cadena tampoco."
+                ejemplo="Si Farmatodo tiene tu precio más bajo en 12 de tus 40 productos, su barra marca 12."
                 alinear="derecha"
               />
             </div>
           </header>
           {lideres.length === 0 ? (
-            <SinDatos texto="Aún no hay precios de la competencia." />
+            <SinDatos texto="Hace falta tu precio en 2 o más cadenas." />
           ) : (
-            <div style={{ height: Math.min(200, Math.max(150, lideres.length * 34 + 16)) }} role="img" aria-label="Productos donde cada cadena es la más barata">
+            <div style={{ height: Math.min(200, Math.max(150, lideres.length * 34 + 16)) }} role="img" aria-label="Productos tuyos que cada cadena vende más barato">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={lideres} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 4 }} barCategoryGap="28%">
                   <CartesianGrid horizontal={false} stroke={tg.rejilla} strokeOpacity={0.6} />
@@ -1051,7 +989,7 @@ function TooltipCadena({ active, payload }) {
   return (
     <div className="m3-chart-tooltip">
       <div className="font-medium">{l.nombre}</div>
-      <div>El más barato en {l.total} {l.total === 1 ? 'producto' : 'productos'}</div>
+      <div>Tu precio más bajo en {l.total} {l.total === 1 ? 'producto' : 'productos'}</div>
     </div>
   );
 }

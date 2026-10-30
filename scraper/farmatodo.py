@@ -223,6 +223,24 @@ def cargar_plataformas():
         print(f"Aviso: no se leyeron las plataformas de las cadenas ({e})", flush=True)
 
 
+def cadenas_de_baja() -> set:
+    """Ids y nombres (en minusculas) de las cadenas dadas de baja en el panel
+    (dim_cadenas.activo = false): el robot no las lee. Su historial queda."""
+    try:
+        from supabase_client import is_supabase_configured, select
+        if not is_supabase_configured():
+            return set()
+        baja = set()
+        for c in select("dim_cadenas", "select=id,nombre&activo=eq.false"):
+            for v in (c.get("id"), c.get("nombre")):
+                if v:
+                    baja.add(str(v).strip().lower())
+        return baja
+    except Exception as e:
+        print(f"Aviso: no se leyeron las cadenas de baja ({e})", flush=True)
+        return set()
+
+
 def es_vtex(url: str) -> bool:
     u = url.lower()
     return any(d in u for d in VTEX_DOMINIOS) and bool(re.search(r"/p/?(?:[?#].*)?$", u))
@@ -1206,6 +1224,12 @@ async def main_async():
     if not filas:
         print("❌ No hay enlaces para procesar.", flush=True)
         sys.exit(1)
+
+    baja = cadenas_de_baja()
+    if baja:
+        antes = len(filas)
+        filas = [f for f in filas if str(f.get("cadena") or "").strip().lower() not in baja]
+        print(f"Cadenas de baja (no se leen): {sorted(baja)} · {antes - len(filas)} enlaces omitidos.", flush=True)
 
     filas_activas = []
     for f in filas:

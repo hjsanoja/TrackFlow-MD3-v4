@@ -5,7 +5,7 @@ import ModalWrapper from './ModalWrapper';
 // del producto.
 //
 // columnas: [{ titulo, celda: fila => nodo, alinear: 'right' | 'left' }]
-export default function DetalleLista({ titulo, subtitulo, icono, filas, columnas, claveFila, onFila, vacio, onVerEnTabla, onClose, ancho = 'max-w-3xl' }) {
+export default function DetalleLista({ titulo, subtitulo, icono, filas, columnas, claveFila, onFila, vacio, onVerEnTabla, onClose, ancho = 'max-w-6xl' }) {
   return (
     <ModalWrapper
       isOpen

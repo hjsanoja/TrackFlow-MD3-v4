@@ -2373,3 +2373,41 @@ body.solo-lectura .solo-en-lectura { display: inline; }
 .m3-margen-labs { left: 0; right: auto; width: min(320px, calc(100vw - 32px)); }
 .m3-margen-labs-lista { max-height: 300px; overflow-y: auto; }
 .m3-margen-labs-lista .m3-menu-item { height: 40px; cursor: pointer; }
+
+/* Listas de las tarjetas (DetalleLista): la columna del producto queda fija
+   al moverse de lado, para no perder de vista que fila se mira. */
+@media (min-width: 900px) {
+  .m3-table-detalle th:first-child,
+  .m3-table-detalle td:first-child {
+    position: sticky; left: 0; z-index: 2;
+    background-color: var(--md-sys-color-surface-container-lowest);
+    box-shadow: 1px 0 0 var(--md-sys-color-outline-variant);
+  }
+  .m3-table-detalle thead th:first-child { z-index: 3; background-color: var(--md-sys-color-surface-container-low); }
+}
+
+/* Relaciones a revisar: estado de cada relacion por molecula. */
+.m3-relacion-estado {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px 2px 6px;
+  border-radius: 999px; font-size: 0.8125rem; font-weight: 500; white-space: nowrap;
+}
+.m3-relacion-estado .material-symbols-outlined { font-size: 16px; }
+.m3-relacion-estado.is-cruce { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+.m3-relacion-estado.is-sin-dato { background-color: color-mix(in srgb, #f5a524 22%, transparent); color: var(--md-sys-color-on-surface); }
+.m3-relacion-estado.is-parcial { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.m3-relacion-estado.is-coincide { background-color: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent); color: var(--md-sys-color-primary); }
+
+/* Salud de los datos (Cadenas): semaforo por cadena, siempre con texto. */
+.m3-salud-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 12px; background-color: var(--md-sys-color-surface-container-low);
+}
+.m3-salud-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px;
+  border-radius: 999px; font-size: 0.8125rem; font-weight: 600; white-space: nowrap;
+  background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface);
+}
+.m3-salud-chip i { width: 10px; height: 10px; border-radius: 999px; display: inline-block; background-color: var(--md-sys-color-outline); }
+.m3-salud-chip.is-verde i { background-color: #1e9e5a; }
+.m3-salud-chip.is-ambar i { background-color: #f5a524; }
+.m3-salud-chip.is-rojo i { background-color: var(--md-sys-color-error); }

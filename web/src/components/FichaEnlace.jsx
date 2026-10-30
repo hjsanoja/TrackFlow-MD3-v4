@@ -9,7 +9,7 @@ import { factorPromo, textoPromo } from '../utils/promociones';
 
 /**
  * Ficha de un enlace de competencia (side sheet), hermana de FichaProducto:
- * el precio de hoy frente al PVP propio, los datos del enlace y sus ultimas
+ * el precio de hoy frente al PSL propio, los datos del enlace y sus ultimas
  * capturas. Desde aqui se abre la tienda, se lanza el robot, se corrige el
  * precio a mano o se edita.
  */
@@ -124,7 +124,7 @@ export default function FichaEnlace({
                 </span>
               </div>
               <div className="m3-ficha-kpi">
-                <span className="m3-label-medium text-on-surface-variant">Tu PVP</span>
+                <span className="m3-label-medium text-on-surface-variant">Tu PSL</span>
                 <span className="m3-title-large text-on-surface">{usd(pvp)}</span>
               </div>
               <div className="m3-ficha-kpi">
@@ -133,7 +133,7 @@ export default function FichaEnlace({
                   {diferencia === null ? '—' : `${diferencia > 0 ? '+' : ''}${diferencia.toFixed(0)}%`}
                 </span>
                 {diferencia !== null && (
-                  <span className="m3-body-small text-on-surface-variant">{diferencia > 0 ? 'tu PVP es más caro' : diferencia < 0 ? 'tu PVP es más barato' : 'igual'}</span>
+                  <span className="m3-body-small text-on-surface-variant">{diferencia > 0 ? 'tu PSL es más caro' : diferencia < 0 ? 'tu PSL es más barato' : 'igual'}</span>
                 )}
               </div>
             </div>

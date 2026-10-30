@@ -561,6 +561,52 @@ marca/genérico que estaba comentado y el disparo del robot sin seguimiento.
   `m3-filter-chip` / `m3-rows-select`): miden lo que su opción más larga y no
   empujan a los de al lado al cambiar.
 
+## Correos con Brevo, alertas a la medida y salud de los datos (fase 54)
+
+- `scraper/correos.py` (`alertas` | `resumen`), por la API de Brevo:
+  - **Alertas**: reglas de cada usuario (`alertas_usuario`: baja, sube o
+    queda más barato que tú, con %, laboratorio, cadena y producto
+    opcionales). Salen al final de cada corrida del robot
+    (`scraper-diario.yml`), una vez por regla, enlace y día
+    (`alertas_enviadas`). Se crean y pausan en Mi cuenta (`MisAlertas`).
+  - **Resumen semanal** (lunes 7:20 a. m., `correos.yml`): dónde más
+    perdiste y ganaste frente al competidor más barato en 7 días, cuántos
+    precios cambiaron y cuántos llevan +15 días sin actualizar.
+  - Solo usuarios activos y vigentes, con el interruptor encendido en Mi
+    cuenta; respetan el alcance de cada uno y no cuentan cadenas de baja.
+  - Bitácora: `correos_enviados`. Sin `BREVO_API_KEY` solo imprime.
+  - Secretos de GitHub: `BREVO_API_KEY`, `BREVO_REMITENTE`, `BREVO_NOMBRE`
+    (opcional) y `PANEL_URL` (opcional, botón «Abrir TrackFlow»).
+- **Salud de los datos** (Cadenas, `components/SaludDatos.jsx`): por cadena
+  activa, % de enlaces con precio de los últimos 15 días y leídos hoy;
+  verde ≥ 90 %, ámbar 70–90 %, rojo < 70 %.
+
+## Datos más limpios, relaciones por molécula y PSL (fase 53)
+
+- **Cadenas de baja** (`dim_cadenas.activo = false`): el robot no las lee
+  (`cadenas_de_baja()` en `scraper/farmatodo.py`) y sus precios no se ven en
+  el panel: política RESTRICTIVA de lectura en `fact_precios`
+  (`fn_publicaciones_de_baja`). No se borra nada; al reactivarla vuelve todo.
+  Los enlaces siguen en Relación y Cadenas.
+- **Precios viejos**: `v_ultimo_precio_valido` y `v_variacion` solo toman
+  precios de los últimos 15 días. `v_precios_viejos` lista los enlaces
+  pasados de 15 días: aviso en la campana y pestaña «Precios sin
+  actualizar» (Experimental).
+- **Molécula del competidor**: `dim_productos.molecula_competidor` y
+  `v_relaciones_molecula`; pestaña «Relaciones a revisar» (Experimental,
+  `components/revision/RelacionesMolecula.jsx`, `utils/moleculas.js`):
+  cruce errado, sin molécula, parcial o coincide. Sin molécula cargada se lee
+  del nombre (genéricos).
+- **Dashboard**: fuera «Desde tu última visita» (tomaba el último inicio de
+  sesión, no la última visita) y el selector 24h/7d/15d (siempre 24 h). El
+  gráfico de cadenas ahora es «¿En qué cadena está más barato tu producto?»
+  (solo tus precios, productos en 2 o más cadenas).
+- Las listas de las tarjetas (`DetalleLista`) son más anchas y fijan la
+  columna del producto.
+- **PVP → PSL** (precio de salida del laboratorio) en todos los textos. En la
+  base sigue siendo `pvp_propio`. La carga CSV acepta la columna «PSL».
+- Ayuda: botón «Abrir la guía visual».
+
 ## Margen por cadena más simple y exportar a Excel
 
 - Siempre por empaque (precio de la caja): sin el selector Empaque/Unidad.

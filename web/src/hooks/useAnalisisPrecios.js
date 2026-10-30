@@ -6,7 +6,7 @@ import { factorPromo } from '../utils/promociones';
 
 // Precios de cada producto propio frente a la competencia, con el mismo
 // criterio en el Dashboard y en el Mapa de Calor:
-//   - "Tu precio": el mas bajo de tus enlaces en las cadenas. El PVP no entra
+//   - "Tu precio": el mas bajo de tus enlaces en las cadenas. El PSL no entra
 //     en ningun calculo (es un precio para otro cliente): sin enlace leido el
 //     producto queda sin tu precio.
 //   - Minimo y promedio: del MERCADO (la competencia mas tu precio);

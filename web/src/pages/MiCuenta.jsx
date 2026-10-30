@@ -5,6 +5,7 @@ import { FormSection, Field } from '../components/formulario';
 import { registrarAcceso, mensajeAuth } from '../utils/accesos';
 import { AVAILABLE_MENUS, etiquetaEvento, fechaHora } from '../utils/usuarios';
 import { abrirBienvenida } from '../components/Bienvenida';
+import MisAlertas from '../components/usuarios/MisAlertas';
 import { VERSION, ETIQUETA_VERSION, DESARROLLADOR } from '../utils/version';
 
 // Mi cuenta: cada usuario ve sus datos, cambia su nombre, elige que correos
@@ -116,12 +117,12 @@ export default function MiCuenta({ user, userDoc, onActualizado }) {
           <label className="m3-switch-label">
             <input type="checkbox" role="switch" className="m3-switch" checked={datos.alertas}
               onChange={e => setDatos(d => ({ ...d, alertas: e.target.checked }))} />
-            <span><strong>Alertas inmediatas</strong> · cuando un competidor cambia mucho su precio</span>
+            <span><strong>Alertas inmediatas</strong> · cuando se cumple una de tus alertas de precio (abajo)</span>
           </label>
           <label className="m3-switch-label">
             <input type="checkbox" role="switch" className="m3-switch" checked={datos.resumen}
               onChange={e => setDatos(d => ({ ...d, resumen: e.target.checked }))} />
-            <span><strong>Resumen diario</strong> · un correo por la mañana con lo que cambió</span>
+            <span><strong>Resumen semanal</strong> · cada lunes por la mañana: dónde ganaste y dónde perdiste en la semana</span>
           </label>
         </FormSection>
 
@@ -131,6 +132,8 @@ export default function MiCuenta({ user, userDoc, onActualizado }) {
           </button>
         </div>
       </form>
+
+      <MisAlertas recibeAlertas={Boolean(userDoc?.recibe_alertas_inmediatas)} />
 
       <form onSubmit={cambiarClave} className="space-y-4" noValidate>
         <FormSection titulo="Cambiar contraseña" icono="password">

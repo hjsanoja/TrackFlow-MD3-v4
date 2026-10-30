@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
  * Ficha de un producto propio en un panel lateral (side sheet de M3).
  *
  * Reune en un solo lugar lo que antes habia que buscar en tres pantallas:
- * los datos del catalogo, el PVP frente al precio mas bajo de la
+ * los datos del catalogo, el PSL frente al precio mas bajo de la
  * competencia y los enlaces que vigila el scraper con su ultimo precio.
  * Para editar o ver el historial de precios se sale desde aqui.
  */
@@ -91,7 +91,7 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
             <h3 id="ficha-precio" className="m3-title-small text-on-surface-variant mb-2">Precio</h3>
             <div className="grid grid-cols-3 gap-2">
               <div className="m3-ficha-kpi">
-                <span className="m3-label-medium text-on-surface-variant">PVP propio</span>
+                <span className="m3-label-medium text-on-surface-variant">PSL propio</span>
                 <span className="m3-title-large text-on-surface">{usd(pvp)}</span>
               </div>
               <div className="m3-ficha-kpi">
@@ -203,7 +203,7 @@ export default function FichaProducto({ producto: p, enlaces = [], presentacion,
   );
 }
 
-// Historial del PVP: cada precio con desde cuando rige y cuanto cambio
+// Historial del PSL: cada precio con desde cuando rige y cuanto cambio
 // frente al anterior (tabla pvp_propio, un tramo por cada cambio).
 const fechaPvp = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-VE', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -225,9 +225,9 @@ function HistorialPvp({ productoId }) {
   if (tramos === null) return null;
   return (
     <section aria-labelledby="ficha-pvp">
-      <h3 id="ficha-pvp" className="m3-title-small text-on-surface-variant mb-2">Historial del PVP</h3>
+      <h3 id="ficha-pvp" className="m3-title-small text-on-surface-variant mb-2">Historial del PSL</h3>
       {tramos.length === 0 ? (
-        <p className="m3-body-medium text-on-surface-variant">Todavía no hay PVP guardados para este producto.</p>
+        <p className="m3-body-medium text-on-surface-variant">Todavía no hay PSL guardados para este producto.</p>
       ) : (
         <ul className="divide-y divide-outline-variant">
           {tramos.map((t, i) => {
@@ -240,7 +240,7 @@ function HistorialPvp({ productoId }) {
                     {t.vigente_hasta ? `${fechaPvp(t.vigente_desde)} – ${fechaPvp(t.vigente_hasta)}` : `Desde ${fechaPvp(t.vigente_desde)}`}
                   </div>
                   <div className="m3-body-small text-on-surface-variant">
-                    {!t.vigente_hasta ? 'Vigente' : anterior ? 'Anterior' : 'Primer PVP registrado'}
+                    {!t.vigente_hasta ? 'Vigente' : anterior ? 'Anterior' : 'Primer PSL registrado'}
                   </div>
                 </div>
                 {cambio != null && Math.abs(cambio) >= 0.05 && (

@@ -173,7 +173,7 @@ export default function ProductDetailModal({ producto, competencia, currency, bc
     || (a.sinPrecio ? 1 : 0) - (b.sinPrecio ? 1 : 0)
     || (b.priceUsd ?? 0) - (a.priceUsd ?? 0));
   const tuyas = ofertas.filter(o => !o.sinPrecio && o.tipo === 'propio' && (cadenaFiltro === 'todos' || o.cadena === cadenaFiltro));
-  // Solo tus enlaces: el PVP no entra en los calculos (es para otro cliente).
+  // Solo tus enlaces: el PSL no entra en los calculos (es para otro cliente).
   const tuPrecio = tuyas.length ? Math.min(...tuyas.map(o => o.priceUsd)) : null;
   const valores = visibles.map(o => o.priceUsd);
   const minimo = valores.length ? Math.min(...valores) : null;

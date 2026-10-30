@@ -17,15 +17,15 @@ import { describirPresentacion } from '../utils/presentacion';
 import { crearFormato, pct, mediana, GRUPOS, grupoDe } from './dashboard/comun';
 import { AYUDA_OFERTA, textoPromo } from '../utils/promociones';
 
-// Margen por cadena: tu PVP (el precio al que le vendes a la cadena) frente
+// Margen por cadena: tu PSL (el precio al que le vendes a la cadena) frente
 // al precio al que la cadena lo vende, y ese precio frente a los laboratorios
 // que elijas en la misma cadena.
-//   - Precio teorico = PVP x factor (1,5 = la cadena le suma 50 %). El factor
+//   - Precio teorico = PSL x factor (1,5 = la cadena le suma 50 %). El factor
 //     es general y se puede cambiar por producto.
-//   - Margen real = precio en la cadena / PVP - 1.
+//   - Margen real = precio en la cadena / PSL - 1.
 //   - GAP = precio del competidor / tu precio en la cadena - 1 (negativo: el
 //     competidor esta mas barato).
-// Todo se calcula en dolares a la tasa del dia; el PVP se carga en dolares.
+// Todo se calcula en dolares a la tasa del dia; el PSL se carga en dolares.
 // Cada usuario guarda lo que elige (cadena, factor, laboratorios...) en
 // preferencias_usuario (fase 52).
 
@@ -124,7 +124,7 @@ export default function MargenPorCadena() {
   }, [labsCadena, pref.labs]);
   const labsFuera = (pref.labs || []).filter(l => !labsCadena.some(x => x.clave === clave(l)));
 
-  // Una fila por producto: PVP, teorico, tu precio en la cadena y cada laboratorio.
+  // Una fila por producto: PSL, teorico, tu precio en la cadena y cada laboratorio.
   const base = useMemo(() => analizados
     .filter(({ producto: p }) =>
       filtroUnidad === 'todos' || claveUnidad(p) === filtroUnidad)
@@ -247,7 +247,7 @@ export default function MargenPorCadena() {
     const base = [
       { titulo: 'Código', columnas: [{ ancho: 11 }] },
       { titulo: 'Producto', columnas: [{ ancho: 44 }] },
-      { titulo: 'PVP', columnas: [{ ancho: 13 }] },
+      { titulo: 'PSL', columnas: [{ ancho: 13 }] },
       { titulo: 'Teórico', columnas: [{ titulo: 'Precio', ancho: 13 }, { titulo: 'Margen', ancho: 9 }] },
     ];
     const inicio = (x) => [
@@ -292,7 +292,7 @@ export default function MargenPorCadena() {
     }
     const detalle = [
       `${vista === 'cadenas' ? 'Todas las cadenas' : `Cadena: ${nombreSel}`} · Factor ${textoFactor(factorGeneral)} (${textoMargen((factorGeneral - 1) * 100)}) · Precio de ${modoPrecio === 'lista' ? 'lista' : 'oferta'} · Precio por caja · ${moneda === 'usd' ? 'Dólares' : `Bolívares a tasa BCV ${tasa.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}`,
-      `Margen real = precio en la cadena ÷ PVP − 1${vista === 'cadenas' ? ' · El color compara el precio de la cadena con tu precio teórico' : ' · GAP = precio del competidor ÷ tu precio en la cadena − 1 (negativo: el competidor está más barato)'}${resumen.ultimaFecha ? ` · Precios al ${fechaCorta(resumen.ultimaFecha)}` : ''}`,
+      `Margen real = precio en la cadena ÷ PSL − 1${vista === 'cadenas' ? ' · El color compara el precio de la cadena con tu precio teórico' : ' · GAP = precio del competidor ÷ tu precio en la cadena − 1 (negativo: el competidor está más barato)'}${resumen.ultimaFecha ? ` · Precios al ${fechaCorta(resumen.ultimaFecha)}` : ''}`,
     ];
     setExportando(true);
     try {
@@ -325,8 +325,8 @@ export default function MargenPorCadena() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <p className="m3-body-medium text-on-surface-variant">
           {vista === 'cadenas'
-            ? 'Cada columna es una cadena: tu precio ahí y el margen que le suma a tu PVP. El color compara ese precio con tu precio teórico.'
-            : `Tu PVP, el precio que debería tener ${nombreSel} con tu factor, el precio real ahí y cuánto más barato o caro está cada laboratorio que elijas.`}
+            ? 'Cada columna es una cadena: tu precio ahí y el margen que le suma a tu PSL. El color compara ese precio con tu precio teórico.'
+            : `Tu PSL, el precio que debería tener ${nombreSel} con tu factor, el precio real ahí y cuánto más barato o caro está cada laboratorio que elijas.`}
         </p>
         <button onClick={exportar} disabled={exportando || !filas.length} className="m3-btn-outline self-start md:self-auto" title="Descargar en Excel, con los colores y los filtros de la pantalla">
           <span className="material-symbols-outlined text-base">{exportando ? 'hourglass_top' : 'download'}</span>
@@ -368,7 +368,7 @@ export default function MargenPorCadena() {
 
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Indicadores">
         <StatCard compacto label={`Con tu precio en ${nombreSel}`} value={`${resumen.conPrecio} de ${conPvp.length}`} icon="inventory_2" tono="neutral"
-          hint={sinPvp ? `${sinPvp} productos sin PVP cargado no salen` : 'Productos con PVP cargado'}
+          hint={sinPvp ? `${sinPvp} productos sin PSL cargado no salen` : 'Productos con PSL cargado'}
           onClick={() => setMostrar(mostrar === 'sin_precio' ? 'todos' : 'sin_precio')} />
         <StatCard compacto label="Margen real típico" value={textoMargen(resumen.margenTipico)} icon="percent"
           tono={resumen.margenTipico == null ? 'neutral' : resumen.margenTipico > (factorGeneral - 1) * 100 + 5 ? 'negative' : 'primary'}
@@ -402,11 +402,11 @@ export default function MargenPorCadena() {
                 {filas.length === conPvp.length ? `${conPvp.length} productos` : `${filas.length} de ${conPvp.length} productos`}
               </span>
               <InfoGrafico alinear="derecha" titulo="Margen por cadena"
-                ejemplo="Clopi 75 x 30: PVP 5.604 Bs × 1,5 = teórico 8.406 Bs. Farmatodo lo vende a 7.967 Bs: margen real 42 %. Genven está a 6.525 Bs: GAP −18 % (18 % más barato que tú ahí)."
-                que="Cuánto le suma cada cadena a tu PVP y cómo queda tu precio ahí frente a los laboratorios que elijas."
+                ejemplo="Clopi 75 x 30: PSL 5.604 Bs × 1,5 = teórico 8.406 Bs. Farmatodo lo vende a 7.967 Bs: margen real 42 %. Genven está a 6.525 Bs: GAP −18 % (18 % más barato que tú ahí)."
+                que="Cuánto le suma cada cadena a tu PSL y cómo queda tu precio ahí frente a los laboratorios que elijas."
                 formula={[
-                  'Precio teórico = PVP × factor (1,5 = 50 % de margen)',
-                  'Margen real = precio en la cadena ÷ PVP − 1',
+                  'Precio teórico = PSL × factor (1,5 = 50 % de margen)',
+                  'Margen real = precio en la cadena ÷ PSL − 1',
                   'GAP = precio del competidor ÷ tu precio en la cadena − 1',
                 ]}
                 lectura="Un GAP negativo (rojo) es un competidor más barato que tú en esa cadena. Un margen real por encima del teórico (rojo en la vista Cadenas) es una cadena que te encarece. «—» siempre explica por qué falta al pasar el mouse." />
@@ -429,7 +429,7 @@ export default function MargenPorCadena() {
         {filas.length === 0 ? (
           <div className="p-12 text-center text-on-surface-variant flex flex-col items-center gap-3">
             <span className="material-symbols-outlined text-3xl">search_off</span>
-            <div className="m3-title-medium text-on-surface">{conPvp.length ? 'Ningún producto coincide' : 'Aún no hay productos con PVP cargado'}</div>
+            <div className="m3-title-medium text-on-surface">{conPvp.length ? 'Ningún producto coincide' : 'Aún no hay productos con PSL cargado'}</div>
           </div>
         ) : (
           <>
@@ -439,7 +439,7 @@ export default function MargenPorCadena() {
                   <button type="button" onClick={() => abrirFicha(x)} className="w-full text-left px-4 py-3 space-y-2">
                     <div className="m3-cell-primary">{x.producto.nombre}</div>
                     <div className="m3-body-small text-on-surface-variant">
-                      PVP {fmtModo(x.pvp)} · teórico {fmtModo(x.teorico)} ({textoFactor(x.factor)})
+                      PSL {fmtModo(x.pvp)} · teórico {fmtModo(x.teorico)} ({textoFactor(x.factor)})
                     </div>
                     {vista === 'cadenas' ? (
                       <div className="flex flex-wrap gap-1.5">
@@ -479,8 +479,8 @@ export default function MargenPorCadena() {
                 <thead className="m3-sticky-header">
                   <tr>
                     <th className="m3-dash-col-producto"><Orden campo="nombre" orden={orden} onClick={ordenarPor}>Producto</Orden></th>
-                    <th className="text-right"><Orden campo="pvp" orden={orden} onClick={ordenarPor}>PVP</Orden></th>
-                    <th className="text-right m3-dash-col-sep" title="PVP × factor">Teórico</th>
+                    <th className="text-right"><Orden campo="pvp" orden={orden} onClick={ordenarPor}>PSL</Orden></th>
+                    <th className="text-right m3-dash-col-sep" title="PSL × factor">Teórico</th>
                     {vista === 'cadenas' ? cadenasConPrecio.map(c => (
                       <th key={c.id} className="text-center m3-dash-col-sep">
                         <Orden campo={`cad:${c.id}`} orden={orden} onClick={ordenarPor}>
@@ -651,7 +651,7 @@ function CeldaTeorico({ fila, fmt, editando, onEditar, onCerrar, onGuardar }) {
   );
 }
 
-// Factor general (PVP x factor = precio teorico).
+// Factor general (PSL x factor = precio teorico).
 function FactorGeneral({ valor, onChange, propios, onQuitarPropios }) {
   const [texto, setTexto] = useState(String(valor).replace('.', ','));
   useEffect(() => { setTexto(String(valor).replace('.', ',')); }, [valor]);
@@ -661,7 +661,7 @@ function FactorGeneral({ valor, onChange, propios, onQuitarPropios }) {
     else setTexto(String(valor).replace('.', ','));
   };
   return (
-    <span className="m3-margen-factor" title="Precio teórico = PVP × factor. 1,5 = la cadena le suma 50 %">
+    <span className="m3-margen-factor" title="Precio teórico = PSL × factor. 1,5 = la cadena le suma 50 %">
       <span className="m3-segmentado-rotulo">Factor</span>
       <span aria-hidden="true">×</span>
       <input inputMode="decimal" value={texto} onChange={e => setTexto(e.target.value)} onBlur={aplicar}

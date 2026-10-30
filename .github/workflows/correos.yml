@@ -1,0 +1,35 @@
+name: Correos (resumen semanal y alertas)
+
+# Resumen semanal: lunes 7:20 a. m. hora Venezuela (11:20 UTC).
+# Las alertas salen al final de cada corrida del robot (scraper-diario.yml);
+# aqui tambien se pueden lanzar a mano.
+on:
+  schedule:
+    - cron: '20 11 * * 1'
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'resumen o alertas'
+        required: true
+        default: 'resumen'
+        type: choice
+        options: [resumen, alertas]
+
+jobs:
+  correos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Enviar correos
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_REMITENTE: ${{ secrets.BREVO_REMITENTE }}
+          BREVO_NOMBRE: ${{ secrets.BREVO_NOMBRE }}
+          PANEL_URL: ${{ secrets.PANEL_URL }}
+        run: python scraper/correos.py ${{ github.event.inputs.modo || 'resumen' }}

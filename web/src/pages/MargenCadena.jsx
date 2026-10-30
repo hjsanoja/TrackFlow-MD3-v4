@@ -1,6 +1,6 @@
 import MargenPorCadena from '../components/MargenPorCadena';
 
-// Margen por cadena: tu PVP, el precio teorico de la cadena (PVP x factor),
+// Margen por cadena: tu PSL, el precio teorico de la cadena (PSL x factor),
 // el precio real ahi y el GAP frente a los laboratorios que elijas.
 export default function MargenCadena() {
   return (
@@ -10,7 +10,7 @@ export default function MargenCadena() {
           <span className="material-symbols-outlined text-primary text-3xl" aria-hidden="true">price_change</span>
           <h1 className="text-2xl lg:text-3xl font-display font-extrabold text-on-background tracking-tight">Margen por cadena</h1>
         </div>
-        <p className="text-xs text-on-surface-variant">Cuánto le suma cada cadena a tu PVP y cómo queda tu precio ahí frente a los laboratorios que elijas.</p>
+        <p className="text-xs text-on-surface-variant">Cuánto le suma cada cadena a tu PSL y cómo queda tu precio ahí frente a los laboratorios que elijas.</p>
       </div>
       <MargenPorCadena />
     </div>

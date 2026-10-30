@@ -34,7 +34,7 @@ export function leerFilaProducto(row) {
   const claveActivo = Object.keys(row).find(k => k.trim().toLowerCase() === 'activo');
   const activoRaw = claveActivo ? String(row[claveActivo] ?? '').trim().toLowerCase() : '';
 
-  const pvpRaw = getRowValue(row, 'pvp_propio_usd', 'PVP Propio USD', 'pvp', 'precio', 'pvp usd', 'precio usd', 'mi precio lista (usd)').trim();
+  const pvpRaw = getRowValue(row, 'pvp_propio_usd', 'PSL Propio USD', 'psl', 'psl usd', 'psl (usd)', 'pvp', 'precio', 'pvp usd', 'precio usd', 'mi precio lista (usd)').trim();
   const pvp = parseFloat(pvpRaw.replace(',', '.'));
 
   return {
@@ -78,7 +78,7 @@ const CAMPOS = [
   { campo: 'market_type', etiqueta: 'Tipo', igual: (a, b) => norm(a) === norm(b), mostrar: v => (v === 'MARCA' ? 'Marca' : 'Genérico') },
   { campo: 'activo', etiqueta: 'Estado', igual: (a, b) => Boolean(a) === Boolean(b), mostrar: v => (v ? 'Activo' : 'De baja') },
   {
-    campo: 'pvp_propio_usd', etiqueta: 'PVP',
+    campo: 'pvp_propio_usd', etiqueta: 'PSL',
     igual: (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005,
     mostrar: v => (Number(v) > 0 ? `$${Number(v).toFixed(2)}` : '—'),
   },

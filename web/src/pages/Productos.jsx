@@ -37,7 +37,7 @@ import { DIAS_ENLACE_CAIDO, enlaceCaido, describirPresentacion } from '../utils/
 // panel se puede editar y volver a subir tal cual.
 //
 // tipo_mercado es MARCA o GENERICO (dim_productos.tipo_mercado, fase 18).
-// pvp_propio_usd: cambiarlo en el archivo registra un PVP nuevo (el anterior
+// pvp_propio_usd: cambiarlo en el archivo registra un PSL nuevo (el anterior
 // queda en el historial); dejarlo igual o vacio no toca nada.
 // Lleva `activo` para que reimportar no reactive productos dados de baja.
 // En los dos, una columna ausente conserva lo guardado.
@@ -79,7 +79,7 @@ function camposFaltantes(p) {
   if (!p.forma_farmaceutica) faltan.push('forma');
   if (!(Number(p.unidosis) > 1) && !/\d/.test(p.tamano || '')) faltan.push('tamaño');
   if (!p.laboratorio) faltan.push('laboratorio');
-  if (!(Number(p.pvp_propio_usd) > 0)) faltan.push('PVP');
+  if (!(Number(p.pvp_propio_usd) > 0)) faltan.push('PSL');
   return faltan;
 }
 
@@ -480,7 +480,7 @@ export default function Productos() {
   };
 
   // Solo cambia `activo`: antes reescribia la ficha entera (laboratorio,
-  // moleculas, PVP...) para mover un booleano.
+  // moleculas, PSL...) para mover un booleano.
   const handleToggleActivo = async (producto) => {
     try {
       await cambiarActivo([producto.id_interno], !producto.activo);
@@ -773,7 +773,7 @@ export default function Productos() {
         <div className="m3-banner" role="status">
           <span className="material-symbols-outlined" aria-hidden="true">fact_check</span>
           <span className="m3-body-medium flex-1">
-            <strong>{incompletos} {incompletos === 1 ? 'producto activo tiene' : 'productos activos tienen'} la ficha incompleta</strong> (falta molécula, dosis, forma, tamaño, laboratorio o PVP): sin esos datos la comparación pierde precisión.
+            <strong>{incompletos} {incompletos === 1 ? 'producto activo tiene' : 'productos activos tienen'} la ficha incompleta</strong> (falta molécula, dosis, forma, tamaño, laboratorio o PSL): sin esos datos la comparación pierde precisión.
           </span>
           <button type="button" onClick={() => setFiltroFicha('incompletos')} className="m3-btn-text">Ver cuáles</button>
         </div>
@@ -930,7 +930,7 @@ export default function Productos() {
                       {p.unidad_negocio || '—'} · {(p.market_type || 'GENERICO').toUpperCase() === 'MARCA' ? 'Marca' : 'Genérico'}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                      <span className="m3-cell-primary tabular-nums">{pvp > 0 ? `$${pvp.toFixed(2)}` : 'Sin PVP'}</span>
+                      <span className="m3-cell-primary tabular-nums">{pvp > 0 ? `$${pvp.toFixed(2)}` : 'Sin PSL'}</span>
                       {masBarato && (
                         <span className={`m3-cell-secondary tabular-nums ${pvp > precioEnlaceUsd(masBarato) ? 'text-error' : ''}`}>
                           comp. ${precioEnlaceUsd(masBarato).toFixed(2)}
@@ -977,7 +977,7 @@ export default function Productos() {
                   <th>Presentación</th>
                   {encabezado('linea', 'Línea')}
                   {encabezado('laboratorio', 'Laboratorio')}
-                  {encabezado('pvp', 'PVP', 'text-right')}
+                  {encabezado('pvp', 'PSL', 'text-right')}
                   {encabezado('enlaces', 'Enlaces', 'text-center')}
                   {encabezado('estado', 'Estado')}
                   <th className="m3-sticky-actions"><span className="sr-only">Acciones</span></th>
@@ -1230,7 +1230,7 @@ export default function Productos() {
               <div>concentracion, tamano, forma_farmaceutica, laboratorio, categoria</div>
               <div>unidad_negocio, tipo_mercado <span className="text-on-surface-variant font-sans font-medium">(MARCA / GENERICO)</span></div>
               <div>activo <span className="text-on-surface-variant font-sans font-medium">(si / no)</span>, pvp_propio_usd</div>
-              <div className="font-sans font-medium text-on-surface-variant pt-1">Una celda vacía no cambia nada. Para actualizar productos que ya existen basta el id_interno y las columnas que cambian (p. ej. solo el PVP).</div>
+              <div className="font-sans font-medium text-on-surface-variant pt-1">Una celda vacía no cambia nada. Para actualizar productos que ya existen basta el id_interno y las columnas que cambian (p. ej. solo el PSL).</div>
             </div>
             <div className="flex justify-between items-center pt-1">
               <button type="button" onClick={downloadCsvPlantilla}
@@ -1329,7 +1329,7 @@ function ProductoModal({ producto, plantilla = null, productos = [], sugerirId, 
   const dimensiones = useDimensiones();
   const isNew = !producto;
   // Al duplicar se copia la ficha de otro producto, salvo lo que identifica
-  // a uno solo (ID y codigo de barras) y el PVP, que suele ser otro.
+  // a uno solo (ID y codigo de barras) y el PSL, que suele ser otro.
   const base = producto || plantilla;
   const [form, setForm] = useState({
     id_interno: producto?.id_interno || sugerirId(),
@@ -1435,7 +1435,7 @@ function ProductoModal({ producto, plantilla = null, productos = [], sugerirId, 
       onClose={onClose}
       title={plantilla ? 'Duplicar producto' : isNew ? 'Nuevo producto' : 'Editar producto'}
       subtitle={plantilla
-        ? `Copia de ${plantilla.id_interno} ${plantilla.nombre}. Cambia lo que distingue a esta presentación (empaque, dosis) y el PVP.`
+        ? `Copia de ${plantilla.id_interno} ${plantilla.nombre}. Cambia lo que distingue a esta presentación (empaque, dosis) y el PSL.`
         : isNew ? 'Los campos con * son obligatorios.' : `${form.id_interno} · ${producto?.nombre || ''}`}
       icon={plantilla ? 'content_copy' : isNew ? 'add_box' : 'edit'}
       maxWidth="max-w-3xl"
@@ -1540,7 +1540,7 @@ function ProductoModal({ producto, plantilla = null, productos = [], sugerirId, 
                 opciones={dimensiones.categorias.filter(c => c !== 'Otros')} cargando={!dimensiones.cargado}
                 placeholder="Sin categoría" />
             </Field>
-            <Field label="PVP (USD)" error={errores.pvp_propio_usd}
+            <Field label="PSL (USD)" error={errores.pvp_propio_usd}
               hint={isNew ? 'Opcional' : 'El anterior queda en el historial'}>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" aria-hidden="true">$</span>
