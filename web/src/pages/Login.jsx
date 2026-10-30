@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Logo from '../components/Logo';
 import { supabase } from '../supabase';
 import { registrarAcceso, urlDelPanel, mensajeAuth } from '../utils/accesos';
 import { VERSION, ETIQUETA_VERSION, DESARROLLADOR } from '../utils/version';
@@ -56,9 +57,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 text-on-background">
       <div className="w-full max-w-md bg-surface-container-lowest rounded-[28px] border border-outline-variant p-8 sm:p-10 space-y-8">
         <div className="text-center space-y-2">
-          <div className="mx-auto w-16 h-16 rounded-[20px] bg-primary flex items-center justify-center">
-            <span className="material-symbols-outlined text-on-primary text-3xl select-none">monitoring</span>
-          </div>
+          <Logo tamano={64} className="mx-auto rounded-[20px]" />
           <h1 className="text-3xl font-display font-extrabold text-primary tracking-tight">TrackFlow</h1>
           <p className="m3-body-medium text-on-surface-variant">Inteligencia de precios</p>
         </div>

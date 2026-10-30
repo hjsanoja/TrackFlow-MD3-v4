@@ -3,14 +3,14 @@
   "name": "TrackFlow - Monitor de Precios Farmacéuticos",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ],
   "start_url": "/",
   "background_color": "#FAF8F5",
-  "theme_color": "#016874",
+  "theme_color": "#0F2C59",
   "display": "standalone",
   "orientation": "portrait"
 }
