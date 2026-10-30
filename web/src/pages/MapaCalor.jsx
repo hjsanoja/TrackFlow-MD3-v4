@@ -13,8 +13,9 @@ import { useData } from '../context/DataContext';
 import { useBcvRate } from '../hooks/useBcvRate';
 import { useAnalisisPrecios } from '../hooks/useAnalisisPrecios';
 import { exportToCSV } from '../utils/exportUtils';
+import { exportarTablaExcel } from '../utils/exportarExcel';
 import { describirPresentacion } from '../utils/presentacion';
-import { crearFormato, Diferencia, pct, usePreferencia, grupoDe } from '../components/dashboard/comun';
+import { crearFormato, Diferencia, pct, usePreferencia, grupoDe, GRUPOS } from '../components/dashboard/comun';
 import { AYUDA_OFERTA } from '../utils/promociones';
 
 // Mapa de calor: por cada producto, el espectro de precios de la competencia
@@ -175,6 +176,32 @@ export default function MapaCalor() {
     ], datos);
   };
 
+  const exportarExcelTabla = () => {
+    if (!filas.length) return;
+    const precio = (usd) => (usd == null ? null : moneda === 'usd' ? usd : usd * (bcv.rate || 0));
+    exportarTablaExcel({
+      archivo: `rango_de_precios${filtroCadena !== 'todos' ? `_${filtroCadena}` : ''}${modoAnalisis === 'unidosis' ? '_por_unidad' : ''}`,
+      hoja: 'Rango de precios',
+      titulo: 'Rango de precios',
+      detalle: [`Precio de ${modoPrecio === 'lista' ? 'lista' : 'oferta'} · ${modoAnalisis === 'unidosis' ? 'por unidad' : 'por caja'} · ${moneda === 'usd' ? 'Dólares' : `Bolívares a tasa BCV ${(bcv.rate || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`}`,
+        'Tú vs promedio: azul = más barato que el mercado, rojo = más caro.'],
+      moneda, decimales: moneda === 'usd' && modoAnalisis === 'unidosis' ? 3 : 2, congelar: 2,
+      columnas: [
+        { titulo: 'Código', ancho: 11, valor: x => x.producto.id_interno },
+        { titulo: 'Producto', ancho: 38, valor: x => x.producto.nombre },
+        { titulo: 'Presentación', ancho: 22, valor: x => subtituloProducto(x.producto, false) },
+        { titulo: 'Tu precio', formato: 'moneda', valor: x => precio(x.tuPrecio), color: x => (x.difProm == null ? null : grupoDe(x.difProm).id) },
+        { titulo: 'Mínimo', formato: 'moneda', valor: x => precio(x.minimo) },
+        { titulo: 'Promedio', formato: 'moneda', valor: x => precio(x.promedio) },
+        { titulo: 'Máximo', formato: 'moneda', valor: x => precio(x.maximo) },
+        { titulo: 'Tú vs promedio', ancho: 12, formato: 'pct', valor: x => x.difProm, color: x => (x.difProm == null ? null : grupoDe(x.difProm).id) },
+        { titulo: 'Posición', ancho: 13, valor: x => ETIQUETA_POSICION[x.posicion] },
+      ],
+      filas,
+      leyenda: GRUPOS.map(g => ({ color: g.id, texto: g.corto })),
+    });
+  };
+
   if (loading && productos.length === 0) {
     return (
       <div className="space-y-6" aria-busy="true">
@@ -198,10 +225,16 @@ export default function MapaCalor() {
             Para cada producto, los precios del mercado (la competencia y el tuyo) del más barato al más caro, y dónde cae el tuyo.
           </p>
         </div>
-        <button onClick={exportar} className="m3-btn-outline self-start lg:self-auto" title="Descargar en CSV lo que se ve, con los filtros actuales">
-          <span className="material-symbols-outlined text-base">download</span>
-          <span>Exportar</span>
-        </button>
+        <div className="flex items-center gap-2 self-start lg:self-auto">
+          <button onClick={exportarExcelTabla} className="m3-btn-outline" title="Descargar en Excel lo que se ve, con colores y los filtros actuales">
+            <span className="material-symbols-outlined text-base">table_view</span>
+            <span>Excel</span>
+          </button>
+          <button onClick={exportar} className="m3-btn-text" title="Descargar en CSV lo que se ve, con los filtros actuales">
+            <span className="material-symbols-outlined text-base">download</span>
+            <span>CSV</span>
+          </button>
+        </div>
       </div>
 
       <BarraFiltros

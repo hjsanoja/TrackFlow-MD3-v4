@@ -148,3 +148,20 @@ export async function exportarExcel({ archivo, hoja = 'Datos', titulo, detalle =
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// Tabla simple (una fila de encabezados) con el mismo aspecto: para las
+// pantallas que ademas mantienen su CSV de siempre (Dashboard, Rango de
+// precios, Mapa de calor).
+//   columnas: [{ titulo, ancho, formato, valor: fila => v, color: fila => id, nota: fila => texto }]
+export function exportarTablaExcel({ columnas, filas, ...resto }) {
+  return exportarExcel({
+    ...resto,
+    grupos: columnas.map(c => ({ titulo: c.titulo, columnas: [{ ancho: c.ancho || 14 }] })),
+    filas: filas.map(f => columnas.map(c => ({
+      v: c.valor(f),
+      formato: c.formato || 'texto',
+      color: c.color ? c.color(f) : null,
+      nota: c.nota ? c.nota(f) : null,
+    }))),
+  });
+}
